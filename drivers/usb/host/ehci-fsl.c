@@ -143,7 +143,7 @@ static int fsl_ehci_drv_probe(struct platform_device *pdev)
 
 	/* Don't need to set host mode here. It will be done by tdi_reset() */
 
-	retval = usb_add_hcd(hcd, irq, IRQF_SHARED);
+	retval = usb_add_hcd(hcd, irq, IRQF_SHARED | IRQF_NO_SUSPEND);
 	if (retval != 0)
 		goto err2;
 	device_wakeup_enable(hcd->self.controller);

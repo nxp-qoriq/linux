@@ -923,12 +923,32 @@ int usb_otg_start(struct platform_device *pdev)
 	temp &= ~(PORTSC_PHY_TYPE_SEL | PORTSC_PTW);
 	switch (pdata->phy_mode) {
 	case FSL_USB2_PHY_ULPI:
+		if (pdata->controller_ver) {
+			/* controller version 1.6 or above */
+			setbits32(&p_otg->dr_mem_map->control,
+				USB_CTRL_ULPI_PHY_CLK_SEL);
+			/*
+			 * Due to controller issue of PHY_CLK_VALID in ULPI
+			 * mode, we set USB_CTRL_USB_EN before checking
+			 * PHY_CLK_VALID, otherwise PHY_CLK_VALID doesn't work.
+			 */
+			clrsetbits_be32(&p_otg->dr_mem_map->control,
+				USB_CTRL_UTMI_PHY_EN, USB_CTRL_IOENB);
+		}
 		temp |= PORTSC_PTS_ULPI;
 		break;
 	case FSL_USB2_PHY_UTMI_WIDE:
 		temp |= PORTSC_PTW_16BIT;
 		/* fall through */
 	case FSL_USB2_PHY_UTMI:
+		if (pdata->controller_ver) {
+			/* controller version 1.6 or above */
+			setbits32(&p_otg->dr_mem_map->control,
+				USB_CTRL_UTMI_PHY_EN);
+			/* Delay for UTMI PHY CLK to become stable - 10ms */
+			mdelay(FSL_UTMI_PHY_DLY);
+		}
+		setbits32(&p_otg->dr_mem_map->control, USB_CTRL_UTMI_PHY_EN);
 		temp |= PORTSC_PTS_UTMI;
 		/* fall through */
 	default:

@@ -728,6 +728,7 @@ irqreturn_t fsl_otg_isr(int irq, void *dev_id)
 {
 	struct otg_fsm *fsm = &((struct fsl_otg *)dev_id)->fsm;
 	struct usb_otg *otg = ((struct fsl_otg *)dev_id)->phy.otg;
+	struct fsl_otg *otg_dev = dev_id;
 	u32 otg_int_src, otg_sc;
 
 	otg_sc = fsl_readl(&usb_dr_regs->otgsc);
@@ -757,18 +758,8 @@ irqreturn_t fsl_otg_isr(int irq, void *dev_id)
 				otg->gadget->is_a_peripheral = !fsm->id;
 			VDBG("ID int (ID is %d)\n", fsm->id);
 
-			if (fsm->id) {	/* switch to gadget */
-				schedule_delayed_work(
-					&((struct fsl_otg *)dev_id)->otg_event,
-					100);
-			} else {	/* switch to host */
-				cancel_delayed_work(&
-						    ((struct fsl_otg *)dev_id)->
-						    otg_event);
-				fsl_otg_start_gadget(fsm, 0);
-				otg_drv_vbus(fsm, 1);
-				fsl_otg_start_host(fsm, 1);
-			}
+			schedule_delayed_work(&otg_dev->otg_event, 100);
+
 			return IRQ_HANDLED;
 		}
 	}

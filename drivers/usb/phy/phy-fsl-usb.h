@@ -199,6 +199,14 @@
 /* control Register Bit Masks */
 #define  USB_CTRL_IOENB			(0x1<<2)
 #define  USB_CTRL_ULPI_INT0EN		(0x1<<0)
+#define	USB_CTRL_WU_INT_EN		(0x1<<1)
+#define	USB_CTRL_LINE_STATE_FILTER__EN	(0x1<<3)
+#define	USB_CTRL_KEEP_OTG_ON		(0x1<<4)
+#define	USB_CTRL_OTG_PORT		(0x1<<5)
+#define	USB_CTRL_PLL_RESET		(0x1<<8)
+#define	USB_CTRL_UTMI_PHY_EN		(0x1<<9)
+#define	USB_CTRL_ULPI_PHY_CLK_SEL	(0x1<<10)
+#define	USB_CTRL_PHY_CLK_VALID		(0x1<<17)
 
 /* BCSR5 */
 #define BCSR5_INT_USB			(0x02)

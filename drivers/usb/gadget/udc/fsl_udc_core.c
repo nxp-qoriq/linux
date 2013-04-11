@@ -1775,6 +1775,7 @@ static void suspend_irq(struct fsl_udc *udc)
 
 static void bus_resume(struct fsl_udc *udc)
 {
+	udc->last_state = udc->usb_state;
 	udc->usb_state = udc->resume_state;
 	udc->resume_state = 0;
 
@@ -2610,6 +2611,21 @@ static int fsl_udc_suspend(struct platform_device *pdev, pm_message_t state)
  *-----------------------------------------------------------------*/
 static int fsl_udc_resume(struct platform_device *pdev)
 {
+#if defined(CONFIG_FSL_USB2_OTG) || defined(CONFIG_FSL_USB2_OTG_MODULE)
+	/* Add delay to synchronize between host and gadget drivers
+	 * Upon role-reversal host drv is shutdown by kernel worker
+	 * thread. By the time host drv shuts down, dr controller
+	 * gets programmed for gadget role. Shutting host drv after this
+	 * results in controller getting reset, and it stops responding
+	 * to otg events
+	 *
+	 * This delay can be added only if this function call is not in
+	 * interrupt context which happens only when USB device is not
+	 * coming out of SUSPEND state
+	 */
+	if (udc_controller->last_state != USB_STATE_SUSPENDED)
+		msleep(1000);
+#endif
 	/* Enable DR irq reg and set controller Run */
 	if (udc_controller->stopped) {
 		dr_controller_setup(udc_controller);

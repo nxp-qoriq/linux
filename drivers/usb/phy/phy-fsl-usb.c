@@ -672,6 +672,10 @@ static void fsl_otg_event(struct work_struct *work)
 		fsl_otg_start_host(fsm, 0);
 		otg_drv_vbus(fsm, 0);
 		fsl_otg_start_gadget(fsm, 1);
+	} else {
+		fsl_otg_start_gadget(fsm, 0);
+		otg_drv_vbus(fsm, 1);
+		fsl_otg_start_host(fsm, 1);
 	}
 }
 

@@ -335,7 +335,7 @@ static int dr_controller_setup(struct fsl_udc *udc)
 	}
 #endif
 
-#if defined(CONFIG_PPC32) && !defined(CONFIG_NOT_COHERENT_CACHE)
+#if !defined(CONFIG_NOT_COHERENT_CACHE)
 	/* Turn on cache snooping hardware, since some PowerPC platforms
 	 * wholly rely on hardware to deal with cache coherent. */
 

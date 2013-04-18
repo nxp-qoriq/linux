@@ -180,6 +180,9 @@ struct ehci_hcd {			/* one per controller */
 	unsigned		periodic_count;	/* periodic activity count */
 	unsigned		uframe_periodic_max; /* max periodic time per uframe */
 
+#if defined(CONFIG_FSL_USB2_OTG) || defined(CONFIG_FSL_USB2_OTG_MODULE)
+	struct work_struct change_hcd_work;
+#endif
 
 	/* list of itds & sitds completed while now_frame was still active */
 	struct list_head	cached_itd_list;

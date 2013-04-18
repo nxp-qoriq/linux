@@ -43,6 +43,96 @@
 #define DRV_NAME "ehci-fsl"
 
 static struct hc_driver __read_mostly fsl_ehci_hc_driver;
+struct ehci_fsl {
+       /* store current hcd state for otg;
+	* have_hcd is true when host drv al already part of otg framework,
+	* otherwise false;
+	* hcd_add is true when otg framework wants to add host
+	* drv as part of otg;flase when it wants to remove it
+	*/
+unsigned have_hcd:1;
+unsigned hcd_add:1;
+};
+
+static struct ehci_fsl *hcd_to_ehci_fsl(struct usb_hcd *hcd)
+{
+struct ehci_hcd *ehci = hcd_to_ehci(hcd);
+
+return container_of(ehci, struct ehci_fsl, ehci);
+}
+
+#if defined(CONFIG_FSL_USB2_OTG) || defined(CONFIG_FSL_USB2_OTG_MODULE)
+static void do_change_hcd(struct work_struct *work)
+{
+struct ehci_hcd *ehci = container_of(work, struct ehci_hcd,
+				     change_hcd_work);
+struct usb_hcd *hcd = ehci_to_hcd(ehci);
+struct ehci_fsl *ehci_fsl = hcd_to_ehci_fsl(hcd);
+void __iomem *non_ehci = hcd->regs;
+int retval;
+
+	if (ehci_fsl->hcd_add && !ehci_fsl->have_hcd) {
+	writel(USBMODE_CM_HOST, non_ehci + FSL_SOC_USB_USBMODE);
+	/* host, gadget and otg share same int line */
+	retval = usb_add_hcd(hcd, hcd->irq, IRQF_SHARED);
+	if (retval == 0)
+	ehci_fsl->have_hcd = 1;
+	} else if (!ehci_fsl->hcd_add && ehci_fsl->have_hcd) {
+		usb_remove_hcd(hcd);
+		ehci_fsl->have_hcd = 0;
+	}
+}
+#endif
+
+struct ehci_fsl {
+	struct ehci_hcd ehci;
+
+#ifdef CONFIG_PM
+struct ehci_regs saved_regs;
+struct ccsr_usb_phy saved_phy_regs;
+/* Saved USB PHY settings, need to restore after deep sleep. */
+u32 usb_ctrl;
+#endif
+	/*
+	 * store current hcd state for otg;
+	 * have_hcd is true when host drv al already part of otg framework,
+	 * otherwise false;
+	 * hcd_add is true when otg framework wants to add host
+	 * drv as part of otg;flase when it wants to remove it
+	 */
+unsigned have_hcd:1;
+unsigned hcd_add:1;
+};
+
+static strut ehci_fsl *hcd_to_ehci_fsl(struct usb_hcd *hcd)
+{
+struct ehci_hcd *ehci = hcd_to_ehci(hcd);
+
+return container_of(ehci, struct ehci_fsl, ehci);
+}
+
+#if defined(CONFIG_FSL_USB2_OTG) || defined(CONFIG_FSL_USB2_OTG_MODULE)
+static void do_change_hcd(struct work_struct *work)
+{
+struct ehci_hcd *ehci = container_of(work, struct ehci_hcd,
+change_hcd_work);
+struct usb_hcd *hcd = ehci_to_hcd(ehci);
+struct ehci_fsl *ehci_fsl = hcd_to_ehci_fsl(hcd);
+void __iomem *non_ehci = hcd->regs;
+int retval;
+
+if (ehci_fsl->hcd_add && !ehci_fsl->have_hcd) {
+writel(USBMODE_CM_HOST, non_ehci + FSL_SOC_USB_USBMODE);
+/* host, gadget and otg share same int line */
+retval = usb_add_hcd(hcd, hcd->irq, IRQF_SHARED);
+if (retval == 0)
+ehci_fsl->have_hcd = 1;
+} else if (!ehci_fsl->hcd_add && ehci_fsl->have_hcd) {
+	usb_remove_hcd(hcd);
+ehci_fsl->have_hcd = 0;
+}
+}
+#endif
 
 /* configure so an HC device and id are always provided */
 /* always called with process context; sleeping is OK */
@@ -147,11 +237,14 @@ static int fsl_ehci_drv_probe(struct platform_device *pdev)
 		goto err2;
 	device_wakeup_enable(hcd->self.controller);
 
-#ifdef CONFIG_USB_OTG
+#if defined(CONFIG_FSL_USB2_OTG) || defined(CONFIG_FSL_USB2_OTG_MODULE)
 	if (pdata->operating_mode == FSL_USB2_DR_OTG) {
 		struct ehci_hcd *ehci = hcd_to_ehci(hcd);
 
 		hcd->usb_phy = usb_get_phy(USB_PHY_TYPE_USB2);
+
+		INIT_WORK(&ehci->change_hcd_work, do_change_hcd);
+
 		dev_dbg(&pdev->dev, "hcd=0x%p  ehci=0x%p, phy=0x%p\n",
 			hcd, ehci, hcd->usb_phy);
 
@@ -375,15 +468,6 @@ static int ehci_fsl_setup(struct usb_hcd *hcd)
 	return retval;
 }
 
-struct ehci_fsl {
-	struct ehci_hcd	ehci;
-
-#ifdef CONFIG_PM
-	/* Saved USB PHY settings, need to restore after deep sleep. */
-	u32 usb_ctrl;
-#endif
-};
-
 #ifdef CONFIG_PM
 
 #ifdef CONFIG_PPC_MPC512x
@@ -531,23 +615,31 @@ static inline int ehci_fsl_mpc512x_drv_resume(struct device *dev)
 }
 #endif /* CONFIG_PPC_MPC512x */
 
-static struct ehci_fsl *hcd_to_ehci_fsl(struct usb_hcd *hcd)
-{
-	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
-
-	return container_of(ehci, struct ehci_fsl, ehci);
-}
-
 static int ehci_fsl_drv_suspend(struct device *dev)
 {
 	struct usb_hcd *hcd = dev_get_drvdata(dev);
 	struct ehci_fsl *ehci_fsl = hcd_to_ehci_fsl(hcd);
 	void __iomem *non_ehci = hcd->regs;
+#if defined(CONFIG_FSL_USB2_OTG) || defined(CONFIG_FSL_USB2_OTG_MODULE)
+	struct usb_bus host = hcd->self;
+#endif
 
 	if (of_device_is_compatible(dev->parent->of_node,
 				    "fsl,mpc5121-usb2-dr")) {
 		return ehci_fsl_mpc512x_drv_suspend(dev);
 	}
+
+#if defined(CONFIG_FSL_USB2_OTG) || defined(CONFIG_FSL_USB2_OTG_MODULE)
+	if (host.is_otg) {
+		struct ehci_hcd *ehci = hcd_to_ehci(hcd);
+
+		/* remove hcd */
+		ehci_fsl->hcd_add = 0;
+		schedule_work(&ehci->change_hcd_work);
+		host.is_otg = 0;
+		return 0;
+	}
+#endif
 
 	ehci_prepare_ports_for_controller_suspend(hcd_to_ehci(hcd),
 			device_may_wakeup(dev));
@@ -564,11 +656,25 @@ static int ehci_fsl_drv_resume(struct device *dev)
 	struct ehci_fsl *ehci_fsl = hcd_to_ehci_fsl(hcd);
 	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
 	void __iomem *non_ehci = hcd->regs;
+#if defined(CONFIG_FSL_USB2_OTG) || defined(CONFIG_FSL_USB2_OTG_MODULE)
+	struct usb_bus host = hcd->self;
+#endif
 
 	if (of_device_is_compatible(dev->parent->of_node,
 				    "fsl,mpc5121-usb2-dr")) {
 		return ehci_fsl_mpc512x_drv_resume(dev);
 	}
+
+#if defined(CONFIG_FSL_USB2_OTG) || defined(CONFIG_FSL_USB2_OTG_MODULE)
+	if (host.is_otg) {
+		/* add hcd */
+		ehci_fsl->hcd_add = 1;
+		schedule_work(&ehci->change_hcd_work);
+		usb_hcd_resume_root_hub(hcd);
+		host.is_otg = 0;
+		return 0;
+	}
+#endif
 
 	ehci_prepare_ports_for_controller_resume(ehci);
 	if (!fsl_deep_sleep())

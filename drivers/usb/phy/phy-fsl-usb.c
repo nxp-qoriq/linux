@@ -544,8 +544,17 @@ int fsl_otg_start_gadget(struct otg_fsm *fsm, int on)
 	dev = otg->gadget->dev.parent;
 
 	if (on) {
-		if (dev->driver->resume)
+		/* Delay gadget resume to synchronize between host and gadget
+		 * drivers. Upon role-reversal host drv is shutdown by kernel
+		 * worker thread. By the time host drv shuts down, controller
+		 * gets programmed for gadget role. Shutting host drv after
+		 * this results in controller getting reset, and it stops
+		 * responding to otg events
+		 */
+		if (dev->driver->resume) {
+			msleep(1000);
 			dev->driver->resume(dev);
+		}
 	} else {
 		if (dev->driver->suspend)
 			dev->driver->suspend(dev, otg_suspend_state);

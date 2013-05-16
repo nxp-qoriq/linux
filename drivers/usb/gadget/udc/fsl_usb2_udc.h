@@ -503,7 +503,6 @@ struct fsl_udc {
 	u32 max_pipes;          /* Device max pipes */
 	u32 bus_reset;		/* Device is bus resetting */
 	u32 resume_state;	/* USB state to resume */
-	u32 last_state;		/* previous USB state */
 	u32 usb_state;		/* USB current state */
 	u32 ep0_state;		/* Endpoint zero state */
 	u32 ep0_dir;		/* Endpoint zero direction: can be

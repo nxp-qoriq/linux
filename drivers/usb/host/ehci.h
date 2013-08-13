@@ -219,6 +219,7 @@ struct ehci_hcd {			/* one per controller */
 	unsigned		no_selective_suspend:1;
 	unsigned		has_fsl_port_bug:1; /* FreeScale */
 	unsigned		has_fsl_hs_errata:1;	/* Freescale HS quirk */
+	unsigned		has_fsl_susp_errata:1; /*Freescale SUSP quirk*/
 	unsigned		big_endian_mmio:1;
 	unsigned		big_endian_desc:1;
 	unsigned		big_endian_capbase:1;
@@ -695,6 +696,9 @@ ehci_port_speed(struct ehci_hcd *ehci, unsigned int portsc)
 #if defined(CONFIG_PPC_85xx)
 /* Some Freescale processors have an erratum (USB A-005275) in which
  * incoming packets get corrupted in HS mode
+ * Some Freescale processors have an erratum (USB A-005697) in which
+ * we need to wait for 10ms for bus to fo into suspend mode after
+ * setting SUSP bit
  */
 #define ehci_has_fsl_hs_errata(e)	((e)->has_fsl_hs_errata)
 #define ehci_has_fsl_susp_errata(e)     ((e)->has_fsl_susp_errata)

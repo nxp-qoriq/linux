@@ -2478,6 +2478,7 @@ static int fsl_udc_probe(struct platform_device *pdev)
 	/* Setup gadget.dev and register with kernel */
 	dev_set_name(&udc_controller->gadget.dev, "gadget");
 	udc_controller->gadget.dev.of_node = pdev->dev.of_node;
+	set_dma_ops(&udc_controller->gadget.dev, pdev->dev.archdata.dma_ops);
 
 	if (!IS_ERR_OR_NULL(udc_controller->transceiver))
 		udc_controller->gadget.is_otg = 1;

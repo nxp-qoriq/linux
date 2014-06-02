@@ -249,10 +249,10 @@ static int dr_controller_setup(struct fsl_udc *udc)
 		if (udc->pdata->have_sysif_regs) {
 			if (udc->pdata->controller_ver) {
 				/* controller version 1.6 or above */
-				ctrl = __raw_readl(&usb_sys_regs->control);
+				ctrl = ioread32be(&usb_sys_regs->control);
 				ctrl &= ~USB_CTRL_UTMI_PHY_EN;
 				ctrl |= USB_CTRL_USB_EN;
-				__raw_writel(ctrl, &usb_sys_regs->control);
+				iowrite32be(ctrl, &usb_sys_regs->control);
 			}
 		}
 		portctrl |= PORTSCX_PTS_ULPI;
@@ -264,10 +264,10 @@ static int dr_controller_setup(struct fsl_udc *udc)
 		if (udc->pdata->have_sysif_regs) {
 			if (udc->pdata->controller_ver) {
 				/* controller version 1.6 or above */
-				ctrl = __raw_readl(&usb_sys_regs->control);
+				ctrl = ioread32be(&usb_sys_regs->control);
 				ctrl |= (USB_CTRL_UTMI_PHY_EN |
 					USB_CTRL_USB_EN);
-				__raw_writel(ctrl, &usb_sys_regs->control);
+				iowrite32be(ctrl, &usb_sys_regs->control);
 				mdelay(FSL_UTMI_PHY_DLY); /* Delay for UTMI
 					PHY CLK to become stable - 10ms*/
 			}
@@ -333,9 +333,9 @@ static int dr_controller_setup(struct fsl_udc *udc)
 	/* Config control enable i/o output, cpu endian register */
 #ifndef CONFIG_ARCH_MXC
 	if (udc->pdata->have_sysif_regs) {
-		ctrl = __raw_readl(&usb_sys_regs->control);
+		ctrl = ioread32be(&usb_sys_regs->control);
 		ctrl |= USB_CTRL_IOENB;
-		__raw_writel(ctrl, &usb_sys_regs->control);
+		iowrite32be(ctrl, &usb_sys_regs->control);
 	}
 #endif
 
@@ -352,9 +352,9 @@ static int dr_controller_setup(struct fsl_udc *udc)
 	if (udc->pdata->have_sysif_regs) {
 		/* Setup Snooping for all the 4GB space */
 		tmp = SNOOP_SIZE_2GB;	/* starts from 0x0, size 2G */
-		__raw_writel(tmp, &usb_sys_regs->snoop1);
+		iowrite32be(tmp, &usb_sys_regs->snoop1);
 		tmp |= 0x80000000;	/* starts from 0x8000000, size 2G */
-		__raw_writel(tmp, &usb_sys_regs->snoop2);
+		iowrite32be(tmp, &usb_sys_regs->snoop2);
 	}
 #endif
 

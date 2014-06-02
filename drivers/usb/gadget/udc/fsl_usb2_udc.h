@@ -20,6 +20,10 @@
 #define USB_MAX_CTRL_PAYLOAD		64
 #define USB_DR_SYS_OFFSET		0x400
 
+#ifdef CONFIG_SOC_LS1021A
+#undef CONFIG_ARCH_MXC
+#endif
+
  /* USB DR device mode registers (Little Endian) */
 struct usb_dr_device {
 	/* Capability register */

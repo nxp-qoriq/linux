@@ -288,6 +288,26 @@ static enum hrtimer_restart fec_ptp_pps_perout_handler(struct hrtimer *timer)
 	return HRTIMER_NORESTART;
 }
 
+#ifdef CONFIG_AVB_SUPPORT
+/**
+ * fec_timecounter_set
+ * @start_tstamp: new time in ns
+ *
+ * update the FEC timecounter structure to a new time, and make sure
+ * the HW counter matches that value.
+ */
+static inline void fec_timecounter_set(struct fec_enet_private *fep,
+		      u64 start_tstamp)
+{
+	u32 tempval;
+
+	tempval = start_tstamp & fep->cc.mask;
+	writel(tempval, fep->hwp + FEC_ATIME);
+	fep->tc.cycle_last = tempval;
+	fep->tc.nsec = start_tstamp;
+}
+#endif
+
 /**
  * fec_ptp_start_cyclecounter - create the cycle counter from hw
  * @ndev: network device
@@ -307,27 +327,178 @@ void fec_ptp_start_cyclecounter(struct net_device *ndev)
 	/* grab the ptp lock */
 	spin_lock_irqsave(&fep->tmreg_lock, flags);
 
-	/* 1ns counter */
+	/* 1ns counter, disable correction period */
+	writel(0, fep->hwp + FEC_ATIME_CORR);
 	writel(inc << FEC_T_INC_OFFSET, fep->hwp + FEC_ATIME_INC);
 
+
+#ifdef CONFIG_AVB_SUPPORT
+	/* use 32-bits timer counter */
+	writel(0, fep->hwp + FEC_ATIME_EVT_PERIOD);
+	writel(FEC_T_CTRL_ENABLE, fep->hwp + FEC_ATIME_CTRL);
+#else
 	/* use 31-bit timer counter */
 	writel(FEC_COUNTER_PERIOD, fep->hwp + FEC_ATIME_EVT_PERIOD);
 
 	writel(FEC_T_CTRL_ENABLE | FEC_T_CTRL_PERIOD_RST,
 		fep->hwp + FEC_ATIME_CTRL);
+#endif
+
 
 	memset(&fep->cc, 0, sizeof(fep->cc));
 	fep->cc.read = fec_ptp_read;
+#ifdef CONFIG_AVB_SUPPORT
+	fep->cc.mask = CLOCKSOURCE_MASK(32);
+#else
 	fep->cc.mask = CLOCKSOURCE_MASK(31);
+#endif
 	fep->cc.shift = 31;
 	fep->cc.mult = FEC_CC_MULT;
 
 	/* reset the ns time counter */
+#ifdef CONFIG_AVB_SUPPORT
+	fep->tc.cc = &fep->cc;
+	fec_timecounter_set(fep, 0);
+#else
 	timecounter_init(&fep->tc, &fep->cc, 0);
+#endif
 
 	spin_unlock_irqrestore(&fep->tmreg_lock, flags);
 }
 
+#ifdef CONFIG_AVB_SUPPORT
+/**
+ * fec_ptp_adjfreq - adjust ptp cycle frequency
+ * @ptp: the ptp clock structure
+ * @scaled_ppm: scaled parts per million adjustment from base
+ *
+ * Adjust the frequency of the ptp cycle counter by the
+ * indicated amount from the base frequency.
+ *
+ * Scaled parts per million is ppm with a 16-bit binary fractional field.
+ *
+ * This version adjusts the HW counter. The HW implementation results in the following equation:
+ * fe * diff = ppb * (pc + 1)
+ * with:
+ *   . fe : ENET ref clock frequency in Hz
+ *   . diff = inc_corr - inc : difference between default increment and correction increment
+ *   . ppb : parts per billion adjustment from base
+ *   . pc : correction period (in number of fe clock cycles)
+ *
+ * Limitations:
+ *  . only add or remove 1ns per correction period. This will limit jitter and improve short term
+ *  accuracy (in particular for trigger events during clock recovery) but increase the max possible
+ *  error, since the correction period will be the shortest possible and thus may not be optimal.
+ *  In the case of an adjustment of about 100ppm (which should be the max if the ref clock
+ *  is within the 802.1AS spec), the max error will be about 0.2ppm with a 50MHz ref clock, and
+ *  0.08ppm with a 125MHz ref clock.
+ *  Long term accuracy will also be lower (20ns per 100ms @50MHz, 8ns per 100ms @125MHz), but this
+ *  can be fixed by phase adjustments.
+ *  . It seems not all period/correction values are valid. With a 1ns correction, all even
+ *  period values return wrong timings (half the requested correction), but on the other hand odd
+ *  values are not taken into account systematically by the hardware, so we choose the closest even
+ *  value that matches the following equation:
+ *  fe * diff = 2 * ppb * (pc + 1)
+ *  . given we force abs(diff) = 1, limit max adjustment to prevent pc < 1.
+ *
+ */
+static int fec_ptp_adjfine(struct ptp_clock_info *ptp, long scaled_ppm)
+{
+	struct fec_enet_private *fep =
+			container_of(ptp, struct fec_enet_private, ptp_caps);
+	s32 ppb = scaled_ppm_to_ppb(scaled_ppm);
+	unsigned long flags;
+	u32 inc, cor, pc;
+
+	inc = FEC_T_PERIOD_ONE_SEC / fep->cycle_speed;
+	if (ppb == 0) {
+		cor = 0;
+		pc = 0;
+	} else {
+		if (ppb < 0) {
+			ppb = -ppb;
+			cor = inc - 1;
+		}
+		else
+			cor = inc + 1;
+
+		if (ppb > fep->ptp_caps.max_adj) {
+			dev_err(&fep->pdev->dev, "ppb value %d outside accepted range (max_adj = %d)", (cor > inc) ? ppb : -ppb, ptp->max_adj);
+			return -1;
+		}
+
+		pc = (((fep->cycle_speed / (2*ppb)) - 1) + 1) & ~ 0x1; // + 1) & ~ 0x1 returns the closest even value
+	}
+
+	spin_lock_irqsave(&fep->tmreg_lock, flags);
+
+	writel((cor << FEC_T_INC_CORR_OFFSET) | (inc << FEC_T_INC_OFFSET), fep->hwp + FEC_ATIME_INC);
+	writel(pc, fep->hwp + FEC_ATIME_CORR);
+
+	spin_unlock_irqrestore(&fep->tmreg_lock, flags);
+
+	return 0;
+}
+
+/**
+ * fec_ptp_adjtime
+ * @ptp: the ptp clock structure
+ * @delta: offset to adjust the cycle counter by
+ *
+ * adjust the timer by updating the HW counter AND the timecounter structure
+ * as well. Since updating the HW register requires a read and a write, make
+ * a crude estimate of the read time and subtract it from the desired delta.
+ */
+static int fec_ptp_adjtime(struct ptp_clock_info *ptp, s64 delta)
+{
+	struct fec_enet_private *fep =
+	    container_of(ptp, struct fec_enet_private, ptp_caps);
+	unsigned long flags;
+	u64 now, then;
+	s64 real_delta;
+
+	spin_lock_irqsave(&fep->tmreg_lock, flags);
+
+	now = timecounter_read(&fep->tc);
+	then = timecounter_read(&fep->tc);
+
+	real_delta = delta - (then - now);
+
+	now = timecounter_read(&fep->tc);
+	now += real_delta;
+
+	fec_timecounter_set(fep, now);
+
+	spin_unlock_irqrestore(&fep->tmreg_lock, flags);
+
+	return 0;
+}
+
+/**
+ * fec_ptp_settime
+ * @ptp: the ptp clock structure
+ * @ts: the timespec containing the new time for the cycle counter
+ *
+ * Update the timecounter to use a new base value instead of the kernel
+ * wall timer value, and update the HW counter as well.
+ */
+static int fec_ptp_settime(struct ptp_clock_info *ptp,
+			   const struct timespec64 *ts)
+{
+	struct fec_enet_private *fep =
+	    container_of(ptp, struct fec_enet_private, ptp_caps);
+	u64 ns;
+	unsigned long flags;
+
+	ns = ts->tv_sec * 1000000000ULL;
+	ns += ts->tv_nsec;
+
+	spin_lock_irqsave(&fep->tmreg_lock, flags);
+	fec_timecounter_set(fep, ns);
+	spin_unlock_irqrestore(&fep->tmreg_lock, flags);
+	return 0;
+}
+#else /* CONFIG_AVB_SUPPORT */
 /**
  * fec_ptp_adjfine - adjust ptp cycle frequency
  * @ptp: the ptp clock structure
@@ -425,37 +596,6 @@ static int fec_ptp_adjtime(struct ptp_clock_info *ptp, s64 delta)
 }
 
 /**
- * fec_ptp_gettime
- * @ptp: the ptp clock structure
- * @ts: timespec structure to hold the current time value
- *
- * read the timecounter and return the correct value on ns,
- * after converting it into a struct timespec.
- */
-static int fec_ptp_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
-{
-	struct fec_enet_private *fep =
-	    container_of(ptp, struct fec_enet_private, ptp_caps);
-	u64 ns;
-	unsigned long flags;
-
-	mutex_lock(&fep->ptp_clk_mutex);
-	/* Check the ptp clock */
-	if (!fep->ptp_clk_on) {
-		mutex_unlock(&fep->ptp_clk_mutex);
-		return -EINVAL;
-	}
-	spin_lock_irqsave(&fep->tmreg_lock, flags);
-	ns = timecounter_read(&fep->tc);
-	spin_unlock_irqrestore(&fep->tmreg_lock, flags);
-	mutex_unlock(&fep->ptp_clk_mutex);
-
-	*ts = ns_to_timespec64(ns);
-
-	return 0;
-}
-
-/**
  * fec_ptp_settime
  * @ptp: the ptp clock structure
  * @ts: the timespec containing the new time for the cycle counter
@@ -491,6 +631,40 @@ static int fec_ptp_settime(struct ptp_clock_info *ptp,
 	timecounter_init(&fep->tc, &fep->cc, ns);
 	spin_unlock_irqrestore(&fep->tmreg_lock, flags);
 	mutex_unlock(&fep->ptp_clk_mutex);
+	return 0;
+}
+#endif /* CONFIG_AVB_SUPPORT */
+
+/**
+ * fec_ptp_gettime
+ * @ptp: the ptp clock structure
+ * @ts: timespec structure to hold the current time value
+ *
+ * read the timecounter and return the correct value on ns,
+ * after converting it into a struct timespec.
+ */
+static int fec_ptp_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
+{
+	struct fec_enet_private *fep =
+	    container_of(ptp, struct fec_enet_private, ptp_caps);
+	u64 ns;
+	u32 remainder;
+	unsigned long flags;
+
+	mutex_lock(&fep->ptp_clk_mutex);
+	/* Check the ptp clock */
+	if (!fep->ptp_clk_on) {
+		mutex_unlock(&fep->ptp_clk_mutex);
+		return -EINVAL;
+	}
+	spin_lock_irqsave(&fep->tmreg_lock, flags);
+	ns = timecounter_read(&fep->tc);
+	spin_unlock_irqrestore(&fep->tmreg_lock, flags);
+	mutex_unlock(&fep->ptp_clk_mutex);
+
+	ts->tv_sec = div_u64_rem(ns, 1000000000ULL, &remainder);
+	ts->tv_nsec = remainder;
+
 	return 0;
 }
 
@@ -714,7 +888,18 @@ void fec_ptp_init(struct platform_device *pdev, int irq_idx)
 	fep->pps_channel = DEFAULT_PPS_CHANNEL;
 	of_property_read_u32(np, "fsl,pps-channel", &fep->pps_channel);
 
+	fep->cycle_speed = clk_get_rate(fep->clk_ptp);
+	if (!fep->cycle_speed) {
+		fep->cycle_speed = NSEC_PER_SEC;
+		dev_err(&fep->pdev->dev, "clk_ptp clock rate is zero\n");
+	}
+	fep->ptp_inc = NSEC_PER_SEC / fep->cycle_speed;
+
+#ifdef CONFIG_AVB_SUPPORT
+	fep->ptp_caps.max_adj = fep->cycle_speed / 2;
+#else
 	fep->ptp_caps.max_adj = 250000000;
+#endif
 	fep->ptp_caps.n_alarm = 0;
 	fep->ptp_caps.n_ext_ts = 0;
 	fep->ptp_caps.n_per_out = 1;
@@ -725,13 +910,6 @@ void fec_ptp_init(struct platform_device *pdev, int irq_idx)
 	fep->ptp_caps.gettime64 = fec_ptp_gettime;
 	fep->ptp_caps.settime64 = fec_ptp_settime;
 	fep->ptp_caps.enable = fec_ptp_enable;
-
-	fep->cycle_speed = clk_get_rate(fep->clk_ptp);
-	if (!fep->cycle_speed) {
-		fep->cycle_speed = NSEC_PER_SEC;
-		dev_err(&fep->pdev->dev, "clk_ptp clock rate is zero\n");
-	}
-	fep->ptp_inc = NSEC_PER_SEC / fep->cycle_speed;
 
 	spin_lock_init(&fep->tmreg_lock);
 

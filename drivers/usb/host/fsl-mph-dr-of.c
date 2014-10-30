@@ -103,6 +103,8 @@ static struct platform_device *fsl_usb2_device_register(
 	else
 		dma_set_mask(&pdev->dev, DMA_BIT_MASK(32));
 
+	pdev->dev.of_node = ofdev->dev.of_node;
+
 	retval = platform_device_add_data(pdev, pdata, sizeof(*pdata));
 	if (retval)
 		goto error;

@@ -39,6 +39,39 @@
 #include "ehci.h"
 #include "ehci-fsl.h"
 
+#define FSL_USB_PHY_ADDR       0xffe214000
+
+struct ccsr_usb_port_ctrl {
+	u32     ctrl;
+	u32     drvvbuscfg;
+	u32     pwrfltcfg;
+	u32     sts;
+	u8      res_14[0xc];
+	u32     bistcfg;
+	u32     biststs;
+	u32     abistcfg;
+	u32     abiststs;
+	u8      res_30[0x10];
+	u32     xcvrprg;
+	u32     anaprg;
+	u32     anadrv;
+	u32     anasts;
+};
+
+struct ccsr_usb_phy {
+	u32     id;
+	struct ccsr_usb_port_ctrl port1;
+	u8      res_50[0xc];
+	u32     tvr;
+	u32     pllprg[4];
+	u8      res_70[0x4];
+	u32     anaccfg;
+	u32     dbg;
+	u8      res_7c[0x4];
+	struct ccsr_usb_port_ctrl port2;
+	u8      res_dc[0x334];
+};
+
 #define DRIVER_DESC "Freescale EHCI Host controller driver"
 #define DRV_NAME "ehci-fsl"
 
@@ -501,9 +534,9 @@ static int ehci_fsl_setup(struct usb_hcd *hcd)
 }
 
 
-
-
 #ifdef CONFIG_PM
+void __iomem *phy_reg;
+
 /* save usb registers */
 static int ehci_fsl_save_context(struct usb_hcd *hcd)
 {
@@ -511,11 +544,11 @@ static int ehci_fsl_save_context(struct usb_hcd *hcd)
 	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
 	void __iomem *non_ehci = hcd->regs;
 
-	ehci_fsl->saved_regs = kzalloc(sizeof(struct ehci_regs), GFP_KERNEL);
-	if (!ehci_fsl->saved_regs)
-		return -ENOMEM;
-	_memcpy_fromio(ehci_fsl->saved_regs, ehci->regs,
-					sizeof(struct ehci_regs));
+	phy_reg = ioremap(FSL_USB_PHY_ADDR, sizeof(struct ccsr_usb_phy));
+	_memcpy_fromio((void *)&ehci_fsl->saved_phy_regs, phy_reg,
+			sizeof(struct ccsr_usb_phy));
+	_memcpy_fromio((void *)&ehci_fsl->saved_regs, ehci->regs,
+			sizeof(struct ehci_regs));
 	ehci_fsl->usb_ctrl = in_be32(non_ehci + FSL_SOC_USB_CTRL);
 	return 0;
 
@@ -528,13 +561,14 @@ static int ehci_fsl_restore_context(struct usb_hcd *hcd)
 	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
 	void __iomem *non_ehci = hcd->regs;
 
-	if (ehci_fsl->saved_regs) {
-		_memcpy_toio(ehci->regs, ehci_fsl->saved_regs,
-						sizeof(struct ehci_regs));
-		out_be32(non_ehci + FSL_SOC_USB_CTRL, ehci_fsl->usb_ctrl);
-		kfree(ehci_fsl->saved_regs);
-		ehci_fsl->saved_regs = NULL;
-	}
+	if (phy_reg)
+		_memcpy_toio(phy_reg, (void *)&ehci_fsl->saved_phy_regs,
+				sizeof(struct ccsr_usb_phy));
+
+	_memcpy_toio(ehci->regs, (void *)&ehci_fsl->saved_regs,
+				sizeof(struct ehci_regs));
+	iowrite32be(ehci_fsl->usb_ctrl, non_ehci + FSL_SOC_USB_CTRL);
+
 	return 0;
 }
 

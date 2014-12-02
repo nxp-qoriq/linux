@@ -366,11 +366,12 @@ static int ehci_fsl_setup_phy(struct usb_hcd *hcd,
 		portsc |= PORT_PTS_PTW;
 		/* fall through */
 	case FSL_USB2_PHY_UTMI:
+	case FSL_USB2_PHY_UTMI_DUAL:
 		if (pdata->has_fsl_erratum_a006918) {
 			pr_warn("fsl-ehci: USB PHY clock invalid\n");
 			return -EINVAL;
 		}
-	case FSL_USB2_PHY_UTMI_DUAL:
+
 		/* PHY_CLK_VALID bit is de-featured from all controller
 		 * versions below 2.4 and is to be checked only for
 		 * internal UTMI phy
@@ -543,15 +544,21 @@ static int ehci_fsl_save_context(struct usb_hcd *hcd)
 	struct ehci_fsl *ehci_fsl = hcd_to_ehci_fsl(hcd);
 	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
 	void __iomem *non_ehci = hcd->regs;
+	struct device *dev = hcd->self.controller;
+	struct fsl_usb2_platform_data *pdata = dev_get_platdata(dev);
 
-	phy_reg = ioremap(FSL_USB_PHY_ADDR, sizeof(struct ccsr_usb_phy));
-	_memcpy_fromio((void *)&ehci_fsl->saved_phy_regs, phy_reg,
+	if (pdata->phy_mode == FSL_USB2_PHY_UTMI_DUAL) {
+	phy_reg = ioremap(FSL_USB_PHY_ADDR,
 			sizeof(struct ccsr_usb_phy));
-	_memcpy_fromio((void *)&ehci_fsl->saved_regs, ehci->regs,
-			sizeof(struct ehci_regs));
-	ehci_fsl->usb_ctrl = in_be32(non_ehci + FSL_SOC_USB_CTRL);
-	return 0;
+	_memcpy_fromio((void *)&ehci_fsl->saved_phy_regs, phy_reg,
+	sizeof(struct ccsr_usb_phy));
+	}
 
+	_memcpy_fromio((void *)&ehci_fsl->saved_regs, ehci->regs,
+					sizeof(struct ehci_regs));
+	ehci_fsl->usb_ctrl = ioread32be(non_ehci + FSL_SOC_USB_CTRL);
+
+	return 0;
 }
 
 /*Restore usb registers */
@@ -560,10 +567,15 @@ static int ehci_fsl_restore_context(struct usb_hcd *hcd)
 	struct ehci_fsl *ehci_fsl = hcd_to_ehci_fsl(hcd);
 	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
 	void __iomem *non_ehci = hcd->regs;
+	struct device *dev = hcd->self.controller;
+	struct fsl_usb2_platform_data *pdata = dev_get_platdata(dev);
 
-	if (phy_reg)
-		_memcpy_toio(phy_reg, (void *)&ehci_fsl->saved_phy_regs,
+	if (pdata->phy_mode == FSL_USB2_PHY_UTMI_DUAL) {
+		if (phy_reg)
+			_memcpy_toio(phy_reg,
+				(void *)&ehci_fsl->saved_phy_regs,
 				sizeof(struct ccsr_usb_phy));
+	}
 
 	_memcpy_toio(ehci->regs, (void *)&ehci_fsl->saved_regs,
 				sizeof(struct ehci_regs));
@@ -746,10 +758,10 @@ static int ehci_fsl_drv_suspend(struct device *dev)
 	ehci_prepare_ports_for_controller_suspend(hcd_to_ehci(hcd),
 			device_may_wakeup(dev));
 
-	ehci_fsl_save_context(hcd);
-
 	if (!fsl_deep_sleep())
 		return 0;
+
+	ehci_fsl_save_context(hcd);
 
 	ehci_fsl->usb_ctrl = in_be32(non_ehci + FSL_SOC_USB_CTRL);
 	return 0;
@@ -762,7 +774,8 @@ static int ehci_fsl_drv_resume(struct device *dev)
 	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
 	void __iomem *non_ehci = hcd->regs;
 
-	ehci_fsl_restore_context(hcd);
+	if (fsl_deep_sleep())
+		ehci_fsl_restore_context(hcd);
 
 #if defined(CONFIG_FSL_USB2_OTG) || defined(CONFIG_FSL_USB2_OTG_MODULE)
 	struct usb_bus host = hcd->self;

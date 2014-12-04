@@ -303,6 +303,8 @@ static int ehci_bus_suspend (struct usb_hcd *hcd)
 						USB_PORT_STAT_HIGH_SPEED)
 				fs_idle_delay = true;
 			ehci_writel(ehci, t2, reg);
+			if (ehci_has_fsl_susp_errata(ehci))
+				usleep_range(10000, 20000);
 			changed = 1;
 		}
 	}

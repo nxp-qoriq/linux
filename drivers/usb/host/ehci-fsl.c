@@ -739,6 +739,9 @@ static int ehci_fsl_drv_suspend(struct device *dev)
 	struct usb_hcd *hcd = dev_get_drvdata(dev);
 	struct ehci_fsl *ehci_fsl = hcd_to_ehci_fsl(hcd);
 	void __iomem *non_ehci = hcd->regs;
+
+	ehci_fsl_save_context(hcd);
+
 #if defined(CONFIG_FSL_USB2_OTG) || defined(CONFIG_FSL_USB2_OTG_MODULE)
 	struct usb_bus host = hcd->self;
 #endif
@@ -766,8 +769,6 @@ static int ehci_fsl_drv_suspend(struct device *dev)
 	if (!fsl_deep_sleep())
 		return 0;
 
-	ehci_fsl_save_context(hcd);
-
 	ehci_fsl->usb_ctrl = ioread32be(non_ehci + FSL_SOC_USB_CTRL);
 	return 0;
 }
@@ -779,8 +780,7 @@ static int ehci_fsl_drv_resume(struct device *dev)
 	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
 	void __iomem *non_ehci = hcd->regs;
 
-	if (fsl_deep_sleep())
-		ehci_fsl_restore_context(hcd);
+	ehci_fsl_restore_context(hcd);
 
 #if defined(CONFIG_FSL_USB2_OTG) || defined(CONFIG_FSL_USB2_OTG_MODULE)
 	struct usb_bus host = hcd->self;

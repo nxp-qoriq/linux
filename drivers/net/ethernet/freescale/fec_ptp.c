@@ -292,6 +292,7 @@ static inline void fec_timecounter_set(struct fec_enet_private *fep,
 	fep->tc.cycle_last = tempval;
 	fep->tc.nsec = start_tstamp;
 }
+
 #endif
 
 /**
@@ -511,6 +512,29 @@ static int fec_ptp_settime(struct ptp_clock_info *ptp,
 	raw_spin_unlock_irqrestore(&fep->tmreg_lock, flags);
 	return 0;
 }
+
+/**
+ * fec_ptp_read
+ * @data: fec private context ptr
+ * @cnt: data pointer for counter value
+ *
+ * Returns status
+ */
+int fec_ptp_read_cnt(void *data, u32 *cnt)
+{
+	struct fec_enet_private *fep = data;
+	unsigned long flags;
+
+	/* Note : it might be possible to avoid taking the lock */
+	raw_spin_lock_irqsave(&fep->tmreg_lock, flags);
+
+	*cnt = (u32) fec_ptp_read(&fep->cc);
+
+	raw_spin_unlock_irqrestore(&fep->tmreg_lock, flags);
+
+	return 0;
+}
+EXPORT_SYMBOL(fec_ptp_read_cnt);
 #else /* CONFIG_AVB_SUPPORT */
 /**
  * fec_ptp_adjfreq - adjust ptp cycle frequency

@@ -101,6 +101,7 @@ struct avb_ops {
 int fec_enet_avb_register(const char *ifname, const struct avb_ops *avb, void *data);
 struct device *fec_enet_avb_get_device(const char *ifname);
 int fec_enet_avb_unregister(int ifindex, const struct avb_ops *avb);
+int fec_ptp_read_cnt(void *data, u32 *cnt);
 
 #endif
 

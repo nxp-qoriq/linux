@@ -363,6 +363,38 @@ static struct arm_smmu_option_prop arm_smmu_options[] = {
 	{ ARM_SMMU_OPT_SECURE_CFG_ACCESS, "calxeda,smmu-secure-config-access" },
 	{ 0, NULL},
 };
+#define CONFIG_AIOP_ERRATA
+#ifdef CONFIG_AIOP_ERRATA
+/*
+ * PL = 1, BMT = 1, VA = 1
+ */
+#define AIOP_SMR_VALUE 0x380
+/*
+ * Following should be set:
+ * SHCFG: 0x3
+ * MTCFG: 0x1
+ * MemAttr: 0xf
+ * Type: 0x1
+ * RACFG: 0x2
+ * WACFG: 0x2
+ */
+#define AIOP_S2CR_VALUE 0xA1FB00
+
+static void arm_smmu_aiop_attr_trans(struct arm_smmu_device *smmu)
+{
+	void __iomem *gr0_base = ARM_SMMU_GR0(smmu);
+	u16 mask = 0x7c7f;
+	int index;
+	u32 reg;
+	/* reserve one smr group for AIOP */
+	index = --smmu->num_mapping_groups;
+
+	reg = SMR_VALID | AIOP_SMR_VALUE << SMR_ID_SHIFT |
+		  mask << SMR_MASK_SHIFT;
+	writel(reg, gr0_base + ARM_SMMU_GR0_SMR(index));
+	writel(AIOP_S2CR_VALUE, gr0_base + ARM_SMMU_GR0_S2CR(index));
+}
+#endif
 
 static struct arm_smmu_domain *to_smmu_domain(struct iommu_domain *dom)
 {
@@ -1812,6 +1844,10 @@ static int arm_smmu_device_dt_probe(struct platform_device *pdev)
 	spin_unlock(&arm_smmu_devices_lock);
 
 	arm_smmu_device_reset(smmu);
+		/* AIOP Rev1 errata work around */
+#ifdef CONFIG_AIOP_ERRATA
+		arm_smmu_aiop_attr_trans(smmu);
+#endif
 	return 0;
 
 out_free_irqs:

@@ -47,6 +47,12 @@
 
 #include "io-pgtable.h"
 
+#ifdef CONFIG_FSL_MC_BUS
+#include <../drivers/staging/fsl-mc/include/mc.h>
+#endif
+
+#include <asm/pgalloc.h>
+
 /* Maximum number of stream IDs assigned to a single device */
 #define MAX_MASTER_STREAMIDS		MAX_PHANDLE_ARGS
 
@@ -280,6 +286,7 @@ struct arm_smmu_smr {
 struct arm_smmu_master_cfg {
 	int				num_streamids;
 	u16				streamids[MAX_MASTER_STREAMIDS];
+	u16				mask;
 	struct arm_smmu_smr		*smrs;
 };
 
@@ -429,6 +436,16 @@ static struct device_node *dev_get_dev_node(struct device *dev)
 			bus = bus->parent;
 		return bus->bridge->parent->of_node;
 	}
+
+#ifdef CONFIG_FSL_MC_BUS
+	if (dev->bus == &fsl_mc_bus_type) {
+		/*
+		 * Get to the MC device tree node.
+		 */
+		while (dev->bus == &fsl_mc_bus_type)
+			dev = dev->parent;
+	}
+#endif
 
 	return dev->of_node;
 }
@@ -1052,7 +1069,7 @@ static int arm_smmu_master_configure_smrs(struct arm_smmu_device *smmu,
 
 		smrs[i] = (struct arm_smmu_smr) {
 			.idx	= idx,
-			.mask	= 0, /* We don't currently share SMRs */
+			.mask	= cfg->mask,
 			.id	= cfg->streamids[i],
 		};
 	}
@@ -1489,6 +1506,88 @@ static struct iommu_ops arm_smmu_ops = {
 	.domain_set_attr	= arm_smmu_domain_set_attr,
 	.pgsize_bitmap		= -1UL, /* Restricted during device attach */
 };
+
+#ifdef CONFIG_FSL_MC_BUS
+
+static void arm_smmu_release_fsl_mc_iommudata(void *data)
+{
+	kfree(data);
+}
+
+/*
+ * IOMMU group creation and stream ID programming for
+ * the LS devices
+ *
+ */
+static int arm_fsl_mc_smmu_add_device(struct device *dev)
+{
+	struct device *cont_dev;
+	struct fsl_mc_device *mc_dev;
+	struct iommu_group *group;
+	struct arm_smmu_master_cfg *cfg;
+	int ret = 0;
+
+	mc_dev = to_fsl_mc_device(dev);
+	if (mc_dev->flags & FSL_MC_IS_DPRC)
+		cont_dev = dev;
+	else
+		cont_dev = mc_dev->dev.parent;
+
+	get_device(cont_dev);
+	group = iommu_group_get(cont_dev);
+	put_device(cont_dev);
+	if (!group) {
+		void (*releasefn)(void *) = NULL;
+
+		group = iommu_group_alloc();
+		if (IS_ERR(group))
+			return PTR_ERR(group);
+		/*
+		 * allocate the cfg for the container and associate it with
+		 * the iommu group. In the find cfg function we get the cfg
+		 * from the iommu group.
+		 */
+		cfg = kzalloc(sizeof(*cfg), GFP_KERNEL);
+		if (!cfg)
+			return -ENOMEM;
+
+		mc_dev = to_fsl_mc_device(cont_dev);
+		cfg->num_streamids = 1;
+		cfg->streamids[0] = mc_dev->icid;
+		cfg->mask = 0x7c00;
+		releasefn = arm_smmu_release_fsl_mc_iommudata;
+		iommu_group_set_iommudata(group, cfg, releasefn);
+		ret = iommu_group_add_device(group, cont_dev);
+	}
+
+	if (!ret && cont_dev != dev)
+		ret = iommu_group_add_device(group, dev);
+
+	iommu_group_put(group);
+
+	return ret;
+}
+
+static void arm_fsl_mc_smmu_remove_device(struct device *dev)
+{
+	iommu_group_remove_device(dev);
+
+}
+
+static struct iommu_ops arm_fsl_mc_smmu_ops = {
+	.capable	= arm_smmu_capable,
+	.domain_init	= arm_smmu_domain_init,
+	.domain_destroy	= arm_smmu_domain_destroy,
+	.attach_dev	= arm_smmu_attach_dev,
+	.detach_dev	= arm_smmu_detach_dev,
+	.map		= arm_smmu_map,
+	.unmap		= arm_smmu_unmap,
+	.iova_to_phys	= arm_smmu_iova_to_phys,
+	.add_device	= arm_fsl_mc_smmu_add_device,
+	.remove_device	= arm_fsl_mc_smmu_remove_device,
+	.pgsize_bitmap		= -1UL, /* Restricted during device attach */
+};
+#endif
 
 static void arm_smmu_device_reset(struct arm_smmu_device *smmu)
 {
@@ -1959,6 +2058,10 @@ static int __init arm_smmu_init(void)
 		bus_set_iommu(&pci_bus_type, &arm_smmu_ops);
 #endif
 
+#ifdef CONFIG_FSL_MC_BUS
+	if (!iommu_present(&fsl_mc_bus_type))
+		bus_set_iommu(&fsl_mc_bus_type, &arm_fsl_mc_smmu_ops);
+#endif
 	return 0;
 }
 

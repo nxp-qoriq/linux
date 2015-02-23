@@ -1,4 +1,4 @@
 config FSL_LS2_CONSOLE
         bool "Layerscape MC and AIOP console support"
-	depends on SOC_LS1021A || ARCH_FSL_LS2085A
+	depends on ARCH_LAYERSCAPE
         default y

@@ -110,6 +110,7 @@ struct fsl_mc_bus {
 int __must_check fsl_mc_device_add(struct dprc_obj_desc *obj_desc,
 				   struct fsl_mc_io *mc_io,
 				   struct device *parent_dev,
+				   const char *driver_override,
 				   struct fsl_mc_device **new_mc_dev);
 
 void fsl_mc_device_remove(struct fsl_mc_device *mc_dev);
@@ -117,6 +118,7 @@ void fsl_mc_device_remove(struct fsl_mc_device *mc_dev);
 int dprc_scan_container(struct fsl_mc_device *mc_bus_dev);
 
 int dprc_scan_objects(struct fsl_mc_device *mc_bus_dev,
+		      const char *driver_override,
 		      unsigned int *total_irq_count);
 
 int __init dprc_driver_init(void);

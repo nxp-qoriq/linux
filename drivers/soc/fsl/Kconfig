@@ -20,3 +20,11 @@ config FSL_GUTS
 if ARM || ARM64
 source "drivers/soc/fsl/Kconfig.arm"
 endif
+
+config FSL_QIXIS
+	tristate "QIXIS system controller driver"
+	depends on LS_SOC_DRIVERS
+	default n
+	help
+	  Say y here to enable QIXIS system controller api.  The qixis driver
+	  provides FPGA functions to control system.

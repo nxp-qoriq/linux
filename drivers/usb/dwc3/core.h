@@ -259,6 +259,10 @@
 /* Global Frame Length Adjustment Register */
 #define DWC3_GFLADJ_30MHZ_SDBND_SEL		(1 << 7)
 #define DWC3_GFLADJ_30MHZ_MASK			0x3f
+#define GFLADJ_30MHZ_REG_SEL           (1 << 7)
+#define GFLADJ_30MHZ(n)                        ((n) & 0x3f)
+#define GFLADJ_30MHZ_DEFAULT           0x20
+
 
 /* Device Configuration Register */
 #define DWC3_DCFG_DEVADDR(addr)	((addr) << 3)

@@ -1213,6 +1213,10 @@ static int dwc3_probe(struct platform_device *pdev)
 	}
 
 	/* Adjust Frame Length */
+	if (dwc->configure_gfladj)
+		dwc3_writel(dwc->regs, DWC3_GFLADJ, GFLADJ_30MHZ_REG_SEL |
+			GFLADJ_30MHZ(GFLADJ_30MHZ_DEFAULT));
+
 	dwc3_frame_length_adjustment(dwc, fladj);
 
 	usb_phy_set_suspend(dwc->usb2_phy, 0);

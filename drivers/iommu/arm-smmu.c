@@ -362,6 +362,9 @@ struct arm_smmu_domain {
 };
 
 static struct iommu_ops arm_smmu_ops;
+#ifdef CONFIG_FSL_MC_BUS
+static struct iommu_ops arm_fsl_mc_smmu_ops;
+#endif
 
 static DEFINE_SPINLOCK(arm_smmu_devices_lock);
 static LIST_HEAD(arm_smmu_devices);
@@ -946,6 +949,9 @@ static int arm_smmu_init_domain_context(struct iommu_domain *domain,
 
 	/* Update our support page sizes to reflect the page table format */
 	arm_smmu_ops.pgsize_bitmap = pgtbl_cfg.pgsize_bitmap;
+#ifdef CONFIG_FSL_MC_BUS
+	arm_fsl_mc_smmu_ops.pgsize_bitmap = pgtbl_cfg.pgsize_bitmap;
+#endif
 
 	/* Initialise the context bank with our page table cfg */
 	arm_smmu_init_context_bank(smmu_domain, &pgtbl_cfg);
@@ -1575,17 +1581,20 @@ static void arm_fsl_mc_smmu_remove_device(struct device *dev)
 }
 
 static struct iommu_ops arm_fsl_mc_smmu_ops = {
-	.capable	= arm_smmu_capable,
-	.domain_init	= arm_smmu_domain_init,
-	.domain_destroy	= arm_smmu_domain_destroy,
-	.attach_dev	= arm_smmu_attach_dev,
-	.detach_dev	= arm_smmu_detach_dev,
-	.map		= arm_smmu_map,
-	.unmap		= arm_smmu_unmap,
-	.iova_to_phys	= arm_smmu_iova_to_phys,
-	.add_device	= arm_fsl_mc_smmu_add_device,
-	.remove_device	= arm_fsl_mc_smmu_remove_device,
-	.pgsize_bitmap		= -1UL, /* Restricted during device attach */
+	.capable		= arm_smmu_capable,
+	.domain_init		= arm_smmu_domain_init,
+	.domain_destroy		= arm_smmu_domain_destroy,
+	.attach_dev		= arm_smmu_attach_dev,
+	.detach_dev		= arm_smmu_detach_dev,
+	.map			= arm_smmu_map,
+	.unmap			= arm_smmu_unmap,
+	.map_sg			= default_iommu_map_sg,
+	.iova_to_phys		= arm_smmu_iova_to_phys,
+	.add_device		= arm_fsl_mc_smmu_add_device,
+	.remove_device		= arm_fsl_mc_smmu_remove_device,
+	.domain_get_attr	= arm_smmu_domain_get_attr,
+	.domain_set_attr	= arm_smmu_domain_set_attr,
+	.pgsize_bitmap	= -1UL, /* Restricted during device attach */
 };
 #endif
 

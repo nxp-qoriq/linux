@@ -24,6 +24,8 @@ endif
 config FSL_QIXIS
 	tristate "QIXIS system controller driver"
 	depends on LS_SOC_DRIVERS
+	select REGMAP_I2C
+	select REGMAP_MMIO
 	default n
 	help
 	  Say y here to enable QIXIS system controller api.  The qixis driver

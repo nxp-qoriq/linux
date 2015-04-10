@@ -16,8 +16,10 @@
 
 /* QIXIS MAP */
 struct fsl_qixis_regs {
-	u8		version;	/* Identification Registers */
-	u8		reserved1[0x20];
+	u8		id;		/* Identification Registers */
+	u8		version;	/* Version Register */
+	u8		qixis_ver;	/* QIXIS Version Register */
+	u8		reserved1[0x1e];
 	u8		pwr_ctrl2;	/* Power Control 2 Register */
 };
 

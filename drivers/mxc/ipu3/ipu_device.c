@@ -3249,7 +3249,7 @@ static int ipu_task_thread(void *argv)
 	uint32_t size;
 	unsigned long flags;
 	unsigned int cpu;
-	struct cpumask cpu_mask;
+	struct cpumask cpu_mask = CPU_MASK_NONE;
 	struct ipu_thread_data *data = (struct ipu_thread_data *)argv;
 
 	thread_id++;

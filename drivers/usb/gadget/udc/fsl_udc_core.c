@@ -2428,10 +2428,12 @@ static int fsl_udc_probe(struct platform_device *pdev)
 		usb_sys_regs = (void *)dr_regs + USB_DR_SYS_OFFSET;
 #endif
 
+#ifdef CONFIG_ARCH_MXC
 	/* Initialize USB clocks */
 	ret = fsl_udc_clk_init(pdev);
 	if (ret < 0)
 		goto err_iounmap_noclk;
+#endif
 
 	/* Read Device Controller Capability Parameters register */
 	dccparams = fsl_readl(&dr_regs->dccparams);
@@ -2471,9 +2473,11 @@ static int fsl_udc_probe(struct platform_device *pdev)
 		dr_controller_setup(udc_controller);
 	}
 
+#ifdef CONFIG_ARCH_MXC
 	ret = fsl_udc_clk_finalize(pdev);
 	if (ret)
 		goto err_free_irq;
+#endif
 
 	/* Setup gadget structure */
 	udc_controller->gadget.ops = &fsl_gadget_ops;
@@ -2538,7 +2542,9 @@ err_free_irq:
 err_iounmap:
 	if (pdata->exit)
 		pdata->exit(pdev);
+#ifdef CONFIG_ARCH_MXC
 	fsl_udc_clk_release();
+#endif
 err_iounmap_noclk:
 	iounmap(dr_regs);
 err_release_mem_region:
@@ -2566,8 +2572,9 @@ static int fsl_udc_remove(struct platform_device *pdev)
 	udc_controller->done = &done;
 	usb_del_gadget_udc(&udc_controller->gadget);
 
+#ifdef CONFIG_ARCH_MXC
 	fsl_udc_clk_release();
-
+#endif
 	/* DR has been stopped in usb_gadget_unregister_driver() */
 	remove_proc_file();
 

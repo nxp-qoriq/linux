@@ -601,18 +601,6 @@ struct platform_device;
 int fsl_udc_clk_init(struct platform_device *pdev);
 int fsl_udc_clk_finalize(struct platform_device *pdev);
 void fsl_udc_clk_release(void);
-#else
-static inline int fsl_udc_clk_init(struct platform_device *pdev)
-{
-	return 0;
-}
-static inline int fsl_udc_clk_finalize(struct platform_device *pdev)
-{
-	return 0;
-}
-static inline void fsl_udc_clk_release(void)
-{
-}
 #endif
 
 #endif

@@ -1063,7 +1063,7 @@ static int fsl_ep_fifo_status(struct usb_ep *_ep)
 	struct ep_queue_head *qh;
 
 	ep = container_of(_ep, struct fsl_ep, ep);
-	if (!_ep || (!ep->ep.desc && ep_index(ep) != 0))
+	if (!_ep || !ep->ep.desc || (ep_index(ep) == 0))
 		return -ENODEV;
 
 	udc = (struct fsl_udc *)ep->udc;

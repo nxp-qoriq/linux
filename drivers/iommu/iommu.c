@@ -686,10 +686,10 @@ static struct iommu_group *get_pci_alias_group(struct pci_dev *pdev,
 			continue;
 
 		/* We alias them or they alias us */
-		if (((pdev->dev_flags & PCI_DEV_FLAGS_DMA_ALIAS_DEVFN) &&
-		     pdev->dma_alias_devfn == tmp->devfn) ||
-		    ((tmp->dev_flags & PCI_DEV_FLAGS_DMA_ALIAS_DEVFN) &&
-		     tmp->dma_alias_devfn == pdev->devfn)) {
+		if (((pdev->dev_flags & PCI_DEV_FLAGS_DMA_ALIAS_DEVID) &&
+		     (pdev->dma_alias_devid & 0xff) == tmp->devfn) ||
+		    ((tmp->dev_flags & PCI_DEV_FLAGS_DMA_ALIAS_DEVID) &&
+		     (tmp->dma_alias_devid & 0xff) == pdev->devfn)) {
 
 			group = get_pci_alias_group(tmp, devfns);
 			if (group) {

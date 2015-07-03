@@ -3583,8 +3583,9 @@ int pci_dev_specific_reset(struct pci_dev *dev, int probe)
 static void quirk_dma_func0_alias(struct pci_dev *dev)
 {
 	if (PCI_FUNC(dev->devfn) != 0) {
-		dev->dma_alias_devfn = PCI_DEVFN(PCI_SLOT(dev->devfn), 0);
-		dev->dev_flags |= PCI_DEV_FLAGS_DMA_ALIAS_DEVFN;
+		dev->dma_alias_devid = PCI_DEVID(dev->bus->number,
+				       PCI_DEVFN(PCI_SLOT(dev->devfn), 0));
+		dev->dev_flags |= PCI_DEV_FLAGS_DMA_ALIAS_DEVID;
 	}
 }
 
@@ -3599,8 +3600,9 @@ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_RICOH, 0xe476, quirk_dma_func0_alias);
 static void quirk_dma_func1_alias(struct pci_dev *dev)
 {
 	if (PCI_FUNC(dev->devfn) != 1) {
-		dev->dma_alias_devfn = PCI_DEVFN(PCI_SLOT(dev->devfn), 1);
-		dev->dev_flags |= PCI_DEV_FLAGS_DMA_ALIAS_DEVFN;
+		dev->dma_alias_devid = PCI_DEVID(dev->bus->number,
+				       PCI_DEVFN(PCI_SLOT(dev->devfn), 1));
+		dev->dev_flags |= PCI_DEV_FLAGS_DMA_ALIAS_DEVID;
 	}
 }
 
@@ -3664,11 +3666,12 @@ static void quirk_fixed_dma_alias(struct pci_dev *dev)
 
 	id = pci_match_id(fixed_dma_alias_tbl, dev);
 	if (id) {
-		dev->dma_alias_devfn = id->driver_data;
-		dev->dev_flags |= PCI_DEV_FLAGS_DMA_ALIAS_DEVFN;
+		dev->dma_alias_devid = PCI_DEVID(dev->bus->number,
+						 id->driver_data);
+		dev->dev_flags |= PCI_DEV_FLAGS_DMA_ALIAS_DEVID;
 		dev_info(&dev->dev, "Enabling fixed DMA alias to %02x.%d\n",
-			 PCI_SLOT(dev->dma_alias_devfn),
-			 PCI_FUNC(dev->dma_alias_devfn));
+			 PCI_SLOT(dev->dma_alias_devid),
+			 PCI_FUNC(dev->dma_alias_devid));
 	}
 }
 

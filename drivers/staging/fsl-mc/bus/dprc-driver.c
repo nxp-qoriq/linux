@@ -193,7 +193,7 @@ static void dprc_add_new_devices(struct fsl_mc_device *mc_bus_dev,
 	}
 }
 
-static void dprc_init_all_resource_pools(struct fsl_mc_device *mc_bus_dev)
+void dprc_init_all_resource_pools(struct fsl_mc_device *mc_bus_dev)
 {
 	int pool_type;
 	struct fsl_mc_bus *mc_bus = to_fsl_mc_bus(mc_bus_dev);
@@ -234,7 +234,7 @@ static void dprc_cleanup_resource_pool(struct fsl_mc_device *mc_bus_dev,
 	WARN_ON(free_count != res_pool->free_count);
 }
 
-static void dprc_cleanup_all_resource_pools(struct fsl_mc_device *mc_bus_dev)
+void dprc_cleanup_all_resource_pools(struct fsl_mc_device *mc_bus_dev)
 {
 	int pool_type;
 

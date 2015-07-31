@@ -43,8 +43,10 @@
 
 /**
  * Timeout in milliseconds to wait for the completion of an MC command
+ * 5000 ms is barely enough for dpsw/dpdmux creation
+ * TODO: if MC firmware could response faster, we should decrease this value
  */
-#define MC_CMD_COMPLETION_TIMEOUT_MS	500
+#define MC_CMD_COMPLETION_TIMEOUT_MS	5000
 
 /*
  * usleep_range() min and max values used to throttle down polling
@@ -327,17 +329,8 @@ static int mc_polling_wait_preemptible(struct fsl_mc_io *mc_io,
 		usleep_range(MC_CMD_COMPLETION_POLLING_MIN_SLEEP_USECS,
 			     MC_CMD_COMPLETION_POLLING_MAX_SLEEP_USECS);
 
-		if (time_after_eq(jiffies, jiffies_until_timeout)) {
-			dev_dbg(mc_io->dev,
-				"MC command timed out (portal: %#llx, obj handle: %#x, command: %#x)\n",
-				 mc_io->portal_phys_addr,
-				 (unsigned int)
-					MC_CMD_HDR_READ_TOKEN(cmd->header),
-				 (unsigned int)
-					MC_CMD_HDR_READ_CMDID(cmd->header));
-
+		if (time_after_eq(jiffies, jiffies_until_timeout))
 			return -ETIMEDOUT;
-		}
 	}
 
 	*mc_status = status;
@@ -369,17 +362,8 @@ static int mc_polling_wait_atomic(struct fsl_mc_io *mc_io,
 
 		udelay(MC_CMD_COMPLETION_POLLING_MAX_SLEEP_USECS);
 		timeout_usecs -= MC_CMD_COMPLETION_POLLING_MAX_SLEEP_USECS;
-		if (timeout_usecs == 0) {
-			dev_dbg(mc_io->dev,
-				"MC command timed out (portal: %#llx, obj handle: %#x, command: %#x)\n",
-				 mc_io->portal_phys_addr,
-				 (unsigned int)
-					MC_CMD_HDR_READ_TOKEN(cmd->header),
-				 (unsigned int)
-					MC_CMD_HDR_READ_CMDID(cmd->header));
-
+		if (timeout_usecs == 0)
 			return -ETIMEDOUT;
-		}
 	}
 
 	*mc_status = status;
@@ -422,8 +406,18 @@ int mc_send_command(struct fsl_mc_io *mc_io, struct mc_command *cmd)
 	else
 		error = mc_polling_wait_atomic(mc_io, cmd, &status);
 
-	if (error < 0)
+	if (error < 0) {
+		if (error == -ETIMEDOUT) {
+			pr_debug("MC command timed out (portal: %#llx, obj handle: %#x, command: %#x)\n",
+				 mc_io->portal_phys_addr,
+				 (unsigned int)
+					MC_CMD_HDR_READ_TOKEN(cmd->header),
+				 (unsigned int)
+					MC_CMD_HDR_READ_CMDID(cmd->header));
+		}
 		goto common_exit;
+
+	}
 
 	if (status != MC_CMD_STATUS_OK) {
 		dev_dbg(mc_io->dev,

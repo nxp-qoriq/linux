@@ -215,6 +215,32 @@ static int dwc3_soft_reset(struct dwc3 *dwc)
 	return 0;
 }
 
+/*
+ * dwc3_frame_length_adjustment - Adjusts frame length if required
+ * @dwc3: Pointer to our controller context structure
+ */
+static void dwc3_frame_length_adjustment(struct dwc3 *dwc)
+{
+	u32 reg;
+	u32 dft;
+
+	if (dwc->revision < DWC3_REVISION_250A)
+		return;
+
+	if (dwc->fladj == 0)
+		return;
+
+	reg = dwc3_readl(dwc->regs, DWC3_GFLADJ);
+	dft = reg & DWC3_GFLADJ_30MHZ_MASK;
+	if (dft == dwc->fladj) {
+		dev_warn(dwc->dev, "request value same as default, ignoring\n");
+	} else {
+		reg &= ~DWC3_GFLADJ_30MHZ_MASK;
+		reg |= DWC3_GFLADJ_30MHZ_SDBND_SEL | dwc->fladj;
+		dwc3_writel(dwc->regs, DWC3_GFLADJ, reg);
+	}
+}
+
 /**
  * dwc3_free_one_event_buffer - Frees one event buffer
  * @dwc: Pointer to our controller context structure
@@ -810,6 +836,9 @@ static int dwc3_core_init(struct dwc3 *dwc)
 
 	dwc3_set_soc_bus_cfg(dwc);
 
+	/* Adjust Frame Length */
+	dwc3_frame_length_adjustment(dwc);
+
 	usb_phy_set_suspend(dwc->usb2_phy, 0);
 	usb_phy_set_suspend(dwc->usb3_phy, 0);
 	ret = phy_power_on(dwc->usb2_generic_phy);
@@ -1107,7 +1136,6 @@ static void dwc3_get_properties(struct dwc3 *dwc)
 static int dwc3_probe(struct platform_device *pdev)
 {
 	struct device		*dev = &pdev->dev;
-	struct dwc3_platform_data *pdata = dev_get_platdata(dev);
 	struct device_node      *node = dev->of_node;
 	struct resource		*res;
 	struct dwc3		*dwc;

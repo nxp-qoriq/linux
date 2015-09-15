@@ -9,3 +9,4 @@ config FSL_DPAA2
 	  Build drivers for Freescale DataPath Acceleration Architecture (DPAA2) family of SoCs.
 # TODO move DPIO driver in-here?
 source "drivers/staging/fsl-dpaa2/ethernet/Kconfig"
+source "drivers/staging/fsl-dpaa2/mac/Kconfig"

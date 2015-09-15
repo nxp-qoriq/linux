@@ -2787,6 +2787,7 @@ static struct sk_buff *pktgen_alloc_skb(struct net_device *dev,
 	} else {
 		 skb = __netdev_alloc_skb(dev, size, GFP_NOWAIT);
 	}
+	skb_reserve(skb, LL_RESERVED_SPACE(dev));
 
 	if (likely(skb))
 		skb_reserve(skb, LL_RESERVED_SPACE(dev));

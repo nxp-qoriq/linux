@@ -103,8 +103,11 @@ enum mc_cmd_status {
 #define MC_CMD_HDR_READ_FLAGS(_hdr) \
 	((u32)mc_dec((_hdr), MC_CMD_HDR_FLAGS_O, MC_CMD_HDR_FLAGS_S))
 
+#define MC_PREP_OP(_ext, _param, _offset, _width, _type, _arg) \
+	((_ext)[_param] |= cpu_to_le64(mc_enc((_offset), (_width), _arg)))
+
 #define MC_EXT_OP(_ext, _param, _offset, _width, _type, _arg) \
-	((_ext)[_param] |= mc_enc((_offset), (_width), _arg))
+	(_arg = (_type)mc_dec(cpu_to_le64(_ext[_param]), (_offset), (_width)))
 
 #define MC_CMD_OP(_cmd, _param, _offset, _width, _type, _arg) \
 	((_cmd).params[_param] |= mc_enc((_offset), (_width), _arg))

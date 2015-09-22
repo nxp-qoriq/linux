@@ -81,7 +81,6 @@
 #define MAX_TIMER_CHANNEL	3
 #define FEC_TMODE_TOGGLE	0x05
 #define FEC_HIGH_PULSE		0x0F
-
 #define FEC_CC_MULT	(1 << 31)
 #define FEC_COUNTER_PERIOD	(1 << 31)
 #define PPS_OUPUT_RELOAD_PERIOD	NSEC_PER_SEC
@@ -113,6 +112,13 @@ static int fec_ptp_enable_pps(struct fec_enet_private *fep, uint enable)
 	fep->reload_period = PPS_OUPUT_RELOAD_PERIOD;
 
 	raw_spin_lock_irqsave(&fep->tmreg_lock, flags);
+
+#ifdef CONFIG_AVB_SUPPORT
+	if (fep->rec_enable && (fep->pps_channel == fep->rec_channel)) {
+		raw_spin_unlock_irqrestore(&fep->tmreg_lock, flags);
+		return -EBUSY;
+	}
+#endif
 
 	if (enable) {
 		/* clear capture or output compare interrupt status if have.
@@ -535,7 +541,121 @@ int fec_ptp_read_cnt(void *data, u32 *cnt)
 	return 0;
 }
 EXPORT_SYMBOL(fec_ptp_read_cnt);
+
+/**
+ * fec_ptp_tc_start
+ * @data: fec private context ptr
+ * @id: TC register ID
+ * @ts_0: First timestamp
+ * @ts_1: Second timestamp
+ * @tcsr_val: TCSR register value
+ *
+ * Returns 0 on success, -1 if PTP counter is not
+ * enabled.
+ */
+int fec_ptp_tc_start(void *data, u8 id, u32 ts_0, u32 ts_1, u32 tcsr_val)
+{
+	struct fec_enet_private *fep = data;
+	unsigned long flags;
+	u32 ctrl_val;
+	int rc = 0;
+
+	if (id > MAX_TIMER_CHANNEL) {
+		rc = -1;
+		goto exit;
+	}
+
+	raw_spin_lock_irqsave(&fep->tmreg_lock, flags);
+
+	/* Simple resource sharing handling with pps */
+	if (fep->pps_enable && (fep->pps_channel == id)) {
+		rc = -1;
+		goto exit_unlock;
+	}
+
+	ctrl_val = readl_relaxed(fep->hwp + FEC_ATIME_CTRL);
+	if (!(ctrl_val & FEC_T_CTRL_ENABLE)) {
+		rc = -1;
+		goto exit_unlock;
+	}
+
+	writel_relaxed(ts_0, fep->hwp + FEC_TCCR(id));
+	writel_relaxed(tcsr_val, fep->hwp + FEC_TCSR(id));
+	writel_relaxed(ts_1, fep->hwp + FEC_TCCR(id));
+
+	fep->rec_enable = 1;
+	fep->rec_channel = id;
+
+exit_unlock:
+	raw_spin_unlock_irqrestore(&fep->tmreg_lock, flags);
+exit:
+	return rc;
+}
+EXPORT_SYMBOL(fec_ptp_tc_start);
+
+/**
+ * fec_ptp_tc_stop
+ * @data: fec private context ptr
+ * @id: TC register ID
+ *
+ * Returns none
+ */
+void fec_ptp_tc_stop(void *data, u8 id)
+{
+	struct fec_enet_private *fep = data;
+	unsigned long flags;
+
+	raw_spin_lock_irqsave(&fep->tmreg_lock, flags);
+
+	writel_relaxed(0, fep->hwp + FEC_TCCR(id));
+	writel_relaxed(FEC_T_TF_MASK, fep->hwp + FEC_TCSR(id));
+
+	fep->rec_enable = 0;
+
+	raw_spin_unlock_irqrestore(&fep->tmreg_lock, flags);
+}
+EXPORT_SYMBOL(fec_ptp_tc_stop);
+
+/**
+ * fec_ptp_tc_reload
+ * @data: fec private context ptr
+ * @id: TC register ID
+ * @ts: New timestamp to load
+ *
+ * Returns 0 if success, -1 if compare has not occured
+ * or if PTP counter is not enabled.
+ */
+int fec_ptp_tc_reload(void *data, u8 id, u32 ts)
+{
+	struct fec_enet_private *fep = data;
+	unsigned long flags;
+	u32 tcsr_val;
+	u32 ctrl_val;
+	int rc = 0;
+
+	raw_spin_lock_irqsave(&fep->tmreg_lock, flags);
+
+	ctrl_val = readl_relaxed(fep->hwp + FEC_ATIME_CTRL);
+	if (!(ctrl_val & FEC_T_CTRL_ENABLE)) {
+		rc = -1;
+		goto exit;
+	}
+
+	tcsr_val = readl_relaxed(fep->hwp + FEC_TCSR(id));
+	if (tcsr_val & FEC_T_TF_MASK) {
+		writel_relaxed(ts, fep->hwp + FEC_TCCR(id));
+		writel_relaxed(tcsr_val, fep->hwp + FEC_TCSR(id));
+	}
+	else
+		rc = -1;
+
+exit:
+	raw_spin_unlock_irqrestore(&fep->tmreg_lock, flags);
+	return rc;
+}
+EXPORT_SYMBOL(fec_ptp_tc_reload);
 #else /* CONFIG_AVB_SUPPORT */
+
 /**
  * fec_ptp_adjfreq - adjust ptp cycle frequency
  * @ptp: the ptp clock structure
@@ -900,6 +1020,9 @@ static irqreturn_t fec_pps_interrupt(int irq, void *dev_id)
 	u8 channel = fep->pps_channel;
 	struct ptp_clock_event event;
 
+	if (fep->pps_enable)
+		goto exit;
+
 	val = readl(fep->hwp + FEC_TCSR(channel));
 	if (val & FEC_T_TF_MASK) {
 		/* Write the next next compare(not the next according the spec)
@@ -919,6 +1042,7 @@ static irqreturn_t fec_pps_interrupt(int irq, void *dev_id)
 		return IRQ_HANDLED;
 	}
 
+exit:
 	return IRQ_NONE;
 }
 

@@ -655,6 +655,11 @@ struct fec_enet_private {
 	u32 rx_delay_1000;
 	u32 tx_delay_1000;
 
+#ifdef CONFIG_AVB_SUPPORT
+	int rec_channel;
+	int rec_enable;
+#endif
+
 	u64 ethtool_stats[];
 };
 

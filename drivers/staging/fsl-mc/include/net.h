@@ -367,7 +367,6 @@
 /***************************  GTP fields  ************************************/
 #define NH_FLD_GTP_TEID                       (1)
 
-
 /* Protocol options */
 
 /* Ethernet options */

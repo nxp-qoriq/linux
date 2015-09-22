@@ -103,6 +103,9 @@ int fec_enet_avb_register(const char *ifname, const struct avb_ops *avb, void *d
 struct device *fec_enet_avb_get_device(const char *ifname);
 int fec_enet_avb_unregister(int ifindex, const struct avb_ops *avb);
 int fec_ptp_read_cnt(void *data, u32 *cnt);
+int fec_ptp_tc_start(void *data, u8 id, u32 ts_0, u32 ts_1, u32 tcsr_val);
+void fec_ptp_tc_stop(void *data, u8 id);
+int fec_ptp_tc_reload(void *data, u8 id, u32 ts);
 
 #endif
 

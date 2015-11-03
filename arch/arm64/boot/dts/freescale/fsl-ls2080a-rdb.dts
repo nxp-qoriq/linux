@@ -99,6 +99,7 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 		status = "disabled";
+		i2c-mux-never-disable;
 		i2c@1 {
 			#address-cells = <1>;
 			#size-cells = <0>;

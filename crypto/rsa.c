@@ -98,12 +98,6 @@ static int rsa_enc(struct akcipher_request *req)
 		goto err_free_c;
 	}
 
-	if (req->dst_len < mpi_get_size(pkey->n)) {
-		req->dst_len = mpi_get_size(pkey->n);
-		ret = -EOVERFLOW;
-		goto err_free_c;
-	}
-
 	ret = -ENOMEM;
 	m = mpi_read_raw_from_sgl(req->src, req->src_len);
 	if (!m)
@@ -140,12 +134,6 @@ static int rsa_dec(struct akcipher_request *req)
 
 	if (unlikely(!pkey->n || !pkey->d)) {
 		ret = -EINVAL;
-		goto err_free_m;
-	}
-
-	if (req->dst_len < mpi_get_size(pkey->n)) {
-		req->dst_len = mpi_get_size(pkey->n);
-		ret = -EOVERFLOW;
 		goto err_free_m;
 	}
 
@@ -187,12 +175,6 @@ static int rsa_sign(struct akcipher_request *req)
 		goto err_free_s;
 	}
 
-	if (req->dst_len < mpi_get_size(pkey->n)) {
-		req->dst_len = mpi_get_size(pkey->n);
-		ret = -EOVERFLOW;
-		goto err_free_s;
-	}
-
 	ret = -ENOMEM;
 	m = mpi_read_raw_from_sgl(req->src, req->src_len);
 	if (!m)
@@ -229,12 +211,6 @@ static int rsa_verify(struct akcipher_request *req)
 
 	if (unlikely(!pkey->n || !pkey->e)) {
 		ret = -EINVAL;
-		goto err_free_m;
-	}
-
-	if (req->dst_len < mpi_get_size(pkey->n)) {
-		req->dst_len = mpi_get_size(pkey->n);
-		ret = -EOVERFLOW;
 		goto err_free_m;
 	}
 

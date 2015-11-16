@@ -1287,7 +1287,15 @@ static void fec_enet_timeout_work(struct work_struct *work)
 	if (netif_device_present(ndev) || netif_running(ndev)) {
 		napi_disable(&fep->napi);
 		netif_tx_lock_bh(ndev);
+#ifdef CONFIG_AVB_SUPPORT
+		if (fep->avb_enabled)
+			fep->avb->close(fep->avb_data);
+#endif
 		fec_restart(ndev);
+#ifdef CONFIG_AVB_SUPPORT
+		if (fep->avb_enabled)
+			fep->avb->open(fep->avb_data, fep, fec_max_rate(fep));
+#endif
 		netif_tx_wake_all_queues(ndev);
 		netif_tx_unlock_bh(ndev);
 		napi_enable(&fep->napi);
@@ -1876,7 +1884,15 @@ static void fec_enet_adjust_link(struct net_device *ndev)
 		if (status_change) {
 			napi_disable(&fep->napi);
 			netif_tx_lock_bh(ndev);
+#ifdef CONFIG_AVB_SUPPORT
+		if (fep->avb_enabled)
+			fep->avb->close(fep->avb_data);
+#endif
 			fec_restart(ndev);
+#ifdef CONFIG_AVB_SUPPORT
+		if (fep->avb_enabled)
+			fep->avb->open(fep->avb_data, fep, fec_max_rate(fep));
+#endif
 			netif_tx_wake_all_queues(ndev);
 			netif_tx_unlock_bh(ndev);
 			napi_enable(&fep->napi);
@@ -1885,7 +1901,15 @@ static void fec_enet_adjust_link(struct net_device *ndev)
 		if (fep->link) {
 			napi_disable(&fep->napi);
 			netif_tx_lock_bh(ndev);
+#ifdef CONFIG_AVB_SUPPORT
+		if (fep->avb_enabled)
+			fep->avb->close(fep->avb_data);
+#endif
 			fec_stop(ndev);
+#ifdef CONFIG_AVB_SUPPORT
+		if (fep->avb_enabled)
+			fep->avb->open(fep->avb_data, fep, fec_max_rate(fep));
+#endif
 			netif_tx_unlock_bh(ndev);
 			napi_enable(&fep->napi);
 			fep->link = phy_dev->link;
@@ -2207,6 +2231,12 @@ static int fec_enet_mii_probe(struct net_device *ndev)
 	}
 	else
 		phy_set_max_speed(phy_dev, 100);
+
+#ifdef CONFIG_AVB_SUPPORT
+	/* Restore advertising settings saved last interface close */
+	if (!linkmode_empty(fep->phy_advertising))
+		linkmode_copy(phy_dev->advertising, fep->phy_advertising);
+#endif
 
 	fep->link = 0;
 	fep->full_duplex = 0;
@@ -3104,10 +3134,14 @@ static int fec_enet_alloc_queue(struct net_device *ndev)
 		}
 
 		fep->tx_queue[i] = txq;
-		txq->bd.ring_size = TX_RING_SIZE;
+		txq->bd.ring_size = FEC_TX_RING_SIZE;
 		fep->total_tx_ring_size += fep->tx_queue[i]->bd.ring_size;
 
+#ifdef CONFIG_AVB_SUPPORT
+		txq->tx_stop_threshold = FEC_TX_RING_SIZE * 3/4;
+#else
 		txq->tx_stop_threshold = FEC_MAX_SKB_DESCS;
+#endif
 		txq->tx_wake_threshold =
 			(txq->bd.ring_size - txq->tx_stop_threshold) / 2;
 
@@ -3129,7 +3163,7 @@ static int fec_enet_alloc_queue(struct net_device *ndev)
 			goto alloc_failed;
 		}
 
-		fep->rx_queue[i]->bd.ring_size = RX_RING_SIZE;
+		fep->rx_queue[i]->bd.ring_size = FEC_RX_RING_SIZE;
 		fep->total_rx_ring_size += fep->rx_queue[i]->bd.ring_size;
 	}
 	return ret;
@@ -3240,6 +3274,15 @@ fec_enet_open(struct net_device *ndev)
 	int ret;
 	bool reset_again;
 
+#ifdef CONFIG_AVB_SUPPORT
+	if (fep->avb_enabled) {
+		if (!try_module_get(fep->avb->owner)) {
+			ret = -EIO;
+			goto err_module_get;
+		}
+	}
+#endif
+
 	ret = pm_runtime_resume_and_get(&fep->pdev->dev);
 	if (ret < 0)
 		return ret;
@@ -3289,6 +3332,12 @@ fec_enet_open(struct net_device *ndev)
 
 	napi_enable(&fep->napi);
 	phy_start(ndev->phydev);
+
+#ifdef CONFIG_AVB_SUPPORT
+	if (fep->avb_enabled)
+		fep->avb->open(fep->avb_data, fep, fec_max_rate(fep));
+#endif
+
 	netif_tx_start_all_queues(ndev);
 
 	device_set_wakeup_enable(&ndev->dev, fep->wol_flag &
@@ -3305,6 +3354,13 @@ clk_enable:
 	pm_runtime_put_autosuspend(&fep->pdev->dev);
 	if (!fep->mii_bus_share)
 		pinctrl_pm_select_sleep_state(&fep->pdev->dev);
+
+#ifdef CONFIG_AVB_SUPPORT
+	if (fep->avb_enabled)
+		module_put(fep->avb->owner);
+#endif
+
+err_module_get:
 	return ret;
 }
 
@@ -3318,9 +3374,20 @@ fec_enet_close(struct net_device *ndev)
 	if (netif_device_present(ndev)) {
 		napi_disable(&fep->napi);
 		netif_tx_disable(ndev);
+#ifdef CONFIG_AVB_SUPPORT
+		if (fep->avb_enabled)
+			fep->avb->close(fep->avb_data);
+#endif
 		fec_stop(ndev);
 	}
 
+#ifdef CONFIG_AVB_SUPPORT
+	/*
+	 * Save advertising settings so there are not lost
+	 * when opening the interface again.
+	 */
+	linkmode_copy(fep->phy_advertising, ndev->phydev->advertising);
+#endif
 	phy_disconnect(ndev->phydev);
 	ndev->phydev = NULL;
 
@@ -3338,6 +3405,11 @@ fec_enet_close(struct net_device *ndev)
 	pm_runtime_put_autosuspend(&fep->pdev->dev);
 
 	fec_enet_free_buffers(ndev);
+
+#ifdef CONFIG_AVB_SUPPORT
+	if (fep->avb_enabled)
+		module_put(fep->avb->owner);
+#endif
 
 	return 0;
 }
@@ -3547,6 +3619,113 @@ static const unsigned short offset_des_active_txq[] = {
 	FEC_X_DES_ACTIVE_0, FEC_X_DES_ACTIVE_1, FEC_X_DES_ACTIVE_2
 };
 
+#ifdef CONFIG_AVB_SUPPORT
+struct device *fec_enet_avb_get_device(const char *ifname)
+{
+	struct net_device *ndev;
+	struct fec_enet_private *fep;
+
+
+	ndev = dev_get_by_name(&init_net, ifname);
+	if (!ndev)
+		return NULL;
+
+	fep = netdev_priv(ndev);
+
+	dev_put(ndev);
+
+	return &fep->pdev->dev;
+
+}
+EXPORT_SYMBOL(fec_enet_avb_get_device);
+
+int fec_enet_avb_register(const char *ifname, const struct avb_ops *avb, void *data)
+{
+	struct net_device *ndev;
+	struct fec_enet_private *fep;
+	unsigned int up;
+	int ifindex;
+
+	ndev = dev_get_by_name(&init_net, ifname);
+	if (!ndev)
+		goto err_dev_get;
+
+	fep = netdev_priv(ndev);
+
+	if (fep->avb)
+		goto err_avb;
+
+	rtnl_lock();
+	up = ndev->flags & IFF_UP;
+	if (up)
+		dev_close(ndev);
+
+	fep->avb = avb;
+	fep->avb_data = data;
+	fep->avb_enabled = 1;
+	ifindex = ndev->ifindex;
+
+	if (up) {
+		/* In case of error, device is closed but avb interface is registered */
+		dev_open(ndev, NULL);
+	}
+
+	rtnl_unlock();
+
+	dev_put(ndev);
+
+	return ifindex;
+
+err_avb:
+	dev_put(ndev);
+
+err_dev_get:
+	return -1;
+}
+EXPORT_SYMBOL(fec_enet_avb_register);
+
+int fec_enet_avb_unregister(int ifindex, const struct avb_ops *avb)
+{
+	struct net_device *ndev;
+	struct fec_enet_private *fep;
+	unsigned int up;
+
+	ndev = dev_get_by_index(&init_net, ifindex);
+	if (!ndev)
+		goto err_dev_get;
+
+	fep = netdev_priv(ndev);
+	if (fep->avb != avb)
+		goto err_avb;
+
+	rtnl_lock();
+	up = ndev->flags & IFF_UP;
+	if (up)
+		dev_close(ndev);
+
+	fep->avb = NULL;
+	fep->avb_data = NULL;
+	fep->avb_enabled = 0;
+
+	if (up)
+		/* In case of error, device is closed but avb interface is unregistered */
+		dev_open(ndev, NULL);
+
+	rtnl_unlock();
+
+	dev_put(ndev);
+
+	return 0;
+
+err_avb:
+	dev_put(ndev);
+
+err_dev_get:
+	return -1;
+}
+EXPORT_SYMBOL(fec_enet_avb_unregister);
+#endif
+
  /*
   * XXX:  We need to clean up on failure exits here.
   *
@@ -3651,8 +3830,13 @@ static int fec_enet_init(struct net_device *ndev)
 		ndev->gso_max_segs = FEC_MAX_TSO_SEGS;
 
 		/* enable hw accelerator */
+#ifdef CONFIG_AVB_SUPPORT
+		//FIXME disable SG and TSO for now
+		ndev->features |= (NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM | NETIF_F_RXCSUM);
+#else
 		ndev->features |= (NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM
 				| NETIF_F_RXCSUM | NETIF_F_SG | NETIF_F_TSO);
+#endif
 		fep->csum_flags |= FLAG_RX_CSUM_ENABLED;
 	}
 
@@ -4171,6 +4355,10 @@ static int __maybe_unused fec_suspend(struct device *dev)
 		netif_tx_lock_bh(ndev);
 		netif_device_detach(ndev);
 		netif_tx_unlock_bh(ndev);
+#ifdef CONFIG_AVB_SUPPORT
+		if (fep->avb_enabled)
+			fep->avb->close(fep->avb_data);
+#endif
 		fec_stop(ndev);
 		if (!(fep->wol_flag & FEC_WOL_FLAG_ENABLE)) {
 			fec_irqs_disable(ndev);
@@ -4246,6 +4434,10 @@ static int __maybe_unused fec_resume(struct device *dev)
 		napi_enable(&fep->napi);
 		phy_init_hw(ndev->phydev);
 		phy_start(ndev->phydev);
+#ifdef CONFIG_AVB_SUPPORT
+		if (fep->avb_enabled)
+			fep->avb->open(fep->avb_data, fep, fec_max_rate(fep));
+#endif
 	} else if (fep->mii_bus_share && !ndev->phydev) {
 		pinctrl_pm_select_default_state(&fep->pdev->dev);
 		/* And then recovery mii bus */

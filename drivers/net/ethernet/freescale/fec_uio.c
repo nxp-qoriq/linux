@@ -515,8 +515,8 @@ static int fec_enet_uio_init(struct net_device *ndev)
 		return ret;
 	}
 
-	tx_ring_size = TX_RING_SIZE;
-	rx_ring_size = RX_RING_SIZE;
+	tx_ring_size = FEC_TX_RING_SIZE;
+	rx_ring_size = FEC_RX_RING_SIZE;
 
 	for (i = 0; i < FEC_ENET_MAX_TX_QS; i++)
 		total_tx_ring_size += tx_ring_size;

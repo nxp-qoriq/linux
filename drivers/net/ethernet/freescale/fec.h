@@ -21,6 +21,7 @@
 #include <linux/timecounter.h>
 #include <dt-bindings/firmware/imx/rsrc.h>
 #include <linux/firmware/imx/sci.h>
+#include <linux/fec.h>
 
 #if defined(CONFIG_M523x) || defined(CONFIG_M527x) || defined(CONFIG_M528x) || \
     defined(CONFIG_M520x) || defined(CONFIG_M532x) || defined(CONFIG_ARM) || \
@@ -339,22 +340,6 @@ struct bufdesc_ex {
 #define RCMR_CMP(X)		(((X) == 1) ? RCMR_CMP_1 : RCMR_CMP_2)
 #define FEC_TX_BD_FTYPE(X)	(((X) & 0xf) << 20)
 
-/* The number of Tx and Rx buffers.  These are allocated from the page
- * pool.  The code may assume these are power of two, so it it best
- * to keep them that size.
- * We don't need to allocate pages for the transmitter.  We just use
- * the skbuffer directly.
- */
-
-#define FEC_ENET_RX_PAGES	256
-#define FEC_ENET_RX_FRSIZE	2048
-#define FEC_ENET_RX_FRPPG	(PAGE_SIZE / FEC_ENET_RX_FRSIZE)
-#define RX_RING_SIZE		(FEC_ENET_RX_FRPPG * FEC_ENET_RX_PAGES)
-#define FEC_ENET_TX_FRSIZE	2048
-#define FEC_ENET_TX_FRPPG	(PAGE_SIZE / FEC_ENET_TX_FRSIZE)
-#define TX_RING_SIZE		512	/* Must be power of two */
-#define TX_RING_MOD_MASK	511	/*   for this to work */
-
 #define BD_ENET_RX_INT		0x00800000
 #define BD_ENET_RX_PTP		((ushort)0x0400)
 #define BD_ENET_RX_ICE		0x00000020
@@ -521,8 +506,8 @@ struct bufdesc_prop {
 
 struct fec_enet_priv_tx_q {
 	struct bufdesc_prop bd;
-	unsigned char *tx_bounce[TX_RING_SIZE];
-	struct  sk_buff *tx_skbuff[TX_RING_SIZE];
+	unsigned char *tx_bounce[FEC_TX_RING_SIZE];
+	struct  sk_buff *tx_skbuff[FEC_TX_RING_SIZE];
 
 	unsigned short tx_stop_threshold;
 	unsigned short tx_wake_threshold;
@@ -534,7 +519,7 @@ struct fec_enet_priv_tx_q {
 
 struct fec_enet_priv_rx_q {
 	struct bufdesc_prop bd;
-	struct  sk_buff *rx_skbuff[RX_RING_SIZE];
+	struct  sk_buff *rx_skbuff[FEC_RX_RING_SIZE];
 };
 
 struct fec_stop_mode_gpr {
@@ -576,6 +561,12 @@ struct fec_enet_private {
 	unsigned int total_tx_ring_size;
 	unsigned int total_rx_ring_size;
 
+#ifdef CONFIG_AVB_SUPPORT
+	const struct avb_ops *avb;
+	void *avb_data;
+	unsigned int avb_enabled;
+	__ETHTOOL_DECLARE_LINK_MODE_MASK(phy_advertising);
+#endif
 	struct	platform_device *pdev;
 
 	int	dev_id;
@@ -666,6 +657,17 @@ struct fec_enet_private {
 
 	u64 ethtool_stats[];
 };
+
+#ifdef CONFIG_AVB_SUPPORT
+#define FEC_MAX_RATE		400	/* Mbps */
+#define FEC_MAX_RATE_HAS_AVB	1000	/* Mbps */
+
+static inline int fec_max_rate(struct fec_enet_private *fep)
+{
+	int max_rate = (fep->quirks & FEC_QUIRK_HAS_AVB) ? FEC_MAX_RATE_HAS_AVB : FEC_MAX_RATE;
+	return min(max_rate, fep->speed);
+}
+#endif
 
 void fec_ptp_init(struct platform_device *pdev, int irq_idx);
 void fec_ptp_stop(struct platform_device *pdev);

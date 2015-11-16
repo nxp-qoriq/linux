@@ -43,6 +43,14 @@ config FEC_UIO
 	  Say Y here if you want to use the built-in 10/100 Fast ethernet
 	  controller on Freescale i.MX 8M Mini processor.
 
+config AVB_SUPPORT
+	bool "AVB interface support"
+	depends on FEC && ARCH_MXC
+	help
+	  Say Y here if you want to enable the AVB interface in the FEC
+	  driver. For  the actual AVB functionality an external module is
+	  still required.
+
 config FEC_MPC52xx
 	tristate "FEC MPC52xx driver"
 	depends on PPC_MPC52xx && PPC_BESTCOMM

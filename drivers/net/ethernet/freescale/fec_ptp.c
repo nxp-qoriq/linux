@@ -408,7 +408,7 @@ static int fec_ptp_adjfine(struct ptp_clock_info *ptp, long scaled_ppm)
 	unsigned long flags;
 	u32 inc, cor, pc;
 
-	inc = FEC_T_PERIOD_ONE_SEC / fep->cycle_speed;
+	inc = fep->ptp_inc;
 	if (ppb == 0) {
 		cor = 0;
 		pc = 0;

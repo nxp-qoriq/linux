@@ -1260,8 +1260,8 @@ static int fec_enet_uio_init(struct net_device *ndev)
 		return ret;
 	}
 
-	tx_ring_size = RING_SIZE_TX;
-	rx_ring_size = RING_SIZE_RX;
+	tx_ring_size = FEC_TX_RING_SIZE;
+	rx_ring_size = FEC_RX_RING_SIZE;
 
 	for (i = 0; i < FEC_MAX_Q; i++) {
 		total_tx_ring_size += tx_ring_size;

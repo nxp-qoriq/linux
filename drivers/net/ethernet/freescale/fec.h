@@ -652,7 +652,7 @@ struct fec_enet_private {
 
 	struct ptp_clock *ptp_clock;
 	struct ptp_clock_info ptp_caps;
-	spinlock_t tmreg_lock;
+	raw_spinlock_t tmreg_lock;
 	struct cyclecounter cc;
 	struct timecounter tc;
 	u32 cycle_speed;

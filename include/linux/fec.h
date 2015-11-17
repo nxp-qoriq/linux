@@ -33,6 +33,7 @@ struct fec_platform_data {
 #define FEC_ENET_RX_FRPPG	(PAGE_SIZE / FEC_ENET_RX_FRSIZE)
 #ifdef CONFIG_AVB_SUPPORT
 #define FEC_RX_RING_SIZE	256
+#define FEC_ENET_AVB_RX_FRSIZE	1522
 #else
 #define FEC_RX_RING_SIZE	(FEC_ENET_RX_FRPPG * FEC_ENET_RX_PAGES)
 #endif
@@ -71,11 +72,13 @@ struct avb_rx_desc {
 	struct avb_desc common;
 
 	/* end of common rx fields */
+	unsigned long dma_addr;
 	unsigned short sc;	/* Control and status info */
 	unsigned short queue_id;
 };
 
-#define AVB_DATA_OFFSET		L1_CACHE_ALIGN(sizeof(struct avb_rx_desc)) /* 64 bytes */
+#define AVB_WAKE_THREAD    (1 << 0)
+#define AVB_WAKE_NAPI      (1 << 1)
 
 struct avb_ops {
 	void (*open)(void *, void *, int);
@@ -102,6 +105,8 @@ struct avb_ops {
 int fec_enet_avb_register(const char *ifname, const struct avb_ops *avb, void *data);
 struct device *fec_enet_avb_get_device(const char *ifname);
 int fec_enet_avb_unregister(int ifindex, const struct avb_ops *avb);
+int fec_enet_rx_poll_avb(void *data);
+
 int fec_ptp_read_cnt(void *data, u32 *cnt);
 int fec_ptp_tc_start(void *data, u8 id, u32 ts_0, u32 ts_1, u32 tcsr_val);
 void fec_ptp_tc_stop(void *data, u8 id);

@@ -1302,9 +1302,9 @@ fec_enet_hwtstamp(struct fec_enet_private *fep, unsigned ts,
 	unsigned long flags;
 	u64 ns;
 
-	spin_lock_irqsave(&fep->tmreg_lock, flags);
+	raw_spin_lock_irqsave(&fep->tmreg_lock, flags);
 	ns = timecounter_cyc2time(&fep->tc, ts);
-	spin_unlock_irqrestore(&fep->tmreg_lock, flags);
+	raw_spin_unlock_irqrestore(&fep->tmreg_lock, flags);
 
 	memset(hwtstamps, 0, sizeof(*hwtstamps));
 	hwtstamps->hwtstamp = ns_to_ktime(ns);

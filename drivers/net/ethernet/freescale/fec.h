@@ -528,6 +528,10 @@ struct fec_stop_mode_gpr {
 	u8 bit;
 };
 
+#ifdef CONFIG_AVB_SUPPORT
+#define AVB_DMA_MAPPING		1
+#endif
+
 /* The FEC buffer descriptors track the ring buffers.  The rx_bd_base and
  * tx_bd_base always point to the base of the buffer descriptors.  The
  * cur_rx and cur_tx point to the currently available buffer.

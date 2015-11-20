@@ -432,6 +432,203 @@ fec_enet_clear_csum(struct sk_buff *skb, struct net_device *ndev)
 	return 0;
 }
 
+#ifdef CONFIG_AVB_SUPPORT
+/*
+ * Sends an AVB buffer on the network.
+ */
+int fec_enet_start_xmit_avb(void *data, struct avb_tx_desc *desc)
+{
+	struct fec_enet_private *fep = data;
+	struct bufdesc *bdp;
+	unsigned short status;
+	unsigned int index;
+	unsigned short queue_id = desc->queue_id;
+	struct fec_enet_priv_tx_q *txq = fep->tx_queue[queue_id];
+
+	/* ring buffer base address */
+	/* registers base address */
+	/* current descriptor pointer */
+	bdp = txq->bd.cur;
+
+	if (bdp == txq->dirty_tx)
+		return -2;
+
+	status = fec16_to_cpu(bdp->cbd_sc);
+
+	if (status & BD_ENET_TX_READY)
+		return -2;
+
+	/* Clear all of the status flags */
+	status &= ~BD_ENET_TX_STATS;
+
+	index = fec_enet_get_bd_index(bdp, &txq->bd);
+
+	/* Save desc pointer */
+	txq->tx_skbuff[index] = (void *)desc;
+
+	bdp->cbd_datlen = cpu_to_fec16(desc->common.len);
+	bdp->cbd_bufaddr = cpu_to_fec32(desc->dma_addr);
+
+	if (fep->bufdesc_ex) {
+		struct bufdesc_ex *ebdp = (struct bufdesc_ex *)bdp;
+		unsigned long cbd_esc;
+
+		ebdp->cbd_bdu = cpu_to_fec32(0);
+
+		if (desc->common.flags & AVB_TX_FLAG_HW_TS)
+			cbd_esc = BD_ENET_TX_TS | desc->esc;
+		else
+			cbd_esc = desc->esc;
+
+		if (desc->common.flags & AVB_TX_FLAG_HW_CSUM)
+			cbd_esc |= BD_ENET_TX_PINS | BD_ENET_TX_IINS;
+
+		if (fep->quirks & FEC_QUIRK_HAS_AVB)
+			cbd_esc |= FEC_TX_BD_FTYPE(txq->bd.qid);
+
+		ebdp->cbd_esc = cpu_to_fec32(cbd_esc);
+	}
+
+	wmb();
+
+	bdp->cbd_sc = cpu_to_fec16(status | (BD_ENET_TX_READY | BD_ENET_TX_LAST | BD_ENET_TX_TC));
+
+	/* If this was the last BD in the ring, start at the beginning again. */
+	bdp = fec_enet_get_nextdesc(bdp, &txq->bd);
+
+	txq->bd.cur = bdp;
+
+	/* Trigger transmission start */
+	if (!(fep->quirks & FEC_QUIRK_ERR006358))
+		if (!(fep->quirks & FEC_QUIRK_ERR007885) ||
+		    !readl(txq->bd.reg_desc_active) ||
+		    !readl(txq->bd.reg_desc_active) ||
+		    !readl(txq->bd.reg_desc_active) ||
+		    !readl(txq->bd.reg_desc_active))
+			writel(0, txq->bd.reg_desc_active);
+
+	if (bdp == txq->dirty_tx)
+		return -1;
+
+	return 0;
+}
+EXPORT_SYMBOL(fec_enet_start_xmit_avb);
+
+void fec_enet_finish_xmit_avb(void *data, unsigned int queue_id)
+{
+	struct fec_enet_private *fep = data;
+
+	/* Trigger transmission start */
+	if (fep->quirks & FEC_QUIRK_ERR006358)
+		if (!(fep->quirks & FEC_QUIRK_ERR007885) ||
+		    !readl(fep->tx_queue[queue_id]->bd.reg_desc_active) ||
+		    !readl(fep->tx_queue[queue_id]->bd.reg_desc_active) ||
+		    !readl(fep->tx_queue[queue_id]->bd.reg_desc_active) ||
+		    !readl(fep->tx_queue[queue_id]->bd.reg_desc_active))
+			writel(0, fep->tx_queue[queue_id]->bd.reg_desc_active);
+}
+EXPORT_SYMBOL(fec_enet_finish_xmit_avb);
+
+/*
+ * When AVB is enabled, it is the transmit function for the regular
+ * network traffic. It does not support any SG/TSO skb.
+ * Frames are posted to the AVB module for further scheduling.
+ */
+static int fec_enet_start_xmit_best_effort(struct fec_enet_priv_tx_q *txq,
+		struct netdev_queue *nq, struct sk_buff *skb, struct net_device *ndev)
+{
+	struct fec_enet_private *fep = netdev_priv(ndev);
+	void *bufaddr;
+	struct avb_tx_desc *desc;
+	int rc;
+
+	if (fep->avb->tx_full(fep->avb_data)) {
+		netdev_err(ndev, "tx queue full!\n");
+		return NETDEV_TX_BUSY;
+	}
+
+	/* Protocol checksum off-load for TCP and UDP. */
+	if (fec_enet_clear_csum(skb, ndev)) {
+		dev_kfree_skb_any(skb);
+		ndev->stats.tx_dropped++;
+		return NETDEV_TX_OK;
+	}
+
+	if (skb_headroom(skb) < sizeof(struct avb_tx_desc)) {
+		if (pskb_expand_head(skb, sizeof(struct avb_tx_desc), 0, GFP_ATOMIC)) {
+			dev_kfree_skb_any(skb);
+			ndev->stats.tx_dropped++;
+			return NETDEV_TX_OK;
+		}
+	}
+
+	bufaddr = skb->data;
+	desc = (struct avb_tx_desc *)(skb->data - sizeof(struct avb_tx_desc));
+
+	/* Set buffer length and buffer pointer */
+	desc->common.offset = sizeof(struct avb_tx_desc);
+	desc->common.len = skb->len;
+	desc->queue_id = txq->bd.qid;
+
+	if ((((unsigned long) bufaddr) & fep->tx_align) ||
+		(fep->quirks & FEC_QUIRK_SWAP_FRAME)) {
+		memcpy(txq->tx_bounce[txq->tx_index], skb->data, skb->len);
+		bufaddr = txq->tx_bounce[txq->tx_index];
+
+		txq->tx_index++;
+		if (txq->tx_index >= txq->tx_bounce_size)
+			txq->tx_index = 0;
+
+		if (fep->quirks & FEC_QUIRK_SWAP_FRAME)
+			swap_buffer(bufaddr, skb->len);
+	}
+
+	/* Save skb pointer */
+	desc->data = skb;
+	desc->common.flags = AVB_TX_FLAG_SKB;
+
+	/* Push the data cache so the CPM does not get stale memory data. */
+	desc->dma_addr = dma_map_single(&fep->pdev->dev, bufaddr, skb->len, DMA_TO_DEVICE);
+	if (dma_mapping_error(&fep->pdev->dev, desc->dma_addr)) {
+		dev_kfree_skb_any(skb);
+		if (net_ratelimit())
+			netdev_err(ndev, "Tx DMA memory map failed\n");
+		return NETDEV_TX_OK;
+	}
+
+
+	if (fep->bufdesc_ex) {
+
+		desc->esc = 0;
+
+		if (unlikely(skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP &&
+			fep->hwts_tx_en)) {
+			skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
+			desc->esc |= BD_ENET_TX_TS;
+		}
+
+		if (skb->ip_summed == CHECKSUM_PARTIAL)
+			desc->esc |= BD_ENET_TX_PINS | BD_ENET_TX_IINS;
+	}
+
+	skb_tx_timestamp(skb);
+
+	if ((rc = fep->avb->tx(fep->avb_data, desc)) < 0) {
+		if (rc < -1) {
+			kfree_skb(skb);
+			ndev->stats.tx_dropped++;
+		}
+
+		netif_tx_stop_queue(nq);
+		return NETDEV_TX_OK;
+	}
+
+	return NETDEV_TX_OK;
+}
+
+
+#endif
+
 static struct bufdesc *
 fec_enet_txq_submit_frag_skb(struct fec_enet_priv_tx_q *txq,
 			     struct sk_buff *skb,
@@ -860,6 +1057,11 @@ fec_enet_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 	txq = fep->tx_queue[queue];
 	nq = netdev_get_tx_queue(ndev, queue);
 
+#ifdef CONFIG_AVB_SUPPORT
+	if (fep->avb_enabled)
+		return fec_enet_start_xmit_best_effort(txq, nq, skb, ndev);
+#endif
+
 	if (skb_is_gso(skb))
 		ret = fec_enet_txq_submit_tso(txq, skb, ndev);
 	else
@@ -884,6 +1086,7 @@ static void fec_enet_bd_init(struct net_device *dev)
 	struct bufdesc *bdp;
 	unsigned int i;
 	unsigned int q;
+	struct	sk_buff	*skb;
 
 	for (q = 0; q < fep->num_rx_queues; q++) {
 		/* Initialize the receive buffer descriptors. */
@@ -907,6 +1110,23 @@ static void fec_enet_bd_init(struct net_device *dev)
 		rxq->bd.cur = rxq->bd.base;
 	}
 
+#ifdef CONFIG_AVB_SUPPORT
+	if (fep->avb_enabled) {
+		struct avb_tx_desc *desc;
+
+		while ((desc = fep->avb->tx_cleanup_dequeue(fep->avb_data)) != (void *) -1) {
+
+			skb = desc->data;
+
+			dma_unmap_single(&fep->pdev->dev, desc->bufaddr,
+				skb->len, DMA_TO_DEVICE);
+
+			/* Free the sk buffer associated with this last transmit */
+			dev_kfree_skb_any(skb);
+		}
+	}
+#endif
+
 	for (q = 0; q < fep->num_tx_queues; q++) {
 		/* ...and the same for transmit */
 		txq = fep->tx_queue[q];
@@ -915,6 +1135,35 @@ static void fec_enet_bd_init(struct net_device *dev)
 
 		for (i = 0; i < txq->bd.ring_size; i++) {
 			/* Initialize the BD for every fragment in the page. */
+
+			if (txq->tx_skbuff[i]) {
+#ifdef CONFIG_AVB_SUPPORT
+				skb = NULL;
+				if (fep->avb_enabled) {
+					struct avb_tx_desc *desc = (struct avb_tx_desc *)txq->tx_skbuff[i];
+
+					if (!(desc->common.flags & AVB_TX_FLAG_SKB)) {
+						fep->avb->free(fep->avb_data, &desc->common);
+						/* Avoid unmapping AVB buffers below */
+						bdp->cbd_bufaddr = cpu_to_fec32(0);
+					} else {
+						skb = desc->data;
+					}
+				} else
+					skb = txq->tx_skbuff[i];
+
+				if (skb) {
+#else
+				skb = txq->tx_skbuff[i];
+
+				{
+#endif
+					dev_kfree_skb_any(skb);
+				}
+
+				txq->tx_skbuff[i] = NULL;
+			}
+
 			bdp->cbd_sc = cpu_to_fec16(0);
 			if (bdp->cbd_bufaddr &&
 			    !IS_TSO_HEADER(txq, fec32_to_cpu(bdp->cbd_bufaddr)))
@@ -922,10 +1171,7 @@ static void fec_enet_bd_init(struct net_device *dev)
 						 fec32_to_cpu(bdp->cbd_bufaddr),
 						 fec16_to_cpu(bdp->cbd_datlen),
 						 DMA_TO_DEVICE);
-			if (txq->tx_skbuff[i]) {
-				dev_kfree_skb_any(txq->tx_skbuff[i]);
-				txq->tx_skbuff[i] = NULL;
-			}
+
 			bdp->cbd_bufaddr = cpu_to_fec32(0);
 			bdp = fec_enet_get_nextdesc(bdp, &txq->bd);
 		}
@@ -1317,6 +1563,173 @@ fec_enet_hwtstamp(struct fec_enet_private *fep, unsigned ts,
 	memset(hwtstamps, 0, sizeof(*hwtstamps));
 	hwtstamps->hwtstamp = ns_to_ktime(ns);
 }
+
+#ifdef CONFIG_AVB_SUPPORT
+static int
+fec_enet_tx_queue_avb(struct net_device *ndev, u16 queue_id)
+{
+	struct	fec_enet_private *fep;
+	struct bufdesc *bdp;
+	struct avb_tx_desc *desc;
+	unsigned short status;
+	struct fec_enet_priv_tx_q *txq;
+	struct netdev_queue *nq;
+	int index = 0;
+	int rc = 0;
+
+	fep = netdev_priv(ndev);
+
+	txq = fep->tx_queue[queue_id];
+	nq = netdev_get_tx_queue(ndev, queue_id);
+
+	bdp = txq->dirty_tx;
+
+	/* get next bdp of dirty_tx */
+	bdp = fec_enet_get_nextdesc(bdp, &txq->bd);
+
+	while (bdp != READ_ONCE(txq->bd.cur)) {
+		/* Order the load of cur_tx and cbd_sc */
+		rmb();
+		status = fec16_to_cpu(READ_ONCE(bdp->cbd_sc));
+		if (status & BD_ENET_TX_READY)
+			break;
+
+		index = fec_enet_get_bd_index(bdp, &txq->bd);
+		desc = (struct avb_tx_desc *)txq->tx_skbuff[index];
+
+		if (!(desc->common.flags & AVB_TX_FLAG_SKB)) {
+			if ((desc->common.flags & AVB_TX_FLAG_HW_TS) && fep->bufdesc_ex) {
+				struct bufdesc_ex *ebdp = (struct bufdesc_ex *)bdp;
+
+				desc->common.ts = ebdp->ts + fep->tx_tstamp_latency;
+
+				/* upper layer will retrieve the timestamp and free the descriptor */
+				rc |= fep->avb->tx_ts(fep->avb_data, &desc->common);
+			}
+			else
+				fep->avb->free(fep->avb_data, &desc->common);
+		} else {
+			/* Backup hardware descriptor fields in software descriptor */
+			desc->sc = status;
+			desc->datlen = fec16_to_cpu(bdp->cbd_datlen);
+			desc->bufaddr = fec32_to_cpu(bdp->cbd_bufaddr);
+			desc->common.ts = fec32_to_cpu(((struct bufdesc_ex *)bdp)->ts);
+
+			if (fep->avb->tx_cleanup(fep->avb_data, desc) < 0)
+				BUG();
+		}
+
+		txq->tx_skbuff[index] = NULL;
+		bdp->cbd_bufaddr = cpu_to_fec32(0);
+		txq->dirty_tx = bdp;
+
+		/* Update pointer to next buffer descriptor to be transmitted */
+		bdp = fec_enet_get_nextdesc(bdp, &txq->bd);
+	}
+
+	/* schedule tx napi, based on level of tx cleanup queue or time passed */
+	if (fep->avb->tx_cleanup_ready(fep->avb_data) || netif_tx_queue_stopped(nq)) {
+		if (napi_schedule_prep(&fep->napi)) {
+			__napi_schedule(&fep->napi);
+		}
+	}
+
+	return rc;
+}
+
+int
+fec_enet_tx_avb(void *data)
+{
+	struct fec_enet_private *fep = data;
+	u16 queue_id;
+	int rc = 0;
+
+	for (queue_id = 0; queue_id < fep->num_tx_queues; queue_id++)
+		rc |= fec_enet_tx_queue_avb(fep->netdev, queue_id);
+
+	return rc;
+}
+EXPORT_SYMBOL(fec_enet_tx_avb);
+
+static void
+fec_enet_tx_best_effort(struct net_device *ndev)
+{
+	struct  fec_enet_private *fep;
+	unsigned short status;
+	struct avb_tx_desc *desc;
+	struct  sk_buff *skb;
+	struct fec_enet_priv_tx_q *txq;
+	struct netdev_queue *nq;
+
+	fep = netdev_priv(ndev);
+
+	while ((desc = fep->avb->tx_cleanup_dequeue(fep->avb_data)) != (void *) -1) {
+
+		txq = fep->tx_queue[desc->queue_id];
+		nq = netdev_get_tx_queue(ndev, desc->queue_id);
+
+		status = desc->sc;
+
+		/* Check for errors. */
+		if (status & (BD_ENET_TX_HB | BD_ENET_TX_LC |
+				   BD_ENET_TX_RL | BD_ENET_TX_UN |
+				   BD_ENET_TX_CSL)) {
+			ndev->stats.tx_errors++;
+			if (status & BD_ENET_TX_HB)  /* No heartbeat */
+				ndev->stats.tx_heartbeat_errors++;
+			if (status & BD_ENET_TX_LC)  /* Late collision */
+				ndev->stats.tx_window_errors++;
+			if (status & BD_ENET_TX_RL)  /* Retrans limit */
+				ndev->stats.tx_aborted_errors++;
+			if (status & BD_ENET_TX_UN)  /* Underrun */
+				ndev->stats.tx_fifo_errors++;
+			if (status & BD_ENET_TX_CSL) /* Carrier lost */
+				ndev->stats.tx_carrier_errors++;
+		} else {
+			ndev->stats.tx_packets++;
+			ndev->stats.tx_bytes += desc->datlen;
+		}
+
+		skb = desc->data;
+
+		if (!IS_TSO_HEADER(txq, desc->bufaddr))
+			dma_unmap_single(&fep->pdev->dev, desc->bufaddr,
+					 desc->datlen, DMA_TO_DEVICE);
+
+		if (unlikely(skb_shinfo(skb)->tx_flags & SKBTX_IN_PROGRESS) &&
+			fep->bufdesc_ex) {
+			struct skb_shared_hwtstamps shhwtstamps;
+
+			desc->common.ts += fep->tx_tstamp_latency;
+			fec_enet_hwtstamp(fep, desc->common.ts,
+					  &shhwtstamps);
+			skb_tstamp_tx(skb, &shhwtstamps);
+		}
+
+		/* Deferred means some collisions occurred during transmit,
+		 * but we eventually sent the packet OK.
+		 */
+		if (status & BD_ENET_TX_DEF)
+			ndev->stats.collisions++;
+
+		/* Free the sk buffer associated with this last transmit */
+		dev_kfree_skb_any(skb);
+
+		/* Make sure the update to bdp and tx_skbuff are performed
+		 * before dirty_tx
+		 */
+		wmb();
+
+		//FIXME add treshold
+		if (!fep->avb->tx_full(fep->avb_data)) {
+			if (netif_tx_queue_stopped(nq)) {
+	//`			netdev_info(ndev, "wake queue\n");
+				netif_tx_wake_queue(nq);
+			}
+		}
+	}
+}
+#endif
 
 static void
 fec_enet_tx_queue(struct net_device *ndev, u16 queue_id)
@@ -2020,7 +2433,7 @@ static int fec_enet_rx_napi(struct napi_struct *napi, int budget)
 #ifdef CONFIG_AVB_SUPPORT
 	if (fep->avb_enabled) {
 		done = fec_enet_rx_best_effort(ndev, budget);
-		fec_enet_tx(ndev);
+		fec_enet_tx_best_effort(ndev);
 	} else
 #endif
 	{
@@ -3389,20 +3802,52 @@ static void fec_enet_free_buffers(struct net_device *ndev)
 #ifdef CONFIG_AVB_SUPPORT
 	if (fep->avb_enabled) {
 		struct avb_rx_desc *rx_desc;
+		struct avb_tx_desc *tx_desc;
 
 		while ((rx_desc = fep->avb->dequeue(fep->avb_data)) != (void *) -1)
 			fep->avb->free(fep->avb_data, &rx_desc->common);
+
+		while ((tx_desc = fep->avb->tx_cleanup_dequeue(fep->avb_data)) != (void *) -1) {
+
+			skb = tx_desc->data;
+
+			dma_unmap_single(&fep->pdev->dev, tx_desc->bufaddr,
+				skb->len, DMA_TO_DEVICE);
+
+			/* Free the sk buffer associated with this last transmit */
+			dev_kfree_skb_any(skb);
+		}
 	}
 #endif
 
 	for (q = 0; q < fep->num_tx_queues; q++) {
 		txq = fep->tx_queue[q];
 		for (i = 0; i < txq->bd.ring_size; i++) {
+
+			if (txq->tx_skbuff[i]) {
+#ifdef CONFIG_AVB_SUPPORT
+				skb = NULL;
+				if (fep->avb_enabled) {
+					struct avb_tx_desc *desc = (struct avb_tx_desc *)txq->tx_skbuff[i];
+
+					if (!(desc->common.flags & AVB_TX_FLAG_SKB))
+						fep->avb->free(fep->avb_data, &desc->common);
+					else
+						skb = desc->data;
+				} else
+					skb = txq->tx_skbuff[i];
+			if (skb)
+#else
+				skb = txq->tx_skbuff[i];
+#endif
+				dev_kfree_skb(skb);
+				txq->tx_skbuff[i] = NULL;
+			}
+		}
+
+		for (i = 0; i < txq->tx_bounce_size; i++) {
 			kfree(txq->tx_bounce[i]);
 			txq->tx_bounce[i] = NULL;
-			skb = txq->tx_skbuff[i];
-			txq->tx_skbuff[i] = NULL;
-			dev_kfree_skb(skb);
 		}
 	}
 }
@@ -3589,17 +4034,28 @@ fec_enet_alloc_txq_buffers(struct net_device *ndev, unsigned int queue)
 
 	txq = fep->tx_queue[queue];
 	bdp = txq->bd.base;
-	for (i = 0; i < txq->bd.ring_size; i++) {
+	for (i = 0; i < txq->tx_bounce_size; i++) {
 		txq->tx_bounce[i] = kmalloc(FEC_ENET_TX_FRSIZE, GFP_KERNEL);
 		if (!txq->tx_bounce[i])
 			goto err_alloc;
+	}
 
+	bdp = txq->bd.base;
+	txq->bd.cur = bdp;
+
+	for (i = 0; i < txq->bd.ring_size; i++) {
 		bdp->cbd_sc = cpu_to_fec16(0);
 		bdp->cbd_bufaddr = cpu_to_fec32(0);
 
 		if (fep->bufdesc_ex) {
 			struct bufdesc_ex *ebdp = (struct bufdesc_ex *)bdp;
-			ebdp->cbd_esc = cpu_to_fec32(BD_ENET_TX_INT);
+
+#ifdef CONFIG_AVB_SUPPORT
+			if (fep->avb_enabled)
+				ebdp->cbd_esc = cpu_to_fec32(0);
+			else
+#endif
+				ebdp->cbd_esc = cpu_to_fec32(BD_ENET_TX_INT);
 		}
 
 		bdp = fec_enet_get_nextdesc(bdp, &txq->bd);
@@ -3608,6 +4064,7 @@ fec_enet_alloc_txq_buffers(struct net_device *ndev, unsigned int queue)
 	/* Set the last buffer to wrap. */
 	bdp = fec_enet_get_prevdesc(bdp, &txq->bd);
 	bdp->cbd_sc |= cpu_to_fec16(BD_SC_WRAP);
+	txq->dirty_tx = bdp;
 
 	return 0;
 
@@ -3637,6 +4094,7 @@ fec_enet_open(struct net_device *ndev)
 	struct fec_enet_private *fep = netdev_priv(ndev);
 	int ret;
 	bool reset_again;
+	int i;
 
 #ifdef CONFIG_AVB_SUPPORT
 	if (fep->avb_enabled) {
@@ -3644,8 +4102,12 @@ fec_enet_open(struct net_device *ndev)
 			ret = -EIO;
 			goto err_module_get;
 		}
-	}
+		for (i = 0; i < fep->num_tx_queues; i++)
+			fep->tx_queue[i]->tx_bounce_size = FEC_TX_RING_SIZE + 32;
+	} else
 #endif
+		for (i = 0; i < fep->num_tx_queues; i++)
+			fep->tx_queue[i]->tx_bounce_size = FEC_TX_RING_SIZE;
 
 	ret = pm_runtime_resume_and_get(&fep->pdev->dev);
 	if (ret < 0)
@@ -3724,7 +4186,9 @@ clk_enable:
 		module_put(fep->avb->owner);
 #endif
 
+#ifdef CONFIG_AVB_SUPPORT
 err_module_get:
+#endif
 	return ret;
 }
 
@@ -4177,6 +4641,7 @@ static int fec_enet_init(struct net_device *ndev)
 		txq->bd.last = (struct bufdesc *)(((void *)cbd_base) - dsize);
 	}
 
+	fep->netdev = ndev;
 
 	/* The FEC Ethernet specific entries in the device structure */
 	ndev->watchdog_timeo = TX_TIMEOUT;

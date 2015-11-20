@@ -79,6 +79,11 @@ struct avb_rx_desc {
 #define AVB_WAKE_THREAD		(1 << 0)
 #define AVB_WAKE_NAPI		(1 << 1)
 
+#define AVB_TX_FLAG_SKB		(1 << 0)
+#define AVB_TX_FLAG_HW_TS 	(1 << 1)
+#define AVB_TX_FLAG_HW_CSUM 	(1 << 2)
+#define AVB_TX_FLAG_TS	 	(1 << 3)
+
 struct avb_ops {
 	void (*open)(void *, void *, int);
 	void (*close)(void *);
@@ -105,6 +110,9 @@ int fec_enet_avb_register(const char *ifname, const struct avb_ops *avb, void *d
 struct device *fec_enet_avb_get_device(const char *ifname);
 int fec_enet_avb_unregister(int ifindex, const struct avb_ops *avb);
 int fec_enet_rx_poll_avb(void *data);
+int fec_enet_start_xmit_avb(void *data, struct avb_tx_desc *desc);
+void fec_enet_finish_xmit_avb(void *data, unsigned int queue_id);
+int fec_enet_tx_avb(void *data);
 
 int fec_ptp_read_cnt(void *data, u32 *cnt);
 int fec_ptp_tc_start(void *data, u8 id, u32 ts_0, u32 ts_1, u32 tcsr_val);

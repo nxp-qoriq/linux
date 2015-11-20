@@ -506,7 +506,14 @@ struct bufdesc_prop {
 
 struct fec_enet_priv_tx_q {
 	struct bufdesc_prop bd;
+	unsigned int tx_bounce_size;
+
+#ifdef CONFIG_AVB_SUPPORT
+	unsigned int tx_index;
+	unsigned char *tx_bounce[FEC_TX_RING_SIZE + 32];
+#else
 	unsigned char *tx_bounce[FEC_TX_RING_SIZE];
+#endif
 	struct  sk_buff *tx_skbuff[FEC_TX_RING_SIZE];
 
 	unsigned short tx_stop_threshold;

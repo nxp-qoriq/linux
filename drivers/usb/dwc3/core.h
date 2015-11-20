@@ -154,6 +154,32 @@
 
 /* Bit fields */
 
+/* Global SoC Bus Configuration Register 0 */
+#define AXI3_CACHE_TYPE_AW		0x8 /* write allocate */
+#define AXI3_CACHE_TYPE_AR		0x4 /* read allocate */
+#define AXI3_CACHE_TYPE_SNP		0x2 /* cacheable */
+#define AXI3_CACHE_TYPE_BUF		0x1 /* bufferable */
+#define DWC3_GSBUSCFG0_DATARD_SHIFT	28
+#define DWC3_GSBUSCFG0_DESCRD_SHIFT	24
+#define DWC3_GSBUSCFG0_DATAWR_SHIFT	20
+#define DWC3_GSBUSCFG0_DESCWR_SHIFT	16
+#define DWC3_GSBUSCFG0_SNP_MASK		0xffff0000
+#define DWC3_GSBUSCFG0_DATABIGEND	(1 << 11)
+#define DWC3_GSBUSCFG0_DESCBIGEND	(1 << 10)
+#define DWC3_GSBUSCFG0_INCR256BRSTENA	(1 << 7) /* INCR256 burst */
+#define DWC3_GSBUSCFG0_INCR128BRSTENA	(1 << 6) /* INCR128 burst */
+#define DWC3_GSBUSCFG0_INCR64BRSTENA	(1 << 5) /* INCR64 burst */
+#define DWC3_GSBUSCFG0_INCR32BRSTENA	(1 << 4) /* INCR32 burst */
+#define DWC3_GSBUSCFG0_INCR16BRSTENA	(1 << 3) /* INCR16 burst */
+#define DWC3_GSBUSCFG0_INCR8BRSTENA	(1 << 2) /* INCR8 burst */
+#define DWC3_GSBUSCFG0_INCR4BRSTENA	(1 << 1) /* INCR4 burst */
+#define DWC3_GSBUSCFG0_INCRBRSTENA	(1 << 0) /* undefined length enable */
+#define DWC3_GSBUSCFG0_INCRBRST_MASK	0xff
+
+/* Global SoC Bus Configuration Register 1 */
+#define DWC3_GSBUSCFG1_1KPAGEENA	(1 << 12) /* 1K page boundary enable */
+#define DWC3_GSBUSCFG1_PTRANSLIMIT_MASK	0xf00
+
 /* Global Debug Queue/FIFO Space Available Register */
 #define DWC3_GDBGFIFOSPACE_NUM(n)	((n) & 0x1f)
 #define DWC3_GDBGFIFOSPACE_TYPE(n)	(((n) << 5) & 0x1e0)
@@ -753,6 +779,7 @@ struct dwc3_scratchpad_array {
  * @regs: base address for our registers
  * @regs_size: address space size
  * @fladj: frame length adjustment
+ * @incrx_type: INCR burst type adjustment
  * @irq_gadget: peripheral controller's IRQ number
  * @nr_scratch: number of scratch buffers
  * @u1u2: only used on revisions <1.83a for workaround
@@ -872,6 +899,12 @@ struct dwc3 {
 	enum usb_phy_interface	hsphy_mode;
 
 	u32			fladj;
+	/*
+	 * For INCR burst type.
+	 * First field: for undefined length INCR burst type enable.
+	 * Second field: for INCRx burst type enable
+	 */
+	u32			incrx_type[2];
 	u32			irq_gadget;
 	u32			nr_scratch;
 	u32			u1u2;

@@ -83,6 +83,13 @@ static int dwc3_get_dr_mode(struct dwc3 *dwc)
 		mode = USB_DR_MODE_HOST;
 		break;
 	default:
+
+	/* Change burst beat and outstanding pipelined transfers requests */
+	dwc3_writel(dwc->regs, DWC3_GSBUSCFG0,
+		(dwc3_readl(dwc->regs, DWC3_GSBUSCFG0) & ~0xff) | 0xf);
+	dwc3_writel(dwc->regs, DWC3_GSBUSCFG1,
+		dwc3_readl(dwc->regs, DWC3_GSBUSCFG1) | 0xf00);
+
 		if (IS_ENABLED(CONFIG_USB_DWC3_HOST))
 			mode = USB_DR_MODE_HOST;
 		else if (IS_ENABLED(CONFIG_USB_DWC3_GADGET))
@@ -723,6 +730,8 @@ static int dwc3_core_init(struct dwc3 *dwc)
 
 	/* Adjust Frame Length */
 	dwc3_frame_length_adjustment(dwc);
+
+	dwc3_set_soc_bus_cfg(dwc);
 
 	usb_phy_set_suspend(dwc->usb2_phy, 0);
 	usb_phy_set_suspend(dwc->usb3_phy, 0);

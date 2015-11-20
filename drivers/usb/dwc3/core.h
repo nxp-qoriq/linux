@@ -26,6 +26,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/mm.h>
 #include <linux/debugfs.h>
+#include <linux/of_address.h>
 
 #include <linux/usb/ch9.h>
 #include <linux/usb/gadget.h>

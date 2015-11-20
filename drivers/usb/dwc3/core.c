@@ -58,6 +58,7 @@ static int dwc3_get_dr_mode(struct dwc3 *dwc)
 	enum usb_dr_mode mode;
 	struct device *dev = dwc->dev;
 	unsigned int hw_mode;
+	struct device_node      *node = dev->of_node;
 
 	if (dwc->dr_mode == USB_DR_MODE_UNKNOWN)
 		dwc->dr_mode = USB_DR_MODE_OTG;
@@ -93,6 +94,13 @@ static int dwc3_get_dr_mode(struct dwc3 *dwc)
 		(dwc3_readl(dwc->regs, DWC3_GSBUSCFG0) & ~0xff) | 0xf);
 	dwc3_writel(dwc->regs, DWC3_GSBUSCFG1,
 		dwc3_readl(dwc->regs, DWC3_GSBUSCFG1) | 0xf00);
+
+	/* Enable Snooping */
+	if (node && of_dma_is_coherent(node)) {
+		dwc3_writel(dwc->regs, DWC3_GSBUSCFG0,
+		dwc3_readl(dwc->regs, DWC3_GSBUSCFG0) | 0x22220000);
+		dev_dbg(dev, "enabled snooping for usb\n");
+	}
 
 		if (IS_ENABLED(CONFIG_USB_DWC3_HOST))
 			mode = USB_DR_MODE_HOST;
@@ -1099,6 +1107,8 @@ static void dwc3_get_properties(struct dwc3 *dwc)
 static int dwc3_probe(struct platform_device *pdev)
 {
 	struct device		*dev = &pdev->dev;
+	struct dwc3_platform_data *pdata = dev_get_platdata(dev);
+	struct device_node      *node = dev->of_node;
 	struct resource		*res;
 	struct dwc3		*dwc;
 	u8			lpm_nyet_threshold;
@@ -1108,7 +1118,6 @@ static int dwc3_probe(struct platform_device *pdev)
 	int			ret;
 
 	void __iomem		*regs;
-	struct device_node      *node = dev->of_node;
 	void			*mem;
 
 	mem = devm_kzalloc(dev, sizeof(*dwc) + DWC3_ALIGN_MASK, GFP_KERNEL);

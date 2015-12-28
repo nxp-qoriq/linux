@@ -41,6 +41,8 @@
 #define QUADSPI_QUIRK_TKT253890		(1 << 2)
 /* Controller cannot wake up from wait mode, TKT245618 */
 #define QUADSPI_QUIRK_TKT245618         (1 << 3)
+/* QSPI_AMBA_BASE is internally added by SOC design */
+#define QUADSPI_AMBA_BASE_INTERNAL	(0x10000)
 
 /* The registers */
 #define QUADSPI_MCR			0x00
@@ -214,6 +216,7 @@ enum fsl_qspi_devtype {
 	FSL_QUADSPI_IMX7D,
 	FSL_QUADSPI_IMX6UL,
 	FSL_QUADSPI_LS1021A,
+	FSL_QUADSPI_LS2080A,
 };
 
 struct fsl_qspi_devtype_data {
@@ -267,6 +270,14 @@ static struct fsl_qspi_devtype_data ls1021a_data = {
 	.driver_data = 0,
 };
 
+static struct fsl_qspi_devtype_data ls2080a_data = {
+	.devtype = FSL_QUADSPI_LS2080A,
+	.rxfifo = 128,
+	.txfifo = 64,
+	.ahb_buf_size = 1024,
+	.driver_data = QUADSPI_AMBA_BASE_INTERNAL,
+};
+
 #define FSL_QSPI_MAX_CHIP	4
 struct fsl_qspi {
 	struct spi_nor nor[FSL_QSPI_MAX_CHIP];
@@ -307,6 +318,11 @@ static inline int needs_fill_txfifo(struct fsl_qspi *q)
 static inline int needs_wakeup_wait_mode(struct fsl_qspi *q)
 {
 	return q->devtype_data->driver_data & QUADSPI_QUIRK_TKT245618;
+}
+
+static inline int has_added_amba_base_internal(struct fsl_qspi *q)
+{
+	return q->devtype_data->driver_data & QUADSPI_AMBA_BASE_INTERNAL;
 }
 
 /*
@@ -526,8 +542,11 @@ fsl_qspi_runcmd(struct fsl_qspi *q, u8 cmd, unsigned int addr, int len)
 	/* save the reg */
 	reg = qspi_readl(q, base + QUADSPI_MCR);
 
-	qspi_writel(q, q->memmap_phy + q->chip_base_addr + addr,
-			base + QUADSPI_SFAR);
+	if (has_added_amba_base_internal(q))
+		qspi_writel(q, q->chip_base_addr + addr, base + QUADSPI_SFAR);
+	else
+		qspi_writel(q, q->memmap_phy + q->chip_base_addr + addr,
+			    base + QUADSPI_SFAR);
 	qspi_writel(q, QUADSPI_RBCT_WMRK_MASK | QUADSPI_RBCT_RXBRD_USEIPS,
 			base + QUADSPI_RBCT);
 	qspi_writel(q, reg | QUADSPI_MCR_CLR_RXF_MASK, base + QUADSPI_MCR);
@@ -820,6 +839,7 @@ static const struct of_device_id fsl_qspi_dt_ids[] = {
 	{ .compatible = "fsl,imx7d-qspi", .data = (void *)&imx7d_data, },
 	{ .compatible = "fsl,imx6ul-qspi", .data = (void *)&imx6ul_data, },
 	{ .compatible = "fsl,ls1021a-qspi", .data = (void *)&ls1021a_data, },
+	{ .compatible = "fsl,ls2080a-qspi", .data = (void *)&ls2080a_data, },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, fsl_qspi_dt_ids);

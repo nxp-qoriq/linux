@@ -48,110 +48,113 @@
 #define AIOP_BUFFER_OFFSET  0x06000000
 #define AIOP_BUFFER_SIZE (1024*1024*16)
 
+struct log_header {
+	char magic_word[8]; /* magic word 'AIOP<version>' */
+	uint32_t buf_start; /* holds the 32-bit little-endian offset of the start of the buffer */
+	uint32_t buf_length; /* holds the 32-bit little-endian length of the buffer - not including these initial words */
+	uint32_t last_byte; /* holds the 32-bit little-endian offset of the byte after the last byte that was written */
+	char reserved[44];
+};
+
+#define LOG_HEADER_LAST_BYTE_OFFSET 16 /*size of magic word + buf start + buf length*/
+#define LOG_HEADER_FLAG_BUFFER_WRAPAROUND 0x80000000
+#define LOG_VERSION_MAJOR 1
+#define LOG_VERSION_MINOR 0
+
+
 #define invalidate(p) { asm volatile("dc ivac, %0" : : "r" (p) : "memory"); }
 
 struct console_data {
+	char *map_addr;
+	struct log_header *hdr;
 	char *start_addr; /* Start of buffer */
 	char *end_addr; /* End of buffer */
 	char *end_of_data; /* Current end of data */
-	char *last_to_console; /* Last data sent to console */
+	char *cur_ptr; /* Last data sent to console */
 };
 
 static void adjust_end(struct console_data *cd);
 
+#define LOG_HEADER_FLAG_BUFFER_WRAPAROUND 0x80000000
+#define LAST_BYTE(a) ((a) & ~(LOG_HEADER_FLAG_BUFFER_WRAPAROUND))
+
+static inline void __adjust_end(struct console_data *cd)
+{
+	cd->end_of_data = cd->map_addr+LAST_BYTE(cd->hdr->last_byte);
+}
+
+static inline void adjust_end(struct console_data *cd)
+{
+	invalidate(cd->hdr);
+	__adjust_end(cd);
+}
+
+
 static int fsl_ls2_generic_console_open(struct inode *node, struct file *fp,
-					u64 offset, u64 size)
+					u64 offset, uint8_t *emagic, uint8_t magic_len)
 {
 	struct console_data *cd;
+	uint8_t *magic;
+	uint32_t wrapped;
 
 	cd = kmalloc(sizeof(*cd), GFP_KERNEL);
 	if (cd == NULL)
 		return -ENOMEM;
 	fp->private_data = cd;
-	cd->start_addr = ioremap(MC_BASE_ADDR + offset, size);
-	cd->end_addr = cd->start_addr + size;
-	if (strncmp(cd->start_addr, "START", 5) == 0) {
-		/* Data has not wrapped yet */
-		cd->end_of_data = cd->start_addr + 5;
-		cd->last_to_console  = cd->start_addr + 4;
+	cd->map_addr = ioremap(MC_BASE_ADDR + offset, AIOP_BUFFER_SIZE);
+
+	cd->hdr = (struct log_header*) cd->map_addr;
+
+	magic = cd->hdr->magic_word;
+	if(memcmp(magic,emagic,magic_len)) {
+		pr_info("magic didn't match!\n");
+		pr_info("expected magic: %02x %02x %02x %02x %02x %02x %02x %02x\n",
+				emagic[0], emagic[1], emagic[2], emagic[3],
+				emagic[4], emagic[5], emagic[6], emagic[7]);
+		pr_info("    seen magic: %02x %02x %02x %02x %02x %02x %02x %02x\n",
+				magic[0], magic[1], magic[2], magic[3],
+				magic[4], magic[5], magic[6], magic[7]);
+		kfree(cd);
+		iounmap(cd->map_addr);
+		return -EIO;
+	}
+
+	cd->start_addr = cd->map_addr+cd->hdr->buf_start;
+	cd->end_addr = cd->start_addr + cd->hdr->buf_length;
+
+	wrapped = cd->hdr->last_byte & LOG_HEADER_FLAG_BUFFER_WRAPAROUND;
+
+	__adjust_end(cd);
+	if(wrapped && (cd->end_of_data != cd->end_addr)) {
+		cd->cur_ptr = cd->end_of_data+1;
 	} else {
-		cd->end_of_data = cd->start_addr;
-		cd->last_to_console  = cd->start_addr;
-		adjust_end(cd);
-		cd->end_of_data += 3;
-		cd->last_to_console += 2;
+		cd->cur_ptr = cd->start_addr;
 	}
 	return 0;
 }
 
 static int fsl_ls2_mc_console_open(struct inode *node, struct file *fp)
 {
+	uint8_t magic_word[] = { 0, 1, 'C', 'M' };
 	return fsl_ls2_generic_console_open(node, fp, MC_BUFFER_OFFSET,
-					    MC_BUFFER_SIZE);
+			magic_word, sizeof(magic_word));
 }
 
 static int fsl_ls2_aiop_console_open(struct inode *node, struct file *fp)
 {
+	uint8_t magic_word[] = { 'P', 'O', 'I', 'A', 0, 0, 0, 1 };
+
 	return fsl_ls2_generic_console_open(node, fp, AIOP_BUFFER_OFFSET,
-					    AIOP_BUFFER_SIZE);
+			magic_word, sizeof(magic_word));
 }
 
 static int fsl_ls2_console_close(struct inode *node, struct file *fp)
 {
 	struct console_data *cd = fp->private_data;
 
-	iounmap(cd->start_addr);
+	iounmap(cd->map_addr);
 	kfree(cd);
 	return 0;
-}
-
-static void adjust_end(struct console_data *cd)
-{
-	/* Search for the END marker, but being careful of
-	   wraparound */
-	char last3[3] = { 0, 0, 0 };
-	int i = 0;
-	char *ptr = cd->end_of_data;
-
-	invalidate(ptr);
-
-	while (i < 3) {
-		last3[i] = *ptr;
-		i++;
-		ptr++;
-		if (ptr >= cd->end_addr)
-			ptr = cd->start_addr;
-
-		if (((u64)ptr) % 64 == 0)
-			invalidate(ptr);
-
-	}
-	while (last3[0] != 'E' || last3[1] != 'N' ||
-	       last3[2] != 'D') {
-		last3[0] = last3[1];
-		last3[1] = last3[2];
-		last3[2] = *ptr;
-		ptr++;
-		if (ptr == cd->end_addr)
-			ptr = cd->start_addr;
-		if (((u64)ptr) % 64 == 0)
-			invalidate(ptr);
-	}
-	cd->end_of_data = ptr - 3;
-}
-
-/* Read one past the end of the buffer regardless of end */
-static char consume_next_char(struct console_data *cd)
-{
-	++cd->last_to_console;
-	if (cd->last_to_console == cd->end_addr)
-		cd->last_to_console = cd->start_addr;
-
-	/* Sadly we need to invalidate all tthe time here as the data
-	   may have changed as we go */
-	invalidate(cd->last_to_console);
-
-	return *(cd->last_to_console);
 }
 
 ssize_t fsl_ls2_console_read(struct file *fp, char __user *buf, size_t count,
@@ -164,10 +167,16 @@ ssize_t fsl_ls2_console_read(struct file *fp, char __user *buf, size_t count,
 	/* Check if we need to adjust the end of data addr */
 	adjust_end(cd);
 
-	while (count != bytes && ((cd->end_of_data-1) != cd->last_to_console)) {
-		data = consume_next_char(cd);
+	while ((count != bytes) && (cd->end_of_data != cd->cur_ptr)) {
+		if (((u64)cd->cur_ptr) % 64 == 0)
+			invalidate(cd->cur_ptr);
+
+		data = *(cd->cur_ptr);
 		if (copy_to_user(&buf[bytes], &data, 1))
 			return -EFAULT;
+		cd->cur_ptr++;
+		if(cd->cur_ptr >= cd->end_addr)
+			cd->cur_ptr = cd->start_addr;
 		++bytes;
 	}
 	return bytes;

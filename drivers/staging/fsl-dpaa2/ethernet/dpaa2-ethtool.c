@@ -52,7 +52,7 @@ char dpaa2_ethtool_stats[][ETH_GSTRING_LEN] = {
 
 #define DPAA2_ETH_NUM_STATS	ARRAY_SIZE(dpaa2_ethtool_stats)
 
-/* To be kept in sync with 'struct dpaa2_eth_stats' */
+/* To be kept in sync with 'struct dpaa2_eth_drv_stats' */
 char dpaa2_ethtool_extras[][ETH_GSTRING_LEN] = {
 	/* per-cpu stats */
 
@@ -63,12 +63,12 @@ char dpaa2_ethtool_extras[][ETH_GSTRING_LEN] = {
 	"rx sg frames",
 	"rx sg bytes",
 	/* how many times we had to retry the enqueue command */
-	"tx portal busy",
+	"enqueue portal busy",
 
 	/* Channel stats */
-
 	/* How many times we had to retry the volatile dequeue command */
-	"portal busy",
+	"dequeue portal busy",
+	"channel pull errors",
 	/* Number of notifications received */
 	"cdan",
 #ifdef CONFIG_FSL_QBMAN_DEBUG
@@ -83,8 +83,8 @@ char dpaa2_ethtool_extras[][ETH_GSTRING_LEN] = {
 
 #define DPAA2_ETH_NUM_EXTRA_STATS	ARRAY_SIZE(dpaa2_ethtool_extras)
 
-static void dpaa2_get_drvinfo(struct net_device *net_dev,
-			      struct ethtool_drvinfo *drvinfo)
+static void dpaa2_eth_get_drvinfo(struct net_device *net_dev,
+				  struct ethtool_drvinfo *drvinfo)
 {
 	struct mc_version mc_ver;
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
@@ -112,20 +112,8 @@ static void dpaa2_get_drvinfo(struct net_device *net_dev,
 		sizeof(drvinfo->bus_info));
 }
 
-static u32 dpaa2_get_msglevel(struct net_device *net_dev)
-{
-	return ((struct dpaa2_eth_priv *)netdev_priv(net_dev))->msg_enable;
-}
-
-static void dpaa2_set_msglevel(struct net_device *net_dev,
-			       u32 msg_enable)
-{
-	((struct dpaa2_eth_priv *)netdev_priv(net_dev))->msg_enable =
-					msg_enable;
-}
-
-static int dpaa2_get_settings(struct net_device *net_dev,
-			      struct ethtool_cmd *cmd)
+static int dpaa2_eth_get_settings(struct net_device *net_dev,
+				  struct ethtool_cmd *cmd)
 {
 	struct dpni_link_state state = {0};
 	int err = 0;
@@ -152,8 +140,8 @@ out:
 	return err;
 }
 
-static int dpaa2_set_settings(struct net_device *net_dev,
-			      struct ethtool_cmd *cmd)
+static int dpaa2_eth_set_settings(struct net_device *net_dev,
+				  struct ethtool_cmd *cmd)
 {
 	struct dpni_link_cfg cfg = {0};
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
@@ -190,8 +178,8 @@ static int dpaa2_set_settings(struct net_device *net_dev,
 	return err;
 }
 
-static void dpaa2_get_strings(struct net_device *netdev, u32 stringset,
-			      u8 *data)
+static void dpaa2_eth_get_strings(struct net_device *netdev, u32 stringset,
+				  u8 *data)
 {
 	u8 *p = data;
 	int i;
@@ -210,7 +198,7 @@ static void dpaa2_get_strings(struct net_device *netdev, u32 stringset,
 	}
 }
 
-static int dpaa2_get_sset_count(struct net_device *net_dev, int sset)
+static int dpaa2_eth_get_sset_count(struct net_device *net_dev, int sset)
 {
 	switch (sset) {
 	case ETH_SS_STATS: /* ethtool_get_stats(), ethtool_get_drvinfo() */
@@ -222,9 +210,9 @@ static int dpaa2_get_sset_count(struct net_device *net_dev, int sset)
 
 /** Fill in hardware counters, as returned by the MC firmware.
  */
-static void dpaa2_get_ethtool_stats(struct net_device *net_dev,
-				    struct ethtool_stats *stats,
-				    u64 *data)
+static void dpaa2_eth_get_ethtool_stats(struct net_device *net_dev,
+					struct ethtool_stats *stats,
+					u64 *data)
 {
 	int i; /* Current index in the data array */
 	int j, k, err;
@@ -236,9 +224,9 @@ static void dpaa2_get_ethtool_stats(struct net_device *net_dev,
 	u32 buf_cnt;
 #endif
 	u64 cdan = 0;
-	u64 portal_busy = 0;
+	u64 portal_busy = 0, pull_err = 0;
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
-	struct dpaa2_eth_stats *extras;
+	struct dpaa2_eth_drv_stats *extras;
 	struct dpaa2_eth_ch_stats *ch_stats;
 
 	memset(data, 0,
@@ -266,16 +254,18 @@ static void dpaa2_get_ethtool_stats(struct net_device *net_dev,
 		ch_stats = &priv->channel[j]->stats;
 		cdan += ch_stats->cdan;
 		portal_busy += ch_stats->dequeue_portal_busy;
+		pull_err += ch_stats->pull_err;
 	}
 
 	*(data + i++) = portal_busy;
+	*(data + i++) = pull_err;
 	*(data + i++) = cdan;
 
 #ifdef CONFIG_FSL_QBMAN_DEBUG
 	for (j = 0; j < priv->num_fqs; j++) {
 		/* Print FQ instantaneous counts */
 		err = dpaa2_io_query_fq_count(NULL, priv->fq[j].fqid,
-					     &fcnt, &bcnt);
+					      &fcnt, &bcnt);
 		if (err) {
 			netdev_warn(net_dev, "FQ query error %d", err);
 			return;
@@ -303,12 +293,12 @@ static void dpaa2_get_ethtool_stats(struct net_device *net_dev,
 #endif
 }
 
-static const struct dpaa2_hash_fields {
+static const struct dpaa2_eth_hash_fields {
 	u64 rxnfc_field;
 	enum net_prot cls_prot;
 	int cls_field;
 	int size;
-} dpaa2_hash_fields[] = {
+} hash_fields[] = {
 	{
 		/* L2 header */
 		.rxnfc_field = RXH_L2DA,
@@ -353,55 +343,53 @@ static const struct dpaa2_hash_fields {
 	},
 };
 
-static int dpaa2_cls_is_enabled(struct net_device *net_dev, u64 flag)
+static int cls_is_enabled(struct net_device *net_dev, u64 flag)
 {
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 
 	return !!(priv->rx_hash_fields & flag);
 }
 
-static int dpaa2_cls_key_off(struct net_device *net_dev, u64 flag)
+static int cls_key_off(struct net_device *net_dev, u64 flag)
 {
 	int i, off = 0;
 
-	for (i = 0; i < ARRAY_SIZE(dpaa2_hash_fields); i++) {
-		if (dpaa2_hash_fields[i].rxnfc_field & flag)
+	for (i = 0; i < ARRAY_SIZE(hash_fields); i++) {
+		if (hash_fields[i].rxnfc_field & flag)
 			return off;
-		if (dpaa2_cls_is_enabled(net_dev,
-					 dpaa2_hash_fields[i].rxnfc_field))
-			off += dpaa2_hash_fields[i].size;
+		if (cls_is_enabled(net_dev, hash_fields[i].rxnfc_field))
+			off += hash_fields[i].size;
 	}
 
 	return -1;
 }
 
-static u8 dpaa2_cls_key_size(struct net_device *net_dev)
+static u8 cls_key_size(struct net_device *net_dev)
 {
 	u8 i, size = 0;
 
-	for (i = 0; i < ARRAY_SIZE(dpaa2_hash_fields); i++) {
-		if (!dpaa2_cls_is_enabled(net_dev,
-					  dpaa2_hash_fields[i].rxnfc_field))
+	for (i = 0; i < ARRAY_SIZE(hash_fields); i++) {
+		if (!cls_is_enabled(net_dev, hash_fields[i].rxnfc_field))
 			continue;
-		size += dpaa2_hash_fields[i].size;
+		size += hash_fields[i].size;
 	}
 
 	return size;
 }
 
-static u8 dpaa2_cls_max_key_size(struct net_device *net_dev)
+static u8 cls_max_key_size(struct net_device *net_dev)
 {
 	u8 i, size = 0;
 
-	for (i = 0; i < ARRAY_SIZE(dpaa2_hash_fields); i++)
-		size += dpaa2_hash_fields[i].size;
+	for (i = 0; i < ARRAY_SIZE(hash_fields); i++)
+		size += hash_fields[i].size;
 
 	return size;
 }
 
-void dpaa2_cls_check(struct net_device *net_dev)
+void check_fs_support(struct net_device *net_dev)
 {
-	u8 key_size = dpaa2_cls_max_key_size(net_dev);
+	u8 key_size = cls_max_key_size(net_dev);
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 
 	if (priv->dpni_attrs.options & DPNI_OPT_DIST_FS &&
@@ -417,7 +405,7 @@ void dpaa2_cls_check(struct net_device *net_dev)
 /* Set RX hash options
  * flags is a combination of RXH_ bits
  */
-int dpaa2_set_hash(struct net_device *net_dev, u64 flags)
+int dpaa2_eth_set_hash(struct net_device *net_dev, u64 flags)
 {
 	struct device *dev = net_dev->dev.parent;
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
@@ -441,11 +429,11 @@ int dpaa2_set_hash(struct net_device *net_dev, u64 flags)
 
 	memset(&cls_cfg, 0, sizeof(cls_cfg));
 
-	for (i = 0; i < ARRAY_SIZE(dpaa2_hash_fields); i++) {
+	for (i = 0; i < ARRAY_SIZE(hash_fields); i++) {
 		struct dpkg_extract *key =
 			&cls_cfg.extracts[cls_cfg.num_extracts];
 
-		if (!(flags & dpaa2_hash_fields[i].rxnfc_field))
+		if (!(flags & hash_fields[i].rxnfc_field))
 			continue;
 
 		if (cls_cfg.num_extracts >= DPKG_MAX_NUM_OF_EXTRACTS) {
@@ -454,14 +442,12 @@ int dpaa2_set_hash(struct net_device *net_dev, u64 flags)
 		}
 
 		key->type = DPKG_EXTRACT_FROM_HDR;
-		key->extract.from_hdr.prot =
-			dpaa2_hash_fields[i].cls_prot;
+		key->extract.from_hdr.prot = hash_fields[i].cls_prot;
 		key->extract.from_hdr.type = DPKG_FULL_FIELD;
-		key->extract.from_hdr.field =
-			dpaa2_hash_fields[i].cls_field;
+		key->extract.from_hdr.field = hash_fields[i].cls_field;
 		cls_cfg.num_extracts++;
 
-		enabled_flags |= dpaa2_hash_fields[i].rxnfc_field;
+		enabled_flags |= hash_fields[i].rxnfc_field;
 	}
 
 	dma_mem = kzalloc(DPAA2_CLASSIFIER_DMA_SIZE, GFP_DMA | GFP_KERNEL);
@@ -486,7 +472,7 @@ int dpaa2_set_hash(struct net_device *net_dev, u64 flags)
 		return -ENOMEM;
 	}
 
-	dist_cfg.dist_size = dpaa2_queue_count(priv);
+	dist_cfg.dist_size = dpaa2_eth_queue_count(priv);
 	if (dpaa2_eth_fs_enabled(priv)) {
 		dist_cfg.dist_mode = DPNI_DIST_MODE_FS;
 		dist_cfg.fs_cfg.miss_action = DPNI_FS_MISS_HASH;
@@ -508,14 +494,14 @@ int dpaa2_set_hash(struct net_device *net_dev, u64 flags)
 	return 0;
 }
 
-static int dpaa2_cls_prep_rule(struct net_device *net_dev,
-			       struct ethtool_rx_flow_spec *fs,
-			       void *key)
+static int prep_cls_rule(struct net_device *net_dev,
+			 struct ethtool_rx_flow_spec *fs,
+			 void *key)
 {
 	struct ethtool_tcpip4_spec *l4ip4_h, *l4ip4_m;
 	struct ethhdr *eth_h, *eth_m;
 	struct ethtool_flow_ext *ext_h, *ext_m;
-	const u8 key_size = dpaa2_cls_key_size(net_dev);
+	const u8 key_size = cls_key_size(net_dev);
 	void *msk = key + key_size;
 
 	memset(key, 0, key_size * 2);
@@ -546,51 +532,47 @@ l4ip4:
 				   "ToS is not supported for IPv4 L4\n");
 			return -EOPNOTSUPP;
 		}
-		if (l4ip4_m->ip4src &&
-		    !dpaa2_cls_is_enabled(net_dev, RXH_IP_SRC)) {
+		if (l4ip4_m->ip4src && !cls_is_enabled(net_dev, RXH_IP_SRC)) {
 			netdev_err(net_dev, "IP SRC not supported!\n");
 			return -EOPNOTSUPP;
 		}
-		if (l4ip4_m->ip4dst &&
-		    !dpaa2_cls_is_enabled(net_dev, RXH_IP_DST)) {
+		if (l4ip4_m->ip4dst && !cls_is_enabled(net_dev, RXH_IP_DST)) {
 			netdev_err(net_dev, "IP DST not supported!\n");
 			return -EOPNOTSUPP;
 		}
-		if (l4ip4_m->psrc &&
-		    !dpaa2_cls_is_enabled(net_dev, RXH_L4_B_0_1)) {
+		if (l4ip4_m->psrc && !cls_is_enabled(net_dev, RXH_L4_B_0_1)) {
 			netdev_err(net_dev, "PSRC not supported, ignored\n");
 			return -EOPNOTSUPP;
 		}
-		if (l4ip4_m->pdst &&
-		    !dpaa2_cls_is_enabled(net_dev, RXH_L4_B_2_3)) {
+		if (l4ip4_m->pdst && !cls_is_enabled(net_dev, RXH_L4_B_2_3)) {
 			netdev_err(net_dev, "PDST not supported, ignored\n");
 			return -EOPNOTSUPP;
 		}
 
-		if (dpaa2_cls_is_enabled(net_dev, RXH_IP_SRC)) {
-			*(u32 *)(key + dpaa2_cls_key_off(net_dev, RXH_IP_SRC))
+		if (cls_is_enabled(net_dev, RXH_IP_SRC)) {
+			*(u32 *)(key + cls_key_off(net_dev, RXH_IP_SRC))
 				= l4ip4_h->ip4src;
-			*(u32 *)(msk + dpaa2_cls_key_off(net_dev, RXH_IP_SRC))
+			*(u32 *)(msk + cls_key_off(net_dev, RXH_IP_SRC))
 				= l4ip4_m->ip4src;
 		}
-		if (dpaa2_cls_is_enabled(net_dev, RXH_IP_DST)) {
-			*(u32 *)(key + dpaa2_cls_key_off(net_dev, RXH_IP_DST))
+		if (cls_is_enabled(net_dev, RXH_IP_DST)) {
+			*(u32 *)(key + cls_key_off(net_dev, RXH_IP_DST))
 				= l4ip4_h->ip4dst;
-			*(u32 *)(msk + dpaa2_cls_key_off(net_dev, RXH_IP_DST))
+			*(u32 *)(msk + cls_key_off(net_dev, RXH_IP_DST))
 				= l4ip4_m->ip4dst;
 		}
 
-		if (dpaa2_cls_is_enabled(net_dev, RXH_L4_B_0_1)) {
-			*(u32 *)(key + dpaa2_cls_key_off(net_dev, RXH_L4_B_0_1))
+		if (cls_is_enabled(net_dev, RXH_L4_B_0_1)) {
+			*(u32 *)(key + cls_key_off(net_dev, RXH_L4_B_0_1))
 				= l4ip4_h->psrc;
-			*(u32 *)(msk + dpaa2_cls_key_off(net_dev, RXH_L4_B_0_1))
+			*(u32 *)(msk + cls_key_off(net_dev, RXH_L4_B_0_1))
 				= l4ip4_m->psrc;
 		}
 
-		if (dpaa2_cls_is_enabled(net_dev, RXH_L4_B_2_3)) {
-			*(u32 *)(key + dpaa2_cls_key_off(net_dev, RXH_L4_B_2_3))
+		if (cls_is_enabled(net_dev, RXH_L4_B_2_3)) {
+			*(u32 *)(key + cls_key_off(net_dev, RXH_L4_B_2_3))
 				= l4ip4_h->pdst;
-			*(u32 *)(msk + dpaa2_cls_key_off(net_dev, RXH_L4_B_2_3))
+			*(u32 *)(msk + cls_key_off(net_dev, RXH_L4_B_2_3))
 				= l4ip4_m->pdst;
 		}
 		break;
@@ -609,12 +591,10 @@ l4ip4:
 			return -EOPNOTSUPP;
 		}
 
-		if (dpaa2_cls_is_enabled(net_dev, RXH_L2DA)) {
-			ether_addr_copy(key
-					+ dpaa2_cls_key_off(net_dev, RXH_L2DA),
+		if (cls_is_enabled(net_dev, RXH_L2DA)) {
+			ether_addr_copy(key + cls_key_off(net_dev, RXH_L2DA),
 					eth_h->h_dest);
-			ether_addr_copy(msk
-					+ dpaa2_cls_key_off(net_dev, RXH_L2DA),
+			ether_addr_copy(msk + cls_key_off(net_dev, RXH_L2DA),
 					eth_m->h_dest);
 		} else {
 			if (!is_zero_ether_addr(eth_m->h_dest)) {
@@ -639,12 +619,10 @@ l4ip4:
 		ext_h = &fs->h_ext;
 		ext_m = &fs->m_ext;
 
-		if (dpaa2_cls_is_enabled(net_dev, RXH_L2DA)) {
-			ether_addr_copy(key
-					+ dpaa2_cls_key_off(net_dev, RXH_L2DA),
+		if (cls_is_enabled(net_dev, RXH_L2DA)) {
+			ether_addr_copy(key + cls_key_off(net_dev, RXH_L2DA),
 					ext_h->h_dest);
-			ether_addr_copy(msk
-					+ dpaa2_cls_key_off(net_dev, RXH_L2DA),
+			ether_addr_copy(msk + cls_key_off(net_dev, RXH_L2DA),
 					ext_m->h_dest);
 		} else {
 			if (!is_zero_ether_addr(ext_m->h_dest)) {
@@ -657,9 +635,9 @@ l4ip4:
 	return 0;
 }
 
-static int dpaa2_do_cls(struct net_device *net_dev,
-			struct ethtool_rx_flow_spec *fs,
-			bool add)
+static int do_cls(struct net_device *net_dev,
+		  struct ethtool_rx_flow_spec *fs,
+		  bool add)
 {
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 	const int rule_cnt = DPAA2_CLASSIFIER_ENTRY_COUNT;
@@ -674,19 +652,19 @@ static int dpaa2_do_cls(struct net_device *net_dev,
 	}
 
 	if ((fs->ring_cookie != RX_CLS_FLOW_DISC &&
-	     fs->ring_cookie >= dpaa2_queue_count(priv)) ||
+	     fs->ring_cookie >= dpaa2_eth_queue_count(priv)) ||
 	     fs->location >= rule_cnt)
 		return -EINVAL;
 
 	memset(&rule_cfg, 0, sizeof(rule_cfg));
-	rule_cfg.key_size = dpaa2_cls_key_size(net_dev);
+	rule_cfg.key_size = cls_key_size(net_dev);
 
 	/* allocate twice the key size, for the actual key and for mask */
 	dma_mem =  kzalloc(rule_cfg.key_size * 2, GFP_DMA | GFP_KERNEL);
 	if (!dma_mem)
 		return -ENOMEM;
 
-	err = dpaa2_cls_prep_rule(net_dev, fs, dma_mem);
+	err = prep_cls_rule(net_dev, fs, dma_mem);
 	if (err)
 		goto err_free_mem;
 
@@ -735,13 +713,13 @@ err_free_mem:
 	return err;
 }
 
-static int dpaa2_add_cls(struct net_device *net_dev,
-			 struct ethtool_rx_flow_spec *fs)
+static int add_cls(struct net_device *net_dev,
+		   struct ethtool_rx_flow_spec *fs)
 {
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 	int err;
 
-	err = dpaa2_do_cls(net_dev, fs, true);
+	err = do_cls(net_dev, fs, true);
 	if (err)
 		return err;
 
@@ -751,12 +729,12 @@ static int dpaa2_add_cls(struct net_device *net_dev,
 	return 0;
 }
 
-static int dpaa2_del_cls(struct net_device *net_dev, int location)
+static int del_cls(struct net_device *net_dev, int location)
 {
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 	int err;
 
-	err = dpaa2_do_cls(net_dev, &priv->cls_rule[location].fs, false);
+	err = do_cls(net_dev, &priv->cls_rule[location].fs, false);
 	if (err)
 		return err;
 
@@ -765,7 +743,7 @@ static int dpaa2_del_cls(struct net_device *net_dev, int location)
 	return 0;
 }
 
-static void dpaa2_clear_cls(struct net_device *net_dev)
+static void clear_cls(struct net_device *net_dev)
 {
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 	int i, err;
@@ -774,7 +752,7 @@ static void dpaa2_clear_cls(struct net_device *net_dev)
 		if (!priv->cls_rule[i].in_use)
 			continue;
 
-		err = dpaa2_del_cls(net_dev, i);
+		err = del_cls(net_dev, i);
 		if (err)
 			netdev_warn(net_dev,
 				    "err trying to delete classification entry %d\n",
@@ -782,8 +760,8 @@ static void dpaa2_clear_cls(struct net_device *net_dev)
 	}
 }
 
-static int dpaa2_set_rxnfc(struct net_device *net_dev,
-			   struct ethtool_rxnfc *rxnfc)
+static int dpaa2_eth_set_rxnfc(struct net_device *net_dev,
+			       struct ethtool_rxnfc *rxnfc)
 {
 	int err = 0;
 
@@ -792,19 +770,19 @@ static int dpaa2_set_rxnfc(struct net_device *net_dev,
 		/* first off clear ALL classification rules, chaging key
 		 * composition will break them anyway
 		 */
-		dpaa2_clear_cls(net_dev);
+		clear_cls(net_dev);
 		/* we purposely ignore cmd->flow_type for now, because the
 		 * classifier only supports a single set of fields for all
 		 * protocols
 		 */
-		err = dpaa2_set_hash(net_dev, rxnfc->data);
+		err = dpaa2_eth_set_hash(net_dev, rxnfc->data);
 		break;
 	case ETHTOOL_SRXCLSRLINS:
-		err = dpaa2_add_cls(net_dev, &rxnfc->fs);
+		err = add_cls(net_dev, &rxnfc->fs);
 		break;
 
 	case ETHTOOL_SRXCLSRLDEL:
-		err = dpaa2_del_cls(net_dev, rxnfc->fs.location);
+		err = del_cls(net_dev, rxnfc->fs.location);
 		break;
 
 	default:
@@ -814,8 +792,8 @@ static int dpaa2_set_rxnfc(struct net_device *net_dev,
 	return err;
 }
 
-static int dpaa2_get_rxnfc(struct net_device *net_dev,
-			   struct ethtool_rxnfc *rxnfc, u32 *rule_locs)
+static int dpaa2_eth_get_rxnfc(struct net_device *net_dev,
+			       struct ethtool_rxnfc *rxnfc, u32 *rule_locs)
 {
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 	const int rule_cnt = DPAA2_CLASSIFIER_ENTRY_COUNT;
@@ -831,7 +809,7 @@ static int dpaa2_get_rxnfc(struct net_device *net_dev,
 		break;
 
 	case ETHTOOL_GRXRINGS:
-		rxnfc->data = dpaa2_queue_count(priv);
+		rxnfc->data = dpaa2_eth_queue_count(priv);
 		break;
 
 	case ETHTOOL_GRXCLSRLCNT:
@@ -868,15 +846,13 @@ static int dpaa2_get_rxnfc(struct net_device *net_dev,
 }
 
 const struct ethtool_ops dpaa2_ethtool_ops = {
-	.get_drvinfo = dpaa2_get_drvinfo,
-	.get_msglevel = dpaa2_get_msglevel,
-	.set_msglevel = dpaa2_set_msglevel,
+	.get_drvinfo = dpaa2_eth_get_drvinfo,
 	.get_link = ethtool_op_get_link,
-	.get_settings = dpaa2_get_settings,
-	.set_settings = dpaa2_set_settings,
-	.get_sset_count = dpaa2_get_sset_count,
-	.get_ethtool_stats = dpaa2_get_ethtool_stats,
-	.get_strings = dpaa2_get_strings,
-	.get_rxnfc = dpaa2_get_rxnfc,
-	.set_rxnfc = dpaa2_set_rxnfc,
+	.get_settings = dpaa2_eth_get_settings,
+	.set_settings = dpaa2_eth_set_settings,
+	.get_sset_count = dpaa2_eth_get_sset_count,
+	.get_ethtool_stats = dpaa2_eth_get_ethtool_stats,
+	.get_strings = dpaa2_eth_get_strings,
+	.get_rxnfc = dpaa2_eth_get_rxnfc,
+	.set_rxnfc = dpaa2_eth_set_rxnfc,
 };

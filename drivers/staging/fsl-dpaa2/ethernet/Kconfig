@@ -16,12 +16,6 @@ menuconfig FSL_DPAA2_ETH
 	  driver, using the Freescale MC bus driver.
 
 if FSL_DPAA2_ETH
-config FSL_DPAA2_ETH_LINK_POLL
-	bool "Use polling mode for link state"
-	default n
-	---help---
-	  Poll for detecting link state changes instead of using
-	  interrupts.
 
 config FSL_DPAA2_ETH_USE_ERR_QUEUE
 	bool "Enable Rx error queue"

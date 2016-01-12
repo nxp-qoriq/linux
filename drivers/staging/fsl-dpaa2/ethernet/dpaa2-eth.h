@@ -49,8 +49,10 @@
 
 #define DPAA2_ETH_STORE_SIZE		16
 
-/* Maximum receive frame size is 64K */
-#define DPAA2_ETH_MAX_SG_ENTRIES	((64 * 1024) / DPAA2_ETH_RX_BUFFER_SIZE)
+/* Maximum number of scatter-gather entries in an ingress frame,
+ * considering the maximum receive frame size is 64K
+ */
+#define DPAA2_ETH_MAX_SG_ENTRIES	((64 * 1024) / DPAA2_ETH_RX_BUF_SIZE)
 
 /* Maximum acceptable MTU value. It is in direct relation with the MC-enforced
  * Max Frame Length (currently 10k).
@@ -75,17 +77,26 @@
 #define DPAA2_ETH_NUM_BUFS		(DPAA2_ETH_MAX_FRAMES_PER_QUEUE + 256)
 #define DPAA2_ETH_REFILL_THRESH		DPAA2_ETH_MAX_FRAMES_PER_QUEUE
 
+/* Maximum number of buffers that can be acquired/released through a single
+ * QBMan command
+ */
+#define DPAA2_ETH_BUFS_PER_CMD		7
+
 /* Hardware requires alignment for ingress/egress buffer addresses
  * and ingress buffer lengths.
  */
-#define DPAA2_ETH_RX_BUFFER_SIZE	2048
+#define DPAA2_ETH_RX_BUF_SIZE		2048
 #define DPAA2_ETH_TX_BUF_ALIGN		64
 #define DPAA2_ETH_RX_BUF_ALIGN		256
 #define DPAA2_ETH_NEEDED_HEADROOM(p_priv) \
 	((p_priv)->tx_data_offset + DPAA2_ETH_TX_BUF_ALIGN)
 
+/* Hardware only sees DPAA2_ETH_RX_BUF_SIZE, but we need to allocate ingress
+ * buffers large enough to allow building an skb around them and also account
+ * for alignment restrictions
+ */
 #define DPAA2_ETH_BUF_RAW_SIZE \
-	(DPAA2_ETH_RX_BUFFER_SIZE + \
+	(DPAA2_ETH_RX_BUF_SIZE + \
 	SKB_DATA_ALIGN(sizeof(struct skb_shared_info)) + \
 	DPAA2_ETH_RX_BUF_ALIGN)
 
@@ -127,57 +138,56 @@ struct dpaa2_fas {
 	__le32 status;
 } __packed;
 
+/* Error and status bits in the frame annotation status word */
 /* Debug frame, otherwise supposed to be discarded */
-#define DPAA2_ETH_FAS_DISC		0x80000000
+#define DPAA2_FAS_DISC			0x80000000
 /* MACSEC frame */
-#define DPAA2_ETH_FAS_MS		0x40000000
-#define DPAA2_ETH_FAS_PTP		0x08000000
+#define DPAA2_FAS_MS			0x40000000
+#define DPAA2_FAS_PTP			0x08000000
 /* Ethernet multicast frame */
-#define DPAA2_ETH_FAS_MC		0x04000000
+#define DPAA2_FAS_MC			0x04000000
 /* Ethernet broadcast frame */
-#define DPAA2_ETH_FAS_BC		0x02000000
-#define DPAA2_ETH_FAS_KSE		0x00040000
-#define DPAA2_ETH_FAS_EOFHE		0x00020000
-#define DPAA2_ETH_FAS_MNLE		0x00010000
-#define DPAA2_ETH_FAS_TIDE		0x00008000
-#define DPAA2_ETH_FAS_PIEE		0x00004000
+#define DPAA2_FAS_BC			0x02000000
+#define DPAA2_FAS_KSE			0x00040000
+#define DPAA2_FAS_EOFHE			0x00020000
+#define DPAA2_FAS_MNLE			0x00010000
+#define DPAA2_FAS_TIDE			0x00008000
+#define DPAA2_FAS_PIEE			0x00004000
 /* Frame length error */
-#define DPAA2_ETH_FAS_FLE		0x00002000
-/* Frame physical error; our favourite pastime */
-#define DPAA2_ETH_FAS_FPE		0x00001000
-#define DPAA2_ETH_FAS_PTE		0x00000080
-#define DPAA2_ETH_FAS_ISP		0x00000040
-#define DPAA2_ETH_FAS_PHE		0x00000020
-#define DPAA2_ETH_FAS_BLE		0x00000010
+#define DPAA2_FAS_FLE			0x00002000
+/* Frame physical error */
+#define DPAA2_FAS_FPE			0x00001000
+#define DPAA2_FAS_PTE			0x00000080
+#define DPAA2_FAS_ISP			0x00000040
+#define DPAA2_FAS_PHE			0x00000020
+#define DPAA2_FAS_BLE			0x00000010
 /* L3 csum validation performed */
-#define DPAA2_ETH_FAS_L3CV		0x00000008
+#define DPAA2_FAS_L3CV			0x00000008
 /* L3 csum error */
-#define DPAA2_ETH_FAS_L3CE		0x00000004
+#define DPAA2_FAS_L3CE			0x00000004
 /* L4 csum validation performed */
-#define DPAA2_ETH_FAS_L4CV		0x00000002
+#define DPAA2_FAS_L4CV			0x00000002
 /* L4 csum error */
-#define DPAA2_ETH_FAS_L4CE		0x00000001
-/* These bits always signal errors */
-#define DPAA2_ETH_RX_ERR_MASK		(DPAA2_ETH_FAS_KSE	| \
-					 DPAA2_ETH_FAS_EOFHE	| \
-					 DPAA2_ETH_FAS_MNLE	| \
-					 DPAA2_ETH_FAS_TIDE	| \
-					 DPAA2_ETH_FAS_PIEE	| \
-					 DPAA2_ETH_FAS_FLE	| \
-					 DPAA2_ETH_FAS_FPE	| \
-					 DPAA2_ETH_FAS_PTE	| \
-					 DPAA2_ETH_FAS_ISP	| \
-					 DPAA2_ETH_FAS_PHE	| \
-					 DPAA2_ETH_FAS_BLE	| \
-					 DPAA2_ETH_FAS_L3CE	| \
-					 DPAA2_ETH_FAS_L4CE)
-/* Unsupported features in the ingress */
-#define DPAA2_ETH_RX_UNSUPP_MASK	DPAA2_ETH_FAS_MS
+#define DPAA2_FAS_L4CE			0x00000001
+/* Possible errors on the ingress path */
+#define DPAA2_ETH_RX_ERR_MASK		(DPAA2_FAS_KSE		| \
+					 DPAA2_FAS_EOFHE	| \
+					 DPAA2_FAS_MNLE		| \
+					 DPAA2_FAS_TIDE		| \
+					 DPAA2_FAS_PIEE		| \
+					 DPAA2_FAS_FLE		| \
+					 DPAA2_FAS_FPE		| \
+					 DPAA2_FAS_PTE		| \
+					 DPAA2_FAS_ISP		| \
+					 DPAA2_FAS_PHE		| \
+					 DPAA2_FAS_BLE		| \
+					 DPAA2_FAS_L3CE		| \
+					 DPAA2_FAS_L4CE)
 /* Tx errors */
-#define DPAA2_ETH_TXCONF_ERR_MASK	(DPAA2_ETH_FAS_KSE	| \
-					 DPAA2_ETH_FAS_EOFHE	| \
-					 DPAA2_ETH_FAS_MNLE	| \
-					 DPAA2_ETH_FAS_TIDE)
+#define DPAA2_ETH_TXCONF_ERR_MASK	(DPAA2_FAS_KSE		| \
+					 DPAA2_FAS_EOFHE	| \
+					 DPAA2_FAS_MNLE		| \
+					 DPAA2_FAS_TIDE)
 
 /* Time in milliseconds between link state updates */
 #define DPAA2_ETH_LINK_STATE_REFRESH	1000
@@ -185,7 +195,7 @@ struct dpaa2_fas {
 /* Driver statistics, other than those in struct rtnl_link_stats64.
  * These are usually collected per-CPU and aggregated by ethtool.
  */
-struct dpaa2_eth_stats {
+struct dpaa2_eth_drv_stats {
 	__u64	tx_conf_frames;
 	__u64	tx_conf_bytes;
 	__u64	tx_sg_frames;
@@ -210,15 +220,17 @@ struct dpaa2_eth_ch_stats {
 	__u64 cdan;
 	/* Number of frames received on queues from this channel */
 	__u64 frames;
+	/* Pull errors */
+	__u64 pull_err;
 };
 
-/* Maximum number of Rx queues associated with a DPNI */
+/* Maximum number of queues associated with a DPNI */
 #define DPAA2_ETH_MAX_RX_QUEUES		16
 #define DPAA2_ETH_MAX_TX_QUEUES		NR_CPUS
 #define DPAA2_ETH_MAX_RX_ERR_QUEUES	1
-#define DPAA2_ETH_MAX_QUEUES	(DPAA2_ETH_MAX_RX_QUEUES + \
-				DPAA2_ETH_MAX_TX_QUEUES + \
-				DPAA2_ETH_MAX_RX_ERR_QUEUES)
+#define DPAA2_ETH_MAX_QUEUES		(DPAA2_ETH_MAX_RX_QUEUES + \
+					DPAA2_ETH_MAX_TX_QUEUES + \
+					DPAA2_ETH_MAX_RX_ERR_QUEUES)
 
 #define DPAA2_ETH_MAX_DPCONS		NR_CPUS
 
@@ -241,7 +253,6 @@ struct dpaa2_eth_fq {
 			struct dpaa2_eth_channel *,
 			const struct dpaa2_fd *,
 			struct napi_struct *);
-	struct dpaa2_eth_priv *netdev_priv;	/* backpointer */
 	struct dpaa2_eth_fq_stats stats;
 };
 
@@ -258,16 +269,16 @@ struct dpaa2_eth_channel {
 	struct dpaa2_eth_ch_stats stats;
 };
 
-struct dpaa2_cls_rule {
+struct dpaa2_eth_cls_rule {
 	struct ethtool_rx_flow_spec fs;
 	bool in_use;
 };
 
+/* Driver private data */
 struct dpaa2_eth_priv {
 	struct net_device *net_dev;
 
 	u8 num_fqs;
-	/* First queue is tx conf, the rest are rx */
 	struct dpaa2_eth_fq fq[DPAA2_ETH_MAX_QUEUES];
 
 	u8 num_channels;
@@ -299,12 +310,12 @@ struct dpaa2_eth_priv {
 	/* Standard statistics */
 	struct rtnl_link_stats64 __percpu *percpu_stats;
 	/* Extra stats, in addition to the ones known by the kernel */
-	struct dpaa2_eth_stats __percpu *percpu_extras;
-	u32 msg_enable;	/* net_device message level */
+	struct dpaa2_eth_drv_stats __percpu *percpu_extras;
 
 	u16 mc_token;
 
 	struct dpni_link_state link_state;
+	bool do_link_poll;
 	struct task_struct *poll_thread;
 
 	/* enabled ethtool hashing bits */
@@ -315,7 +326,7 @@ struct dpaa2_eth_priv {
 #endif
 
 	/* array of classification rules */
-	struct dpaa2_cls_rule *cls_rule;
+	struct dpaa2_eth_cls_rule *cls_rule;
 
 	struct dpni_tx_shaping_cfg shaping_cfg;
 
@@ -341,9 +352,9 @@ struct dpaa2_eth_priv {
 
 extern const struct ethtool_ops dpaa2_ethtool_ops;
 
-int dpaa2_set_hash(struct net_device *net_dev, u64 flags);
+int dpaa2_eth_set_hash(struct net_device *net_dev, u64 flags);
 
-static int dpaa2_queue_count(struct dpaa2_eth_priv *priv)
+static int dpaa2_eth_queue_count(struct dpaa2_eth_priv *priv)
 {
 	if (!dpaa2_eth_hash_enabled(priv))
 		return 1;
@@ -351,16 +362,16 @@ static int dpaa2_queue_count(struct dpaa2_eth_priv *priv)
 	return priv->dpni_ext_cfg.tc_cfg[0].max_dist;
 }
 
-static inline int dpaa2_max_channels(struct dpaa2_eth_priv *priv)
+static inline int dpaa2_eth_max_channels(struct dpaa2_eth_priv *priv)
 {
 	/* Ideally, we want a number of channels large enough
 	 * to accommodate both the Rx distribution size
 	 * and the max number of Tx confirmation queues
 	 */
-	return max_t(int, dpaa2_queue_count(priv),
+	return max_t(int, dpaa2_eth_queue_count(priv),
 		     priv->dpni_attrs.max_senders);
 }
 
-void dpaa2_cls_check(struct net_device *);
+void check_fs_support(struct net_device *);
 
 #endif	/* __DPAA2_H */

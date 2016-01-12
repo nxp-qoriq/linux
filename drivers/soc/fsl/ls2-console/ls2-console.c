@@ -40,23 +40,25 @@
 
 /* MC and IOP character device to read from RAM */
 
-#define MC_BASE_ADDR 0x83e0000000
+#define MC_BASE_ADDR 0x83c0000000
 
-#define MC_BUFFER_OFFSET 0x01000000
+#define MC_BUFFER_OFFSET 0x01400000
 #define MC_BUFFER_SIZE (1024*1024*3)
 
-#define AIOP_BUFFER_OFFSET  0x06000000
+#define AIOP_BUFFER_OFFSET 0x06000000
 #define AIOP_BUFFER_SIZE (1024*1024*16)
 
 struct log_header {
-	char magic_word[8]; /* magic word 'AIOP<version>' */
-	uint32_t buf_start; /* holds the 32-bit little-endian offset of the start of the buffer */
-	uint32_t buf_length; /* holds the 32-bit little-endian length of the buffer - not including these initial words */
-	uint32_t last_byte; /* holds the 32-bit little-endian offset of the byte after the last byte that was written */
+	char magic_word[8]; /* magic word */
+	uint32_t buf_start; /* holds the 32-bit little-endian
+		offset of the start of the buffer */
+	uint32_t buf_length; /* holds the 32-bit little-endian
+		length of the buffer */
+	uint32_t last_byte; /* holds the 32-bit little-endian offset
+		of the byte after the last byte that was written */
 	char reserved[44];
 };
 
-#define LOG_HEADER_LAST_BYTE_OFFSET 16 /*size of magic word + buf start + buf length*/
 #define LOG_HEADER_FLAG_BUFFER_WRAPAROUND 0x80000000
 #define LOG_VERSION_MAJOR 1
 #define LOG_VERSION_MINOR 0
@@ -73,14 +75,12 @@ struct console_data {
 	char *cur_ptr; /* Last data sent to console */
 };
 
-static void adjust_end(struct console_data *cd);
-
-#define LOG_HEADER_FLAG_BUFFER_WRAPAROUND 0x80000000
 #define LAST_BYTE(a) ((a) & ~(LOG_HEADER_FLAG_BUFFER_WRAPAROUND))
 
 static inline void __adjust_end(struct console_data *cd)
 {
-	cd->end_of_data = cd->map_addr+LAST_BYTE(cd->hdr->last_byte);
+	cd->end_of_data = cd->map_addr
+				+ LAST_BYTE(le32_to_cpu(cd->hdr->last_byte));
 }
 
 static inline void adjust_end(struct console_data *cd)
@@ -91,7 +91,8 @@ static inline void adjust_end(struct console_data *cd)
 
 
 static int fsl_ls2_generic_console_open(struct inode *node, struct file *fp,
-					u64 offset, uint8_t *emagic, uint8_t magic_len)
+				u64 offset, u64 size,
+				uint8_t *emagic, uint8_t magic_len)
 {
 	struct console_data *cd;
 	uint8_t *magic;
@@ -101,17 +102,17 @@ static int fsl_ls2_generic_console_open(struct inode *node, struct file *fp,
 	if (cd == NULL)
 		return -ENOMEM;
 	fp->private_data = cd;
-	cd->map_addr = ioremap(MC_BASE_ADDR + offset, AIOP_BUFFER_SIZE);
+	cd->map_addr = ioremap(MC_BASE_ADDR + offset, size);
 
-	cd->hdr = (struct log_header*) cd->map_addr;
+	cd->hdr = (struct log_header *) cd->map_addr;
 
 	magic = cd->hdr->magic_word;
-	if(memcmp(magic,emagic,magic_len)) {
+	if (memcmp(magic, emagic, magic_len)) {
 		pr_info("magic didn't match!\n");
-		pr_info("expected magic: %02x %02x %02x %02x %02x %02x %02x %02x\n",
+		pr_info("expected: %02x %02x %02x %02x %02x %02x %02x %02x\n",
 				emagic[0], emagic[1], emagic[2], emagic[3],
 				emagic[4], emagic[5], emagic[6], emagic[7]);
-		pr_info("    seen magic: %02x %02x %02x %02x %02x %02x %02x %02x\n",
+		pr_info("    seen: %02x %02x %02x %02x %02x %02x %02x %02x\n",
 				magic[0], magic[1], magic[2], magic[3],
 				magic[4], magic[5], magic[6], magic[7]);
 		kfree(cd);
@@ -119,24 +120,27 @@ static int fsl_ls2_generic_console_open(struct inode *node, struct file *fp,
 		return -EIO;
 	}
 
-	cd->start_addr = cd->map_addr+cd->hdr->buf_start;
-	cd->end_addr = cd->start_addr + cd->hdr->buf_length;
+	cd->start_addr = cd->map_addr + le32_to_cpu(cd->hdr->buf_start);
+	cd->end_addr = cd->start_addr + le32_to_cpu(cd->hdr->buf_length);
 
-	wrapped = cd->hdr->last_byte & LOG_HEADER_FLAG_BUFFER_WRAPAROUND;
+	wrapped = le32_to_cpu(cd->hdr->last_byte)
+			 & LOG_HEADER_FLAG_BUFFER_WRAPAROUND;
 
 	__adjust_end(cd);
-	if(wrapped && (cd->end_of_data != cd->end_addr)) {
+	if (wrapped && (cd->end_of_data != cd->end_addr))
 		cd->cur_ptr = cd->end_of_data+1;
-	} else {
+	else
 		cd->cur_ptr = cd->start_addr;
-	}
+
 	return 0;
 }
 
 static int fsl_ls2_mc_console_open(struct inode *node, struct file *fp)
 {
 	uint8_t magic_word[] = { 0, 1, 'C', 'M' };
-	return fsl_ls2_generic_console_open(node, fp, MC_BUFFER_OFFSET,
+
+	return fsl_ls2_generic_console_open(node, fp,
+			MC_BUFFER_OFFSET, MC_BUFFER_SIZE,
 			magic_word, sizeof(magic_word));
 }
 
@@ -144,7 +148,8 @@ static int fsl_ls2_aiop_console_open(struct inode *node, struct file *fp)
 {
 	uint8_t magic_word[] = { 'P', 'O', 'I', 'A', 0, 0, 0, 1 };
 
-	return fsl_ls2_generic_console_open(node, fp, AIOP_BUFFER_OFFSET,
+	return fsl_ls2_generic_console_open(node, fp,
+			AIOP_BUFFER_OFFSET, AIOP_BUFFER_SIZE,
 			magic_word, sizeof(magic_word));
 }
 
@@ -175,7 +180,7 @@ ssize_t fsl_ls2_console_read(struct file *fp, char __user *buf, size_t count,
 		if (copy_to_user(&buf[bytes], &data, 1))
 			return -EFAULT;
 		cd->cur_ptr++;
-		if(cd->cur_ptr >= cd->end_addr)
+		if (cd->cur_ptr >= cd->end_addr)
 			cd->cur_ptr = cd->start_addr;
 		++bytes;
 	}
@@ -235,6 +240,7 @@ static int __init fsl_ls2_console_init(void)
 static void __exit fsl_ls2_console_exit(void)
 {
 	int err = misc_deregister(&fsl_ls2_mc_console_dev);
+
 	if (err)
 		pr_err("Failed to deregister device %s code %d\n",
 		       fsl_ls2_mc_console_dev.name, err);

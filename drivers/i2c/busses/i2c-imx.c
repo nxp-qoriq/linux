@@ -893,6 +893,13 @@ static int i2c_imx_xfer(struct i2c_adapter *adapter,
 	if (result < 0)
 		goto out;
 
+	/* workround for ERR010027: ensure that the I2C BUS is idle
+	   before switching to master mode and attempting a Start cycle
+	 */
+	result =  i2c_imx_bus_busy(i2c_imx, 0);
+	if (result)
+		goto fail0;
+
 	/* Start I2C transfer */
 	result = i2c_imx_start(i2c_imx);
 	if (result) {

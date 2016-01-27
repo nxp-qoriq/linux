@@ -204,8 +204,8 @@ static int ls_pcie_ep_test_dma(struct ls_ep_test *test)
 
 	getrawmonotonic(&end);
 	period = timespec_sub(end, start);
-	test->result = test->len * 8ULL * i * 1000 /
-		       (period.tv_sec * 1000 * 1000 * 1000 + period.tv_nsec);
+	test->result = test->len * 8ULL * i * 1000;
+	do_div(test->result, period.tv_sec * 1000 * 1000 * 1000 + period.tv_nsec);
 	dma_release_channel(chan);
 
 	return 0;
@@ -240,9 +240,8 @@ static int ls_pcie_ep_test_cpy(struct ls_ep_test *test)
 	getrawmonotonic(&end);
 
 	period = timespec_sub(end, start);
-
-	test->result = test->len * 8ULL * i * 1000 /
-		(period.tv_sec * 1000 * 1000 * 1000 + period.tv_nsec);
+	test->result = test->len * 8ULL * i * 1000;
+	do_div(test->result, period.tv_sec * 1000 * 1000 * 1000 + period.tv_nsec);
 
 	return 0;
 }

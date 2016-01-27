@@ -189,7 +189,7 @@ static int ls_pcie_ep_init(struct ls_pcie *pcie)
 	return 0;
 }
 
-static int __init ls_pcie_ep_probe(struct platform_device *pdev)
+static int ls_pcie_ep_probe(struct platform_device *pdev)
 {
 	struct ls_pcie *pcie;
 	struct resource *dbi_base;

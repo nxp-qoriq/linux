@@ -696,6 +696,8 @@
 			dr_mode = "host";
 			snps,quirk-frame-length-adjustment = <0x20>;
 			snps,dis_rxdet_inp3_quirk;
+			configure-gfladj;
+			snps,dma-snooping;
 		};
 
 		usb1: usb3@3000000 {
@@ -705,6 +707,8 @@
 			dr_mode = "host";
 			snps,quirk-frame-length-adjustment = <0x20>;
 			snps,dis_rxdet_inp3_quirk;
+			configure-gfladj;
+			snps,dma-snooping;
 		};
 
 		usb2: usb3@3100000 {

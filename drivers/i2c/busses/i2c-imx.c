@@ -419,10 +419,10 @@ static void i2c_imx_dma_free(struct imx_i2c_struct *i2c_imx)
  * is coming out of reset and will stay low indefinitely.
  * The I2C master has to generate 9 clock pulses to get the bus free or idle.
  */
-static void imx_i2c_fixup(struct imx_i2c_struct *i2c)
+static void imx_i2c_fixup(struct imx_i2c_struct *i2c_imx)
 {
 	int k;
-	u32 delay_val = 1000000 / i2c->real_clk + 1;
+	u32 delay_val = 1000000 / i2c_imx->cur_clk + 1;
 
 	if (delay_val < 2)
 		delay_val = 2;
@@ -466,7 +466,7 @@ static int i2c_imx_bus_busy(struct imx_i2c_struct *i2c_imx, int for_busy)
 			if ((status & (I2SR_ICF | I2SR_IBB | I2CR_TXAK)) != 0) {
 				imx_i2c_write_reg(status & ~I2SR_IAL, i2c_imx,
 						  IMX_I2C_I2CR);
-				imx_i2c_fixup();
+				imx_i2c_fixup(i2c_imx);
 			}
 			return -ETIMEDOUT;
 		}

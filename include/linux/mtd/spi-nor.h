@@ -75,6 +75,10 @@
 /* Used for Spansion flashes only. */
 #define SPINOR_OP_BRWR		0x17	/* Bank register write */
 
+/* Used for Spansion S25FS-S family flash only. */
+#define SPINOR_OP_SPANSION_RDAR	0x65	/* Read any device register */
+#define SPINOR_OP_SPANSION_WRAR	0x71	/* Write any device register */
+
 /* Used for Micron flashes only. */
 #define SPINOR_OP_RD_EVCR      0x65    /* Read EVCR register */
 #define SPINOR_OP_WD_EVCR      0x61    /* Write EVCR register */

@@ -193,3 +193,8 @@ config IRQ_MXS
 	def_bool y if MACH_ASM9260 || ARCH_MXS
 	select IRQ_DOMAIN
 	select STMP_DEVICE
+
+config LS_SCFG_MSI
+	def_bool y if SOC_LS1021A || ARCH_LAYERSCAPE
+	depends on PCI && PCI_MSI
+	select PCI_MSI_IRQ_DOMAIN

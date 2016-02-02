@@ -207,6 +207,9 @@
 #define SEQID_RDCR		9
 #define SEQID_EN4B		10
 #define SEQID_BRWR		11
+#define SEQID_RDAR		12
+#define SEQID_WRAR		13
+
 
 #define QUADSPI_MIN_IOMAP SZ_4M
 
@@ -486,6 +489,28 @@ static void fsl_qspi_init_lut(struct fsl_qspi *q)
 	qspi_writel(q, LUT0(CMD, PAD1, SPINOR_OP_BRWR),
 			base + QUADSPI_LUT(lut_base));
 
+	/*
+	 * Read any device register.
+	 * Used for Spansion S25FS-S family flash only.
+	 */
+	lut_base = SEQID_RDAR * 4;
+	qspi_writel(q, LUT0(CMD, PAD1, SPINOR_OP_SPANSION_RDAR) |
+			LUT1(ADDR, PAD1, ADDR24BIT),
+			base + QUADSPI_LUT(lut_base));
+	qspi_writel(q, LUT0(DUMMY, PAD1, 8) | LUT1(FSL_READ, PAD1, 1),
+			base + QUADSPI_LUT(lut_base + 1));
+
+	/*
+	 * Write any device register.
+	 * Used for Spansion S25FS-S family flash only.
+	 */
+	lut_base = SEQID_WRAR * 4;
+	qspi_writel(q, LUT0(CMD, PAD1, SPINOR_OP_SPANSION_WRAR) |
+			LUT1(ADDR, PAD1, ADDR24BIT),
+			base + QUADSPI_LUT(lut_base));
+	qspi_writel(q, LUT0(FSL_WRITE, PAD1, 1),
+			base + QUADSPI_LUT(lut_base + 1));
+
 	fsl_qspi_lock_lut(q);
 }
 
@@ -493,9 +518,15 @@ static void fsl_qspi_init_lut(struct fsl_qspi *q)
 static int fsl_qspi_get_seqid(struct fsl_qspi *q, u8 cmd)
 {
 	switch (cmd) {
+	case SPINOR_OP_READ4_1_1_4:
 	case SPINOR_OP_READ_1_1_4:
 	case SPINOR_OP_READ_FAST:
+	case SPINOR_OP_READ4_FAST:
 		return SEQID_READ;
+	case SPINOR_OP_SPANSION_RDAR:
+		return SEQID_RDAR;
+	case SPINOR_OP_SPANSION_WRAR:
+		return SEQID_WRAR;
 	case SPINOR_OP_WREN:
 		return SEQID_WREN;
 	case SPINOR_OP_WRDI:
@@ -507,6 +538,7 @@ static int fsl_qspi_get_seqid(struct fsl_qspi *q, u8 cmd)
 	case SPINOR_OP_CHIP_ERASE:
 		return SEQID_CHIP_ERASE;
 	case SPINOR_OP_PP:
+	case SPINOR_OP_PP_4B:
 		return SEQID_PP;
 	case SPINOR_OP_RDID:
 		return SEQID_RDID;
@@ -853,8 +885,12 @@ static int fsl_qspi_read_reg(struct spi_nor *nor, u8 opcode, u8 *buf, int len)
 {
 	int ret;
 	struct fsl_qspi *q = nor->priv;
+	u32 to = 0;
 
-	ret = fsl_qspi_runcmd(q, opcode, 0, len);
+	if (opcode == SPINOR_OP_SPANSION_RDAR)
+		memcpy(&to, nor->cmd_buf, 4);
+
+	ret = fsl_qspi_runcmd(q, opcode, to, len);
 	if (ret)
 		return ret;
 
@@ -866,9 +902,13 @@ static int fsl_qspi_write_reg(struct spi_nor *nor, u8 opcode, u8 *buf, int len)
 {
 	struct fsl_qspi *q = nor->priv;
 	int ret;
+	u32 to = 0;
+
+	if (opcode == SPINOR_OP_SPANSION_WRAR)
+		memcpy(&to, nor->cmd_buf, 4);
 
 	if (!buf) {
-		ret = fsl_qspi_runcmd(q, opcode, 0, 1);
+		ret = fsl_qspi_runcmd(q, opcode, to, 1);
 		if (ret)
 			return ret;
 

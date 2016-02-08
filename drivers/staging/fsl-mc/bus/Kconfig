@@ -22,4 +22,9 @@ config FSL_MC_BUS
 	  Only enable this option when building the kernel for
 	  Freescale QorQIQ LS2xxxx SoCs.
 
-
+config FSL_MC_RESTOOL
+        tristate "Freescale Management Complex (MC) restool driver"
+        depends on FSL_MC_BUS
+        help
+          Driver that provides kernel support for the Freescale Management
+	  Complex resource manager user-space tool.

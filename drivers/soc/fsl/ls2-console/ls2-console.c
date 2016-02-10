@@ -77,16 +77,16 @@ struct console_data {
 	char *end_addr; /* End of buffer */
 	char *end_of_data; /* Current end of data */
 	char *cur_ptr; /* Last data sent to console */
-	uint32_t offset_delta;
+	uint32_t eod_delta;
 };
 
 #define LAST_BYTE(a) ((a) & ~(LOG_HEADER_FLAG_BUFFER_WRAPAROUND))
 
 static inline void __adjust_end(struct console_data *cd)
 {
-	cd->end_of_data = cd->map_addr
+	cd->end_of_data = cd->start_addr
 				+ LAST_BYTE(le32_to_cpu(cd->hdr->last_byte))
-				- cd->offset_delta;
+				- cd->eod_delta;
 }
 
 static inline void adjust_end(struct console_data *cd)
@@ -99,7 +99,8 @@ static inline void adjust_end(struct console_data *cd)
 static int fsl_ls2_generic_console_open(struct inode *node, struct file *fp,
 				u64 offset, u64 size,
 				uint8_t *emagic, uint8_t magic_len,
-				u32 offset_delta, u32 fixed_buf_size)
+				u32 offset_delta, u32 eod_delta,
+				uint8_t ignore_wrap)
 {
 	struct console_data *cd;
 	uint8_t *magic;
@@ -128,18 +129,16 @@ static int fsl_ls2_generic_console_open(struct inode *node, struct file *fp,
 		return -EIO;
 	}
 
-	cd->offset_delta = offset_delta;
-	cd->start_addr = cd->map_addr + le32_to_cpu(cd->hdr->buf_start) - cd->offset_delta;
-	if(fixed_buf_size)
-		cd->end_addr = cd->start_addr + fixed_buf_size;
-	else
-		cd->end_addr = cd->start_addr + le32_to_cpu(cd->hdr->buf_length);
+	cd->eod_delta = eod_delta;
+	cd->start_addr = cd->map_addr
+			 + le32_to_cpu(cd->hdr->buf_start) - offset_delta;
+	cd->end_addr = cd->start_addr + le32_to_cpu(cd->hdr->buf_length);
 
 	wrapped = le32_to_cpu(cd->hdr->last_byte)
 			 & LOG_HEADER_FLAG_BUFFER_WRAPAROUND;
 
 	__adjust_end(cd);
-	if (wrapped && (cd->end_of_data != cd->end_addr))
+	if (!ignore_wrap && wrapped && (cd->end_of_data != cd->end_addr))
 		cd->cur_ptr = cd->end_of_data+1;
 	else
 		cd->cur_ptr = cd->start_addr;
@@ -154,7 +153,7 @@ static int fsl_ls2_mc_console_open(struct inode *node, struct file *fp)
 	return fsl_ls2_generic_console_open(node, fp,
 			MC_BUFFER_OFFSET, MC_BUFFER_SIZE,
 			magic_word, sizeof(magic_word),
-			MC_OFFSET_DELTA, MC_FIXED_LOG_BUF_SIZE);
+			MC_OFFSET_DELTA, 0, 1);
 }
 
 static int fsl_ls2_aiop_console_open(struct inode *node, struct file *fp)
@@ -164,7 +163,7 @@ static int fsl_ls2_aiop_console_open(struct inode *node, struct file *fp)
 	return fsl_ls2_generic_console_open(node, fp,
 			AIOP_BUFFER_OFFSET, AIOP_BUFFER_SIZE,
 			magic_word, sizeof(magic_word),
-			AIOP_OFFSET_DELTA, AIOP_FIXED_LOG_BUF_SIZE);
+			AIOP_OFFSET_DELTA, sizeof(struct log_header), 0);
 }
 
 static int fsl_ls2_console_close(struct inode *node, struct file *fp)

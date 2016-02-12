@@ -45,12 +45,10 @@
 #define MC_BUFFER_OFFSET 0x01000000
 #define MC_BUFFER_SIZE (1024*1024*16)
 #define MC_OFFSET_DELTA (MC_BUFFER_OFFSET)
-#define MC_FIXED_LOG_BUF_SIZE (3*1024*1024-64)
 
 #define AIOP_BUFFER_OFFSET 0x06000000
 #define AIOP_BUFFER_SIZE (1024*1024*16)
 #define AIOP_OFFSET_DELTA (0)
-#define AIOP_FIXED_LOG_BUF_SIZE (0)
 
 struct log_header {
 	char magic_word[8]; /* magic word */
@@ -77,7 +75,6 @@ struct console_data {
 	char *end_addr; /* End of buffer */
 	char *end_of_data; /* Current end of data */
 	char *cur_ptr; /* Last data sent to console */
-	uint32_t eod_delta;
 };
 
 #define LAST_BYTE(a) ((a) & ~(LOG_HEADER_FLAG_BUFFER_WRAPAROUND))
@@ -85,8 +82,7 @@ struct console_data {
 static inline void __adjust_end(struct console_data *cd)
 {
 	cd->end_of_data = cd->start_addr
-				+ LAST_BYTE(le32_to_cpu(cd->hdr->last_byte))
-				- cd->eod_delta;
+				+ LAST_BYTE(le32_to_cpu(cd->hdr->last_byte));
 }
 
 static inline void adjust_end(struct console_data *cd)
@@ -99,8 +95,7 @@ static inline void adjust_end(struct console_data *cd)
 static int fsl_ls2_generic_console_open(struct inode *node, struct file *fp,
 				u64 offset, u64 size,
 				uint8_t *emagic, uint8_t magic_len,
-				u32 offset_delta, u32 eod_delta,
-				uint8_t ignore_wrap)
+				u32 offset_delta)
 {
 	struct console_data *cd;
 	uint8_t *magic;
@@ -129,7 +124,6 @@ static int fsl_ls2_generic_console_open(struct inode *node, struct file *fp,
 		return -EIO;
 	}
 
-	cd->eod_delta = eod_delta;
 	cd->start_addr = cd->map_addr
 			 + le32_to_cpu(cd->hdr->buf_start) - offset_delta;
 	cd->end_addr = cd->start_addr + le32_to_cpu(cd->hdr->buf_length);
@@ -138,7 +132,7 @@ static int fsl_ls2_generic_console_open(struct inode *node, struct file *fp,
 			 & LOG_HEADER_FLAG_BUFFER_WRAPAROUND;
 
 	__adjust_end(cd);
-	if (!ignore_wrap && wrapped && (cd->end_of_data != cd->end_addr))
+	if (wrapped && (cd->end_of_data != cd->end_addr))
 		cd->cur_ptr = cd->end_of_data+1;
 	else
 		cd->cur_ptr = cd->start_addr;
@@ -153,17 +147,17 @@ static int fsl_ls2_mc_console_open(struct inode *node, struct file *fp)
 	return fsl_ls2_generic_console_open(node, fp,
 			MC_BUFFER_OFFSET, MC_BUFFER_SIZE,
 			magic_word, sizeof(magic_word),
-			MC_OFFSET_DELTA, 0, 1);
+			MC_OFFSET_DELTA);
 }
 
 static int fsl_ls2_aiop_console_open(struct inode *node, struct file *fp)
 {
-	uint8_t magic_word[] = { 'P', 'O', 'I', 'A', 0, 0, 0, 1 };
+	uint8_t magic_word[] = { 'P', 'O', 'I', 'A' };
 
 	return fsl_ls2_generic_console_open(node, fp,
 			AIOP_BUFFER_OFFSET, AIOP_BUFFER_SIZE,
 			magic_word, sizeof(magic_word),
-			AIOP_OFFSET_DELTA, sizeof(struct log_header), 0);
+			AIOP_OFFSET_DELTA);
 }
 
 static int fsl_ls2_console_close(struct inode *node, struct file *fp)

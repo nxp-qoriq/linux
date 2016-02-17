@@ -151,7 +151,9 @@ static irqreturn_t _evb_irq0_handler_thread(int irq_num, void *arg)
 	struct fsl_mc_io *io = priv->mc_io;
 	uint16_t token = priv->mux_handle;
 	int irq_index = DPDMUX_IRQ_INDEX_IF;
-	uint32_t status = 0, clear = 0;
+
+	/* Mask the events and the if_id reserved bits to be cleared on read */
+	uint32_t status = DPDMUX_IRQ_EVENT_LINK_CHANGED | 0xFFFF0000;
 	int err;
 
 	/* Sanity check */
@@ -163,23 +165,21 @@ static irqreturn_t _evb_irq0_handler_thread(int irq_num, void *arg)
 	err = dpdmux_get_irq_status(io, 0, token, irq_index, &status);
 	if (unlikely(err)) {
 		netdev_err(netdev, "Can't get irq status (err %d)", err);
-		clear = 0xffffffff;
+		err = dpdmux_clear_irq_status(io, 0, token, irq_index,
+					      0xFFFFFFFF);
+		if (unlikely(err))
+			netdev_err(netdev, "Can't clear irq status (err %d)",
+				   err);
 		goto out;
 	}
 
-	/* FIXME clear irq status */
-
 	if (status & DPDMUX_IRQ_EVENT_LINK_CHANGED) {
-		clear |= DPDMUX_IRQ_EVENT_LINK_CHANGED;
-
 		err = evb_links_state_update(priv);
 		if (unlikely(err))
 			goto out;
 	}
+
 out:
-	err = dpdmux_clear_irq_status(io, 0, token, irq_index, clear);
-	if (unlikely(err))
-		netdev_err(netdev, "Can't clear irq status (err %d)", err);
 	return IRQ_HANDLED;
 }
 
@@ -191,7 +191,7 @@ static int evb_setup_irqs(struct fsl_mc_device *evb_dev)
 	int err = 0;
 	struct fsl_mc_device_irq *irq;
 	const int irq_index = DPDMUX_IRQ_INDEX_IF;
-	uint32_t mask = ~0x0u;	/* FIXME: unmask handled irqs */
+	uint32_t mask = DPDMUX_IRQ_EVENT_LINK_CHANGED;
 
 	err = fsl_mc_allocate_irqs(evb_dev);
 	if (unlikely(err)) {

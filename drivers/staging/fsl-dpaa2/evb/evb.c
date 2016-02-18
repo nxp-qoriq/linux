@@ -44,6 +44,10 @@
 #include "dpdmux.h"
 #include "dpdmux-cmd.h"
 
+/* Minimal supported DPDMUX version */
+#define DPDMUX_MIN_VER_MAJOR			5
+#define DPDMUX_MIN_VER_MINOR			0
+
 /* IRQ index */
 #define DPDMUX_MAX_IRQ_NUM			2
 
@@ -1001,6 +1005,17 @@ static int evb_init(struct fsl_mc_device *evb_dev)
 				    &priv->attr);
 	if (unlikely(err)) {
 		dev_err(dev, "dpdmux_get_attributes err %d\n", err);
+		goto err_close;
+	}
+
+	/* Minimum supported DPDMUX version check */
+	if (priv->attr.version.major < DPDMUX_MIN_VER_MAJOR ||
+	    (priv->attr.version.major == DPDMUX_MIN_VER_MAJOR &&
+	     priv->attr.version.minor < DPDMUX_MIN_VER_MINOR)) {
+		dev_err(dev, "DPDMUX version %d.%d not supported. Use %d.%d or greater.\n",
+			priv->attr.version.major, priv->attr.version.minor,
+			DPDMUX_MIN_VER_MAJOR, DPDMUX_MIN_VER_MAJOR);
+		err = -ENOTSUPP;
 		goto err_close;
 	}
 

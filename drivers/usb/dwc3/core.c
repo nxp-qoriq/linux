@@ -1191,6 +1191,8 @@ static int dwc3_probe(struct platform_device *pdev)
 		(DWC3_GHWPARAMS3_SSPHY_IFC(dwc->hwparams.hwparams3) ==
 		DWC3_GHWPARAMS3_SSPHY_IFC_GEN2))
 		dwc->maximum_speed = USB_SPEED_SUPER_PLUS;
+
+		break;
 	}
 
 	/* Adjust Frame Length */

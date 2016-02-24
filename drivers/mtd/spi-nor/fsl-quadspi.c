@@ -207,9 +207,9 @@
 #define SEQID_RDCR		9
 #define SEQID_EN4B		10
 #define SEQID_BRWR		11
-#define SEQID_RDAR		12
+#define SEQID_RDAR_OR_RD_EVCR	12
 #define SEQID_WRAR		13
-
+#define SEQID_WD_EVCR           14
 
 #define QUADSPI_MIN_IOMAP SZ_4M
 
@@ -393,6 +393,7 @@ static void fsl_qspi_init_lut(struct fsl_qspi *q)
 	int rxfifo = q->devtype_data->rxfifo;
 	u32 lut_base;
 	int i;
+	const struct fsl_qspi_devtype_data *devtype_data = q->devtype_data;
 
 	struct spi_nor *nor = &q->nor[0];
 	u8 addrlen = (nor->addr_width == 3) ? ADDR24BIT : ADDR32BIT;
@@ -489,16 +490,26 @@ static void fsl_qspi_init_lut(struct fsl_qspi *q)
 	qspi_writel(q, LUT0(CMD, PAD1, SPINOR_OP_BRWR),
 			base + QUADSPI_LUT(lut_base));
 
+
 	/*
-	 * Read any device register.
-	 * Used for Spansion S25FS-S family flash only.
+	 * Flash Micron and Spansion command confilict
+	 * use the same value 0x65. But it indicates different meaning.
 	 */
-	lut_base = SEQID_RDAR * 4;
-	qspi_writel(q, LUT0(CMD, PAD1, SPINOR_OP_SPANSION_RDAR) |
-			LUT1(ADDR, PAD1, ADDR24BIT),
-			base + QUADSPI_LUT(lut_base));
-	qspi_writel(q, LUT0(DUMMY, PAD1, 8) | LUT1(FSL_READ, PAD1, 1),
-			base + QUADSPI_LUT(lut_base + 1));
+	lut_base = SEQID_RDAR_OR_RD_EVCR * 4;
+	if (devtype_data->devtype == FSL_QUADSPI_LS2080A) {
+		/*
+		* Read any device register.
+		* Used for Spansion S25FS-S family flash only.
+		*/
+		qspi_writel(q, LUT0(CMD, PAD1, SPINOR_OP_SPANSION_RDAR) |
+			    LUT1(ADDR, PAD1, ADDR24BIT),
+			    base + QUADSPI_LUT(lut_base));
+		qspi_writel(q, LUT0(DUMMY, PAD1, 8) | LUT1(FSL_READ, PAD1, 1),
+			    base + QUADSPI_LUT(lut_base + 1));
+	} else {
+		qspi_writel(q, LUT0(CMD, PAD1, SPINOR_OP_RD_EVCR),
+			    base + QUADSPI_LUT(lut_base));
+	}
 
 	/*
 	 * Write any device register.
@@ -510,6 +521,11 @@ static void fsl_qspi_init_lut(struct fsl_qspi *q)
 			base + QUADSPI_LUT(lut_base));
 	qspi_writel(q, LUT0(FSL_WRITE, PAD1, 1),
 			base + QUADSPI_LUT(lut_base + 1));
+
+	/* Write EVCR register */
+	lut_base = SEQID_WD_EVCR * 4;
+	qspi_writel(q, LUT0(CMD, PAD1, SPINOR_OP_WD_EVCR),
+		    base + QUADSPI_LUT(lut_base));
 
 	fsl_qspi_lock_lut(q);
 }
@@ -523,8 +539,15 @@ static int fsl_qspi_get_seqid(struct fsl_qspi *q, u8 cmd)
 	case SPINOR_OP_READ_FAST:
 	case SPINOR_OP_READ4_FAST:
 		return SEQID_READ;
+	/*
+	 * Spansion & Micron use the same command value 0x65
+	 * Spansion: SPINOR_OP_SPANSION_RDAR, read any register.
+	 * Micron: SPINOR_OP_RD_EVCR,
+	 * read enhanced volatile configuration register.
+	 * case SPINOR_OP_RD_EVCR:
+	 */
 	case SPINOR_OP_SPANSION_RDAR:
-		return SEQID_RDAR;
+		return SEQID_RDAR_OR_RD_EVCR;
 	case SPINOR_OP_SPANSION_WRAR:
 		return SEQID_WRAR;
 	case SPINOR_OP_WREN:
@@ -550,6 +573,8 @@ static int fsl_qspi_get_seqid(struct fsl_qspi *q, u8 cmd)
 		return SEQID_EN4B;
 	case SPINOR_OP_BRWR:
 		return SEQID_BRWR;
+	case SPINOR_OP_WD_EVCR:
+		return SEQID_WD_EVCR;
 	default:
 		if (cmd == q->nor[0].erase_opcode)
 			return SEQID_SE;

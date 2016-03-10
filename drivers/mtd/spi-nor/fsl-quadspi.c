@@ -706,11 +706,17 @@ static void fsl_qspi_set_map_addr(struct fsl_qspi *q)
 {
 	int nor_size = q->nor_size;
 	void __iomem *base = q->iobase;
+	u32 mem_base;
 
-	qspi_writel(q, nor_size + q->memmap_phy, base + QUADSPI_SFA1AD);
-	qspi_writel(q, nor_size * 2 + q->memmap_phy, base + QUADSPI_SFA2AD);
-	qspi_writel(q, nor_size * 3 + q->memmap_phy, base + QUADSPI_SFB1AD);
-	qspi_writel(q, nor_size * 4 + q->memmap_phy, base + QUADSPI_SFB2AD);
+	if (has_added_amba_base_internal(q))
+		mem_base = 0x0;
+	else
+		mem_base = q->memmap_phy;
+
+	qspi_writel(q, nor_size + mem_base, base + QUADSPI_SFA1AD);
+	qspi_writel(q, nor_size * 2 + mem_base, base + QUADSPI_SFA2AD);
+	qspi_writel(q, nor_size * 3 + mem_base, base + QUADSPI_SFB1AD);
+	qspi_writel(q, nor_size * 4 + mem_base, base + QUADSPI_SFB2AD);
 }
 
 /*

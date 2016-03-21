@@ -39,15 +39,18 @@
 char dpaa2_ethtool_stats[][ETH_GSTRING_LEN] = {
 	"rx frames",
 	"rx bytes",
-	"rx frames dropped",
-	"rx err frames",
+	/* rx frames filtered/policed */
+	"rx filtered frames",
+	/* rx frames dropped with errors */
+	"rx discarded frames",
 	"rx mcast frames",
 	"rx mcast bytes",
 	"rx bcast frames",
 	"rx bcast bytes",
 	"tx frames",
 	"tx bytes",
-	"tx err frames",
+	/* tx frames dropped with errors */
+	"tx discarded frames",
 };
 
 #define DPAA2_ETH_NUM_STATS	ARRAY_SIZE(dpaa2_ethtool_stats)

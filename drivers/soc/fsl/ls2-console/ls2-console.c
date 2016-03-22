@@ -246,22 +246,13 @@ static int __init fsl_ls2_console_init(void)
 
 static void __exit fsl_ls2_console_exit(void)
 {
-	int err = misc_deregister(&fsl_ls2_mc_console_dev);
+	misc_deregister(&fsl_ls2_mc_console_dev);
+	pr_info("device %s deregistered\n",
+		fsl_ls2_mc_console_dev.name);
 
-	if (err)
-		pr_err("Failed to deregister device %s code %d\n",
-		       fsl_ls2_mc_console_dev.name, err);
-	else
-		pr_info("device %s deregistered\n",
-			fsl_ls2_mc_console_dev.name);
-
-	err = misc_deregister(&fsl_ls2_aiop_console_dev);
-	if (err)
-		pr_err("Failed to deregister device %s code %d\n",
-		       fsl_ls2_aiop_console_dev.name, err);
-	else
-		pr_info("device %s deregistered\n",
-			fsl_ls2_aiop_console_dev.name);
+	misc_deregister(&fsl_ls2_aiop_console_dev);
+	pr_info("device %s deregistered\n",
+		fsl_ls2_aiop_console_dev.name);
 }
 
 module_init(fsl_ls2_console_init);

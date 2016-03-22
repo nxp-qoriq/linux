@@ -60,6 +60,9 @@ void *memremap(resource_size_t offset, size_t size, unsigned long flags)
 	int is_ram = region_intersects(offset, size, "System RAM");
 	void *addr = NULL;
 
+	if (!flags)
+		return NULL;
+
 	if (is_ram == REGION_MIXED) {
 		WARN_ONCE(1, "memremap attempted on mixed range %pa size: %#lx\n",
 				&offset, (unsigned long) size);
@@ -68,7 +71,6 @@ void *memremap(resource_size_t offset, size_t size, unsigned long flags)
 
 	/* Try all mapping types requested until one returns non-NULL */
 	if (flags & MEMREMAP_WB) {
-		flags &= ~MEMREMAP_WB;
 		/*
 		 * MEMREMAP_WB is special in that it can be satisifed
 		 * from the direct map.  Some archs depend on the
@@ -87,16 +89,17 @@ void *memremap(resource_size_t offset, size_t size, unsigned long flags)
 	 * address mapping.  Enforce that this mapping is not aliasing
 	 * "System RAM"
 	 */
-	if (!addr && is_ram == REGION_INTERSECTS && flags) {
+	if (!addr && is_ram == REGION_INTERSECTS && flags != MEMREMAP_WB) {
 		WARN_ONCE(1, "memremap attempted on ram %pa size: %#lx\n",
 				&offset, (unsigned long) size);
 		return NULL;
 	}
 
-	if (!addr && (flags & MEMREMAP_WT)) {
-		flags &= ~MEMREMAP_WT;
+	if (!addr && (flags & MEMREMAP_WT))
 		addr = ioremap_wt(offset, size);
-	}
+
+	if (!addr && (flags & MEMREMAP_WC))
+		addr = ioremap_wc(offset, size);
 
 	return addr;
 }

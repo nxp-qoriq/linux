@@ -128,7 +128,7 @@ int dpni_prepare_extended_cfg(const struct dpni_extended_cfg	*cfg,
 int dpni_extract_extended_cfg(struct dpni_extended_cfg	*cfg,
 			      const uint8_t		*ext_cfg_buf)
 {
-	uint64_t *ext_params = (uint64_t *)ext_cfg_buf;
+	const uint64_t *ext_params = (const uint64_t *)ext_cfg_buf;
 
 	DPNI_EXT_EXTENDED_CFG(ext_params, cfg);
 
@@ -1651,7 +1651,7 @@ void dpni_prepare_early_drop(const struct dpni_early_drop_cfg *cfg,
 void dpni_extract_early_drop(struct dpni_early_drop_cfg *cfg,
 			     const uint8_t *early_drop_buf)
 {
-	uint64_t *ext_params = (uint64_t *)early_drop_buf;
+	const uint64_t *ext_params = (const uint64_t *)early_drop_buf;
 
 	DPNI_EXT_EARLY_DROP(ext_params, cfg);
 }

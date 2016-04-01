@@ -132,7 +132,7 @@ static void dpaa2_mac_link_changed(struct net_device *netdev)
 }
 
 /* IRQ bits that we handle */
-static const u32 dpmac_irq_mask =  DPMAC_IRQ_EVENT_LINK_CFG_REQ;
+static const u32 dpmac_irq_mask = DPMAC_IRQ_EVENT_LINK_CFG_REQ;
 
 #ifdef CONFIG_FSL_DPAA2_MAC_NETDEVS
 static netdev_tx_t dpaa2_mac_drop_frame(struct sk_buff *skb,
@@ -345,16 +345,13 @@ static const struct ethtool_ops dpaa2_mac_ethtool_ops = {
 };
 #endif /* CONFIG_FSL_DPAA2_MAC_NETDEVS */
 
-static int configure_link(struct dpaa2_mac_priv *priv,
-			  struct dpmac_link_cfg *cfg)
+static void configure_link(struct dpaa2_mac_priv *priv,
+			   struct dpmac_link_cfg *cfg)
 {
 	struct phy_device *phydev = priv->netdev->phydev;
 
-	if (!phydev) {
-		dev_warn(priv->netdev->dev.parent,
-			 "asked to change PHY settings but PHY ref is NULL, ignoring\n");
-		return 0;
-	}
+	if (unlikely(!phydev))
+		return;
 
 	phydev->speed = cfg->rate;
 	phydev->duplex  = !!(cfg->options & DPMAC_LINK_OPT_HALF_DUPLEX);
@@ -368,8 +365,6 @@ static int configure_link(struct dpaa2_mac_priv *priv,
 	}
 
 	phy_start_aneg(phydev);
-
-	return 0;
 }
 
 static irqreturn_t dpaa2_mac_irq_handler(int irq_num, void *arg)
@@ -378,53 +373,29 @@ static irqreturn_t dpaa2_mac_irq_handler(int irq_num, void *arg)
 	struct fsl_mc_device *mc_dev = to_fsl_mc_device(dev);
 	struct dpaa2_mac_priv *priv = dev_get_drvdata(dev);
 	struct dpmac_link_cfg link_cfg;
-	u8 irq_index = DPMAC_IRQ_INDEX;
-	u32 status, clear = 0;
+	u32 status;
 	int err;
 
-	if (mc_dev->irqs[0]->msi_desc->irq != irq_num) {
-		dev_err(dev, "received unexpected interrupt %d!\n", irq_num);
-		goto err;
-	}
-
 	err = dpmac_get_irq_status(mc_dev->mc_io, 0, mc_dev->mc_handle,
-				   irq_index, &status);
-	if (err) {
-		dev_err(dev, "dpmac_get_irq_status err %d\n", err);
-		clear = ~0x0u;
-		goto out;
-	}
+				   DPMAC_IRQ_INDEX, &status);
+	if (unlikely(err || !status))
+		return IRQ_NONE;
 
 	/* DPNI-initiated link configuration; 'ifconfig up' also calls this */
 	if (status & DPMAC_IRQ_EVENT_LINK_CFG_REQ) {
-		dev_dbg(dev, "DPMAC IRQ %d - LINK_CFG_REQ\n", irq_num);
-		clear |= DPMAC_IRQ_EVENT_LINK_CFG_REQ;
-
 		err = dpmac_get_link_cfg(mc_dev->mc_io, 0, mc_dev->mc_handle,
 					 &link_cfg);
-		if (err) {
-			dev_err(dev, "dpmac_get_link_cfg err %d\n", err);
+		if (unlikely(err))
 			goto out;
-		}
 
-		err = configure_link(priv, &link_cfg);
-		if (err) {
-			dev_err(dev, "cannot configure link\n");
-			goto out;
-		}
+		configure_link(priv, &link_cfg);
 	}
 
 out:
-	err = dpmac_clear_irq_status(mc_dev->mc_io, 0, mc_dev->mc_handle,
-				     irq_index, clear);
-	if (err < 0)
-		dev_err(&mc_dev->dev, "dpmac_clear_irq_status() err %d\n", err);
+	dpmac_clear_irq_status(mc_dev->mc_io, 0, mc_dev->mc_handle,
+			       DPMAC_IRQ_INDEX, status);
 
 	return IRQ_HANDLED;
-
-err:
-	dev_warn(dev, "DPMAC IRQ %d was not handled!\n", irq_num);
-	return IRQ_NONE;
 }
 
 static int setup_irqs(struct fsl_mc_device *mc_dev)
@@ -435,19 +406,6 @@ static int setup_irqs(struct fsl_mc_device *mc_dev)
 	if (err) {
 		dev_err(&mc_dev->dev, "fsl_mc_allocate_irqs err %d\n", err);
 		return err;
-	}
-
-	err = dpmac_set_irq_mask(mc_dev->mc_io, 0, mc_dev->mc_handle,
-				 DPMAC_IRQ_INDEX, dpmac_irq_mask);
-	if (err < 0) {
-		dev_err(&mc_dev->dev, "dpmac_set_irq_mask err %d\n", err);
-		goto free_irq;
-	}
-	err = dpmac_set_irq_enable(mc_dev->mc_io, 0, mc_dev->mc_handle,
-				   DPMAC_IRQ_INDEX, 0);
-	if (err) {
-		dev_err(&mc_dev->dev, "dpmac_set_irq_enable err %d\n", err);
-		goto free_irq;
 	}
 
 	err = devm_request_threaded_irq(&mc_dev->dev,
@@ -463,7 +421,7 @@ static int setup_irqs(struct fsl_mc_device *mc_dev)
 
 	err = dpmac_set_irq_mask(mc_dev->mc_io, 0, mc_dev->mc_handle,
 				 DPMAC_IRQ_INDEX, dpmac_irq_mask);
-	if (err < 0) {
+	if (err) {
 		dev_err(&mc_dev->dev, "dpmac_set_irq_mask err %d\n", err);
 		goto free_irq;
 	}
@@ -490,12 +448,12 @@ static void teardown_irqs(struct fsl_mc_device *mc_dev)
 
 	err = dpmac_set_irq_mask(mc_dev->mc_io, 0, mc_dev->mc_handle,
 				 DPMAC_IRQ_INDEX, dpmac_irq_mask);
-	if (err < 0)
+	if (err)
 		dev_err(&mc_dev->dev, "dpmac_set_irq_mask err %d\n", err);
 
 	err = dpmac_set_irq_enable(mc_dev->mc_io, 0, mc_dev->mc_handle,
 				   DPMAC_IRQ_INDEX, 0);
-	if (err < 0)
+	if (err)
 		dev_err(&mc_dev->dev, "dpmac_set_irq_enable err %d\n", err);
 
 	devm_free_irq(&mc_dev->dev, mc_dev->irqs[0]->msi_desc->irq, &mc_dev->dev);
@@ -562,9 +520,6 @@ static int dpaa2_mac_probe(struct fsl_mc_device *mc_dev)
 	phy_interface_t		if_mode;
 	int			err = 0;
 
-	/* just being completely paranoid */
-	if (!mc_dev)
-		return -EFAULT;
 	dev = &mc_dev->dev;
 
 	/* prepare a net_dev structure to make the phy lib API happy */

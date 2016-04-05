@@ -1228,4 +1228,4 @@ static struct fsl_mc_driver evb_drv = {
 module_fsl_mc_driver(evb_drv);
 
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("Layerscape DPAA Edge Virtual Bridge driver (prototype)");
+MODULE_DESCRIPTION("DPAA2 Edge Virtual Bridge driver (prototype)");

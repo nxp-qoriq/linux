@@ -429,13 +429,11 @@ static int setup_irqs(struct fsl_mc_device *mc_dev)
 				   DPMAC_IRQ_INDEX, 1);
 	if (err) {
 		dev_err(&mc_dev->dev, "dpmac_set_irq_enable err %d\n", err);
-		goto unregister_irq;
+		goto free_irq;
 	}
 
 	return 0;
 
-unregister_irq:
-	devm_free_irq(&mc_dev->dev, mc_dev->irqs[0]->msi_desc->irq, &mc_dev->dev);
 free_irq:
 	fsl_mc_free_irqs(mc_dev);
 
@@ -456,7 +454,6 @@ static void teardown_irqs(struct fsl_mc_device *mc_dev)
 	if (err)
 		dev_err(&mc_dev->dev, "dpmac_set_irq_enable err %d\n", err);
 
-	devm_free_irq(&mc_dev->dev, mc_dev->irqs[0]->msi_desc->irq, &mc_dev->dev);
 	fsl_mc_free_irqs(mc_dev);
 }
 

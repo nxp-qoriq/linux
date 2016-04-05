@@ -51,7 +51,7 @@ struct qbman_block_desc {
  * Descriptor for a QBMan software portal, expressed in terms that make sense to
  * the user context. Ie. on MC, this information is likely to be true-physical,
  * and instantiated statically at compile-time. On GPP, this information is
- * likely to be obtained via "discovery" over a partition's "layerscape bus"
+ * likely to be obtained via "discovery" over a partition's "MC bus"
  * (ie. in response to a MC portal command), and would take into account any
  * virtualisation of the GPP user's address space and/or interrupt numbering.
  */

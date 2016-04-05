@@ -138,7 +138,7 @@ static inline void *qbman_swp_mc_complete(struct qbman_swp *swp, void *cmd,
 /* This struct locates a sub-field within a QBMan portal (CENA) cacheline which
  * is either serving as a configuration command or a query result. The
  * representation is inherently little-endian, as the indexing of the words is
- * itself little-endian in nature and layerscape is little endian for anything
+ * itself little-endian in nature and DPAA2 is little endian for anything
  * that crosses a word boundary too (64-bit fields are the obvious examples).
  */
 struct qb_attr_code {

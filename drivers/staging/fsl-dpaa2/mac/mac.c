@@ -534,7 +534,10 @@ static int dpaa2_mac_probe(struct fsl_mc_device *mc_dev)
 	priv->netdev = netdev;
 
 	SET_NETDEV_DEV(netdev, dev);
+
+#ifdef CONFIG_FSL_DPAA2_MAC_NETDEVS
 	snprintf(netdev->name, IFNAMSIZ, "mac%d", mc_dev->obj_desc.id);
+#endif
 
 	dev_set_drvdata(dev, priv);
 
@@ -684,7 +687,9 @@ static int dpaa2_mac_remove(struct fsl_mc_device *mc_dev)
 	struct device		*dev = &mc_dev->dev;
 	struct dpaa2_mac_priv	*priv = dev_get_drvdata(dev);
 
+#ifdef CONFIG_FSL_DPAA2_MAC_NETDEVS
 	unregister_netdev(priv->netdev);
+#endif
 	teardown_irqs(priv->mc_dev);
 	dpmac_close(priv->mc_dev->mc_io, 0, priv->mc_dev->mc_handle);
 	fsl_mc_portal_free(priv->mc_dev->mc_io);

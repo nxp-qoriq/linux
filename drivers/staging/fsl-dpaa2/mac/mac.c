@@ -481,30 +481,6 @@ static struct device_node *lookup_node(struct device *dev, int dpmac_id)
 	return NULL;
 }
 
-static int check_dpmac_version(struct dpaa2_mac_priv *priv)
-{
-	struct device *dev = &priv->mc_dev->dev;
-	int mc_version = priv->attr.version.major;
-
-	/* Check that the FLIB-defined version matches the one reported by MC */
-	if (mc_version != DPMAC_VER_MAJOR) {
-		dev_err(dev, "DPMAC FLIB version mismatch: MC says %d, we have %d\n",
-			mc_version, DPMAC_VER_MAJOR);
-		return -EINVAL;
-	}
-
-	/* ... and that we actually support it */
-	if (mc_version < DPAA2_SUPPORTED_DPMAC_VERSION) {
-		dev_err(dev, "Unsupported DPMAC FLIB version (%d)\n",
-			mc_version);
-		return -EINVAL;
-	}
-
-	dev_dbg(dev, "Using DPMAC FLIB version %d\n", mc_version);
-
-	return 0;
-}
-
 static int dpaa2_mac_probe(struct fsl_mc_device *mc_dev)
 {
 	struct device		*dev;
@@ -558,9 +534,8 @@ static int dpaa2_mac_probe(struct fsl_mc_device *mc_dev)
 		goto err_close;
 	}
 
-	err = check_dpmac_version(priv);
-	if (err)
-		goto err_close;
+	dev_info_once(dev, "Using DPMAC API %d.%d\n",
+		      priv->attr.version.major, priv->attr.version.minor);
 
 	/* Look up the DPMAC node in the device-tree. */
 	dpmac_node = lookup_node(dev, priv->attr.id);

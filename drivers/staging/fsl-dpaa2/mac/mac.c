@@ -461,9 +461,8 @@ static struct device_node *lookup_node(struct device *dev, int dpmac_id)
 {
 	struct device_node *dpmacs, *dpmac = NULL;
 	struct device_node *mc_node = dev->of_node;
-	const void *id;
-	int lenp;
-	int dpmac_id_be32 = cpu_to_be32(dpmac_id);
+	u32 id;
+	int err;
 
 	dpmacs = of_find_node_by_name(mc_node, "dpmacs");
 	if (!dpmacs) {
@@ -472,12 +471,10 @@ static struct device_node *lookup_node(struct device *dev, int dpmac_id)
 	}
 
 	while ((dpmac = of_get_next_child(dpmacs, dpmac))) {
-		id = of_get_property(dpmac, "reg", &lenp);
-		if (!id || lenp != sizeof(int)) {
-			dev_warn(dev, "Unsuitable reg property in dpmac node\n");
+		err = of_property_read_u32(dpmac, "reg", &id);
+		if (err)
 			continue;
-		}
-		if (*(int *)id == dpmac_id_be32)
+		if (id == dpmac_id)
 			return dpmac;
 	}
 

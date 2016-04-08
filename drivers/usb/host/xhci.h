@@ -1634,6 +1634,8 @@ struct xhci_hcd {
 /* For controllers with a broken beyond repair streams implementation */
 #define XHCI_BROKEN_STREAMS	(1 << 19)
 #define XHCI_PME_STUCK_QUIRK	(1 << 20)
+#define XHCI_SSIC_PORT_UNUSED  (1 << 22)
+#define XHCI_NO_64BIT_SUPPORT  (1 << 23)
 #define XHCI_MISSING_CAS	(1 << 24)
 	unsigned int		num_active_eps;
 	unsigned int		limit_active_eps;

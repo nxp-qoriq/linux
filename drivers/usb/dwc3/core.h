@@ -170,6 +170,19 @@
 #define DWC3_GSBUSCFG0_INCRBRSTENA      (1 << 0) /* undefined length enable */
 #define DWC3_GSBUSCFG0_INCRBRST_MASK    0xff
 
+/* Global Debug Queue/FIFO Space Available Register */
+#define DWC3_GDBGFIFOSPACE_NUM(n)      ((n) & 0x1f)
+#define DWC3_GDBGFIFOSPACE_TYPE(n)     (((n) << 5) & 0x1e0)
+#define DWC3_GDBGFIFOSPACE_SPACE_AVAILABLE(n) (((n) >> 16) & 0xffff)
+
+#define DWC3_TXFIFOQ           1
+#define DWC3_RXFIFOQ           3
+#define DWC3_TXREQQ            5
+#define DWC3_RXREQQ            7
+#define DWC3_RXINFOQ           9
+#define DWC3_DESCFETCHQ                13
+#define DWC3_EVENTQ            15
+
 /* Global Configuration Register */
 #define DWC3_GCTL_PWRDNSCALE(n)	((n) << 19)
 #define DWC3_GCTL_U2RSTECN	(1 << 16)
@@ -1050,6 +1063,7 @@ struct dwc3_gadget_ep_cmd_params {
 
 /* prototypes */
 void dwc3_set_mode(struct dwc3 *dwc, u32 mode);
+u32 dwc3_core_fifo_space(struct dwc3_ep *dep, u8 type);
 
 #if IS_ENABLED(CONFIG_USB_DWC3_HOST) || IS_ENABLED(CONFIG_USB_DWC3_DUAL_ROLE)
 int dwc3_host_init(struct dwc3 *dwc);

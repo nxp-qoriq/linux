@@ -934,7 +934,8 @@ static void __init core_mux_init(struct device_node *np)
 	}
 }
 
-static struct clk *sysclk_from_fixed(struct device_node *node, const char *name)
+static struct clk __init
+*sysclk_from_fixed(struct device_node *node, const char *name)
 {
 	u32 rate;
 

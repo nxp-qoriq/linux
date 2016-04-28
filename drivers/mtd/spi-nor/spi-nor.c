@@ -1173,6 +1173,8 @@ int spi_nor_scan(struct spi_nor *nor, const char *name, enum read_mode mode)
 
 	if (!mtd->name)
 		mtd->name = dev_name(dev);
+	if (info->name)
+		nor->vendor = info->name;
 	mtd->priv = nor;
 	mtd->type = MTD_NORFLASH;
 	mtd->writesize = 1;

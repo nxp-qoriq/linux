@@ -2794,6 +2794,7 @@ static const struct fsl_mc_device_id dpaa2_eth_match_id_table[] = {
 	},
 	{ .vendor = 0x0 }
 };
+MODULE_DEVICE_TABLE(fslmc, dpaa2_eth_match_id_table);
 
 static struct fsl_mc_driver dpaa2_eth_driver = {
 	.driver = {

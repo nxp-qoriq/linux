@@ -127,3 +127,5 @@
 &duart1 {
 	status = "okay";
 };
+
+/include/ "fsl-ls1043-post.dtsi"

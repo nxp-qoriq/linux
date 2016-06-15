@@ -670,12 +670,10 @@ static int dpaa2_mac_remove(struct fsl_mc_device *mc_dev)
 	return 0;
 }
 
-static const struct fsl_mc_device_match_id dpaa2_mac_match_id_table[] = {
+static const struct fsl_mc_device_id dpaa2_mac_match_id_table[] = {
 	{
 		.vendor = FSL_MC_VENDOR_FREESCALE,
 		.obj_type = "dpmac",
-		.ver_major = DPMAC_VER_MAJOR,
-		.ver_minor = DPMAC_VER_MINOR,
 	},
 	{}
 };

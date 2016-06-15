@@ -2787,12 +2787,10 @@ static int dpaa2_eth_remove(struct fsl_mc_device *ls_dev)
 	return 0;
 }
 
-static const struct fsl_mc_device_match_id dpaa2_eth_match_id_table[] = {
+static const struct fsl_mc_device_id dpaa2_eth_match_id_table[] = {
 	{
 		.vendor = FSL_MC_VENDOR_FREESCALE,
 		.obj_type = "dpni",
-		.ver_major = DPNI_VER_MAJOR,
-		.ver_minor = DPNI_VER_MINOR
 	},
 	{ .vendor = 0x0 }
 };

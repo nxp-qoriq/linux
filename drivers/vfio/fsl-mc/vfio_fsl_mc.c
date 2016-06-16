@@ -516,11 +516,12 @@ static int vfio_fsl_mc_remove(struct fsl_mc_device *mc_dev)
 		device_for_each_child(dev, NULL, vfio_fsl_mc_device_remove);
 
 		vfio_fsl_mc_free_irqs(vdev);
-		dprc_cleanup_all_resource_pools(mc_dev);
 		mc_bus = to_fsl_mc_bus(mc_dev);
 
 		if (dev_get_msi_domain(&mc_dev->dev))
 			fsl_mc_cleanup_irq_pool(mc_bus);
+
+		dprc_cleanup_all_resource_pools(mc_dev);
 
 		ret = dprc_close(mc_dev->mc_io, 0, mc_dev->mc_handle);
 		if (ret < 0)

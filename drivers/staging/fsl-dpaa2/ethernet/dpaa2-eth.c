@@ -1176,17 +1176,12 @@ static int dpaa2_eth_init(struct net_device *net_dev)
 	u32 options = priv->dpni_attrs.options;
 
 	/* Capabilities listing */
-	supported |= IFF_LIVE_ADDR_CHANGE | IFF_PROMISC | IFF_ALLMULTI;
+	supported |= IFF_LIVE_ADDR_CHANGE;
 
 	if (options & DPNI_OPT_UNICAST_FILTER)
 		supported |= IFF_UNICAST_FLT;
 	else
 		not_supported |= IFF_UNICAST_FLT;
-
-	if (options & DPNI_OPT_MULTICAST_FILTER)
-		supported |= IFF_MULTICAST;
-	else
-		not_supported |= IFF_MULTICAST;
 
 	net_dev->priv_flags |= supported;
 	net_dev->priv_flags &= ~not_supported;

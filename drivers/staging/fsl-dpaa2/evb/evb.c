@@ -1205,12 +1205,10 @@ err_free_netdev:
 	return err;
 }
 
-static const struct fsl_mc_device_match_id evb_match_id_table[] = {
+static const struct fsl_mc_device_id evb_match_id_table[] = {
 	{
 		.vendor = FSL_MC_VENDOR_FREESCALE,
 		.obj_type = "dpdmux",
-		.ver_major = DPDMUX_VER_MAJOR,
-		.ver_minor = DPDMUX_VER_MINOR,
 	},
 	{}
 };

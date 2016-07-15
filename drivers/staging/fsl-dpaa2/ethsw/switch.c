@@ -1685,12 +1685,10 @@ err_free_netdev:
 	return err;
 }
 
-static const struct fsl_mc_device_match_id ethsw_match_id_table[] = {
+static const struct fsl_mc_device_id ethsw_match_id_table[] = {
 	{
 		.vendor = FSL_MC_VENDOR_FREESCALE,
 		.obj_type = "dpsw",
-		.ver_major = DPSW_VER_MAJOR,
-		.ver_minor = DPSW_VER_MINOR,
 	},
 	{}
 };

@@ -1969,6 +1969,8 @@ free_xbuf:
 static int test_akcipher(struct crypto_akcipher *tfm, const char *alg,
 			 struct akcipher_testvec *vecs, unsigned int tcount)
 {
+	const char *algo =
+		crypto_tfm_alg_driver_name(crypto_akcipher_tfm(tfm));
 	int ret, i;
 
 	for (i = 0; i < tcount; i++) {
@@ -1976,8 +1978,8 @@ static int test_akcipher(struct crypto_akcipher *tfm, const char *alg,
 		if (!ret)
 			continue;
 
-		pr_err("alg: akcipher: test failed on vector %d, err=%d\n",
-		       i + 1, ret);
+		pr_err("alg: akcipher: test %d failed for %s, err=%d\n",
+		       i + 1, algo, ret);
 		return ret;
 	}
 	return 0;

@@ -254,8 +254,15 @@ static inline void __coherent_cache_guest_page(struct kvm_vcpu *vcpu,
 
 static inline void __kvm_flush_dcache_pte(pte_t pte)
 {
-	struct page *page = pte_page(pte);
-	kvm_flush_dcache_to_poc(page_address(page), PAGE_SIZE);
+	if (pfn_valid(pte_pfn(pte))) {
+		struct page *page = pte_page(pte);
+		kvm_flush_dcache_to_poc(page_address(page), PAGE_SIZE);
+	} else {
+		void __iomem *va = ioremap_cache_ns(pte_pfn(pte) << PAGE_SHIFT, PAGE_SIZE);
+
+		kvm_flush_dcache_to_poc(va, PAGE_SIZE);
+		iounmap(va);
+	}
 }
 
 static inline void __kvm_flush_dcache_pmd(pmd_t pmd)

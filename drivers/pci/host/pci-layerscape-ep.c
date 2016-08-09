@@ -192,7 +192,7 @@ static int ls_pcie_ep_init(struct ls_pcie *pcie)
 static int ls_pcie_ep_probe(struct platform_device *pdev)
 {
 	struct ls_pcie *pcie;
-	struct resource *dbi_base;
+	struct resource *dbi_base, *cfg_res;
 	int ret;
 
 	pcie = devm_kzalloc(&pdev->dev, sizeof(*pcie), GFP_KERNEL);
@@ -215,6 +215,14 @@ static int ls_pcie_ep_probe(struct platform_device *pdev)
 		return -ENODEV;
 
 	dev_info(pcie->dev, "in EP mode\n");
+
+	cfg_res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "config");
+	if (cfg_res)
+		pcie->out_base = cfg_res->start;
+	else {
+		dev_err(&pdev->dev, "missing *config* space\n");
+		return -ENODEV;
+	}
 
 	ret = ls_pcie_ep_init(pcie);
 	if (ret)

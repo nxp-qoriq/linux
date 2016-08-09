@@ -72,6 +72,7 @@ struct ls_pcie {
 	struct dentry		*dir;
 	void __iomem		*dbi;
 	void __iomem		*lut;
+	phys_addr_t		out_base;
 	int			sriov;
 	int			index;
 };

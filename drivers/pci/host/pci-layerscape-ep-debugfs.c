@@ -34,8 +34,10 @@
 #define PCIE_BAR1_SIZE		(8 * 1024) /* 8K for MSIX */
 #define PCIE_BAR2_SIZE		(4 * 1024) /* 4K */
 #define PCIE_BAR4_SIZE		(1 * 1024 * 1024) /* 1M */
+#define PCIE_MSI_OB_SIZE	(4 * 1024) /* 4K */
 
-#define PCIE_OB_BAR		0x1400000000ULL
+#define PCIE_MSI_MSG_ADDR_OFF	0x54
+#define PCIE_MSI_MSG_DATA_OFF	0x5c
 
 enum test_type {
 	TEST_TYPE_DMA,
@@ -57,10 +59,14 @@ struct ls_ep_test {
 	void __iomem		*cfg;
 	void __iomem		*buf;
 	void __iomem		*out;
+	void __iomem		*msi;
 	dma_addr_t		cfg_addr;
 	dma_addr_t		buf_addr;
 	dma_addr_t		out_addr;
 	dma_addr_t		bus_addr;
+	dma_addr_t		msi_addr;
+	u64			msi_msg_addr;
+	u16			msi_msg_data;
 	struct task_struct	*thread;
 	spinlock_t		lock;
 	struct completion	done;
@@ -72,6 +78,16 @@ struct ls_ep_test {
 	u64			result; /* Mbps */
 	char			cmd[256];
 };
+
+static int ls_pcie_ep_trigger_msi(struct ls_ep_test *test)
+{
+	if (!test->msi)
+		return -EINVAL;
+
+	iowrite32(test->msi_msg_data, test->msi);
+
+	return 0;
+}
 
 static int ls_pcie_ep_test_try_run(struct ls_ep_test *test)
 {
@@ -266,6 +282,9 @@ int ls_pcie_ep_test_thread(void *arg)
 		       test->cmd, test->result);
 
 	ls_pcie_ep_test_done(test);
+
+	ls_pcie_ep_trigger_msi(test);
+
 	do_exit(0);
 }
 
@@ -338,7 +357,7 @@ static int ls_pcie_ep_init_test(struct ls_ep_dev *ep, u64 bus_addr)
 	}
 	test->cfg_addr = virt_to_phys(test->cfg);
 
-	test->out_addr = PCIE_OB_BAR;
+	test->out_addr = pcie->out_base;
 	test->out = ioremap(test->out_addr, PCIE_BAR4_SIZE);
 	if (!test->out) {
 		dev_info(&ep->dev, "failed to map out\n");
@@ -348,11 +367,25 @@ static int ls_pcie_ep_init_test(struct ls_ep_dev *ep, u64 bus_addr)
 
 	test->bus_addr = bus_addr;
 
+	test->msi_addr = test->out_addr + PCIE_BAR4_SIZE;
+	test->msi = ioremap(test->msi_addr, PCIE_MSI_OB_SIZE);
+	if (!test->msi)
+		dev_info(&ep->dev, "failed to map MSI outbound region\n");
+
+	test->msi_msg_addr = ioread32(pcie->dbi + PCIE_MSI_MSG_ADDR_OFF) |
+		(((u64)ioread32(pcie->dbi + PCIE_MSI_MSG_ADDR_OFF + 4)) << 32);
+	test->msi_msg_data = ioread16(pcie->dbi + PCIE_MSI_MSG_DATA_OFF);
+
 	ls_pcie_ep_dev_cfg_enable(ep);
 	ls_pcie_ep_test_setup_bars(ep);
-	/* outbound iATU*/
+
+	/* outbound iATU for memory */
 	ls_pcie_iatu_outbound_set(pcie, 0, PCIE_ATU_TYPE_MEM,
 				  test->out_addr, bus_addr, PCIE_BAR4_SIZE);
+	/* outbound iATU for MSI */
+	ls_pcie_iatu_outbound_set(pcie, 1, PCIE_ATU_TYPE_MEM,
+				  test->msi_addr, test->msi_msg_addr,
+				  PCIE_MSI_OB_SIZE);
 
 	/* ATU 0 : INBOUND : map BAR0 */
 	ls_pcie_iatu_inbound_set(pcie, 0, 0, test->cfg_addr);
@@ -565,8 +598,8 @@ static ssize_t ls_pcie_ep_dbg_test_read(struct file *filp,
 {
 	struct ls_ep_dev *ep = filp->private_data;
 	struct ls_ep_test *test = ep->driver_data;
-	char buf[256];
-	int len;
+	char buf[512];
+	int desc = 0, len;
 
 	if (!test) {
 		dev_info(&ep->dev, " there is NO test\n");
@@ -578,12 +611,14 @@ static ssize_t ls_pcie_ep_dbg_test_read(struct file *filp,
 		return 0;
 	}
 
+	desc = sprintf(buf, "MSI ADDR:0x%llx MSI DATA:0x%x\n",
+		test->msi_msg_addr, test->msi_msg_data);
 
-	snprintf(buf, sizeof(buf), "%s throughput:%lluMbps\n",
-		 test->cmd, test->result);
+	desc += sprintf(buf + desc, "%s throughput:%lluMbps\n",
+			test->cmd, test->result);
 
 	len = simple_read_from_buffer(buffer, count, ppos,
-				      buf, strlen(buf));
+				      buf, desc);
 
 	return len;
 }

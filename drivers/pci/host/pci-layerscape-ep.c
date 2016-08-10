@@ -177,7 +177,7 @@ static int ls_pcie_ep_init(struct ls_pcie *pcie)
 		vf = PCIE_VF_NUM;
 	} else {
 		pcie->sriov = 0;
-		pf = 0;
+		pf = 1;
 		vf = 0;
 	}
 
@@ -189,11 +189,44 @@ static int ls_pcie_ep_init(struct ls_pcie *pcie)
 	return 0;
 }
 
+static struct ls_pcie_ep_drvdata ls1043_drvdata = {
+	.lut_offset = 0x10000,
+	.ltssm_shift = 24,
+	.lut_dbg = 0x7fc,
+};
+
+static struct ls_pcie_ep_drvdata ls1046_drvdata = {
+	.lut_offset = 0x80000,
+	.ltssm_shift = 24,
+	.lut_dbg = 0x407fc,
+};
+
+static struct ls_pcie_ep_drvdata ls2080_drvdata = {
+	.lut_offset = 0x80000,
+	.ltssm_shift = 0,
+	.lut_dbg = 0x7fc,
+};
+
+static const struct of_device_id ls_pcie_ep_of_match[] = {
+	{ .compatible = "fsl,ls1021a-pcie", },
+	{ .compatible = "fsl,ls1043a-pcie", .data = &ls1043_drvdata },
+	{ .compatible = "fsl,ls1046a-pcie", .data = &ls1046_drvdata },
+	{ .compatible = "fsl,ls2080a-pcie", .data = &ls2080_drvdata },
+	{ .compatible = "fsl,ls2085a-pcie", .data = &ls2080_drvdata },
+	{ },
+};
+MODULE_DEVICE_TABLE(of, ls_pcie_ep_of_match);
+
 static int ls_pcie_ep_probe(struct platform_device *pdev)
 {
 	struct ls_pcie *pcie;
 	struct resource *dbi_base, *cfg_res;
+	const struct of_device_id *match;
 	int ret;
+
+	match = of_match_device(ls_pcie_ep_of_match, &pdev->dev);
+	if (!match)
+		return -ENODEV;
 
 	pcie = devm_kzalloc(&pdev->dev, sizeof(*pcie), GFP_KERNEL);
 	if (!pcie)
@@ -209,7 +242,8 @@ static int ls_pcie_ep_probe(struct platform_device *pdev)
 		return PTR_ERR(pcie->dbi);
 	}
 
-	pcie->lut = pcie->dbi + PCIE_LUT_BASE;
+	pcie->drvdata = match->data;
+	pcie->lut = pcie->dbi + pcie->drvdata->lut_offset;
 
 	if (ls_pcie_is_bridge(pcie))
 		return -ENODEV;
@@ -257,13 +291,6 @@ static int ls_pcie_ep_remove(struct platform_device *pdev)
 
 	return 0;
 }
-
-static const struct of_device_id ls_pcie_ep_of_match[] = {
-	{ .compatible = "fsl,ls2085a-pcie" },
-	{ .compatible = "fsl,ls2080a-pcie" },
-	{ },
-};
-MODULE_DEVICE_TABLE(of, ls_pcie_ep_of_match);
 
 static struct platform_driver ls_pcie_ep_driver = {
 	.driver = {

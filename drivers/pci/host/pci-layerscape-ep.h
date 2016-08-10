@@ -66,10 +66,17 @@
 #define PCIE_PF_NUM		2
 #define PCIE_VF_NUM		64
 
+struct ls_pcie_ep_drvdata {
+	u32 lut_offset;
+	u32 ltssm_shift;
+	u32 lut_dbg;
+};
+
 struct ls_pcie {
 	struct list_head	ep_list;
 	struct device		*dev;
 	struct dentry		*dir;
+	const struct ls_pcie_ep_drvdata *drvdata;
 	void __iomem		*dbi;
 	void __iomem		*lut;
 	phys_addr_t		out_base;

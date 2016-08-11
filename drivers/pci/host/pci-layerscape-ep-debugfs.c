@@ -664,6 +664,45 @@ static const struct file_operations ls_pcie_ep_dbg_test_fops = {
 	.write = ls_pcie_ep_dbg_test_write,
 };
 
+static ssize_t ls_pcie_ep_dbg_dump_read(struct file *filp,
+				   char __user *buffer,
+				   size_t count, loff_t *ppos)
+{
+	struct ls_ep_dev *ep = filp->private_data;
+	struct ls_ep_test *test = ep->driver_data;
+	char *buf;
+	int desc = 0, i, len;
+
+	buf = kmalloc(4 * 1024, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	if (!test) {
+		dev_info(&ep->dev, " there is NO test\n");
+		return 0;
+	}
+
+	desc += sprintf(buf + desc, "%s", "dump info:");
+	for (i = 0; i < 256; i += 4) {
+		if (i % 16 == 0)
+			desc += sprintf(buf + desc, "\n%08x:", i);
+		desc += sprintf(buf + desc, " %08x", readl(test->buf + i));
+	}
+
+	desc += sprintf(buf + desc, "\n");
+	len = simple_read_from_buffer(buffer, count, ppos, buf, desc);
+
+	kfree(buf);
+
+	return len;
+}
+
+static const struct file_operations ls_pcie_ep_dbg_dump_fops = {
+	.owner = THIS_MODULE,
+	.open = simple_open,
+	.read = ls_pcie_ep_dbg_dump_read,
+};
+
 static int ls_pcie_ep_dev_dbgfs_init(struct ls_ep_dev *ep)
 {
 	struct ls_pcie *pcie = ep->pcie;
@@ -684,6 +723,11 @@ static int ls_pcie_ep_dev_dbgfs_init(struct ls_ep_dev *ep)
 				    &ls_pcie_ep_dbg_test_fops);
 	if (!pfile)
 		dev_info(&ep->dev, "debugfs test for failed\n");
+
+	pfile = debugfs_create_file("dump", 0600, ep->dir, ep,
+				    &ls_pcie_ep_dbg_dump_fops);
+	if (!pfile)
+		dev_info(&ep->dev, "debugfs dump for failed\n");
 
 	return 0;
 }

@@ -111,18 +111,6 @@ static void ls_pcie_ep_test_done(struct ls_ep_test *test)
 	spin_unlock(&test->lock);
 }
 
-static void ls_pcie_ep_test_setup_bars(struct ls_ep_dev *ep)
-{
-	/* BAR0 - 32bit - 4K configuration */
-	ls_pcie_ep_dev_setup_bar(ep, 0, PCIE_BAR0_SIZE);
-	/* BAR1 - 32bit - 8K MSIX*/
-	ls_pcie_ep_dev_setup_bar(ep, 1, PCIE_BAR1_SIZE);
-	/* BAR2 - 64bit - 4K MEM desciptor */
-	ls_pcie_ep_dev_setup_bar(ep, 2, PCIE_BAR2_SIZE);
-	/* BAR4 - 64bit - 1M MEM*/
-	ls_pcie_ep_dev_setup_bar(ep, 4, PCIE_BAR4_SIZE);
-}
-
 static void ls_pcie_ep_test_dma_cb(void *arg)
 {
 	struct ls_ep_test *test = arg;
@@ -377,7 +365,6 @@ static int ls_pcie_ep_init_test(struct ls_ep_dev *ep, u64 bus_addr)
 	test->msi_msg_data = ioread16(pcie->dbi + PCIE_MSI_MSG_DATA_OFF);
 
 	ls_pcie_ep_dev_cfg_enable(ep);
-	ls_pcie_ep_test_setup_bars(ep);
 
 	/* outbound iATU for memory */
 	ls_pcie_iatu_outbound_set(pcie, 0, PCIE_ATU_TYPE_MEM,
@@ -680,7 +667,6 @@ static int ls_pcie_ep_dev_dbgfs_init(struct ls_ep_dev *ep)
 	struct dentry *pfile;
 
 	ls_pcie_ep_dev_cfg_enable(ep);
-	ls_pcie_ep_test_setup_bars(ep);
 
 	ep->dir = debugfs_create_dir(dev_name(&ep->dev), pcie->dir);
 	if (!ep->dir)

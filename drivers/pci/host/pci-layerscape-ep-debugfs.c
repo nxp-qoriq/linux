@@ -72,6 +72,7 @@ struct ls_ep_test {
 	struct completion	done;
 	u32			len;
 	int			loop;
+	char			data;
 	enum test_dirt		dirt;
 	enum test_type		type;
 	enum test_status	status;
@@ -138,7 +139,7 @@ static int ls_pcie_ep_test_dma(struct ls_ep_test *test)
 		return -EINVAL;
 	}
 
-	memset(test->buf, 0x5a, test->len);
+	memset(test->buf, test->data, test->len);
 
 	if (test->dirt == TEST_DIRT_WRITE) {
 		src = test->buf_addr;
@@ -226,7 +227,7 @@ static int ls_pcie_ep_test_cpy(struct ls_ep_test *test)
 	struct timespec start, end, period;
 	int i = 0;
 
-	memset(test->buf, 0xa5, test->len);
+	memset(test->buf, test->data, test->len);
 
 	if (test->dirt == TEST_DIRT_WRITE) {
 		dst = test->out;
@@ -394,6 +395,7 @@ static int ls_pcie_ep_start_test(struct ls_ep_dev *ep, char *cmd)
 	enum test_type type;
 	enum test_dirt dirt;
 	u32 cnt, len, loop;
+	unsigned int data;
 	char dirt_str[2];
 	int ret;
 
@@ -402,10 +404,10 @@ static int ls_pcie_ep_start_test(struct ls_ep_dev *ep, char *cmd)
 	else
 		type = TEST_TYPE_MEMCPY;
 
-	cnt = sscanf(&cmd[3], "%1s %u %u", dirt_str, &len, &loop);
-	if (cnt != 3) {
+	cnt = sscanf(&cmd[4], "%1s %u %u %x", dirt_str, &len, &loop, &data);
+	if (cnt != 4) {
 		dev_info(&ep->dev, "format error %s", cmd);
-		dev_info(&ep->dev, "dma/cpy <r/w> <packet_size> <loop>\n");
+		dev_info(&ep->dev, "dma/cpy <r/w> <packet_size> <loop> <data>\n");
 		return -EINVAL;
 	}
 
@@ -432,6 +434,7 @@ static int ls_pcie_ep_start_test(struct ls_ep_dev *ep, char *cmd)
 	test->len = len;
 	test->loop = loop;
 	test->type = type;
+	test->data = (char)data;
 	test->dirt = dirt;
 	strcpy(test->cmd, cmd);
 	test->thread = kthread_run(ls_pcie_ep_test_thread, test,

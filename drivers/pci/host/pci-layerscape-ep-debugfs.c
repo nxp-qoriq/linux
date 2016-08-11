@@ -328,14 +328,14 @@ static int ls_pcie_ep_init_test(struct ls_ep_dev *ep, u64 bus_addr)
 	spin_lock_init(&test->lock);
 	test->status = TEST_IDLE;
 
-	test->buf = (void *)__get_free_pages(GFP_KERNEL | __GFP_ZERO,
-					     get_order(PCIE_BAR4_SIZE));
+	test->buf = dma_alloc_coherent(pcie->dev, get_order(PCIE_BAR4_SIZE),
+					&test->buf_addr,
+					GFP_KERNEL);
 	if (!test->buf) {
 		dev_info(&ep->dev, "failed to get mem for bar4\n");
 		err = -ENOMEM;
 		goto _err;
 	}
-	test->buf_addr = virt_to_phys(test->buf);
 
 	test->cfg = (void *)__get_free_pages(GFP_KERNEL | __GFP_ZERO,
 					     get_order(PCIE_BAR2_SIZE));

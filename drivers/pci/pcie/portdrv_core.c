@@ -15,6 +15,7 @@
 #include <linux/slab.h>
 #include <linux/pcieport_if.h>
 #include <linux/aer.h>
+#include <linux/of_irq.h>
 
 #include "../pci.h"
 #include "portdrv.h"
@@ -199,6 +200,28 @@ static int pcie_port_enable_msix(struct pci_dev *dev, int *vectors, int mask)
 static int init_service_irqs(struct pci_dev *dev, int *irqs, int mask)
 {
 	int i, irq = -1;
+	int ret;
+	struct device_node *np = NULL;
+
+	for (i = 0; i < PCIE_PORT_DEVICE_MAXSERVICES; i++)
+		irqs[i] = 0;
+
+	if (dev->bus->dev.of_node)
+		np = dev->bus->dev.of_node;
+
+	/* If root port doesn't support MSI/MSI-X/INTx in RC mode,
+	 * request irq for aer
+	 */
+	if (IS_ENABLED(CONFIG_OF_IRQ) && np &&
+			(mask & PCIE_PORT_SERVICE_PME)) {
+		ret = of_irq_get_byname(np, "aer");
+		if (ret > 0) {
+			irqs[PCIE_PORT_SERVICE_AER_SHIFT] = ret;
+			if (dev->irq)
+				irq = dev->irq;
+			goto no_msi;
+		}
+	}
 
 	/*
 	 * If MSI cannot be used for PCIe PME or hotplug, we have to use
@@ -224,11 +247,13 @@ static int init_service_irqs(struct pci_dev *dev, int *irqs, int mask)
 		irq = dev->irq;
 
  no_msi:
-	for (i = 0; i < PCIE_PORT_DEVICE_MAXSERVICES; i++)
-		irqs[i] = irq;
+	for (i = 0; i < PCIE_PORT_DEVICE_MAXSERVICES; i++) {
+		if (!irqs[i])
+			irqs[i] = irq;
+	}
 	irqs[PCIE_PORT_SERVICE_VC_SHIFT] = -1;
 
-	if (irq < 0)
+	if (irq < 0 && irqs[PCIE_PORT_SERVICE_AER_SHIFT] < 0)
 		return -ENODEV;
 	return 0;
 }

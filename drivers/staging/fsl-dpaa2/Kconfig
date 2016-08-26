@@ -11,3 +11,4 @@ config FSL_DPAA2
 source "drivers/staging/fsl-dpaa2/ethernet/Kconfig"
 source "drivers/staging/fsl-dpaa2/mac/Kconfig"
 source "drivers/staging/fsl-dpaa2/evb/Kconfig"
+source "drivers/staging/fsl-dpaa2/ethsw/Kconfig"

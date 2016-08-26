@@ -75,6 +75,52 @@ static bool arch_timer_mem_use_virtual;
  * Architected system timer support.
  */
 
+#ifdef CONFIG_FSL_ERRATUM_A008585
+DEFINE_STATIC_KEY_FALSE(arch_timer_read_ool_enabled);
+EXPORT_SYMBOL_GPL(arch_timer_read_ool_enabled);
+
+/*
+ * __always_inline is used to ensure that func() is not an actual function
+ * pointer, which would result in the register accesses potentially being too
+ * far apart for the loop to work.
+ *
+ * The timeout is an arbitrary value well beyond the highest number
+ * of iterations the loop has been observed to take.
+ */
+static __always_inline u64 fsl_a008585_reread_counter(u64 (*func)(void))
+{
+	u64 cval_old, cval_new;
+	int timeout = 200;
+
+	do {
+		isb();
+		cval_old = func();
+		cval_new = func();
+		timeout--;
+	} while (unlikely(cval_old != cval_new) && timeout);
+
+	WARN_ON_ONCE(!timeout);
+	return cval_new;
+}
+
+u64 arch_counter_get_cntvct_ool(void)
+{
+	return fsl_a008585_reread_counter(__arch_counter_get_cntvct);
+}
+EXPORT_SYMBOL_GPL(arch_counter_get_cntvct_ool);
+
+u64 arch_timer_get_vtval_ool(void)
+{
+	return fsl_a008585_reread_counter(__arch_timer_get_vtval);
+}
+
+u64 arch_timer_get_ptval_ool(void)
+{
+	return fsl_a008585_reread_counter(__arch_timer_get_ptval);
+}
+
+#endif /* CONFIG_FSL_ERRATUM_A008585 */
+
 static __always_inline
 void arch_timer_reg_write(int access, enum arch_timer_reg reg, u32 val,
 			  struct clock_event_device *clk)
@@ -224,6 +270,35 @@ static __always_inline void set_next_event(const int access, unsigned long evt,
 	arch_timer_reg_write(access, ARCH_TIMER_REG_CTRL, ctrl, clk);
 }
 
+#ifdef CONFIG_FSL_ERRATUM_A008585
+static __always_inline void fsl_a008585_set_next_event(const int access,
+		unsigned long evt, struct clock_event_device *clk)
+{
+	unsigned long ctrl;
+	u64 cval = evt + arch_counter_get_cntvct();
+
+	ctrl = arch_timer_reg_read(access, ARCH_TIMER_REG_CTRL, clk);
+	ctrl |= ARCH_TIMER_CTRL_ENABLE;
+	ctrl &= ~ARCH_TIMER_CTRL_IT_MASK;
+	arch_timer_cval_write_cp15(access, cval);
+	arch_timer_reg_write(access, ARCH_TIMER_REG_CTRL, ctrl, clk);
+}
+
+static int fsl_a008585_set_next_event_virt(unsigned long evt,
+					   struct clock_event_device *clk)
+{
+	fsl_a008585_set_next_event(ARCH_TIMER_VIRT_ACCESS, evt, clk);
+	return 0;
+}
+
+static int fsl_a008585_set_next_event_phys(unsigned long evt,
+					   struct clock_event_device *clk)
+{
+	fsl_a008585_set_next_event(ARCH_TIMER_PHYS_ACCESS, evt, clk);
+	return 0;
+}
+#endif /* CONFIG_FSL_ERRATUM_A008585 */
+
 static int arch_timer_set_next_event_virt(unsigned long evt,
 					  struct clock_event_device *clk)
 {
@@ -252,6 +327,19 @@ static int arch_timer_set_next_event_phys_mem(unsigned long evt,
 	return 0;
 }
 
+static void fsl_a008585_set_sne(struct clock_event_device *clk)
+{
+#ifdef CONFIG_FSL_ERRATUM_A008585
+	if (!static_branch_unlikely(&arch_timer_read_ool_enabled))
+		return;
+
+	if (arch_timer_use_virtual)
+		clk->set_next_event = fsl_a008585_set_next_event_virt;
+	else
+		clk->set_next_event = fsl_a008585_set_next_event_phys;
+#endif
+}
+
 static void __arch_timer_setup(unsigned type,
 			       struct clock_event_device *clk)
 {
@@ -272,6 +360,8 @@ static void __arch_timer_setup(unsigned type,
 			clk->set_state_shutdown = arch_timer_shutdown_phys;
 			clk->set_next_event = arch_timer_set_next_event_phys;
 		}
+
+		fsl_a008585_set_sne(clk);
 	} else {
 		clk->features |= CLOCK_EVT_FEAT_DYNIRQ;
 		clk->name = "arch_mem_timer";
@@ -464,15 +554,19 @@ static void __init arch_counter_register(unsigned type)
 			arch_timer_read_counter = arch_counter_get_cntvct;
 		else
 			arch_timer_read_counter = arch_counter_get_cntpct;
+
+		clocksource_counter.archdata.vdso_direct = true;
+
+#ifdef CONFIG_FSL_ERRATUM_A008585
+		/*
+		 * Don't use the vdso fastpath if errata require using
+		 * the out-of-line counter accessor.
+		 */
+		if (static_branch_unlikely(&arch_timer_read_ool_enabled))
+			clocksource_counter.archdata.vdso_direct = false;
+#endif
 	} else {
 		arch_timer_read_counter = arch_counter_get_cntvct_mem;
-
-		/* If the clocksource name is "arch_sys_counter" the
-		 * VDSO will attempt to read the CP15-based counter.
-		 * Ensure this does not happen when CP15-based
-		 * counter is not available.
-		 */
-		clocksource_counter.name = "arch_mem_counter";
 	}
 
 	start_count = arch_timer_read_counter();
@@ -728,6 +822,11 @@ static void __init arch_timer_of_init(struct device_node *np)
 	arch_timer_detect_rate(NULL, np);
 
 	arch_timer_c3stop = !of_property_read_bool(np, "always-on");
+
+#ifdef CONFIG_FSL_ERRATUM_A008585
+	if (of_property_read_bool(np, "fsl,erratum-a008585"))
+		static_branch_enable(&arch_timer_read_ool_enabled);
+#endif
 
 	/*
 	 * If we cannot rely on firmware initializing the timer registers then

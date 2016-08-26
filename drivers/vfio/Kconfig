@@ -34,3 +34,4 @@ menuconfig VFIO
 source "drivers/vfio/pci/Kconfig"
 source "drivers/vfio/platform/Kconfig"
 source "virt/lib/Kconfig"
+source "drivers/vfio/fsl-mc/Kconfig"

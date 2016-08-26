@@ -1,0 +1,9 @@
+config VFIO_FSL_MC
+	tristate "VFIO support for Freescale Management Complex devices"
+	depends on VFIO && FSL_MC_BUS && EVENTFD
+	help
+	  Support for the Freescale Management Complex(MC) VFIO driver.
+	  This is required to passthrough Freescale MC devices using the
+	  VFIO framework.
+
+	  If you don't know what to do here, say N.

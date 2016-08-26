@@ -28,3 +28,19 @@ config FSL_MC_RESTOOL
         help
           Driver that provides kernel support for the Freescale Management
 	  Complex resource manager user-space tool.
+
+config FSL_MC_DPIO
+	tristate "Freescale Data Path I/O (DPIO) driver"
+	depends on FSL_MC_BUS
+	help
+	  Driver for Freescale Data Path I/O (DPIO) devices.
+	  A DPIO device provides queue and buffer management facilities
+	  for software to interact with other Data Path devices. This
+	  driver does not expose the DPIO device individually, but
+	  groups them under a service layer API.
+
+config FSL_QBMAN_DEBUG
+	tristate "Freescale QBMAN Debug APIs"
+	depends on FSL_MC_DPIO
+	help
+	  QBMan debug assistant APIs.

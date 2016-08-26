@@ -8,4 +8,16 @@ source "drivers/soc/sunxi/Kconfig"
 source "drivers/soc/ti/Kconfig"
 source "drivers/soc/versatile/Kconfig"
 
+config	FSL_SOC_DRIVERS
+	bool "Freescale Soc Drivers"
+	default n
+	help
+	Say y here to enable Freescale Soc Device Drivers support.
+	The Soc Drivers provides the device driver that is a specific block
+	or feature on Freescale platform.
+
+if FSL_SOC_DRIVERS
+	source "drivers/soc/fsl/Kconfig"
+endif
+
 endmenu

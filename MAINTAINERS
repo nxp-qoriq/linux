@@ -4540,6 +4540,21 @@ L:	linux-kernel@vger.kernel.org
 S:	Maintained
 F:	drivers/staging/fsl-mc/
 
+FREESCALE DPAA2 ETH DRIVER
+M:	Ioana Radulescu <ruxandra.radulescu@freescale.com>
+M:	Bogdan Hamciuc <bogdan.hamciuc@freescale.com>
+M:	Cristian Sovaiala <cristian.sovaiala@freescale.com>
+L:	linux-kernel@vger.kernel.org
+S:	Maintained
+F:	drivers/staging/fsl-dpaa2/ethernet/
+
+FREESCALE QORIQ MANAGEMENT COMPLEX RESTOOL DRIVER
+M:	Lijun Pan <Lijun.Pan@freescale.com>
+L:	linux-kernel@vger.kernel.org
+S:	Maintained
+F:	drivers/staging/fsl-mc/bus/mc-ioctl.h
+F:	drivers/staging/fsl-mc/bus/mc-restool.c
+
 FREEVXFS FILESYSTEM
 M:	Christoph Hellwig <hch@infradead.org>
 W:	ftp://ftp.openlinux.org/pub/people/hch/vxfs

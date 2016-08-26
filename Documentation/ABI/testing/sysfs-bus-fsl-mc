@@ -1,0 +1,11 @@
+What:		/sys/bus/fsl-mc/rescan
+Date:		October 2015
+Contact:	Lijun Pan <Lijun.Pan@freescale.com>
+Description:
+		Writing a non-zero value to this attribute will
+		force a rescan of fsl-mc bus in the system, and
+		add/remove previously added/removed objects in
+		Management Complex firmwarer, i.e., synchronize
+		the objects under fsl-mc bus and Management Complex
+		firmware. For example:
+		# echo 1 > /sys/bus/fsl-mc/rescan

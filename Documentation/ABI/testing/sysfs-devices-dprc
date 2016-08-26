@@ -1,0 +1,13 @@
+What:		/sys/devices/.../dprc.X/rescan
+Date:		October 2015
+Contact:	Lijun Pan <Lijun.Pan@freescale.com>
+Description:
+		Writing a non-zero value to this attribute will
+		force a rescan of dprc.X container in the system, and
+		add/remove previously added/removed objects in
+		Management Complex firmwarer, i.e., synchronize
+		the objects under dprc.X and Management Complex
+		firmware. For example:
+		# echo 1 > /sys/devices/platform/80c000000.fsl-mc/dprc.1/rescan
+
+

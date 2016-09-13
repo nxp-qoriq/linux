@@ -159,7 +159,9 @@ struct iommu_ops *of_iommu_configure(struct device *dev,
 		np = iommu_spec.np;
 		ops = of_iommu_get_ops(np);
 
-		if (!ops || !ops->of_xlate || ops->of_xlate(dev, &iommu_spec))
+		if (!ops || !ops->of_xlate ||
+		    iommu_fwspec_init(dev, &np->fwnode, ops) ||
+		    ops->of_xlate(dev, &iommu_spec))
 			goto err_put_node;
 
 		of_node_put(np);

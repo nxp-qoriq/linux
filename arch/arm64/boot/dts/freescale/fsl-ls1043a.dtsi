@@ -103,6 +103,34 @@
 		      /* DRAM space 1, size: 2GiB DRAM */
 	};
 
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		bman_fbpr: bman-fbpr {
+			size = <0 0x1000000>;
+			alignment = <0 0x1000000>;
+		};
+		qman_fqd: qman-fqd {
+			size = <0 0x400000>;
+			alignment = <0 0x400000>;
+		};
+		qman_pfdr: qman-pfdr {
+			size = <0 0x2000000>;
+			alignment = <0 0x2000000>;
+		};
+	};
+
+	bportals: bman-portals@508000000 {
+		ranges = <0x0 0x5 0x08000000 0x8000000>;
+	};
+
+	qportals: qman-portals@500000000 {
+		ranges = <0x0 0x5 0x00000000 0x8000000>;
+	};
+
+
 	sysclk: sysclk {
 		compatible = "fixed-clock";
 		#clock-cells = <0>;
@@ -203,6 +231,18 @@
 			sdhci,auto-cmd12;
 			big-endian;
 			bus-width = <4>;
+		};
+
+		qman: qman@1880000 {
+			compatible = "fsl,qman";
+			reg = <0x00 0x1880000 0x0 0x10000>;
+			interrupts = <0 45 0x4>;
+		};
+
+		bman: bman@1890000 {
+			compatible = "fsl,bman";
+			reg = <0x00 0x1890000 0x0 0x10000>;
+			interrupts = <0 45 0x4>;
 		};
 
 		dspi0: dspi@2100000 {
@@ -554,3 +594,21 @@
 	};
 
 };
+
+&bman_fbpr {
+	compatible = "fsl,bman-fbpr";
+	alloc-ranges = <0 0 0x10000 0>;
+};
+
+&qman_fqd {
+	compatible = "fsl,qman-fqd";
+	alloc-ranges = <0 0 0x10000 0>;
+};
+
+&qman_pfdr {
+	compatible = "fsl,qman-pfdr";
+	alloc-ranges = <0 0 0x10000 0>;
+};
+
+/include/ "qoriq-qman1-portals.dtsi"
+/include/ "qoriq-bman1-portals.dtsi"

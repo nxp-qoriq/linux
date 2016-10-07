@@ -1522,7 +1522,14 @@ static void sdhci_do_set_ios(struct sdhci_host *host, struct mmc_ios *ios)
 	ctrl = sdhci_readb(host, SDHCI_HOST_CONTROL);
 
 	if ((ios->timing == MMC_TIMING_SD_HS ||
-	     ios->timing == MMC_TIMING_MMC_HS)
+	     ios->timing == MMC_TIMING_MMC_HS ||
+	     ios->timing == MMC_TIMING_MMC_HS400 ||
+	     ios->timing == MMC_TIMING_MMC_HS200 ||
+	     ios->timing == MMC_TIMING_MMC_DDR52 ||
+	     ios->timing == MMC_TIMING_UHS_SDR50 ||
+	     ios->timing == MMC_TIMING_UHS_SDR104 ||
+	     ios->timing == MMC_TIMING_UHS_DDR50 ||
+	     ios->timing == MMC_TIMING_UHS_SDR25)
 	    && !(host->quirks & SDHCI_QUIRK_NO_HISPD_BIT))
 		ctrl |= SDHCI_CTRL_HISPD;
 	else
@@ -1530,16 +1537,6 @@ static void sdhci_do_set_ios(struct sdhci_host *host, struct mmc_ios *ios)
 
 	if (host->version >= SDHCI_SPEC_300) {
 		u16 clk, ctrl_2;
-
-		/* In case of UHS-I modes, set High Speed Enable */
-		if ((ios->timing == MMC_TIMING_MMC_HS400) ||
-		    (ios->timing == MMC_TIMING_MMC_HS200) ||
-		    (ios->timing == MMC_TIMING_MMC_DDR52) ||
-		    (ios->timing == MMC_TIMING_UHS_SDR50) ||
-		    (ios->timing == MMC_TIMING_UHS_SDR104) ||
-		    (ios->timing == MMC_TIMING_UHS_DDR50) ||
-		    (ios->timing == MMC_TIMING_UHS_SDR25))
-			ctrl |= SDHCI_CTRL_HISPD;
 
 		if (!host->preset_enabled) {
 			sdhci_writeb(host, ctrl, SDHCI_HOST_CONTROL);

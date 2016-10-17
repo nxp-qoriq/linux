@@ -646,6 +646,11 @@ static const struct regmap_config dspi_regmap_config = {
 	.max_register = 0x88,
 };
 
+static void dspi_init(struct fsl_dspi *dspi)
+{
+	regmap_write(dspi->regmap, SPI_SR, SPI_SR_CLEAR);
+}
+
 static int dspi_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
@@ -709,6 +714,7 @@ static int dspi_probe(struct platform_device *pdev)
 		return PTR_ERR(dspi->regmap);
 	}
 
+	dspi_init(dspi);
 	dspi->irq = platform_get_irq(pdev, 0);
 	if (dspi->irq < 0) {
 		dev_err(&pdev->dev, "can't get platform irq\n");

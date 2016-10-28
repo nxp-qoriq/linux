@@ -1929,6 +1929,8 @@ int netdev_set_prio_tc_map(struct net_device *dev, u8 prio, u8 tc)
 	return 0;
 }
 
+int netdev_txq_to_tc(struct net_device *dev, unsigned int txq);
+
 static inline
 void netdev_reset_tc(struct net_device *dev)
 {

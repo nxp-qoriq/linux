@@ -2615,16 +2615,33 @@ static struct ablkcipher_edesc *ablkcipher_edesc_alloc(struct ablkcipher_request
 	if (likely(req->src == req->dst)) {
 		sgc = dma_map_sg(jrdev, req->src, src_nents ? : 1,
 				 DMA_BIDIRECTIONAL);
+		if (unlikely(!sgc)) {
+			dev_err(jrdev, "unable to map source\n");
+			return ERR_PTR(-ENOMEM);
+		}
 	} else {
 		sgc = dma_map_sg(jrdev, req->src, src_nents ? : 1,
 				 DMA_TO_DEVICE);
+		if (unlikely(!sgc)) {
+			dev_err(jrdev, "unable to map source\n");
+			return ERR_PTR(-ENOMEM);
+		}
+
 		sgc = dma_map_sg(jrdev, req->dst, dst_nents ? : 1,
 				 DMA_FROM_DEVICE);
+		if (unlikely(!sgc)) {
+			dev_err(jrdev, "unable to map destination\n");
+			dma_unmap_sg(jrdev, req->src, src_nents ? : 1,
+				     DMA_TO_DEVICE);
+			return ERR_PTR(-ENOMEM);
+		}
 	}
 
 	iv_dma = dma_map_single(jrdev, req->info, ivsize, DMA_TO_DEVICE);
 	if (dma_mapping_error(jrdev, iv_dma)) {
 		dev_err(jrdev, "unable to map IV\n");
+		caam_unmap(jrdev, req->src, req->dst, src_nents, dst_nents, 0,
+			   0, 0, 0);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -2644,6 +2661,8 @@ static struct ablkcipher_edesc *ablkcipher_edesc_alloc(struct ablkcipher_request
 			GFP_DMA | flags);
 	if (!edesc) {
 		dev_err(jrdev, "could not allocate extended descriptor\n");
+		caam_unmap(jrdev, req->src, req->dst, src_nents, dst_nents,
+			   iv_dma, ivsize, 0, 0);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -2670,6 +2689,9 @@ static struct ablkcipher_edesc *ablkcipher_edesc_alloc(struct ablkcipher_request
 					    sec4_sg_bytes, DMA_TO_DEVICE);
 	if (dma_mapping_error(jrdev, edesc->sec4_sg_dma)) {
 		dev_err(jrdev, "unable to map S/G table\n");
+		caam_unmap(jrdev, req->src, req->dst, src_nents, dst_nents,
+			   iv_dma, ivsize, 0, 0);
+		kfree(edesc);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -2791,11 +2813,26 @@ static struct ablkcipher_edesc *ablkcipher_giv_edesc_alloc(
 	if (likely(req->src == req->dst)) {
 		sgc = dma_map_sg(jrdev, req->src, src_nents ? : 1,
 				 DMA_BIDIRECTIONAL);
+		if (unlikely(!sgc)) {
+			dev_err(jrdev, "unable to map source\n");
+			return ERR_PTR(-ENOMEM);
+		}
 	} else {
 		sgc = dma_map_sg(jrdev, req->src, src_nents ? : 1,
 				 DMA_TO_DEVICE);
+		if (unlikely(!sgc)) {
+			dev_err(jrdev, "unable to map source\n");
+			return ERR_PTR(-ENOMEM);
+		}
+
 		sgc = dma_map_sg(jrdev, req->dst, dst_nents ? : 1,
 				 DMA_FROM_DEVICE);
+		if (unlikely(!sgc)) {
+			dev_err(jrdev, "unable to map destination\n");
+			dma_unmap_sg(jrdev, req->src, src_nents ? : 1,
+				     DMA_TO_DEVICE);
+			return ERR_PTR(-ENOMEM);
+		}
 	}
 
 	/*
@@ -2805,6 +2842,8 @@ static struct ablkcipher_edesc *ablkcipher_giv_edesc_alloc(
 	iv_dma = dma_map_single(jrdev, greq->giv, ivsize, DMA_TO_DEVICE);
 	if (dma_mapping_error(jrdev, iv_dma)) {
 		dev_err(jrdev, "unable to map IV\n");
+		caam_unmap(jrdev, req->src, req->dst, src_nents, dst_nents, 0,
+			   0, 0, 0);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -2820,6 +2859,8 @@ static struct ablkcipher_edesc *ablkcipher_giv_edesc_alloc(
 			GFP_DMA | flags);
 	if (!edesc) {
 		dev_err(jrdev, "could not allocate extended descriptor\n");
+		caam_unmap(jrdev, req->src, req->dst, src_nents, dst_nents,
+			   iv_dma, ivsize, 0, 0);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -2847,6 +2888,9 @@ static struct ablkcipher_edesc *ablkcipher_giv_edesc_alloc(
 					    sec4_sg_bytes, DMA_TO_DEVICE);
 	if (dma_mapping_error(jrdev, edesc->sec4_sg_dma)) {
 		dev_err(jrdev, "unable to map S/G table\n");
+		caam_unmap(jrdev, req->src, req->dst, src_nents, dst_nents,
+			   iv_dma, ivsize, 0, 0);
+		kfree(edesc);
 		return ERR_PTR(-ENOMEM);
 	}
 	edesc->iv_dma = iv_dma;

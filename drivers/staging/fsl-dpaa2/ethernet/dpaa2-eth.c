@@ -356,12 +356,16 @@ static void dpaa2_eth_rx_err(struct dpaa2_eth_priv *priv,
  * make sure we don't accidentally issue another volatile dequeue which would
  * overwrite (leak) frames already in the store.
  *
+ * The number of frames is returned using the last 2 output arguments,
+ * separately for Rx and Tx confirmations.
+ *
  * Observance of NAPI budget is not our concern, leaving that to the caller.
  */
-static int consume_frames(struct dpaa2_eth_channel *ch)
+static bool consume_frames(struct dpaa2_eth_channel *ch, int *rx_cleaned,
+			   int *tx_conf_cleaned)
 {
 	struct dpaa2_eth_priv *priv = ch->priv;
-	struct dpaa2_eth_fq *fq;
+	struct dpaa2_eth_fq *fq = NULL;
 	struct dpaa2_dq *dq;
 	const struct dpaa2_fd *fd;
 	int cleaned = 0;
@@ -382,13 +386,25 @@ static int consume_frames(struct dpaa2_eth_channel *ch)
 		prefetch(fd);
 
 		fq = (struct dpaa2_eth_fq *)dpaa2_dq_fqd_ctx(dq);
-		fq->stats.frames++;
-
 		fq->consume(priv, ch, fd, &ch->napi, fq->flowid);
 		cleaned++;
 	} while (!is_last);
 
-	return cleaned;
+	if (!cleaned)
+		return false;
+
+	/* All frames brought in store by a volatile dequeue
+	 * come from the same queue
+	 */
+	if (fq->type == DPAA2_TX_CONF_FQ)
+		*tx_conf_cleaned += cleaned;
+	else
+		*rx_cleaned += cleaned;
+
+	fq->stats.frames += cleaned;
+	ch->stats.frames += cleaned;
+
+	return true;
 }
 
 /* Configure the egress frame annotation for timestamp update */
@@ -1025,20 +1041,21 @@ static int pull_channel(struct dpaa2_eth_channel *ch)
 /* NAPI poll routine
  *
  * Frames are dequeued from the QMan channel associated with this NAPI context.
- * Rx, Tx confirmation and (if configured) Rx error frames all count
- * towards the NAPI budget.
+ * Rx and (if configured) Rx error frames count towards the NAPI budget. Tx
+ * confirmation frames are limited by a threshold per NAPI poll cycle.
  */
 static int dpaa2_eth_poll(struct napi_struct *napi, int budget)
 {
 	struct dpaa2_eth_channel *ch;
-	int cleaned = 0, store_cleaned;
+	int cleaned, rx_cleaned = 0, tx_conf_cleaned = 0;
+	bool store_cleaned;
 	struct dpaa2_eth_priv *priv;
 	int err;
 
 	ch = container_of(napi, struct dpaa2_eth_channel, napi);
 	priv = ch->priv;
 
-	while (cleaned < budget) {
+	do {
 		err = pull_channel(ch);
 		if (unlikely(err))
 			break;
@@ -1046,27 +1063,26 @@ static int dpaa2_eth_poll(struct napi_struct *napi, int budget)
 		/* Refill pool if appropriate */
 		refill_pool(priv, ch, priv->bpid);
 
-		store_cleaned = consume_frames(ch);
-		cleaned += store_cleaned;
+		store_cleaned = consume_frames(ch, &rx_cleaned,
+					       &tx_conf_cleaned);
 
-		/* If we have enough budget left for a full store,
-		 * try a new pull dequeue, otherwise we're done here
+		/* If we've either consumed the budget with Rx frames,
+		 * or reached the Tx conf threshold, we're done.
 		 */
-		if (store_cleaned == 0 ||
-		    cleaned > budget - DPAA2_ETH_STORE_SIZE)
-			break;
-	}
+		if (rx_cleaned >= budget ||
+		    tx_conf_cleaned >= TX_CONF_PER_NAPI_POLL)
+			return budget;
+	} while (store_cleaned);
 
-	if (cleaned < budget) {
-		napi_complete_done(napi, cleaned);
-		/* Re-enable data available notifications */
-		do {
-			err = dpaa2_io_service_rearm(NULL, &ch->nctx);
-			cpu_relax();
-		} while (err == -EBUSY);
-	}
-
-	ch->stats.frames += cleaned;
+	/* We didn't consume the entire budget, finish napi and
+	 * re-enable data availability notifications
+	 */
+	cleaned = max(rx_cleaned, 1);
+	napi_complete_done(napi, cleaned);
+	do {
+		err = dpaa2_io_service_rearm(NULL, &ch->nctx);
+		cpu_relax();
+	} while (err == -EBUSY);
 
 	return cleaned;
 }
@@ -1178,25 +1194,25 @@ enable_err:
 /* The DPIO store must be empty when we call this,
  * at the end of every NAPI cycle.
  */
-static u32 drain_channel(struct dpaa2_eth_priv *priv,
+static int drain_channel(struct dpaa2_eth_priv *priv,
 			 struct dpaa2_eth_channel *ch)
 {
-	u32 drained = 0, total = 0;
+	int rx_drained = 0, tx_conf_drained = 0;
+	bool has_drained;
 
 	do {
 		pull_channel(ch);
-		drained = consume_frames(ch);
-		total += drained;
-	} while (drained);
+		has_drained = consume_frames(ch, &rx_drained, &tx_conf_drained);
+	} while (has_drained);
 
-	return total;
+	return rx_drained + tx_conf_drained;
 }
 
-static u32 drain_ingress_frames(struct dpaa2_eth_priv *priv)
+static int drain_ingress_frames(struct dpaa2_eth_priv *priv)
 {
 	struct dpaa2_eth_channel *ch;
 	int i;
-	u32 drained = 0;
+	int drained = 0;
 
 	for (i = 0; i < priv->num_channels; i++) {
 		ch = priv->channel[i];
@@ -1211,7 +1227,7 @@ static int dpaa2_eth_stop(struct net_device *net_dev)
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 	int dpni_enabled;
 	int retries = 10;
-	u32 drained;
+	int drained;
 
 	netif_tx_stop_all_queues(net_dev);
 	netif_carrier_off(net_dev);

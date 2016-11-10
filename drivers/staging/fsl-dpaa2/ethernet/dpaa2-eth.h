@@ -48,6 +48,11 @@
 
 #define DPAA2_ETH_STORE_SIZE		16
 
+/* We set a max threshold for how many Tx confirmations we should process
+ * on a NAPI poll call, they take less processing time.
+ */
+#define TX_CONF_PER_NAPI_POLL		256
+
 /* Maximum number of scatter-gather entries in an ingress frame,
  * considering the maximum receive frame size is 64K
  */

@@ -96,6 +96,9 @@
 #define sCR0_BSU_SHIFT			14
 #define sCR0_BSU_MASK			0x3
 
+/* Auxiliary Configuration register */
+#define ARM_SMMU_GR0_sACR		0x10
+
 /* Identification registers */
 #define ARM_SMMU_GR0_ID0		0x20
 #define ARM_SMMU_GR0_ID1		0x24
@@ -225,6 +228,8 @@
 #define SCTLR_TRE			(1 << 1)
 #define SCTLR_M				(1 << 0)
 #define SCTLR_EAE_SBOP			(SCTLR_AFE | SCTLR_TRE)
+
+#define ARM_MMU500_ACR_SMTNMB_TLBEN	(1 << 8)
 
 #define CB_PAR_F			(1 << 0)
 
@@ -1502,6 +1507,16 @@ static void arm_smmu_device_reset(struct arm_smmu_device *smmu)
 		writel_relaxed(S2CR_TYPE_BYPASS,
 			gr0_base + ARM_SMMU_GR0_S2CR(i));
 	}
+
+#ifdef CONFIG_FSL_MC_BUS
+	/*
+	 * Allow unmatched Stream IDs to allocate bypass
+	 * TLB entries for reduced latency for MMU-500.
+	 */
+	reg = readl_relaxed(gr0_base + ARM_SMMU_GR0_sACR);
+	reg |= ARM_MMU500_ACR_SMTNMB_TLBEN;
+	writel_relaxed(reg, gr0_base + ARM_SMMU_GR0_sACR);
+#endif
 
 	/* Make sure all context banks are disabled and clear CB_FSR  */
 	for (i = 0; i < smmu->num_context_banks; ++i) {

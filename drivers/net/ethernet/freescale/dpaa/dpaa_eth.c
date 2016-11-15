@@ -2631,6 +2631,8 @@ static int dpaa_eth_probe(struct platform_device *pdev)
 	if (err < 0)
 		goto netdev_init_failed;
 
+	dpaa_eth_sysfs_init(&net_dev->dev);
+
 	netif_info(priv, probe, net_dev, "Probed interface %s\n",
 		   net_dev->name);
 
@@ -2675,6 +2677,8 @@ static int dpaa_remove(struct platform_device *pdev)
 	net_dev = dev_get_drvdata(dev);
 
 	priv = netdev_priv(net_dev);
+
+	dpaa_eth_sysfs_remove(dev);
 
 	dev_set_drvdata(dev, NULL);
 	unregister_netdev(net_dev);

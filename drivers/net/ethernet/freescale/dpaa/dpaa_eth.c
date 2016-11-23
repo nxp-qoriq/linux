@@ -218,9 +218,6 @@ static int dpaa_netdev_init(struct net_device *net_dev,
 	net_dev->mem_start = priv->mac_dev->res->start;
 	net_dev->mem_end = priv->mac_dev->res->end;
 
-	net_dev->min_mtu = ETH_MIN_MTU;
-	net_dev->max_mtu = dpaa_get_max_mtu();
-
 	net_dev->hw_features |= (NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM |
 				 NETIF_F_LLTX);
 
@@ -326,6 +323,20 @@ static struct rtnl_link_stats64 *dpaa_get_stats64(struct net_device *net_dev,
 	}
 
 	return s;
+}
+
+static int dpaa_change_mtu(struct net_device *net_dev, int new_mtu)
+{
+	const int max_mtu = dpaa_get_max_mtu();
+
+	/* Make sure we don't exceed the Ethernet controller's MAXFRM */
+	if (new_mtu < 68 || new_mtu > max_mtu) {
+		netdev_err(net_dev, "Invalid L3 mtu %d (must be between %d and %d).\n",
+			   new_mtu, 68, max_mtu);
+		return -EINVAL;
+	}
+	net_dev->mtu = new_mtu;
+	return 0;
 }
 
 static struct mac_device *dpaa_mac_dev_get(struct platform_device *pdev)
@@ -2270,6 +2281,7 @@ static const struct net_device_ops dpaa_ops = {
 	.ndo_get_stats64 = dpaa_get_stats64,
 	.ndo_set_mac_address = dpaa_set_mac_address,
 	.ndo_validate_addr = eth_validate_addr,
+	.ndo_change_mtu = dpaa_change_mtu,
 	.ndo_set_rx_mode = dpaa_set_rx_mode,
 };
 

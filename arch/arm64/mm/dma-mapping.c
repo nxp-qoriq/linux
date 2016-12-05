@@ -30,6 +30,7 @@
 #include <linux/swiotlb.h>
 
 #include <asm/cacheflush.h>
+#include <../../../drivers/staging/fsl-mc/include/mc-bus.h>
 
 static int swiotlb __ro_after_init;
 
@@ -917,6 +918,10 @@ static int __init __iommu_dma_init(void)
 #ifdef CONFIG_PCI
 	if (!ret)
 		ret = register_iommu_dma_ops_notifier(&pci_bus_type);
+#endif
+#ifdef CONFIG_FSL_MC_BUS
+	if (!ret)
+		ret = register_iommu_dma_ops_notifier(&fsl_mc_bus_type);
 #endif
 	return ret;
 }

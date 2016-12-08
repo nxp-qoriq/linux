@@ -145,7 +145,11 @@ static int bman_portal_probe(struct platform_device *pdev)
 	}
 	pcfg->irq = irq;
 
+#if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
+	va = ioremap_wc(addr_phys[0]->start, resource_size(addr_phys[0]));
+#else
 	va = ioremap_prot(addr_phys[0]->start, resource_size(addr_phys[0]), 0);
+#endif
 	if (!va) {
 		dev_err(dev, "ioremap::CE failed\n");
 		goto err_ioremap1;
@@ -153,8 +157,12 @@ static int bman_portal_probe(struct platform_device *pdev)
 
 	pcfg->addr_virt[DPAA_PORTAL_CE] = va;
 
+#if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
+	va = ioremap(addr_phys[1]->start, resource_size(addr_phys[1]));
+#else
 	va = ioremap_prot(addr_phys[1]->start, resource_size(addr_phys[1]),
 			  _PAGE_GUARDED | _PAGE_NO_CACHE);
+#endif
 	if (!va) {
 		dev_err(dev, "ioremap::CI failed\n");
 		goto err_ioremap2;

@@ -448,8 +448,14 @@ static int zero_priv_mem(struct device *dev, struct device_node *node,
 		return -ENOMEM;
 
 	memset_io((void __iomem *)tmpp, 0, sz);
+#ifdef CONFIG_PPC
 	flush_dcache_range((unsigned long)tmpp,
 			   (unsigned long)tmpp + sz);
+#elif defined(CONFIG_ARM)
+	__cpuc_flush_dcache_area(tmpp, sz);
+#elif defined(CONFIG_ARM64)
+	__flush_dcache_area(tmpp, sz);
+#endif
 	memunmap(tmpp);
 
 	return 0;

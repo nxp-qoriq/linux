@@ -864,6 +864,12 @@ static int mac_probe(struct platform_device *_of_dev)
 	if (priv->max_speed == 1000)
 		mac_dev->if_support |= SUPPORTED_1000baseT_Full;
 
+	if (priv->phy_if == PHY_INTERFACE_MODE_QSGMII) {
+		mac_dev->if_support |= SUPPORTED_1000baseT_Full;
+		mac_dev->if_support &= ~(SUPPORTED_10baseT_Half |
+					 SUPPORTED_100baseT_Half);
+	}
+
 	/* The 10G interface only supports one mode */
 	if (priv->phy_if == PHY_INTERFACE_MODE_XGMII)
 		mac_dev->if_support = SUPPORTED_10000baseT_Full;

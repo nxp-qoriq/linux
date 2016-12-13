@@ -4488,6 +4488,13 @@ S:	Maintained
 F:	drivers/net/ethernet/freescale/fs_enet/
 F:	include/linux/fs_enet_pd.h
 
+FREESCALE QORIQ DPAA FMAN DRIVER
+M:	Madalin Bucur <madalin.bucur@nxp.com>
+L:	netdev@vger.kernel.org
+S:	Maintained
+F:	drivers/net/ethernet/freescale/fman
+F:	Documentation/devicetree/bindings/powerpc/fsl/fman.txt
+
 FREESCALE QUICC ENGINE LIBRARY
 L:	linuxppc-dev@lists.ozlabs.org
 S:	Orphan

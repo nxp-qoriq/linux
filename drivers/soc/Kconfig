@@ -18,6 +18,7 @@ config	FSL_SOC_DRIVERS
 
 if FSL_SOC_DRIVERS
 	source "drivers/soc/fsl/Kconfig"
+	source "drivers/soc/fsl/qbman/Kconfig"
 endif
 
 endmenu

@@ -679,6 +679,7 @@ static ssize_t ls_pcie_ep_dbg_dump_read(struct file *filp,
 
 	if (!test) {
 		dev_info(&ep->dev, " there is NO test\n");
+		kfree(buf);
 		return 0;
 	}
 

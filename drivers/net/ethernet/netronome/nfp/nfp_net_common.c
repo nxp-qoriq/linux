@@ -2400,8 +2400,8 @@ int nfp_net_set_ring_size(struct nfp_net *nn, u32 rxd_cnt, u32 txd_cnt)
 	return err;
 }
 
-static struct rtnl_link_stats64 *nfp_net_stat64(struct net_device *netdev,
-						struct rtnl_link_stats64 *stats)
+static void nfp_net_stat64(struct net_device *netdev,
+			   struct rtnl_link_stats64 *stats)
 {
 	struct nfp_net *nn = netdev_priv(netdev);
 	int r;
@@ -2431,8 +2431,6 @@ static struct rtnl_link_stats64 *nfp_net_stat64(struct net_device *netdev,
 		stats->tx_bytes += data[1];
 		stats->tx_errors += data[2];
 	}
-
-	return stats;
 }
 
 static bool nfp_net_ebpf_capable(struct nfp_net *nn)

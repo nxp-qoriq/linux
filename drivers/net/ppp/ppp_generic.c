@@ -1314,7 +1314,7 @@ ppp_net_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 	return err;
 }
 
-static struct rtnl_link_stats64*
+static void
 ppp_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats64)
 {
 	struct ppp *ppp = netdev_priv(dev);
@@ -1334,8 +1334,6 @@ ppp_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats64)
 	stats64->rx_dropped       = dev->stats.rx_dropped;
 	stats64->tx_dropped       = dev->stats.tx_dropped;
 	stats64->rx_length_errors = dev->stats.rx_length_errors;
-
-	return stats64;
 }
 
 static int ppp_dev_init(struct net_device *dev)

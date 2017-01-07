@@ -458,7 +458,7 @@ static int ec_bhf_stop(struct net_device *net_dev)
 	return 0;
 }
 
-static struct rtnl_link_stats64 *
+static void
 ec_bhf_get_stats(struct net_device *net_dev,
 		 struct rtnl_link_stats64 *stats)
 {
@@ -473,8 +473,6 @@ ec_bhf_get_stats(struct net_device *net_dev,
 
 	stats->tx_bytes = priv->stat_tx_bytes;
 	stats->rx_bytes = priv->stat_rx_bytes;
-
-	return stats;
 }
 
 static const struct net_device_ops ec_bhf_netdev_ops = {

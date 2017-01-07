@@ -296,8 +296,8 @@ static void ipvlan_set_multicast_mac_filter(struct net_device *dev)
 	dev_mc_sync(ipvlan->phy_dev, dev);
 }
 
-static struct rtnl_link_stats64 *ipvlan_get_stats64(struct net_device *dev,
-						    struct rtnl_link_stats64 *s)
+static void ipvlan_get_stats64(struct net_device *dev,
+			       struct rtnl_link_stats64 *s)
 {
 	struct ipvl_dev *ipvlan = netdev_priv(dev);
 
@@ -334,7 +334,6 @@ static struct rtnl_link_stats64 *ipvlan_get_stats64(struct net_device *dev,
 		s->rx_dropped = rx_errs;
 		s->tx_dropped = tx_drps;
 	}
-	return s;
 }
 
 static int ipvlan_vlan_rx_add_vid(struct net_device *dev, __be16 proto, u16 vid)

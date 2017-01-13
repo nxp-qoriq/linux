@@ -1166,6 +1166,7 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 	struct spi_nor *nor;
 	struct mtd_info *mtd;
 	int ret, i = 0;
+	int find_node;
 	enum read_mode mode = SPI_NOR_QUAD;
 
 	q = devm_kzalloc(dev, sizeof(*q), GFP_KERNEL);
@@ -1243,6 +1244,7 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 
 	mutex_init(&q->lock);
 
+	find_node = 0;
 	/* iterate the subnodes. */
 	for_each_available_child_of_node(dev->of_node, np) {
 		/* skip the holes */
@@ -1269,7 +1271,7 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 		ret = of_property_read_u32(np, "spi-max-frequency",
 				&q->clk_rate);
 		if (ret < 0)
-			goto mutex_failed;
+			continue;
 
 		/* set the chip address for READID */
 		fsl_qspi_set_base_addr(q, nor);
@@ -1283,11 +1285,11 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 
 		ret = spi_nor_scan(nor, NULL, mode);
 		if (ret)
-			goto mutex_failed;
+			continue;
 
 		ret = mtd_device_register(mtd, NULL, 0);
 		if (ret)
-			goto mutex_failed;
+			continue;
 
 		/* Set the correct NOR size now. */
 		if (q->nor_size == 0) {
@@ -1310,7 +1312,11 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 			nor->page_size = q->devtype_data->txfifo;
 
 		i++;
+		find_node++;
 	}
+
+	if (find_node == 0)
+		goto mutex_failed;
 
 	/* finish the rest init. */
 	ret = fsl_qspi_nor_setup_last(q);

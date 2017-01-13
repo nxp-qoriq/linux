@@ -1994,6 +1994,7 @@ fec_enet_rx_queue_avb(struct net_device *ndev, u16 queue_id)
 	struct avb_rx_desc *desc;
 	unsigned int rc = 0;
 	unsigned int net_data_offset;
+	unsigned int count = 0;
 
 	rxq = fep->rx_queue[queue_id];
 
@@ -2002,7 +2003,8 @@ fec_enet_rx_queue_avb(struct net_device *ndev, u16 queue_id)
 	 */
 	bdp = rxq->bd.cur;
 
-	while (!((status = fec16_to_cpu(bdp->cbd_sc)) & BD_ENET_RX_EMPTY)) {
+	/* 20 packets per 125us > 64 bytes packets @ 100Mbps */
+	while (!((status = fec16_to_cpu(bdp->cbd_sc)) & BD_ENET_RX_EMPTY) && (count++ < 20)) {
 
 		writel(FEC_ENET_RXF, fep->hwp + FEC_IEVENT);
 
@@ -2118,14 +2120,16 @@ rx_processing_done:
 		}
 
 		/* Update BD pointer to next entry */
-		bdp = fec_enet_get_nextdesc(bdp, &rxq->bd);
 
-		/* Doing this here will keep the FEC running while we process
-		 * incoming frames.  On a heavily loaded network, we should be
-		 * able to keep up at the expense of system resources.
-		 */
-		writel(0, rxq->bd.reg_desc_active);
+		bdp = fec_enet_get_nextdesc(bdp, &rxq->bd);
 	}
+
+	/* If the receive ring buffer can hold at least double the maximum
+	number of packets per polling period (18.2 packets @ 100Mbps), it's
+	ok to only re-enable receive after processing all current packets */
+
+	writel(0, rxq->bd.reg_desc_active);
+
 	rxq->bd.cur = bdp;
 
 	return rc;

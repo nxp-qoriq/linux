@@ -148,6 +148,26 @@
 #define DWC3_OSTS		0xcc10
 
 /* Bit fields */
+#define AXI3_CACHE_TYPE_AW              0x8 /* write allocate */
+#define AXI3_CACHE_TYPE_AR              0x4 /* read allocate */
+#define AXI3_CACHE_TYPE_SNP             0x2 /* cacheable */
+#define AXI3_CACHE_TYPE_BUF             0x1 /* bufferable */
+#define DWC3_GSBUSCFG0_DATARD_SHIFT     28
+#define DWC3_GSBUSCFG0_DESCRD_SHIFT     24
+#define DWC3_GSBUSCFG0_DATAWR_SHIFT     20
+#define DWC3_GSBUSCFG0_DESCWR_SHIFT     16
+#define DWC3_GSBUSCFG0_SNP_MASK         0xffff0000
+#define DWC3_GSBUSCFG0_DATABIGEND       (1 << 11)
+#define DWC3_GSBUSCFG0_DESCBIGEND       (1 << 10)
+#define DWC3_GSBUSCFG0_INCR256BRSTENA   (1 << 7) /* INCR256 burst */
+#define DWC3_GSBUSCFG0_INCR128BRSTENA   (1 << 6) /* INCR128 burst */
+#define DWC3_GSBUSCFG0_INCR64BRSTENA    (1 << 5) /* INCR64 burst */
+#define DWC3_GSBUSCFG0_INCR32BRSTENA    (1 << 4) /* INCR32 burst */
+#define DWC3_GSBUSCFG0_INCR16BRSTENA    (1 << 3) /* INCR16 burst */
+#define DWC3_GSBUSCFG0_INCR8BRSTENA     (1 << 2) /* INCR8 burst */
+#define DWC3_GSBUSCFG0_INCR4BRSTENA     (1 << 1) /* INCR4 burst */
+#define DWC3_GSBUSCFG0_INCRBRSTENA      (1 << 0) /* undefined length enable */
+#define DWC3_GSBUSCFG0_INCRBRST_MASK    0xff
 
 /* Global Configuration Register */
 #define DWC3_GCTL_PWRDNSCALE(n)	((n) << 19)
@@ -157,7 +177,6 @@
 #define DWC3_GCTL_CLK_PIPE	(1)
 #define DWC3_GCTL_CLK_PIPEHALF	(2)
 #define DWC3_GCTL_CLK_MASK	(3)
-
 #define DWC3_GCTL_PRTCAP(n)	(((n) & (3 << 12)) >> 12)
 #define DWC3_GCTL_PRTCAPDIR(n)	((n) << 12)
 #define DWC3_GCTL_PRTCAP_HOST	1
@@ -744,6 +763,7 @@ struct dwc3 {
 	spinlock_t		lock;
 
 	struct device		*dev;
+	struct device           *sysdev;
 
 	struct platform_device	*xhci;
 	struct resource		xhci_resources[DWC3_XHCI_RESOURCES_NUM];
@@ -767,10 +787,15 @@ struct dwc3 {
 
 	enum usb_dr_mode	dr_mode;
 
+	enum usb_phy_interface  hsphy_mode;
+
+	u32                     fladj;
 	/* used for suspend/resume */
 	u32			dcfg;
 	u32			gctl;
 
+	u32			incrx_type[2];
+	u32			irq_gadget;
 	u32			nr_scratch;
 	u32			num_event_buffers;
 	u32			u1u2;
@@ -844,10 +869,12 @@ struct dwc3 {
 	unsigned		ep0_bounced:1;
 	unsigned		ep0_expect_in:1;
 	unsigned		has_hibernation:1;
+	unsigned                sysdev_is_parent:1;
 	unsigned		has_lpm_erratum:1;
 	unsigned		is_utmi_l1_suspend:1;
 	unsigned		is_fpga:1;
 	unsigned		needs_fifo_resize:1;
+	unsigned                configure_gfladj:1;
 	unsigned		pullups_connected:1;
 	unsigned		resize_fifos:1;
 	unsigned		setup_packet_pending:1;
@@ -865,9 +892,15 @@ struct dwc3 {
 	unsigned		dis_u3_susphy_quirk:1;
 	unsigned		dis_u2_susphy_quirk:1;
 	unsigned		dis_enblslpm_quirk:1;
+	unsigned                dis_rxdet_inp3_quirk:1;
+	unsigned                dis_u2_freeclk_exists_quirk:1;
+	unsigned                dis_del_phy_power_chg_quirk:1;
+	unsigned                dma_snooping_quirk:1;
 
 	unsigned		tx_de_emphasis_quirk:1;
 	unsigned		tx_de_emphasis:2;
+
+	u16                     imod_interval;
 };
 
 /* -------------------------------------------------------------------------- */

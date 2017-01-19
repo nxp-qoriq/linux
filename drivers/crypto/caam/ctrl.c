@@ -2,11 +2,13 @@
  * Controller-level driver, kernel property detection, initialization
  *
  * Copyright 2008-2012 Freescale Semiconductor, Inc.
+ * Copyright 2017 NXP
  */
 
 #include <linux/device.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
+#include <linux/sys_soc.h>
 
 #include "compat.h"
 #include "regs.h"
@@ -17,6 +19,8 @@
 
 bool caam_little_end;
 EXPORT_SYMBOL(caam_little_end);
+bool caam_imx;
+EXPORT_SYMBOL(caam_imx);
 
 #ifdef CONFIG_CAAM_QI
 #include "qi.h"
@@ -26,19 +30,11 @@ EXPORT_SYMBOL(caam_little_end);
  * i.MX targets tend to have clock control subsystems that can
  * enable/disable clocking to our device.
  */
-#ifdef CONFIG_CRYPTO_DEV_FSL_CAAM_IMX
 static inline struct clk *caam_drv_identify_clk(struct device *dev,
 						char *clk_name)
 {
-	return devm_clk_get(dev, clk_name);
+	return caam_imx ? devm_clk_get(dev, clk_name) : NULL;
 }
-#else
-static inline struct clk *caam_drv_identify_clk(struct device *dev,
-						char *clk_name)
-{
-	return NULL;
-}
-#endif
 
 /*
  * Descriptor to instantiate RNG State Handle 0 in normal mode and
@@ -425,6 +421,10 @@ static int caam_probe(struct platform_device *pdev)
 {
 	int ret, ring, gen_sk, ent_delay = RTSDCTL_ENT_DLY_MIN;
 	u64 caam_id;
+	static const struct soc_device_attribute imx_soc[] = {
+		{.family = "Freescale i.MX"},
+		{},
+	};
 	struct device *dev;
 	struct device_node *nprop, *np;
 	struct caam_ctrl __iomem *ctrl;
@@ -446,6 +446,8 @@ static int caam_probe(struct platform_device *pdev)
 	dev_set_drvdata(dev, ctrlpriv);
 	ctrlpriv->pdev = pdev;
 	nprop = pdev->dev.of_node;
+
+	caam_imx = (bool)soc_device_match(imx_soc);
 
 	/* Enable clocking */
 	clk = caam_drv_identify_clk(&pdev->dev, "ipg");

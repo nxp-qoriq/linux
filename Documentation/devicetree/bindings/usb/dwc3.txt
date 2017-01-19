@@ -62,6 +62,8 @@ Optional properties:
 	value, which means undefined length INCR burst type enabled.
 	The values can be 1, 4, 8, 16, 32, 64, 128 and 256.
 
+ - snps,dma-snooping: when set, enable dma snooping
+
 This is usually a subnode to DWC3 glue to which it is connected.
 
 dwc3@4a030000 {

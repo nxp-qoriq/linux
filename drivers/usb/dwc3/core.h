@@ -206,7 +206,6 @@
 #define DWC3_GCTL_CLK_PIPE	(1)
 #define DWC3_GCTL_CLK_PIPEHALF	(2)
 #define DWC3_GCTL_CLK_MASK	(3)
-
 #define DWC3_GCTL_PRTCAP(n)	(((n) & (3 << 12)) >> 12)
 #define DWC3_GCTL_PRTCAPDIR(n)	((n) << 12)
 #define DWC3_GCTL_PRTCAP_HOST	1
@@ -874,6 +873,7 @@ struct dwc3 {
 	spinlock_t		lock;
 
 	struct device		*dev;
+	struct device           *sysdev;
 
 	struct platform_device	*xhci;
 	struct resource		xhci_resources[DWC3_XHCI_RESOURCES_NUM];
@@ -981,9 +981,12 @@ struct dwc3 {
 	unsigned		ep0_bounced:1;
 	unsigned		ep0_expect_in:1;
 	unsigned		has_hibernation:1;
+	unsigned		sysdev_is_parent:1;
 	unsigned		has_lpm_erratum:1;
 	unsigned		is_utmi_l1_suspend:1;
 	unsigned		is_fpga:1;
+	unsigned		needs_fifo_resize:1;
+	unsigned		configure_gfladj:1;
 	unsigned		pending_events:1;
 	unsigned		pullups_connected:1;
 	unsigned		setup_packet_pending:1;
@@ -1004,9 +1007,12 @@ struct dwc3 {
 	unsigned		dis_rxdet_inp3_quirk:1;
 	unsigned		dis_u2_freeclk_exists_quirk:1;
 	unsigned		dis_del_phy_power_chg_quirk:1;
+	unsigned		dma_snooping_quirk:1;
 
 	unsigned		tx_de_emphasis_quirk:1;
 	unsigned		tx_de_emphasis:2;
+
+	u16                     imod_interval;
 };
 
 /* -------------------------------------------------------------------------- */

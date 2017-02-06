@@ -383,6 +383,7 @@ struct dpaa2_eth_priv {
 	u16 rx_buf_align;
 	struct iommu_domain *iommu_domain;
 	u32 max_bufs_per_ch;
+	u32 refill_thresh;
 
 	void *cscn_mem;	/* Tx congestion notifications are written here */
 	void *cscn_unaligned;

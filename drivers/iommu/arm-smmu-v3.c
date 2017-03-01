@@ -1581,7 +1581,7 @@ static __le64 *arm_smmu_get_step_for_sid(struct arm_smmu_device *smmu, u32 sid)
 	return step;
 }
 
-static int arm_smmu_install_ste_for_dev(struct iommu_fwspec *fwspec)
+static void arm_smmu_install_ste_for_dev(struct iommu_fwspec *fwspec)
 {
 	int i, j;
 	struct arm_smmu_master_data *master = fwspec->iommu_priv;
@@ -1600,8 +1600,6 @@ static int arm_smmu_install_ste_for_dev(struct iommu_fwspec *fwspec)
 
 		arm_smmu_write_strtab_ent(smmu, sid, step, &master->ste);
 	}
-
-	return 0;
 }
 
 static void arm_smmu_detach_dev(struct device *dev)
@@ -1609,8 +1607,7 @@ static void arm_smmu_detach_dev(struct device *dev)
 	struct arm_smmu_master_data *master = dev->iommu_fwspec->iommu_priv;
 
 	master->ste.bypass = true;
-	if (arm_smmu_install_ste_for_dev(dev->iommu_fwspec) < 0)
-		dev_warn(dev, "failed to install bypass STE\n");
+	arm_smmu_install_ste_for_dev(dev->iommu_fwspec);
 }
 
 static int arm_smmu_attach_dev(struct iommu_domain *domain, struct device *dev)
@@ -1662,10 +1659,7 @@ static int arm_smmu_attach_dev(struct iommu_domain *domain, struct device *dev)
 		ste->s2_cfg = &smmu_domain->s2_cfg;
 	}
 
-	ret = arm_smmu_install_ste_for_dev(dev->iommu_fwspec);
-	if (ret < 0)
-		ste->valid = false;
-
+	arm_smmu_install_ste_for_dev(dev->iommu_fwspec);
 out_unlock:
 	mutex_unlock(&smmu_domain->init_mutex);
 	return ret;

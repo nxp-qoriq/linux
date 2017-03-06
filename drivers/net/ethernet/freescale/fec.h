@@ -340,6 +340,11 @@ struct bufdesc_ex {
 #define RCMR_CMP(X)		(((X) == 1) ? RCMR_CMP_1 : RCMR_CMP_2)
 #define FEC_TX_BD_FTYPE(X)	(((X) & 0xf) << 20)
 
+#define FEC_RX_FLUSH(X)		(1 << ((X) + 3))
+
+#define FEC_TX_SCHEME_CB	0x0 /* Credit based */
+#define FEC_TX_SCHEME_RR	0x1 /* Round-robin */
+
 #define BD_ENET_RX_INT		0x00800000
 #define BD_ENET_RX_PTP		((ushort)0x0400)
 #define BD_ENET_RX_ICE		0x00000020

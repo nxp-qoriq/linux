@@ -1219,6 +1219,14 @@ static void fec_enet_enable_ring(struct net_device *ndev)
 			writel(DMA_CLASS_EN | IDLE_SLOPE(i),
 			       fep->hwp + FEC_DMA_CFG(i));
 	}
+
+	/*
+	 * For AVB capable devices we should enable RX flushing for the
+	 * best effort queue (ring 0) and also the TX credit based shaper.
+	 */
+	if (fep->quirks & FEC_QUIRK_HAS_AVB)
+		writel(FEC_RX_FLUSH(0) | FEC_TX_SCHEME_CB,
+				fep->hwp + FEC_QOS_SCHEME);
 }
 
 /*

@@ -229,9 +229,16 @@ static int vfio_fsl_mc_probe(struct fsl_mc_device *mc_dev)
 			goto free_vfio_device;
 		}
 	} else {
-		/* Handling for Non-DPRC device to be added */
-		ret = -EINVAL;
-		goto free_vfio_device;
+		struct fsl_mc_device *mc_bus_dev;
+
+		/* Non-dprc devices share mc_io from the parent dprc */
+		mc_bus_dev = to_fsl_mc_device(mc_dev->dev.parent);
+		if (mc_bus_dev == NULL) {
+			vfio_del_group_dev(dev);
+			goto free_vfio_device;
+		}
+
+		mc_dev->mc_io = mc_bus_dev->mc_io;
 	}
 	return 0;
 
@@ -252,6 +259,8 @@ static int vfio_fsl_mc_remove(struct fsl_mc_device *mc_dev)
 
 	if (strcmp(mc_dev->obj_desc.type, "dprc") == 0)
 		vfio_fsl_mc_cleanup_dprc(vdev);
+
+	mc_dev->mc_io = NULL;
 
 	vfio_iommu_group_put(mc_dev->dev.iommu_group, dev);
 	kfree(vdev);

@@ -1591,14 +1591,20 @@ fec_enet_tx_queue_avb(struct net_device *ndev, u16 queue_id)
 
 		if (!(desc->common.flags & AVB_TX_FLAG_SKB)) {
 			if ((desc->common.flags & AVB_TX_FLAG_HW_TS) && fep->bufdesc_ex) {
-				struct bufdesc_ex *ebdp = (struct bufdesc_ex *)bdp;
+				/* In case of bridge support the egress timestamp is taken
+				 * from the switch MAC but the descriptor will be still freed
+				 * by the upper layer software dealing with the bridge
+				 * timestamping interface
+				 */
+				if (!(desc->common.flags & AVB_TX_FLAG_AED_B)) {
+					struct bufdesc_ex *ebdp = (struct bufdesc_ex *)bdp;
 
-				desc->common.ts = ebdp->ts + fep->tx_tstamp_latency;
+					desc->common.ts = ebdp->ts + fep->tx_tstamp_latency;
+				}
 
-				/* upper layer will retrieve the timestamp and free the descriptor */
 				rc |= fep->avb->tx_ts(fep->avb_data, &desc->common);
 			}
-			else
+			else	/* No timestamping required, the descriptor can be freed rigth away */
 				fep->avb->free(fep->avb_data, &desc->common);
 		} else {
 			/* Backup hardware descriptor fields in software descriptor */
@@ -3815,7 +3821,6 @@ static void fec_enet_free_buffers(struct net_device *ndev)
 		}
 	}
 #endif
-
 	for (q = 0; q < fep->num_tx_queues; q++) {
 		txq = fep->tx_queue[q];
 		for (i = 0; i < txq->bd.ring_size; i++) {

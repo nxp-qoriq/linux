@@ -83,6 +83,8 @@ struct avb_rx_desc {
 #define AVB_TX_FLAG_HW_TS 	(1 << 1)
 #define AVB_TX_FLAG_HW_CSUM 	(1 << 2)
 #define AVB_TX_FLAG_TS	 	(1 << 3)
+#define AVB_TX_FLAG_AED_B	(1 << 4)
+#define AVB_TX_FLAG_AED_E	(1 << 5)
 
 struct avb_ops {
 	void (*open)(void *, void *, int);

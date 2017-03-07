@@ -108,6 +108,7 @@ error_region_init:
 static void vfio_fsl_mc_release(void *device_data)
 {
 	struct vfio_fsl_mc_device *vdev = device_data;
+	struct fsl_mc_device *mc_dev = vdev->mc_dev;
 
 	mutex_lock(&driver_lock);
 
@@ -115,6 +116,10 @@ static void vfio_fsl_mc_release(void *device_data)
 		vfio_fsl_mc_regions_cleanup(vdev);
 		vfio_fsl_mc_irqs_cleanup(vdev);
 	}
+
+	if (strcmp(mc_dev->obj_desc.type, "dprc") == 0)
+		dprc_reset_container(mc_dev->mc_io, 0, mc_dev->mc_handle,
+				     mc_dev->obj_desc.id);
 
 	mutex_unlock(&driver_lock);
 

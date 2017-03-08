@@ -1,13 +1,12 @@
 /*
- * Device Tree file for Freescale LS2080a software Simulator model
+ * Device Tree file for Freescale LS2088A QDS Board.
  *
- * Copyright (C) 2014-2015 Freescale Semiconductor
+ * Copyright (C) 2016-17, Freescale Semiconductor
  *
- * Bhupesh Sharma <bhupesh.sharma@freescale.com>
- * Harninder Rai <harninder.rai@freescale.com>
+ * Abhimanyu Saini <abhimanyu.saini@nxp.com>
  *
  * This file is dual-licensed: you can use it either under the terms
- * of the GPL or the X11 license, at your option. Note that this dual
+ * of the GPLv2 or the X11 license, at your option. Note that this dual
  * licensing only applies to this file, and not this project as a
  * whole.
  *
@@ -20,7 +19,6 @@
  *     but WITHOUT ANY WARRANTY; without even the implied warranty of
  *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *     GNU General Public License for more details.
- *
  *
  * Or, alternatively,
  *
@@ -48,15 +46,77 @@
 
 /dts-v1/;
 
-#include "fsl-ls2080a.dtsi"
+#include "fsl-ls2088a.dtsi"
+#include "fsl-ls208xa-qds.dtsi"
 
 / {
-	model = "Freescale Layerscape 2080a software Simulator model";
-	compatible = "fsl,ls2080a-simu", "fsl,ls2080a";
+	model = "Freescale Layerscape 2088a QDS Board";
+	compatible = "fsl,ls2088a-qds", "fsl,ls2088a";
+};
 
-	ethernet@2210000 {
-		compatible = "smsc,lan91c111";
-		reg = <0x0 0x2210000 0x0 0x100>;
-		interrupts = <0 58 0x1>;
+&ifc {
+	boardctrl: board-control@3,0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "fsl,tetra-fpga", "fsl,fpga-qixis", "simple-bus";
+		reg = <3 0 0x300>;		/* TODO check address */
+		ranges = <0 3 0 0x300>;
+
+		mdio_mux_emi1 {
+			compatible = "mdio-mux-mmioreg", "mdio-mux";
+			mdio-parent-bus = <&emdio1>;
+			reg = <0x54 1>;		/* BRDCFG4 */
+			mux-mask = <0xe0>;	/* EMI1_MDIO */
+
+			#address-cells=<1>;
+			#size-cells = <0>;
+
+			/* Child MDIO buses, one for each riser card:
+			   reg = 0x0, 0x20, 0x40, 0x60, 0x80, 0xa0.
+
+			   VSC8234 PHYs on the riser cards.
+			 */
+
+			mdio_mux3: mdio@60 {
+				reg = <0x60>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				mdio0_phy12: mdio_phy0@1c {
+					reg = <0x1c>;
+					phy-connection-type = "sgmii";
+				};
+				mdio0_phy13: mdio_phy1@1d {
+					reg = <0x1d>;
+					phy-connection-type = "sgmii";
+				};
+				mdio0_phy14: mdio_phy2@1e {
+					reg = <0x1e>;
+					phy-connection-type = "sgmii";
+				};
+				mdio0_phy15: mdio_phy3@1f {
+					reg = <0x1f>;
+					phy-connection-type = "sgmii";
+				};
+			};
+		};
 	};
+};
+
+/* Update DPMAC connections to external PHYs, under SerDes 0x2a_0x49. */
+&dpmac9 {
+	phy-handle = <&mdio0_phy12>;
+};
+&dpmac10 {
+	phy-handle = <&mdio0_phy13>;
+};
+&dpmac11 {
+	phy-handle = <&mdio0_phy14>;
+};
+&dpmac12 {
+	phy-handle = <&mdio0_phy15>;
+};
+
+&esdhc {
+	status = "okay";
 };

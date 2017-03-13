@@ -1,0 +1,203 @@
+/*
+ * Device Tree file for Freescale LS1088a RDB board
+ *
+ * Copyright (C) 2015, Freescale Semiconductor
+ *
+ * This file is licensed under the terms of the GNU General Public
+ * License version 2.  This program is licensed "as is" without any
+ * warranty of any kind, whether express or implied.
+ */
+
+/dts-v1/;
+
+#include "fsl-ls1088a.dtsi"
+
+/ {
+	model = "Freescale Layerscape 1088a RDB Board";
+	compatible = "fsl,ls1088a-rdb", "fsl,ls1088a";
+};
+
+&esdhc {
+	status = "okay";
+};
+
+&ifc {
+	status = "disabled";
+};
+
+&ftm0 {
+	status = "okay";
+};
+
+&i2c0 {
+	status = "okay";
+	pca9547@77 {
+		compatible = "philips,pca9547";
+		reg = <0x77>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		i2c@2 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x2>;
+
+			ina220@40 {
+				compatible = "ti,ina220";
+				reg = <0x40>;
+				shunt-resistor = <1000>;
+			};
+		};
+
+		i2c@3 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x3>;
+
+			rtc@51 {
+				compatible = "nxp,pcf2129";
+				reg = <0x51>;
+				/* IRQ10_B */
+				interrupts = <0 150 0x4>;
+			};
+
+			adt7461a@4c {
+				compatible = "adt7461a";
+				reg = <0x4c>;
+			};
+		};
+	};
+};
+
+&i2c1 {
+	status = "disabled";
+};
+
+&i2c2 {
+	status = "disabled";
+};
+
+&i2c3 {
+	status = "disabled";
+};
+
+&dspi {
+	status = "disabled";
+};
+
+&qspi {
+	status = "okay";
+	qflash0: s25fs512s@0 {
+		compatible = "spansion,m25p80";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		spi-max-frequency = <20000000>;
+		reg = <0>;
+	};
+
+	qflash1: s25fs512s@1 {
+		compatible = "spansion,m25p80";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		spi-max-frequency = <20000000>;
+		reg = <1>;
+	};
+};
+
+&sata0 {
+	status = "okay";
+};
+
+&usb0 {
+	status = "okay";
+};
+
+&usb1 {
+	status = "okay";
+};
+
+&serial0 {
+	status = "okay";
+};
+
+&serial1 {
+	status = "okay";
+};
+
+&emdio1 {
+	/* Freescale F104 PHY1 */
+	mdio1_phy1: emdio1_phy@1 {
+		reg = <0x1c>;
+		phy-connection-type = "qsgmii";
+	};
+	mdio1_phy2: emdio1_phy@2 {
+		reg = <0x1d>;
+		phy-connection-type = "qsgmii";
+	};
+	mdio1_phy3: emdio1_phy@3 {
+		reg = <0x1e>;
+		phy-connection-type = "qsgmii";
+	};
+	mdio1_phy4: emdio1_phy@4 {
+		reg = <0x1f>;
+		phy-connection-type = "qsgmii";
+	};
+	/* F104 PHY2 */
+	mdio1_phy5: emdio1_phy@5 {
+		reg = <0x0c>;
+		phy-connection-type = "qsgmii";
+	};
+	mdio1_phy6: emdio1_phy@6 {
+		reg = <0x0d>;
+		phy-connection-type = "qsgmii";
+	};
+	mdio1_phy7: emdio1_phy@7 {
+		reg = <0x0e>;
+		phy-connection-type = "qsgmii";
+	};
+	mdio1_phy8: emdio1_phy@8 {
+		reg = <0x0f>;
+		phy-connection-type = "qsgmii";
+	};
+};
+
+&emdio2 {
+	/* Aquantia AQR105 10G PHY */
+	mdio2_phy1: emdio2_phy@1 {
+		compatible = "ethernet-phy-ieee802.3-c45";
+		reg = <0x0>;
+		phy-connection-type = "xfi";
+	};
+};
+
+/* DPMAC connections to external PHYs
+ * based on LS1088A RM RevC - $24.1.2 SerDes Options
+ */
+/* DPMAC1 is 10G SFP+, fixed link */
+&dpmac2 {
+	phy-handle = <&mdio2_phy1>;
+};
+&dpmac3 {
+	phy-handle = <&mdio1_phy5>;
+};
+&dpmac4 {
+	phy-handle = <&mdio1_phy6>;
+};
+&dpmac5 {
+	phy-handle = <&mdio1_phy7>;
+};
+&dpmac6 {
+	phy-handle = <&mdio1_phy8>;
+};
+&dpmac7 {
+	phy-handle = <&mdio1_phy1>;
+};
+&dpmac8 {
+	phy-handle = <&mdio1_phy2>;
+};
+&dpmac9 {
+	phy-handle = <&mdio1_phy3>;
+};
+&dpmac10 {
+	phy-handle = <&mdio1_phy4>;
+};

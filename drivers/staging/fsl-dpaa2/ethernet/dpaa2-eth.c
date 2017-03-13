@@ -985,8 +985,10 @@ static void drain_pool(struct dpaa2_eth_priv *priv)
 {
 	int i;
 
+	preempt_disable();
 	drain_bufs(priv, DPAA2_ETH_BUFS_PER_CMD);
 	drain_bufs(priv, 1);
+	preempt_enable();
 
 	for (i = 0; i < priv->num_channels; i++)
 		priv->channel[i]->buf_count = 0;

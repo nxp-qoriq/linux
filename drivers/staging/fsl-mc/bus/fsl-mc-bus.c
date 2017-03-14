@@ -149,7 +149,7 @@ static ssize_t rescan_store(struct device *dev,
 
 	if (val) {
 		mutex_lock(&root_mc_bus->scan_mutex);
-		dprc_scan_objects(root_mc_dev, &irq_count);
+		dprc_scan_objects(root_mc_dev, NULL, &irq_count);
 		mutex_unlock(&root_mc_bus->scan_mutex);
 	}
 
@@ -175,7 +175,7 @@ static int scan_fsl_mc_bus(struct device *dev, void *data)
 		root_mc_dev = to_fsl_mc_device(dev);
 		root_mc_bus = to_fsl_mc_bus(root_mc_dev);
 		mutex_lock(&root_mc_bus->scan_mutex);
-		dprc_scan_objects(root_mc_dev, &irq_count);
+		dprc_scan_objects(root_mc_dev, NULL, &irq_count);
 		mutex_unlock(&root_mc_bus->scan_mutex);
 	}
 
@@ -515,6 +515,7 @@ static void fsl_mc_device_release(struct device *dev)
 int fsl_mc_device_add(struct dprc_obj_desc *obj_desc,
 		      struct fsl_mc_io *mc_io,
 		      struct device *parent_dev,
+		      const char *driver_override,
 		      struct fsl_mc_device **new_mc_dev)
 {
 	int error;
@@ -549,6 +550,19 @@ int fsl_mc_device_add(struct dprc_obj_desc *obj_desc,
 
 	mc_dev->obj_desc = *obj_desc;
 	mc_dev->mc_io = mc_io;
+
+	if (driver_override) {
+		/*
+		 * We trust driver_override, so we don't need to use
+		 * kstrndup() here
+		 */
+		mc_dev->driver_override = kstrdup(driver_override, GFP_KERNEL);
+		if (!mc_dev->driver_override) {
+			error = -ENOMEM;
+			goto error_cleanup_dev;
+		}
+	}
+
 	device_initialize(&mc_dev->dev);
 	mc_dev->dev.parent = parent_dev;
 	mc_dev->dev.bus = &fsl_mc_bus_type;
@@ -852,7 +866,8 @@ static int fsl_mc_bus_probe(struct platform_device *pdev)
 	obj_desc.irq_count = 1;
 	obj_desc.region_count = 0;
 
-	error = fsl_mc_device_add(&obj_desc, mc_io, &pdev->dev, &mc_bus_dev);
+	error = fsl_mc_device_add(&obj_desc, mc_io, &pdev->dev, NULL,
+				  &mc_bus_dev);
 	if (error < 0)
 		goto error_cleanup_mc_io;
 

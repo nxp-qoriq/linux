@@ -73,6 +73,7 @@ struct fsl_mc_bus {
 int dprc_scan_container(struct fsl_mc_device *mc_bus_dev);
 
 int dprc_scan_objects(struct fsl_mc_device *mc_bus_dev,
+		      const char *driver_override,
 		      unsigned int *total_irq_count);
 
 int __init dprc_driver_init(void);

@@ -170,10 +170,11 @@ static int fsl_bman_probe(struct platform_device *pdev)
 {
 	int ret, err_irq;
 	struct device *dev = &pdev->dev;
-	struct device_node *node = dev->of_node;
+	struct device_node *mem_node, *node = dev->of_node;
 	struct resource *res;
 	u16 id, bm_pool_cnt;
 	u8 major, minor;
+	u64 size;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
@@ -200,6 +201,38 @@ static int fsl_bman_probe(struct platform_device *pdev)
 			id, major, minor);
 		return -ENODEV;
 	}
+
+	/*
+	 * If FBPR memory wasn't defined using the qbman compatiable string
+	 * try using the of_reserved_mem_device method
+	 */
+	if (!fbpr_a) {
+		ret = of_reserved_mem_device_init(dev);
+		if (ret) {
+			dev_err(dev, "of_reserved_mem_device_init() failed 0x%x\n",
+				ret);
+			return -ENODEV;
+		}
+		mem_node = of_parse_phandle(dev->of_node, "memory-region", 0);
+		if (mem_node) {
+			ret = of_property_read_u64(mem_node, "size", &size);
+			if (ret) {
+				dev_err(dev, "FBPR: of_address_to_resource fails 0x%x\n",
+					ret);
+				return -ENODEV;
+			}
+			fbpr_sz = size;
+		} else {
+			dev_err(dev, "No memory-region found for FBPR\n");
+			return -ENODEV;
+		}
+		if (!dma_zalloc_coherent(dev, fbpr_sz, &fbpr_a, 0)) {
+			dev_err(dev, "Alloc FBPR memory failed\n");
+			return -ENODEV;
+		}
+	}
+
+	dev_dbg(dev, "Allocated FBPR 0x%llx 0x%zx\n", fbpr_a, fbpr_sz);
 
 	bm_set_memory(fbpr_a, fbpr_sz);
 

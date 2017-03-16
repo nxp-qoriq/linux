@@ -28,12 +28,12 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
-
 #include "dpaa_sys.h"
 
 #include <soc/fsl/qman.h>
 #include <linux/iommu.h>
+#include <linux/dma-contiguous.h>
+#include <linux/of_address.h>
 
 #if defined(CONFIG_FSL_PAMU)
 #include <asm/fsl_pamu_stash.h>

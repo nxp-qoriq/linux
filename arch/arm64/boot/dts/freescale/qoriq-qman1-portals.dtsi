@@ -1,0 +1,76 @@
+/*
+ * QorIQ QMan Portals device tree
+ *
+ * Copyright 2011-2016 Freescale Semiconductor Inc.
+ *
+ * SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
+ */
+
+&qportals {
+	#address-cells = <1>;
+	#size-cells = <1>;
+	compatible = "simple-bus";
+
+	qportal0: qman-portal@0 {
+		compatible = "fsl,qman-portal";
+		reg = <0x0 0x4000 0x4000000 0x4000>;
+		interrupts = <0 172 0x4>;
+		cell-index = <0>;
+	};
+
+	qportal1: qman-portal@10000 {
+		compatible = "fsl,qman-portal";
+		reg = <0x10000 0x4000 0x4010000 0x4000>;
+		interrupts = <0 174 0x4>;
+		cell-index = <1>;
+	};
+
+	qportal2: qman-portal@20000 {
+		compatible = "fsl,qman-portal";
+		reg = <0x20000 0x4000 0x4020000 0x4000>;
+		interrupts = <0 176 0x4>;
+		cell-index = <2>;
+	};
+
+	qportal3: qman-portal@30000 {
+		compatible = "fsl,qman-portal";
+		reg = <0x30000 0x4000 0x4030000 0x4000>;
+		interrupts = <0 178 0x4>;
+		cell-index = <3>;
+	};
+
+	qportal4: qman-portal@40000 {
+		compatible = "fsl,qman-portal";
+		reg = <0x40000 0x4000 0x4040000 0x4000>;
+		interrupts = <0 180 0x4>;
+		cell-index = <4>;
+	};
+
+	qportal5: qman-portal@50000 {
+		compatible = "fsl,qman-portal";
+		reg = <0x50000 0x4000 0x4050000 0x4000>;
+		interrupts = <0 182 0x4>;
+		cell-index = <5>;
+	};
+
+	qportal6: qman-portal@60000 {
+		compatible = "fsl,qman-portal";
+		reg = <0x60000 0x4000 0x4060000 0x4000>;
+		interrupts = <0 184 0x4>;
+		cell-index = <6>;
+	};
+
+	qportal7: qman-portal@70000 {
+		compatible = "fsl,qman-portal";
+		reg = <0x70000 0x4000 0x4070000 0x4000>;
+		interrupts = <0 186 0x4>;
+		cell-index = <7>;
+	};
+
+	qportal8: qman-portal@80000 {
+		compatible = "fsl,qman-portal";
+		reg = <0x80000 0x4000 0x4080000 0x4000>;
+		interrupts = <0 188 0x4>;
+		cell-index = <8>;
+	};
+};

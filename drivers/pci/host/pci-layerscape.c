@@ -34,6 +34,11 @@
 /* PEX Internal Configuration Registers */
 #define PCIE_STRFMR1		0x71c /* Symbol Timer & Filter Mask Register1 */
 #define PCIE_DBI_RO_WR_EN	0x8bc /* DBI Read-Only Write Enable Register */
+#define PCIE_LUT_UDR(n)		(0x800 + (n) * 8)
+#define PCIE_LUT_LDR(n)		(0x804 + (n) * 8)
+#define PCIE_LUT_MASK_ALL	0xffff
+#define PCIE_LUT_DR_NUM		32
+#define PCIE_LUT_ENABLE		(1 << 31)
 
 struct ls_pcie_drvdata {
 	u32 lut_offset;
@@ -49,9 +54,29 @@ struct ls_pcie {
 	struct pcie_port pp;
 	const struct ls_pcie_drvdata *drvdata;
 	int index;
+	const u32 *avail_streamids;
+	int streamid_index;
 };
 
 #define to_ls_pcie(x)	container_of(x, struct ls_pcie, pp)
+
+u32 set_pcie_streamid_translation(struct pci_dev *pdev, u32 devid)
+{
+	u32 index, streamid;
+	struct pcie_port *pp = pdev->bus->sysdata;
+	struct ls_pcie *pcie = to_ls_pcie(pp);
+
+	if (!pcie->avail_streamids || !pcie->streamid_index)
+		return ~(u32)0;
+
+	index = --pcie->streamid_index;
+	/* mask is set as all zeroes, want to match all bits */
+	iowrite32((devid << 16), pcie->lut + PCIE_LUT_UDR(index));
+	streamid = be32_to_cpup(&pcie->avail_streamids[index]);
+	iowrite32(streamid | PCIE_LUT_ENABLE, pcie->lut + PCIE_LUT_LDR(index));
+
+	return streamid;
+}
 
 static bool ls_pcie_is_bridge(struct ls_pcie *pcie)
 {
@@ -271,9 +296,27 @@ static int __init ls_pcie_probe(struct platform_device *pdev)
 
 	pcie->drvdata = match->data;
 	pcie->lut = pcie->dbi + pcie->drvdata->lut_offset;
+	/* Disable LDR zero */
+	iowrite32(0, pcie->lut + PCIE_LUT_LDR(0));
 
 	if (!ls_pcie_is_bridge(pcie))
 		return -ENODEV;
+
+	if (of_device_is_compatible(pdev->dev.of_node, "fsl,ls2085a-pcie") ||
+	of_device_is_compatible(pdev->dev.of_node, "fsl,ls2080a-pcie") ||
+	of_device_is_compatible(pdev->dev.of_node, "fsl,ls2088a-pcie")) {
+		int len;
+		const u32 *prop;
+		struct device_node *np;
+
+		np = pdev->dev.of_node;
+		prop = (u32 *)of_get_property(np, "available-stream-ids", &len);
+		if (prop) {
+			pcie->avail_streamids = prop;
+			pcie->streamid_index = len/sizeof(u32);
+		} else
+			dev_err(&pdev->dev, "PCIe endpoint partitioning not possible\n");
+	}
 
 	ret = ls_add_pcie_port(&pcie->pp, pdev);
 	if (ret < 0)

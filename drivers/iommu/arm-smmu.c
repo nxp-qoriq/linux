@@ -51,6 +51,10 @@
 #include <../drivers/staging/fsl-mc/include/mc.h>
 #endif
 
+#ifdef CONFIG_PCI_LAYERSCAPE
+#include <../drivers/pci/host/pci-layerscape.h>
+#endif
+
 #include <asm/pgalloc.h>
 
 /* Maximum number of stream IDs assigned to a single device */
@@ -1324,6 +1328,9 @@ static int arm_smmu_init_pci_device(struct pci_dev *pdev,
 	struct arm_smmu_master_cfg *cfg;
 	u16 sid;
 	int i;
+#ifdef CONFIG_PCI_LAYERSCAPE
+       u32 streamid;
+#endif
 
 	cfg = iommu_group_get_iommudata(group);
 	if (!cfg) {
@@ -1350,6 +1357,18 @@ static int arm_smmu_init_pci_device(struct pci_dev *pdev,
 	/* Avoid duplicate SIDs, as this can lead to SMR conflicts */
 	if (i == cfg->num_streamids)
 		cfg->streamids[cfg->num_streamids++] = sid;
+
+#ifdef CONFIG_PCI_LAYERSCAPE
+	streamid = set_pcie_streamid_translation(pdev, sid);
+	if (~streamid == 0) {
+		return -ENODEV;
+	}
+	cfg->streamids[0] = streamid;
+	cfg->mask = 0x7c00;
+
+	pdev->dev_flags |= PCI_DEV_FLAGS_DMA_ALIAS_DEVID;
+	pdev->dma_alias_devid = streamid;
+#endif
 
 	return 0;
 }

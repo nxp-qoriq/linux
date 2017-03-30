@@ -43,10 +43,12 @@
 
 #include "dpmcp.h"
 
+#ifndef CONFIG_ARCH_LX2160A_SIMU
 /**
  * Timeout in milliseconds to wait for the completion of an MC command
  */
 #define MC_CMD_COMPLETION_TIMEOUT_MS	15000
+#endif
 
 /*
  * usleep_range() min and max values used to throttle down polling
@@ -180,8 +182,10 @@ static int mc_polling_wait_preemptible(struct fsl_mc_io *mc_io,
 				       enum mc_cmd_status *mc_status)
 {
 	enum mc_cmd_status status;
+#ifndef CONFIG_ARCH_LX2160A_SIMU
 	unsigned long jiffies_until_timeout =
 		jiffies + msecs_to_jiffies(MC_CMD_COMPLETION_TIMEOUT_MS);
+#endif
 
 	/*
 	 * Wait for response from the MC hardware:
@@ -198,6 +202,7 @@ static int mc_polling_wait_preemptible(struct fsl_mc_io *mc_io,
 		usleep_range(MC_CMD_COMPLETION_POLLING_MIN_SLEEP_USECS,
 			     MC_CMD_COMPLETION_POLLING_MAX_SLEEP_USECS);
 
+#ifndef CONFIG_ARCH_LX2160A_SIMU
 		if (time_after_eq(jiffies, jiffies_until_timeout)) {
 			dev_dbg(mc_io->dev,
 				"MC command timed out (portal: %#llx, dprc handle: %#x, command: %#x)\n",
@@ -207,6 +212,7 @@ static int mc_polling_wait_preemptible(struct fsl_mc_io *mc_io,
 
 			return -ETIMEDOUT;
 		}
+#endif
 	}
 
 	*mc_status = status;
@@ -226,10 +232,12 @@ static int mc_polling_wait_atomic(struct fsl_mc_io *mc_io,
 				  enum mc_cmd_status *mc_status)
 {
 	enum mc_cmd_status status;
+#ifndef CONFIG_ARCH_LX2160A_SIMU
 	unsigned long timeout_usecs = MC_CMD_COMPLETION_TIMEOUT_MS * 1000;
 
 	BUILD_BUG_ON((MC_CMD_COMPLETION_TIMEOUT_MS * 1000) %
 		     MC_CMD_COMPLETION_POLLING_MAX_SLEEP_USECS != 0);
+#endif
 
 	for (;;) {
 		status = mc_read_response(mc_io->portal_virt_addr, cmd);
@@ -237,6 +245,7 @@ static int mc_polling_wait_atomic(struct fsl_mc_io *mc_io,
 			break;
 
 		udelay(MC_CMD_COMPLETION_POLLING_MAX_SLEEP_USECS);
+#ifndef CONFIG_ARCH_LX2160A_SIMU
 		timeout_usecs -= MC_CMD_COMPLETION_POLLING_MAX_SLEEP_USECS;
 		if (timeout_usecs == 0) {
 			dev_dbg(mc_io->dev,
@@ -247,6 +256,7 @@ static int mc_polling_wait_atomic(struct fsl_mc_io *mc_io,
 
 			return -ETIMEDOUT;
 		}
+#endif
 	}
 
 	*mc_status = status;

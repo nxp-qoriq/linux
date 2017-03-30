@@ -333,10 +333,23 @@ struct bufdesc_ex {
 				(IDLE_SLOPE_2 & IDLE_SLOPE_MASK))
 #define RCMR_MATCHEN		(0x1 << 16)
 #define RCMR_CMP_CFG(v, n)	(((v) & 0x7) <<  (n << 2))
+#ifdef CONFIG_AVB_SUPPORT
+#define SR_CLASS_A_PRIORITY	3
+#define SR_CLASS_B_PRIORITY	2
+#define RCMR_CMP_1		(RCMR_CMP_CFG(SR_CLASS_A_PRIORITY, 0) | \
+				RCMR_CMP_CFG(SR_CLASS_A_PRIORITY, 1) | \
+				RCMR_CMP_CFG(SR_CLASS_A_PRIORITY, 2) | \
+				RCMR_CMP_CFG(SR_CLASS_A_PRIORITY, 3))
+#define RCMR_CMP_2		(RCMR_CMP_CFG(SR_CLASS_B_PRIORITY, 0) | \
+				RCMR_CMP_CFG(SR_CLASS_B_PRIORITY, 1) | \
+				RCMR_CMP_CFG(SR_CLASS_B_PRIORITY, 2) | \
+				RCMR_CMP_CFG(SR_CLASS_B_PRIORITY, 3))
+#else
 #define RCMR_CMP_1		(RCMR_CMP_CFG(0, 0) | RCMR_CMP_CFG(1, 1) | \
 				RCMR_CMP_CFG(2, 2) | RCMR_CMP_CFG(3, 3))
 #define RCMR_CMP_2		(RCMR_CMP_CFG(4, 0) | RCMR_CMP_CFG(5, 1) | \
 				RCMR_CMP_CFG(6, 2) | RCMR_CMP_CFG(7, 3))
+#endif
 #define RCMR_CMP(X)		(((X) == 1) ? RCMR_CMP_1 : RCMR_CMP_2)
 #define FEC_TX_BD_FTYPE(X)	(((X) & 0xf) << 20)
 

@@ -1219,7 +1219,7 @@ static int ethsw_ethtool_get_sset_count(struct net_device *dev, int sset)
 static void ethsw_ethtool_get_strings(struct net_device *netdev,
 				      u32 stringset, u8 *data)
 {
-	int i;
+	u32 i;
 
 	switch (stringset) {
 	case ETH_SS_STATS:
@@ -1235,7 +1235,7 @@ static void ethsw_ethtool_get_stats(struct net_device *netdev,
 				    u64 *data)
 {
 	struct ethsw_port_priv	*port_priv = netdev_priv(netdev);
-	int			i;
+	u32			i;
 	int			err;
 
 	for (i = 0; i < ARRAY_SIZE(ethsw_ethtool_counters); i++) {

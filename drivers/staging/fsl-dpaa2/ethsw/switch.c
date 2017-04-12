@@ -44,6 +44,8 @@
 #include "dpsw.h"
 #include "dpsw-cmd.h"
 
+static const char ethsw_drv_version[] = "0.1";
+
 /* Minimal supported DPSE version */
 #define DPSW_MIN_VER_MAJOR	8
 #define DPSW_MIN_VER_MINOR	0
@@ -1188,6 +1190,114 @@ static const struct net_device_ops ethsw_port_ops = {
 	.ndo_start_xmit		= &ethsw_dropframe,
 };
 
+static void ethsw_get_drvinfo(struct net_device *netdev,
+			      struct ethtool_drvinfo *drvinfo)
+{
+	struct ethsw_port_priv *port_priv = netdev_priv(netdev);
+	u16 version_major, version_minor;
+	int err;
+
+	strlcpy(drvinfo->driver, KBUILD_MODNAME, sizeof(drvinfo->driver));
+	strlcpy(drvinfo->version, ethsw_drv_version, sizeof(drvinfo->version));
+
+	err = dpsw_get_api_version(port_priv->ethsw_priv->mc_io, 0,
+				   &version_major,
+				   &version_minor);
+	if (err)
+		strlcpy(drvinfo->fw_version, "N/A",
+			sizeof(drvinfo->fw_version));
+	else
+		snprintf(drvinfo->fw_version, sizeof(drvinfo->fw_version),
+			 "%u.%u", version_major, version_minor);
+
+	strlcpy(drvinfo->bus_info, dev_name(netdev->dev.parent->parent),
+		sizeof(drvinfo->bus_info));
+}
+
+static int ethsw_get_settings(struct net_device *netdev,
+			      struct ethtool_cmd *cmd)
+{
+	struct ethsw_port_priv *port_priv = netdev_priv(netdev);
+	struct dpsw_link_state state = {0};
+	int err = 0;
+
+	err = dpsw_if_get_link_state(port_priv->ethsw_priv->mc_io, 0,
+				     port_priv->ethsw_priv->dpsw_handle,
+				     port_priv->port_index,
+				     &state);
+	if (err) {
+		netdev_err(netdev, "ERROR %d getting link state", err);
+		goto out;
+	}
+
+	/* At the moment, we have no way of interrogating the DPMAC
+	 * from the DPSW side or there may not exist a DPMAC at all.
+	 * Report only autoneg state, duplexity and speed.
+	 */
+	if (state.options & DPSW_LINK_OPT_AUTONEG)
+		cmd->autoneg = AUTONEG_ENABLE;
+	if (!(state.options & DPSW_LINK_OPT_HALF_DUPLEX))
+		cmd->autoneg = DUPLEX_FULL;
+	ethtool_cmd_speed_set(cmd, state.rate);
+
+out:
+	return err;
+}
+
+static int ethsw_set_settings(struct net_device *netdev,
+			      struct ethtool_cmd *cmd)
+{
+	struct ethsw_port_priv *port_priv = netdev_priv(netdev);
+	struct dpsw_link_state state = {0};
+	struct dpsw_link_cfg cfg = {0};
+	int err = 0;
+
+	netdev_dbg(netdev, "Setting link parameters...");
+
+	err = dpsw_if_get_link_state(port_priv->ethsw_priv->mc_io, 0,
+				     port_priv->ethsw_priv->dpsw_handle,
+				     port_priv->port_index,
+				     &state);
+	if (err) {
+		netdev_err(netdev, "ERROR %d getting link state", err);
+		goto out;
+	}
+
+	/* Due to a temporary MC limitation, the DPSW port must be down
+	 * in order to be able to change link settings. Taking steps to let
+	 * the user know that.
+	 */
+	if (netif_running(netdev)) {
+		netdev_info(netdev,
+			    "Sorry, interface must be brought down first.\n");
+		return -EACCES;
+	}
+
+	cfg.options = state.options;
+	cfg.rate = ethtool_cmd_speed(cmd);
+	if (cmd->autoneg == AUTONEG_ENABLE)
+		cfg.options |= DPSW_LINK_OPT_AUTONEG;
+	else
+		cfg.options &= ~DPSW_LINK_OPT_AUTONEG;
+	if (cmd->duplex == DUPLEX_HALF)
+		cfg.options |= DPSW_LINK_OPT_HALF_DUPLEX;
+	else
+		cfg.options &= ~DPSW_LINK_OPT_HALF_DUPLEX;
+
+	err = dpsw_if_set_link_cfg(port_priv->ethsw_priv->mc_io, 0,
+				   port_priv->ethsw_priv->dpsw_handle,
+				   port_priv->port_index,
+				   &cfg);
+	if (err)
+		/* ethtool will be loud enough if we return an error; no point
+		 * in putting our own error message on the console by default
+		 */
+		netdev_dbg(netdev, "ERROR %d setting link cfg", err);
+
+out:
+	return err;
+}
+
 static struct {
 	enum dpsw_counter id;
 	char name[ETH_GSTRING_LEN];
@@ -1251,6 +1361,10 @@ static void ethsw_ethtool_get_stats(struct net_device *netdev,
 }
 
 static const struct ethtool_ops ethsw_port_ethtool_ops = {
+	.get_drvinfo		= &ethsw_get_drvinfo,
+	.get_link		= &ethtool_op_get_link,
+	.get_settings		= &ethsw_get_settings,
+	.set_settings		= &ethsw_set_settings,
 	.get_strings		= &ethsw_ethtool_get_strings,
 	.get_ethtool_stats	= &ethsw_ethtool_get_stats,
 	.get_sset_count		= &ethsw_ethtool_get_sset_count,

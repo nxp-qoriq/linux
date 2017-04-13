@@ -37,6 +37,9 @@
 
 #include "qbman-portal.h"
 
+struct qb_attr_code code_generic_verb = QB_CODE(0, 0, 7);
+struct qb_attr_code code_generic_rslt = QB_CODE(0, 8, 8);
+
 #define QMAN_REV_4000   0x04000000
 #define QMAN_REV_4100   0x04010000
 #define QMAN_REV_4101   0x04010001

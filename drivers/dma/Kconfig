@@ -72,6 +72,7 @@ config AMCC_PPC440SPE_ADMA
 	select DMA_ENGINE_RAID
 	select ARCH_HAS_ASYNC_TX_FIND_CHANNEL
 	select ASYNC_TX_ENABLE_CHANNEL_SWITCH
+	select ARCH_DMA_ADDR_T_64BIT
 	help
 	  Enable support for the AMCC PPC440SPe RAID engines.
 

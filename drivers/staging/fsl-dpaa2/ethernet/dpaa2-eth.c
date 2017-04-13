@@ -315,6 +315,8 @@ static int consume_frames(struct dpaa2_eth_channel *ch)
 		}
 
 		fd = dpaa2_dq_fd(dq);
+		prefetch(fd);
+
 		fq = (struct dpaa2_eth_fq *)dpaa2_dq_fqd_ctx(dq);
 		fq->stats.frames++;
 
@@ -504,6 +506,7 @@ static void free_tx_fd(const struct dpaa2_eth_priv *priv,
 	fd_addr = dpaa2_fd_get_addr(fd);
 	skbh = dpaa2_iova_to_virt(priv->iommu_domain, fd_addr);
 	fas = dpaa2_get_fas(skbh);
+	prefetch(fas);
 
 	if (fd_format == dpaa2_fd_single) {
 		skb = *skbh;

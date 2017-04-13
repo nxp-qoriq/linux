@@ -303,6 +303,14 @@ struct dpaa2_eth_hash_fields {
 /* Driver private data */
 struct dpaa2_eth_priv {
 	struct net_device *net_dev;
+	/* Standard statistics */
+	struct rtnl_link_stats64 __percpu *percpu_stats;
+	/* Extra stats, in addition to the ones known by the kernel */
+	struct dpaa2_eth_drv_stats __percpu *percpu_extras;
+	u16 tx_data_offset;
+	u16 bpid;
+	u16 tx_qdid;
+	struct iommu_domain *iommu_domain;
 
 	u8 num_fqs;
 	struct dpaa2_eth_fq fq[DPAA2_ETH_MAX_QUEUES];
@@ -311,23 +319,13 @@ struct dpaa2_eth_priv {
 	struct dpaa2_eth_channel *channel[DPAA2_ETH_MAX_DPCONS];
 
 	struct dpni_attr dpni_attrs;
-	u16 tx_data_offset;
-
 	struct fsl_mc_device *dpbp_dev;
-	u16 bpid;
-	struct iommu_domain *iommu_domain;
 
-	u16 tx_qdid;
 	struct fsl_mc_io *mc_io;
 	/* Cores which have an affine DPIO/DPCON.
 	 * This is the cpu set on which Rx and Tx conf frames are processed
 	 */
 	struct cpumask dpio_cpumask;
-
-	/* Standard statistics */
-	struct rtnl_link_stats64 __percpu *percpu_stats;
-	/* Extra stats, in addition to the ones known by the kernel */
-	struct dpaa2_eth_drv_stats __percpu *percpu_extras;
 
 	u16 mc_token;
 

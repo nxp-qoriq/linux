@@ -1,0 +1,6 @@
+config FSL_DPAA2_ETHSW
+	tristate "DPAA2 Ethernet Switch"
+	depends on FSL_MC_BUS && FSL_DPAA2
+	default y
+	---help---
+	Prototype driver for DPAA2 Ethernet Switch.

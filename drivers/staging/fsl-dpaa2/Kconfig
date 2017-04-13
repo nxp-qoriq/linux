@@ -1,0 +1,41 @@
+#
+# Freescale DataPath Acceleration Architecture Gen2 (DPAA2) drivers
+#
+
+config FSL_DPAA2
+	bool "Freescale DPAA2 devices"
+	depends on FSL_MC_BUS
+	---help---
+	  Build drivers for Freescale DataPath Acceleration
+	  Architecture (DPAA2) family of SoCs.
+
+config FSL_DPAA2_ETH
+	tristate "Freescale DPAA2 Ethernet"
+	depends on FSL_DPAA2 && FSL_MC_DPIO
+	---help---
+	  Ethernet driver for Freescale DPAA2 SoCs, using the
+	  Freescale MC bus driver
+
+if FSL_DPAA2_ETH
+config FSL_DPAA2_ETH_USE_ERR_QUEUE
+	bool "Enable Rx error queue"
+	default n
+	---help---
+	  Allow Rx error frames to be enqueued on an error queue
+	  and processed by the driver (by default they are dropped
+	  in hardware).
+	  This may impact performance, recommended for debugging
+	  purposes only.
+
+# QBMAN_DEBUG requires some additional DPIO APIs
+config FSL_DPAA2_ETH_DEBUGFS
+	depends on DEBUG_FS && FSL_QBMAN_DEBUG
+	bool "Enable debugfs support"
+	default n
+	---help---
+	  Enable advanced statistics through debugfs interface.
+endif
+
+source "drivers/staging/fsl-dpaa2/mac/Kconfig"
+source "drivers/staging/fsl-dpaa2/evb/Kconfig"
+source "drivers/staging/fsl-dpaa2/ethsw/Kconfig"

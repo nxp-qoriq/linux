@@ -3013,6 +3013,9 @@ static int dpaa2_eth_probe(struct fsl_mc_device *dpni_dev)
 	}
 
 	dpaa2_eth_sysfs_init(&net_dev->dev);
+#ifdef CONFIG_FSL_DPAA2_ETH_DEBUGFS
+	dpaa2_dbg_add(priv);
+#endif
 
 	dev_info(dev, "Probed interface %s\n", net_dev->name);
 	return 0;
@@ -3054,6 +3057,9 @@ static int dpaa2_eth_remove(struct fsl_mc_device *ls_dev)
 	net_dev = dev_get_drvdata(dev);
 	priv = netdev_priv(net_dev);
 
+#ifdef CONFIG_FSL_DPAA2_ETH_DEBUGFS
+	dpaa2_dbg_remove(priv);
+#endif
 	dpaa2_eth_sysfs_remove(&net_dev->dev);
 
 	unregister_netdev(net_dev);
@@ -3105,15 +3111,19 @@ static int __init dpaa2_eth_driver_init(void)
 {
 	int err;
 
+	dpaa2_eth_dbg_init();
 	err = fsl_mc_driver_register(&dpaa2_eth_driver);
-	if (err)
+	if (err) {
+		dpaa2_eth_dbg_exit();
 		return err;
+	}
 
 	return 0;
 }
 
 static void __exit dpaa2_eth_driver_exit(void)
 {
+	dpaa2_eth_dbg_exit();
 	fsl_mc_driver_unregister(&dpaa2_eth_driver);
 }
 

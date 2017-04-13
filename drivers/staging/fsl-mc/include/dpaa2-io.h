@@ -136,6 +136,14 @@ struct dpaa2_io_store *dpaa2_io_store_create(unsigned int max_frames,
 void dpaa2_io_store_destroy(struct dpaa2_io_store *s);
 struct dpaa2_dq *dpaa2_io_store_next(struct dpaa2_io_store *s, int *is_last);
 
+#ifdef CONFIG_FSL_QBMAN_DEBUG
+int dpaa2_io_query_fq_count(struct dpaa2_io *d, uint32_t fqid,
+			   uint32_t *fcnt, uint32_t *bcnt);
+int dpaa2_io_query_bp_count(struct dpaa2_io *d, uint32_t bpid,
+			   uint32_t *num);
+#endif
+
+
 /***************/
 /* CSCN        */
 /***************/

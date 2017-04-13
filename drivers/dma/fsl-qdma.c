@@ -34,14 +34,14 @@
 
 #define FSL_QDMA_DMR			0x0
 #define FSL_QDMA_DSR			0x4
-#define FSL_QDMA_DEIER			0x1e00
-#define FSL_QDMA_DEDR			0x1e04
-#define FSL_QDMA_DECFDW0R		0x1e10
-#define FSL_QDMA_DECFDW1R		0x1e14
-#define FSL_QDMA_DECFDW2R		0x1e18
-#define FSL_QDMA_DECFDW3R		0x1e1c
-#define FSL_QDMA_DECFQIDR		0x1e30
-#define FSL_QDMA_DECBR			0x1e34
+#define FSL_QDMA_DEIER			0xe00
+#define FSL_QDMA_DEDR			0xe04
+#define FSL_QDMA_DECFDW0R		0xe10
+#define FSL_QDMA_DECFDW1R		0xe14
+#define FSL_QDMA_DECFDW2R		0xe18
+#define FSL_QDMA_DECFDW3R		0xe1c
+#define FSL_QDMA_DECFQIDR		0xe30
+#define FSL_QDMA_DECBR			0xe34
 
 #define FSL_QDMA_BCQMR(x)		(0xc0 + 0x100 * (x))
 #define FSL_QDMA_BCQSR(x)		(0xc4 + 0x100 * (x))
@@ -221,6 +221,7 @@ struct fsl_qdma_comp {
 struct fsl_qdma_engine {
 	struct dma_device	dma_dev;
 	void __iomem		*ctrl_base;
+	void __iomem            *status_base;
 	void __iomem		*block_base;
 	u32			n_chans;
 	u32			n_queues;
@@ -714,14 +715,14 @@ static irqreturn_t fsl_qdma_error_handler(int irq, void *dev_id)
 {
 	struct fsl_qdma_engine *fsl_qdma = dev_id;
 	unsigned int intr;
-	void __iomem *ctrl = fsl_qdma->ctrl_base;
+	void __iomem *status = fsl_qdma->status_base;
 
-	intr = qdma_readl(fsl_qdma, ctrl + FSL_QDMA_DEDR);
+	intr = qdma_readl(fsl_qdma, status + FSL_QDMA_DEDR);
 
 	if (intr)
 		dev_err(fsl_qdma->dma_dev.dev, "DMA transaction error!\n");
 
-	qdma_writel(fsl_qdma, 0xffffffff, ctrl + FSL_QDMA_DEDR);
+	qdma_writel(fsl_qdma, 0xffffffff, status + FSL_QDMA_DEDR);
 	return IRQ_HANDLED;
 }
 
@@ -780,6 +781,7 @@ static int fsl_qdma_reg_init(struct fsl_qdma_engine *fsl_qdma)
 	struct fsl_qdma_queue *fsl_queue = fsl_qdma->queue;
 	struct fsl_qdma_queue *temp;
 	void __iomem *ctrl = fsl_qdma->ctrl_base;
+	void __iomem *status = fsl_qdma->status_base;
 	void __iomem *block = fsl_qdma->block_base;
 	int i, ret;
 	u32 reg;
@@ -841,8 +843,8 @@ static int fsl_qdma_reg_init(struct fsl_qdma_engine *fsl_qdma)
 	qdma_writel(fsl_qdma, FSL_QDMA_CQIER_MEIE | FSL_QDMA_CQIER_TEIE,
 			      block + FSL_QDMA_CQIER);
 	/* Initialize controller interrupt register. */
-	qdma_writel(fsl_qdma, 0xffffffff, ctrl + FSL_QDMA_DEDR);
-	qdma_writel(fsl_qdma, 0xffffffff, ctrl + FSL_QDMA_DEIER);
+	qdma_writel(fsl_qdma, 0xffffffff, status + FSL_QDMA_DEDR);
+	qdma_writel(fsl_qdma, 0xffffffff, status + FSL_QDMA_DEIER);
 
 	/* Initialize the status queue mode. */
 	reg = FSL_QDMA_BSQMR_EN;
@@ -1005,6 +1007,11 @@ static int fsl_qdma_probe(struct platform_device *pdev)
 		return PTR_ERR(fsl_qdma->ctrl_base);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	fsl_qdma->status_base = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(fsl_qdma->status_base))
+		return PTR_ERR(fsl_qdma->status_base);
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 2);
 	fsl_qdma->block_base = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(fsl_qdma->block_base))
 		return PTR_ERR(fsl_qdma->block_base);

@@ -1026,7 +1026,7 @@ static int fsl_qdma_probe(struct platform_device *pdev)
 		struct fsl_qdma_chan *fsl_chan = &fsl_qdma->chans[i];
 
 		fsl_chan->qdma = fsl_qdma;
-		fsl_chan->queue = fsl_qdma->queue;
+		fsl_chan->queue = fsl_qdma->queue + i % fsl_qdma->n_queues;
 		fsl_chan->vchan.desc_free = fsl_qdma_free_desc;
 		INIT_LIST_HEAD(&fsl_chan->qcomp);
 		vchan_init(&fsl_chan->vchan, &fsl_qdma->dma_dev);

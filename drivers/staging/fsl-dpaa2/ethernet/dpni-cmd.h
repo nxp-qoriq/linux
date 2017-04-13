@@ -92,6 +92,7 @@
 #define DPNI_CMDID_CLR_FS_ENT				DPNI_CMD(0x246)
 
 #define DPNI_CMDID_GET_STATISTICS			DPNI_CMD(0x25D)
+#define DPNI_CMDID_RESET_STATISTICS			DPNI_CMD(0x25E)
 #define DPNI_CMDID_GET_QUEUE				DPNI_CMD(0x25F)
 #define DPNI_CMDID_SET_QUEUE				DPNI_CMD(0x260)
 #define DPNI_CMDID_GET_TAILDROP				DPNI_CMD(0x261)
@@ -335,6 +336,14 @@ struct dpni_rsp_get_link_state {
 	__le64 options;
 };
 
+struct dpni_cmd_set_tx_shaping {
+	/* cmd word 0 */
+	__le16 max_burst_size;
+	__le16 pad0[3];
+	/* cmd word 1 */
+	__le32 rate_limit;
+};
+
 struct dpni_cmd_set_max_frame_length {
 	__le16 max_frame_length;
 };
@@ -503,6 +512,33 @@ struct dpni_cmd_set_queue {
 	__le64 user_context;
 };
 
+struct dpni_cmd_add_fs_entry {
+	/* cmd word 0 */
+	u16 options;
+	u8 tc_id;
+	u8 key_size;
+	u16 index;
+	u16 flow_id;
+	/* cmd word 1 */
+	u64 key_iova;
+	/* cmd word 2 */
+	u64 mask_iova;
+	/* cmd word 3 */
+	u64 flc;
+};
+
+struct dpni_cmd_remove_fs_entry {
+	/* cmd word 0 */
+	__le16 pad0;
+	u8 tc_id;
+	u8 key_size;
+	__le32 pad1;
+	/* cmd word 1 */
+	u64 key_iova;
+	/* cmd word 2 */
+	u64 mask_iova;
+};
+
 struct dpni_cmd_set_taildrop {
 	/* cmd word 0 */
 	u8 congestion_point;
@@ -536,6 +572,31 @@ struct dpni_rsp_get_taildrop {
 	u8 units;
 	u8 pad2;
 	__le32 threshold;
+};
+
+#define DPNI_DEST_TYPE_SHIFT		0
+#define DPNI_DEST_TYPE_SIZE		4
+#define DPNI_CONG_UNITS_SHIFT		4
+#define DPNI_CONG_UNITS_SIZE		2
+
+struct dpni_cmd_set_congestion_notification {
+	/* cmd word 0 */
+	u8 qtype;
+	u8 tc;
+	u8 pad[6];
+	/* cmd word 1 */
+	u32 dest_id;
+	u16 notification_mode;
+	u8 dest_priority;
+	/* from LSB: dest_type: 4 units:2 */
+	u8 type_units;
+	/* cmd word 2 */
+	u64 message_iova;
+	/* cmd word 3 */
+	u64 message_ctx;
+	/* cmd word 4 */
+	u32 threshold_entry;
+	u32 threshold_exit;
 };
 
 #endif /* _FSL_DPNI_CMD_H */

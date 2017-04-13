@@ -489,6 +489,10 @@ int dpni_get_statistics(struct fsl_mc_io	*mc_io,
 			u8			page,
 			union dpni_statistics	*stat);
 
+int dpni_reset_statistics(struct fsl_mc_io *mc_io,
+			  u32 cmd_flags,
+			  u16 token);
+
 /**
  * Enable auto-negotiation
  */
@@ -537,6 +541,21 @@ int dpni_get_link_state(struct fsl_mc_io	*mc_io,
 			u32			cmd_flags,
 			u16			token,
 			struct dpni_link_state	*state);
+
+/**
+ * struct dpni_tx_shaping - Structure representing DPNI tx shaping configuration
+ * @rate_limit: rate in Mbps
+ * @max_burst_size: burst size in bytes (up to 64KB)
+ */
+struct dpni_tx_shaping_cfg {
+	u32     rate_limit;
+	u16     max_burst_size;
+};
+
+int dpni_set_tx_shaping(struct fsl_mc_io                       *mc_io,
+			u32                                     cmd_flags,
+			u16                                     token,
+			const struct dpni_tx_shaping_cfg        *tx_shaper);
 
 int dpni_set_max_frame_length(struct fsl_mc_io	*mc_io,
 			      u32		cmd_flags,
@@ -784,6 +803,87 @@ enum dpni_congestion_point {
 };
 
 /**
+ * struct dpni_dest_cfg - Structure representing DPNI destination parameters
+ * @dest_type: Destination type
+ * @dest_id: Either DPIO ID or DPCON ID, depending on the destination type
+ * @priority: Priority selection within the DPIO or DPCON channel; valid values
+ *		are 0-1 or 0-7, depending on the number of priorities in that
+ *		channel; not relevant for 'DPNI_DEST_NONE' option
+ */
+struct dpni_dest_cfg {
+	enum dpni_dest dest_type;
+	int dest_id;
+	u8 priority;
+};
+
+/* DPNI congestion options */
+
+/**
+ * CSCN message is written to message_iova once entering a
+ * congestion state (see 'threshold_entry')
+ */
+#define DPNI_CONG_OPT_WRITE_MEM_ON_ENTER	0x00000001
+/**
+ * CSCN message is written to message_iova once exiting a
+ * congestion state (see 'threshold_exit')
+ */
+#define DPNI_CONG_OPT_WRITE_MEM_ON_EXIT		0x00000002
+/**
+ * CSCN write will attempt to allocate into a cache (coherent write);
+ * valid only if 'DPNI_CONG_OPT_WRITE_MEM_<X>' is selected
+ */
+#define DPNI_CONG_OPT_COHERENT_WRITE		0x00000004
+/**
+ * if 'dest_cfg.dest_type != DPNI_DEST_NONE' CSCN message is sent to
+ * DPIO/DPCON's WQ channel once entering a congestion state
+ * (see 'threshold_entry')
+ */
+#define DPNI_CONG_OPT_NOTIFY_DEST_ON_ENTER	0x00000008
+/**
+ * if 'dest_cfg.dest_type != DPNI_DEST_NONE' CSCN message is sent to
+ * DPIO/DPCON's WQ channel once exiting a congestion state
+ * (see 'threshold_exit')
+ */
+#define DPNI_CONG_OPT_NOTIFY_DEST_ON_EXIT	0x00000010
+/**
+ * if 'dest_cfg.dest_type != DPNI_DEST_NONE' when the CSCN is written to the
+ * sw-portal's DQRR, the DQRI interrupt is asserted immediately (if enabled)
+ */
+#define DPNI_CONG_OPT_INTR_COALESCING_DISABLED	0x00000020
+
+/**
+ * struct dpni_congestion_notification_cfg - congestion notification
+ *		configuration
+ * @units: units type
+ * @threshold_entry: above this threshold we enter a congestion state.
+ *	set it to '0' to disable it
+ * @threshold_exit: below this threshold we exit the congestion state.
+ * @message_ctx: The context that will be part of the CSCN message
+ * @message_iova: I/O virtual address (must be in DMA-able memory),
+ *	must be 16B aligned; valid only if 'DPNI_CONG_OPT_WRITE_MEM_<X>' is
+ *	contained in 'options'
+ * @dest_cfg: CSCN can be send to either DPIO or DPCON WQ channel
+ * @notification_mode: Mask of available options; use 'DPNI_CONG_OPT_<X>' values
+ */
+
+struct dpni_congestion_notification_cfg {
+	enum dpni_congestion_unit units;
+	u32 threshold_entry;
+	u32 threshold_exit;
+	u64 message_ctx;
+	u64 message_iova;
+	struct dpni_dest_cfg dest_cfg;
+	u16 notification_mode;
+};
+
+int dpni_set_congestion_notification(struct fsl_mc_io *mc_io,
+			u32 cmd_flags,
+			u16 token,
+			enum dpni_queue_type qtype,
+			u8 tc_id,
+			const struct dpni_congestion_notification_cfg *cfg);
+
+/**
  * struct dpni_taildrop - Structure representing the taildrop
  * @enable:	Indicates whether the taildrop is active or not.
  * @units:	Indicates the unit of THRESHOLD. Queue taildrop only supports
@@ -828,5 +928,62 @@ struct dpni_rule_cfg {
 	u64	mask_iova;
 	u8	key_size;
 };
+
+/**
+ * Discard matching traffic.  If set, this takes precedence over any other
+ * configuration and matching traffic is always discarded.
+ */
+ #define DPNI_FS_OPT_DISCARD            0x1
+
+/**
+ * Set FLC value.  If set, flc member of truct dpni_fs_action_cfg is used to
+ * override the FLC value set per queue.
+ * For more details check the Frame Descriptor section in the hardware
+ * documentation.
+ */
+#define DPNI_FS_OPT_SET_FLC            0x2
+
+/*
+ * Indicates whether the 6 lowest significant bits of FLC are used for stash
+ * control.  If set, the 6 least significant bits in value are interpreted as
+ * follows:
+ *     - bits 0-1: indicates the number of 64 byte units of context that are
+ *     stashed.  FLC value is interpreted as a memory address in this case,
+ *     excluding the 6 LS bits.
+ *     - bits 2-3: indicates the number of 64 byte units of frame annotation
+ *     to be stashed.  Annotation is placed at FD[ADDR].
+ *     - bits 4-5: indicates the number of 64 byte units of frame data to be
+ *     stashed.  Frame data is placed at FD[ADDR] + FD[OFFSET].
+ * This flag is ignored if DPNI_FS_OPT_SET_FLC is not specified.
+ */
+#define DPNI_FS_OPT_SET_STASH_CONTROL  0x4
+
+/**
+ * struct dpni_fs_action_cfg - Action configuration for table look-up
+ * @flc: FLC value for traffic matching this rule.  Please check the Frame
+ * Descriptor section in the hardware documentation for more information.
+ * @flow_id: Identifies the Rx queue used for matching traffic.  Supported
+ *     values are in range 0 to num_queue-1.
+ * @options: Any combination of DPNI_FS_OPT_ values.
+ */
+struct dpni_fs_action_cfg {
+	u64 flc;
+	u16 flow_id;
+	u16 options;
+};
+
+int dpni_add_fs_entry(struct fsl_mc_io *mc_io,
+		      u32 cmd_flags,
+		      u16 token,
+		      u8 tc_id,
+		      u16 index,
+		      const struct dpni_rule_cfg *cfg,
+		      const struct dpni_fs_action_cfg *action);
+
+int dpni_remove_fs_entry(struct fsl_mc_io *mc_io,
+			 u32 cmd_flags,
+			 u16 token,
+			 u8 tc_id,
+			 const struct dpni_rule_cfg *cfg);
 
 #endif /* __FSL_DPNI_H */

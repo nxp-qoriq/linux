@@ -33,8 +33,6 @@
 #ifndef _FSL_DPNI_CMD_H
 #define _FSL_DPNI_CMD_H
 
-#include "dpni.h"
-
 /* DPNI Version */
 #define DPNI_VER_MAJOR				7
 #define DPNI_VER_MINOR				0

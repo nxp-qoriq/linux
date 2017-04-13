@@ -31,3 +31,10 @@ config FSL_QBMAN_DEBUG
 	depends on FSL_MC_DPIO
 	help
 	  QBMan debug assistant APIs.
+
+config FSL_MC_RESTOOL
+        tristate "Freescale Management Complex (MC) restool driver"
+        depends on FSL_MC_BUS
+        help
+          Driver that provides kernel support for the Freescale Management
+          Complex resource manager user-space tool.

@@ -75,6 +75,14 @@ static char dpaa2_ethtool_extras[][ETH_GSTRING_LEN] = {
 	/* Number of notifications received */
 	"cdan",
 	"tx congestion state",
+#ifdef CONFIG_FSL_QBMAN_DEBUG
+	/* FQ stats */
+	"rx pending frames",
+	"rx pending bytes",
+	"tx conf pending frames",
+	"tx conf pending bytes",
+	"buffer count"
+#endif
 };
 
 #define DPAA2_ETH_NUM_EXTRA_STATS	ARRAY_SIZE(dpaa2_ethtool_extras)
@@ -271,6 +279,12 @@ static void dpaa2_eth_get_ethtool_stats(struct net_device *net_dev,
 	int j = 0, k, err;
 	union dpni_statistics dpni_stats;
 
+#ifdef CONFIG_FSL_QBMAN_DEBUG
+	u32 fcnt, bcnt;
+	u32 fcnt_rx_total = 0, fcnt_tx_total = 0;
+	u32 bcnt_rx_total = 0, bcnt_tx_total = 0;
+	u32 buf_cnt;
+#endif
 	u64 cdan = 0;
 	u64 portal_busy = 0, pull_err = 0;
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
@@ -339,6 +353,38 @@ static void dpaa2_eth_get_ethtool_stats(struct net_device *net_dev,
 	*(data + i++) = cdan;
 
 	*(data + i++) = dpaa2_cscn_state_congested(priv->cscn_mem);
+
+#ifdef CONFIG_FSL_QBMAN_DEBUG
+	for (j = 0; j < priv->num_fqs; j++) {
+		/* Print FQ instantaneous counts */
+		err = dpaa2_io_query_fq_count(NULL, priv->fq[j].fqid,
+					      &fcnt, &bcnt);
+		if (err) {
+			netdev_warn(net_dev, "FQ query error %d", err);
+			return;
+		}
+
+		if (priv->fq[j].type == DPAA2_TX_CONF_FQ) {
+			fcnt_tx_total += fcnt;
+			bcnt_tx_total += bcnt;
+		} else {
+			fcnt_rx_total += fcnt;
+			bcnt_rx_total += bcnt;
+		}
+	}
+
+	*(data + i++) = fcnt_rx_total;
+	*(data + i++) = bcnt_rx_total;
+	*(data + i++) = fcnt_tx_total;
+	*(data + i++) = bcnt_tx_total;
+
+	err = dpaa2_io_query_bp_count(NULL, priv->bpid, &buf_cnt);
+	if (err) {
+		netdev_warn(net_dev, "Buffer count query error %d\n", err);
+		return;
+	}
+	*(data + i++) = buf_cnt;
+#endif
 }
 
 static int cls_key_off(struct dpaa2_eth_priv *priv, int prot, int field)

@@ -39,6 +39,8 @@
 #include "dpni.h"
 #include "net.h"
 
+#include "dpaa2-eth-debugfs.h"
+
 #define DPAA2_ETH_STORE_SIZE		16
 
 /* We set a max threshold for how many Tx confirmations we should process
@@ -423,6 +425,10 @@ struct dpaa2_eth_priv {
 	u8 num_hash_fields;
 	/* enabled ethtool hashing bits */
 	u64 rx_flow_hash;
+
+#ifdef CONFIG_FSL_DPAA2_ETH_DEBUGFS
+	struct dpaa2_debugfs dbg;
+#endif
 
 	/* array of classification rules */
 	struct dpaa2_eth_cls_rule *cls_rule;

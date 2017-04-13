@@ -60,6 +60,11 @@
 /* Convert L3 MTU to L2 MFL */
 #define DPAA2_ETH_L2_MAX_FRM(mtu)	((mtu) + VLAN_ETH_HLEN)
 
+/* Maximum number of buffers that can be acquired/released through a single
+ * QBMan command
+ */
+#define DPAA2_ETH_BUFS_PER_CMD		7
+
 /* Set the taildrop threshold (in bytes) to allow the enqueue of several jumbo
  * frames in the Rx queues (length of the current frame is not
  * taken into account when making the taildrop decision)
@@ -73,12 +78,8 @@
  */
 #define DPAA2_ETH_MAX_FRAMES_PER_QUEUE	(DPAA2_ETH_TAILDROP_THRESH / 64)
 #define DPAA2_ETH_NUM_BUFS		(DPAA2_ETH_MAX_FRAMES_PER_QUEUE + 256)
-#define DPAA2_ETH_REFILL_THRESH		DPAA2_ETH_MAX_FRAMES_PER_QUEUE
-
-/* Maximum number of buffers that can be acquired/released through a single
- * QBMan command
- */
-#define DPAA2_ETH_BUFS_PER_CMD		7
+#define DPAA2_ETH_REFILL_THRESH	\
+	(DPAA2_ETH_NUM_BUFS - DPAA2_ETH_BUFS_PER_CMD)
 
 /* Hardware requires alignment for ingress/egress buffer addresses
  * and ingress buffer lengths.

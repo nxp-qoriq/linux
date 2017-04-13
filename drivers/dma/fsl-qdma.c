@@ -62,6 +62,7 @@
 #define FSL_QDMA_CQDSCR2                0xa0c
 #define FSL_QDMA_CQIER			0xa10
 #define FSL_QDMA_CQEDR			0xa14
+#define FSL_QDMA_SQCCMR			0xa20
 
 #define FSL_QDMA_SQICR_ICEN
 
@@ -75,6 +76,7 @@
 #define FSL_QDMA_BSQICR_ICST(x)		((x) << 16)
 #define FSL_QDMA_CQIER_MEIE		0x80000000
 #define FSL_QDMA_CQIER_TEIE		0x1
+#define FSL_QDMA_SQCCMR_ENTER_WM	0x200000
 
 #define FSL_QDMA_QUEUE_MAX		8
 
@@ -814,6 +816,13 @@ static int fsl_qdma_reg_init(struct fsl_qdma_engine *fsl_qdma)
 		qdma_writel(fsl_qdma, reg, block + FSL_QDMA_BCQMR(i));
 	}
 
+	/*
+	 * Workaround for erratum: ERR010812.
+	 * We must enable XOFF to avoid the enqueue rejection occurs.
+	 * Setting SQCCMR ENTER_WM to 0x20.
+	 */
+	qdma_writel(fsl_qdma, FSL_QDMA_SQCCMR_ENTER_WM,
+			      block + FSL_QDMA_SQCCMR);
 	/*
 	 * Initialize status queue registers to point to the first
 	 * command descriptor in memory.

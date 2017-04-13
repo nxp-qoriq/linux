@@ -176,26 +176,6 @@ struct fsl_qdma_ddf {
 	u32 cmd;
 } __packed;
 
-struct fsl_qdma_tcd {
-	u16	saddr_high;
-	u32	saddr;
-	u32	nbytes;
-	u16	daddr_high;
-	u32	daddr;
-};
-
-struct fsl_qdma_sw_tcd {
-	dma_addr_t			ptcd;
-	struct fsl_qdma_tcd		*tcd;
-};
-
-struct fsl_qdma_chan_config {
-	enum dma_transfer_direction	dir;
-	enum dma_slave_buswidth		addr_width;
-	u32				burst;
-	u32				attr;
-};
-
 struct fsl_qdma_chan {
 	struct virt_dma_chan		vchan;
 	struct virt_dma_desc		vdesc;
@@ -301,7 +281,7 @@ static void fsl_qdma_free_chan_resources(struct dma_chan *chan)
 }
 
 static void fsl_qdma_comp_fill_memcpy(struct fsl_qdma_comp *fsl_comp,
-					u32 dst, u32 src, u32 len)
+					dma_addr_t dst, dma_addr_t src, u32 len)
 {
 	struct fsl_qdma_ccdf *ccdf;
 	struct fsl_qdma_csgf *csgf_desc, *csgf_src, *csgf_dest;
@@ -347,8 +327,8 @@ static void fsl_qdma_comp_fill_sg(
 	struct fsl_qdma_ddf *ddf;
 	struct fsl_qdma_sg *sg_block, *temp;
 	struct scatterlist *sg;
-	u32 total_src_len = 0;
-	u32 total_dst_len = 0;
+	u64 total_src_len = 0;
+	u64 total_dst_len = 0;
 	u32 i;
 
 	ccdf = (struct fsl_qdma_ccdf *)fsl_comp->virt_addr;
@@ -671,13 +651,14 @@ static void fsl_qdma_queue_transfer_complete(struct fsl_qdma_engine *fsl_qdma)
 	struct fsl_qdma_queue *fsl_status = fsl_qdma->status;
 	struct fsl_qdma_queue *temp_queue;
 	struct fsl_qdma_comp *fsl_comp;
+	struct fsl_qdma_ccdf *status_addr;
 	void __iomem *ctrl = fsl_qdma->ctrl_base;
 	void __iomem *block = fsl_qdma->block_base;
 	u32 reg, i;
-	u32 *status_addr;
+
 
 	while (1) {
-		status_addr = (u32 *)fsl_status->virt_head++;
+		status_addr = fsl_status->virt_head++;
 		if (fsl_status->virt_head == fsl_status->cq + fsl_status->n_cq)
 			fsl_status->virt_head = fsl_status->cq;
 		/*
@@ -691,7 +672,8 @@ static void fsl_qdma_queue_transfer_complete(struct fsl_qdma_engine *fsl_qdma)
 			fsl_comp = list_first_entry(&temp_queue->comp_used,
 							struct fsl_qdma_comp,
 							list);
-			if (fsl_comp->bus_addr + 16 != *(u32 *)(status_addr+2))
+			if (fsl_comp->bus_addr + 16 !=
+						(dma_addr_t)status_addr->addr)
 				continue;
 			spin_lock(&temp_queue->queue_lock);
 			list_del(&fsl_comp->list);

@@ -25,3 +25,9 @@ config FSL_MC_DPIO
 	  other DPAA2 objects. This driver does not expose the DPIO
 	  objects individually, but groups them under a service layer
 	  API.
+
+config FSL_QBMAN_DEBUG
+	tristate "Freescale QBMAN Debug APIs"
+	depends on FSL_MC_DPIO
+	help
+	  QBMan debug assistant APIs.

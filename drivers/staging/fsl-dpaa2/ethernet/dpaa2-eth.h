@@ -86,7 +86,12 @@
  */
 #define DPAA2_ETH_RX_BUF_SIZE		2048
 #define DPAA2_ETH_TX_BUF_ALIGN		64
-#define DPAA2_ETH_RX_BUF_ALIGN		256
+/* Due to a limitation in WRIOP 1.0.0, the RX buffer data must be aligned
+ * to 256B. For newer revisions, the requirement is only for 64B alignment
+ */
+#define DPAA2_ETH_RX_BUF_ALIGN_REV1	256
+#define DPAA2_ETH_RX_BUF_ALIGN		64
+
 #define DPAA2_ETH_NEEDED_HEADROOM(p_priv) \
 	((p_priv)->tx_data_offset + DPAA2_ETH_TX_BUF_ALIGN)
 
@@ -94,10 +99,10 @@
  * buffers large enough to allow building an skb around them and also account
  * for alignment restrictions
  */
-#define DPAA2_ETH_BUF_RAW_SIZE \
+#define DPAA2_ETH_BUF_RAW_SIZE(priv) \
 	(DPAA2_ETH_RX_BUF_SIZE + \
 	SKB_DATA_ALIGN(sizeof(struct skb_shared_info)) + \
-	DPAA2_ETH_RX_BUF_ALIGN)
+	(priv)->rx_buf_align)
 
 /* We are accommodating a skb backpointer and some S/G info
  * in the frame's software annotation. The hardware
@@ -311,6 +316,7 @@ struct dpaa2_eth_priv {
 	u16 tx_data_offset;
 	u16 bpid;
 	u16 tx_qdid;
+	u16 rx_buf_align;
 	struct iommu_domain *iommu_domain;
 
 	u8 num_fqs;

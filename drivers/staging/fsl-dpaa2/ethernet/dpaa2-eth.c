@@ -743,11 +743,11 @@ static int add_bufs(struct dpaa2_eth_priv *priv, u16 bpid)
 		/* Allocate buffer visible to WRIOP + skb shared info +
 		 * alignment padding
 		 */
-		buf = napi_alloc_frag(DPAA2_ETH_BUF_RAW_SIZE);
+		buf = napi_alloc_frag(DPAA2_ETH_BUF_RAW_SIZE(priv));
 		if (unlikely(!buf))
 			goto err_alloc;
 
-		buf = PTR_ALIGN(buf, DPAA2_ETH_RX_BUF_ALIGN);
+		buf = PTR_ALIGN(buf, priv->rx_buf_align);
 
 		addr = dma_map_single(dev, buf, DPAA2_ETH_RX_BUF_SIZE,
 				      DMA_FROM_DEVICE);
@@ -758,7 +758,7 @@ static int add_bufs(struct dpaa2_eth_priv *priv, u16 bpid)
 
 		/* tracing point */
 		trace_dpaa2_eth_buf_seed(priv->net_dev,
-					 buf, DPAA2_ETH_BUF_RAW_SIZE,
+					 buf, DPAA2_ETH_BUF_RAW_SIZE(priv),
 					 addr, DPAA2_ETH_RX_BUF_SIZE,
 					 bpid);
 	}
@@ -1794,12 +1794,20 @@ static int setup_dpni(struct fsl_mc_device *ls_dev)
 		goto err_get_attr;
 	}
 
+	/* We need to check for WRIOP version 1.0.0, but MC does not provide
+	 * this number correctly on rev1, so only read the last two digits;
+	 * if they're zero, we're on rev1, otherwise rev2 or above.
+	 */
+	priv->rx_buf_align = priv->dpni_attrs.wriop_version & 0x3FF ?
+			     DPAA2_ETH_RX_BUF_ALIGN :
+			     DPAA2_ETH_RX_BUF_ALIGN_REV1;
+
 	/* Configure buffer layouts */
 	/* rx buffer */
 	buf_layout.pass_parser_result = true;
 	buf_layout.pass_frame_status = true;
 	buf_layout.private_data_size = DPAA2_ETH_SWA_SIZE;
-	buf_layout.data_align = DPAA2_ETH_RX_BUF_ALIGN;
+	buf_layout.data_align = priv->rx_buf_align;
 	buf_layout.options = DPNI_BUF_LAYOUT_OPT_PARSER_RESULT |
 			     DPNI_BUF_LAYOUT_OPT_FRAME_STATUS |
 			     DPNI_BUF_LAYOUT_OPT_PRIVATE_DATA_SIZE |

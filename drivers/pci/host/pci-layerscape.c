@@ -35,6 +35,10 @@
 #define PCIE_STRFMR1		0x71c /* Symbol Timer & Filter Mask Register1 */
 #define PCIE_DBI_RO_WR_EN	0x8bc /* DBI Read-Only Write Enable Register */
 
+#define PCIE_IATU_NUM		6
+
+static void ls_pcie_host_init(struct pcie_port *pp);
+
 struct ls_pcie_drvdata {
 	u32 lut_offset;
 	u32 ltssm_shift;
@@ -83,6 +87,14 @@ static void ls_pcie_drop_msg_tlp(struct ls_pcie *pcie)
 	val = ioread32(pcie->dbi + PCIE_STRFMR1);
 	val &= 0xDFFFFFFF;
 	iowrite32(val, pcie->dbi + PCIE_STRFMR1);
+}
+
+static void ls_pcie_disable_outbound_atus(struct ls_pcie *pcie)
+{
+	int i;
+
+	for (i = 0; i < PCIE_IATU_NUM; i++)
+		dw_pcie_disable_outbound_atu(&pcie->pp, i);
 }
 
 static int ls1021_pcie_link_up(struct pcie_port *pp)
@@ -151,6 +163,9 @@ static void ls_pcie_host_init(struct pcie_port *pp)
 	ls_pcie_clear_multifunction(pcie);
 	ls_pcie_drop_msg_tlp(pcie);
 	iowrite32(0, pcie->dbi + PCIE_DBI_RO_WR_EN);
+
+	ls_pcie_disable_outbound_atus(pcie);
+	dw_pcie_setup_rc(pp);
 }
 
 static int ls_pcie_msi_host_init(struct pcie_port *pp,

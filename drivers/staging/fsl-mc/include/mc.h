@@ -198,4 +198,7 @@ int __must_check fsl_mc_allocate_irqs(struct fsl_mc_device *mc_dev);
 
 void fsl_mc_free_irqs(struct fsl_mc_device *mc_dev);
 
+void fsl_mc_dma_configure(struct fsl_mc_device *mc_dev,
+	struct device_node *fsl_mc_platform_node, int coherent);
+
 #endif /* _FSL_MC_H_ */

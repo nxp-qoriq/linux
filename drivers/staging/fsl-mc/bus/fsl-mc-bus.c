@@ -521,6 +521,8 @@ int fsl_mc_device_add(struct dprc_obj_desc *obj_desc,
 	struct fsl_mc_device *mc_dev = NULL;
 	struct fsl_mc_bus *mc_bus = NULL;
 	struct fsl_mc_device *parent_mc_dev;
+	struct device *fsl_mc_platform_dev;
+	struct device_node *fsl_mc_platform_node;
 
 	if (dev_is_fsl_mc(parent_dev))
 		parent_mc_dev = to_fsl_mc_device(parent_dev);
@@ -613,9 +615,14 @@ int fsl_mc_device_add(struct dprc_obj_desc *obj_desc,
 			goto error_cleanup_dev;
 	}
 
-	/* Objects are coherent, unless 'no shareability' flag set. */
-	if (!(obj_desc->flags & DPRC_OBJ_FLAG_NO_MEM_SHAREABILITY))
-		arch_setup_dma_ops(&mc_dev->dev, 0, 0, NULL, true);
+	fsl_mc_platform_dev = &mc_dev->dev;
+	while (dev_is_fsl_mc(fsl_mc_platform_dev))
+		fsl_mc_platform_dev = fsl_mc_platform_dev->parent;
+	fsl_mc_platform_node = fsl_mc_platform_dev->of_node;
+
+	/* Set up the iommu configuration for the devices. */
+	fsl_mc_dma_configure(mc_dev, fsl_mc_platform_node,
+		!(obj_desc->flags & DPRC_OBJ_FLAG_NO_MEM_SHAREABILITY));
 
 	/*
 	 * The device-specific probe callback will get invoked by device_add()
@@ -656,6 +663,10 @@ void fsl_mc_device_remove(struct fsl_mc_device *mc_dev)
 	 * The device-specific remove callback will get invoked by device_del()
 	 */
 	device_del(&mc_dev->dev);
+
+	if (strcmp(mc_dev->obj_desc.type, "dprc") != 0)
+		mc_dev->dev.iommu_fwspec = NULL;
+
 	put_device(&mc_dev->dev);
 }
 EXPORT_SYMBOL_GPL(fsl_mc_device_remove);

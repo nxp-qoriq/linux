@@ -104,6 +104,7 @@
 #define FSL_QDMA_QUEUE_NUM_MAX		8
 
 #define FSL_QDMA_CMD_RWTTYPE		0x4
+#define FSL_QDMA_CMD_LWC                0x2
 
 #define FSL_QDMA_CMD_RWTTYPE_OFFSET	28
 #define FSL_QDMA_CMD_NS_OFFSET		27
@@ -320,6 +321,7 @@ static void fsl_qdma_comp_fill_memcpy(struct fsl_qdma_comp *fsl_comp,
 	/* Descriptor Buffer */
 	sdf->cmd = FSL_QDMA_CMD_RWTTYPE << FSL_QDMA_CMD_RWTTYPE_OFFSET;
 	ddf->cmd = FSL_QDMA_CMD_RWTTYPE << FSL_QDMA_CMD_RWTTYPE_OFFSET;
+	ddf->cmd |= FSL_QDMA_CMD_LWC << FSL_QDMA_CMD_LWC_OFFSET;
 }
 
 static void fsl_qdma_comp_fill_sg(

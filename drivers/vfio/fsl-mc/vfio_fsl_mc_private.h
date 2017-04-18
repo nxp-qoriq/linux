@@ -21,6 +21,11 @@
 #define VFIO_FSL_MC_INDEX_TO_OFFSET(index)	\
 	((u64)(index) << VFIO_FSL_MC_OFFSET_SHIFT)
 
+struct vfio_fsl_mc_irq {
+	u32			flags;
+	u32			count;
+};
+
 struct vfio_fsl_mc_region {
 	u32			flags;
 #define VFIO_FSL_MC_REGION_TYPE_MMIO  1
@@ -35,6 +40,9 @@ struct vfio_fsl_mc_device {
 	int				refcnt;
 	u32				num_regions;
 	struct vfio_fsl_mc_region	*regions;
+	struct vfio_fsl_mc_irq		*mc_irqs;
 };
 
+int vfio_fsl_mc_irqs_init(struct vfio_fsl_mc_device *vdev);
+void vfio_fsl_mc_irqs_cleanup(struct vfio_fsl_mc_device *vdev);
 #endif /* VFIO_PCI_PRIVATE_H */

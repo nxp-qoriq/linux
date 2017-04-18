@@ -513,5 +513,12 @@
 			dma-coherent;
 			status = "disabled";
 		};
+
+		msi: msi-controller1@1572000 {
+			compatible = "fsl,ls1012a-msi";
+			reg = <0x0 0x1572000 0x0 0x8>;
+			msi-controller;
+			interrupts = <0 126 IRQ_TYPE_LEVEL_HIGH>;
+		};
 	};
 };

@@ -61,7 +61,7 @@ static int vfio_fsl_mc_regions_init(struct vfio_fsl_mc_device *vdev)
 		if (mc_dev->regions[i].flags & IORESOURCE_CACHEABLE)
 			vdev->regions[i].type |=
 					VFIO_FSL_MC_REGION_TYPE_CACHEABLE;
-		vdev->regions[i].flags = 0;
+		vdev->regions[i].flags = VFIO_REGION_INFO_FLAG_MMAP;
 	}
 
 	vdev->num_regions = mc_dev->obj_desc.region_count;
@@ -195,9 +195,75 @@ static ssize_t vfio_fsl_mc_write(void *device_data, const char __user *buf,
 	return -EINVAL;
 }
 
+static int vfio_fsl_mc_mmap_mmio(struct vfio_fsl_mc_region region,
+				 struct vm_area_struct *vma)
+{
+	u64 size = vma->vm_end - vma->vm_start;
+	u64 pgoff, base;
+
+	pgoff = vma->vm_pgoff &
+		((1U << (VFIO_FSL_MC_OFFSET_SHIFT - PAGE_SHIFT)) - 1);
+	base = pgoff << PAGE_SHIFT;
+
+	if (region.size < PAGE_SIZE || base + size > region.size)
+		return -EINVAL;
+	/*
+	 * Set the REGION_TYPE_CACHEABLE (QBman CENA regs) to be the
+	 * cache inhibited area of the portal to avoid coherency issues
+	 * if a user migrates to another core.
+	 */
+	if (region.type & VFIO_FSL_MC_REGION_TYPE_CACHEABLE)
+		vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
+	else
+		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+
+	vma->vm_pgoff = (region.addr >> PAGE_SHIFT) + pgoff;
+
+	return remap_pfn_range(vma, vma->vm_start, vma->vm_pgoff,
+			       size, vma->vm_page_prot);
+}
+
+/* Allows mmaping fsl_mc device regions in assigned DPRC */
 static int vfio_fsl_mc_mmap(void *device_data, struct vm_area_struct *vma)
 {
-	return -EINVAL;
+	struct vfio_fsl_mc_device *vdev = device_data;
+	struct fsl_mc_device *mc_dev = vdev->mc_dev;
+	unsigned long size, addr;
+	int index;
+
+	index = vma->vm_pgoff >> (VFIO_FSL_MC_OFFSET_SHIFT - PAGE_SHIFT);
+
+	if (vma->vm_end < vma->vm_start)
+		return -EINVAL;
+	if (vma->vm_start & ~PAGE_MASK)
+		return -EINVAL;
+	if (vma->vm_end & ~PAGE_MASK)
+		return -EINVAL;
+	if (!(vma->vm_flags & VM_SHARED))
+		return -EINVAL;
+	if (index >= vdev->num_regions)
+		return -EINVAL;
+
+	if (!(vdev->regions[index].flags & VFIO_REGION_INFO_FLAG_MMAP))
+		return -EINVAL;
+
+	if (!(vdev->regions[index].flags & VFIO_REGION_INFO_FLAG_READ)
+			&& (vma->vm_flags & VM_READ))
+		return -EINVAL;
+
+	if (!(vdev->regions[index].flags & VFIO_REGION_INFO_FLAG_WRITE)
+			&& (vma->vm_flags & VM_WRITE))
+		return -EINVAL;
+
+	addr = vdev->regions[index].addr;
+	size = vdev->regions[index].size;
+
+	vma->vm_private_data = mc_dev;
+
+	if (vdev->regions[index].type & VFIO_FSL_MC_REGION_TYPE_MMIO)
+		return vfio_fsl_mc_mmap_mmio(vdev->regions[index], vma);
+
+	return -EFAULT;
 }
 
 static const struct vfio_device_ops vfio_fsl_mc_ops = {

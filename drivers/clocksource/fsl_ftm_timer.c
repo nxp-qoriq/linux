@@ -83,11 +83,11 @@ static inline void ftm_counter_disable(void __iomem *base)
 
 static inline void ftm_irq_acknowledge(void __iomem *base)
 {
-	u32 val;
+	unsigned int timeout = 100;
 
-	val = ftm_readl(base + FTM_SC);
-	val &= ~FTM_SC_TOF;
-	ftm_writel(val, base + FTM_SC);
+	while ((FTM_SC_TOF & ftm_readl(base + FTM_SC)) && timeout--)
+		ftm_writel(ftm_readl(base + FTM_SC) & (~FTM_SC_TOF),
+			   base + FTM_SC);
 }
 
 static inline void ftm_irq_enable(void __iomem *base)

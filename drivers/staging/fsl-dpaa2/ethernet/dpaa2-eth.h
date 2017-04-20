@@ -376,6 +376,7 @@ struct dpaa2_eth_priv {
 	struct rtnl_link_stats64 __percpu *percpu_stats;
 	/* Extra stats, in addition to the ones known by the kernel */
 	struct dpaa2_eth_drv_stats __percpu *percpu_extras;
+	struct iommu_domain *iommu_domain;
 
 	bool ts_tx_en; /* Tx timestamping enabled */
 	bool ts_rx_en; /* Rx timestamping enabled */

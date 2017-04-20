@@ -513,7 +513,7 @@ static int build_sg_fd(struct dpaa2_eth_priv *priv,
 	swa->num_dma_bufs = num_dma_bufs;
 
 	/* Separately map the SGT buffer */
-	addr = dma_map_single(dev, sgt_buf, sgt_buf_size, DMA_TO_DEVICE);
+	addr = dma_map_single(dev, sgt_buf, sgt_buf_size, DMA_BIDIRECTIONAL);
 	if (unlikely(dma_mapping_error(dev, addr))) {
 		err = -ENOMEM;
 		goto dma_map_single_failed;
@@ -572,7 +572,7 @@ static int build_single_fd(struct dpaa2_eth_priv *priv,
 
 	addr = dma_map_single(dev, buffer_start,
 			      skb_tail_pointer(skb) - buffer_start,
-			      DMA_TO_DEVICE);
+			      DMA_BIDIRECTIONAL);
 	if (unlikely(dma_mapping_error(dev, addr)))
 		return -ENOMEM;
 
@@ -630,7 +630,7 @@ static void free_tx_fd(const struct dpaa2_eth_priv *priv,
 		 */
 		dma_unmap_single(dev, fd_addr,
 				 skb_tail_pointer(skb) - buffer_start,
-				 DMA_TO_DEVICE);
+				 DMA_BIDIRECTIONAL);
 		break;
 	case dpaa2_fd_sg:
 		swa = (struct dpaa2_eth_swa *)skbh;
@@ -646,7 +646,7 @@ static void free_tx_fd(const struct dpaa2_eth_priv *priv,
 		/* Unmap the SGT buffer */
 		unmap_size = priv->tx_data_offset +
 		       sizeof(struct dpaa2_sg_entry) * (1 + num_dma_bufs);
-		dma_unmap_single(dev, fd_addr, unmap_size, DMA_TO_DEVICE);
+		dma_unmap_single(dev, fd_addr, unmap_size, DMA_BIDIRECTIONAL);
 		break;
 	default:
 		/* Unsupported format, mark it as errored and give up */

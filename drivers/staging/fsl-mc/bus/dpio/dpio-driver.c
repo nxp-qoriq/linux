@@ -168,11 +168,11 @@ static int dpaa2_dpio_probe(struct fsl_mc_device *dpio_dev)
 	desc.cpu = next_cpu;
 
 	/*
-	 * Set the CENA regs to be the cache inhibited area of the portal to
-	 * avoid coherency issues if a user migrates to another core.
+	 * Set the CENA regs to be the cache enabled area of the portal to
+	 * achieve the best performance.
 	 */
-	desc.regs_cena = ioremap_wc(dpio_dev->regions[1].start,
-		resource_size(&dpio_dev->regions[1]));
+	desc.regs_cena = ioremap_cache_ns(dpio_dev->regions[0].start,
+		resource_size(&dpio_dev->regions[0]));
 	desc.regs_cinh = ioremap(dpio_dev->regions[1].start,
 		resource_size(&dpio_dev->regions[1]));
 

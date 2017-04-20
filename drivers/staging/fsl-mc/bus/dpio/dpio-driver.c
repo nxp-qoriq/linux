@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
 /*
  * Copyright 2014-2016 Freescale Semiconductor Inc.
- * Copyright 2016 NXP
+ * Copyright 2016-2019 NXP
  *
  */
 
@@ -25,6 +25,9 @@
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_AUTHOR("Freescale Semiconductor, Inc");
 MODULE_DESCRIPTION("DPIO Driver");
+
+#define PROT_NORMAL_NS         (PTE_TYPE_PAGE | PTE_AF | PTE_PXN | PTE_UXN | PTE_DIRTY | PTE_WRITE | PTE_ATTRINDX(MT_NORMAL))
+#define ioremap_cache_ns(addr, size)   __ioremap((addr), (size), __pgprot(PROT_NORMAL_NS))
 
 struct dpio_priv {
 	struct dpaa2_io *io;
@@ -150,6 +153,10 @@ static int dpaa2_dpio_probe(struct fsl_mc_device *dpio_dev)
 
 	if (dpio_dev->obj_desc.region_count < 3) {
 		/* No support for DDR backed portals, use classic mapping */
+		/*
+		 * Set the CENA regs to be the cache enabled area of the portal to
+		 * achieve the best performance.
+		 */
 		desc.regs_cena = ioremap_cache_ns(dpio_dev->regions[0].start,
 				       resource_size(&dpio_dev->regions[0]));
 	} else {

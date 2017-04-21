@@ -130,3 +130,11 @@
 &sata {
 	status = "okay";
 };
+
+&esdhc0 {
+	status = "okay";
+};
+
+&esdhc1 {
+	status = "okay";
+};

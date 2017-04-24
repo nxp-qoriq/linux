@@ -11,6 +11,8 @@
 #include <linux/usb/otg.h>
 #include <linux/usb/phy.h>
 
+enum usb_dr_mode of_usb_get_dr_mode(struct device_node *np);
+
 #if IS_ENABLED(CONFIG_OF)
 enum usb_dr_mode of_usb_get_dr_mode_by_phy(struct device_node *np, int arg0);
 bool of_usb_host_tpl_support(struct device_node *np);

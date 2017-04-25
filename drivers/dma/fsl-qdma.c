@@ -424,6 +424,28 @@ static void fsl_qdma_comp_fill_sg(
 }
 
 /*
+ * Prei-request full command descriptor for enqueue.
+ */
+static int fsl_qdma_pre_request_enqueue_desc(struct fsl_qdma_queue *queue)
+{
+	struct fsl_qdma_comp *comp_temp;
+	int i;
+
+	for (i = 0; i < queue->n_cq; i++) {
+		comp_temp = kzalloc(sizeof(*comp_temp), GFP_KERNEL);
+		if (!comp_temp)
+			return -1;
+		comp_temp->virt_addr = dma_pool_alloc(queue->comp_pool,
+						      GFP_NOWAIT,
+						      &comp_temp->bus_addr);
+		if (!comp_temp->virt_addr)
+			return -1;
+		list_add_tail(&comp_temp->list, &queue->comp_free);
+	}
+	return 0;
+}
+
+/*
  * Request a command descriptor for enqueue.
  */
 static struct fsl_qdma_comp *fsl_qdma_request_enqueue_desc(
@@ -1066,6 +1088,8 @@ static int fsl_qdma_probe(struct platform_device *pdev)
 		INIT_LIST_HEAD(&fsl_chan->qcomp);
 		vchan_init(&fsl_chan->vchan, &fsl_qdma->dma_dev);
 	}
+	for (i = 0; i < fsl_qdma->n_queues; i++)
+		fsl_qdma_pre_request_enqueue_desc(fsl_qdma->queue + i);
 
 	dma_cap_set(DMA_MEMCPY, fsl_qdma->dma_dev.cap_mask);
 	dma_cap_set(DMA_SG, fsl_qdma->dma_dev.cap_mask);

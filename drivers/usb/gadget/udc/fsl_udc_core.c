@@ -340,12 +340,6 @@ static int dr_controller_setup(struct fsl_udc *udc)
 	}
 #endif
 
-#if (defined(CONFIG_PPC32) || defined(CONFIG_PPC64)) && \
-!defined(CONFIG_NOT_COHERENT_CACHE)
-/* Turn on cache snooping hardware, since some PowerPC platforms
- * wholly rely on hardware to deal with cache coherent.
- */
-
 #if !defined(CONFIG_NOT_COHERENT_CACHE)
 	/* Turn on cache snooping hardware, since some PowerPC platforms
 	 * wholly rely on hardware to deal with cache coherent. */
@@ -2490,7 +2484,7 @@ static int fsl_udc_probe(struct platform_device *pdev)
 	/* Setup gadget.dev and register with kernel */
 	dev_set_name(&udc_controller->gadget.dev, "gadget");
 	udc_controller->gadget.dev.of_node = pdev->dev.of_node;
-	set_dma_ops(&udc_controller->gadget.dev, pdev->dev.archdata.dma_ops);
+	set_dma_ops(&udc_controller->gadget.dev, pdev->dev.dma_ops);
 
 	if (!IS_ERR_OR_NULL(udc_controller->transceiver))
 		udc_controller->gadget.is_otg = 1;

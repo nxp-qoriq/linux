@@ -133,8 +133,7 @@ static struct sk_buff *build_linear_skb(struct dpaa2_eth_priv *priv,
 
 	ch->buf_count--;
 
-	skb = build_skb(fd_vaddr, DPAA2_ETH_RX_BUF_SIZE +
-			SKB_DATA_ALIGN(sizeof(struct skb_shared_info)));
+	skb = build_skb(fd_vaddr, DPAA2_ETH_SKB_SIZE);
 	if (unlikely(!skb))
 		return NULL;
 
@@ -176,8 +175,7 @@ static struct sk_buff *build_frag_skb(struct dpaa2_eth_priv *priv,
 
 		if (i == 0) {
 			/* We build the skb around the first data buffer */
-			skb = build_skb(sg_vaddr, DPAA2_ETH_RX_BUF_SIZE +
-				SKB_DATA_ALIGN(sizeof(struct skb_shared_info)));
+			skb = build_skb(sg_vaddr, DPAA2_ETH_SKB_SIZE);
 			if (unlikely(!skb)) {
 				/* We still need to subtract the buffers used
 				 * by this FD from our software counter
@@ -1808,10 +1806,12 @@ static int setup_dpni(struct fsl_mc_device *ls_dev)
 	buf_layout.pass_frame_status = true;
 	buf_layout.private_data_size = DPAA2_ETH_SWA_SIZE;
 	buf_layout.data_align = priv->rx_buf_align;
+	buf_layout.data_head_room = DPAA2_ETH_RX_HEAD_ROOM;
 	buf_layout.options = DPNI_BUF_LAYOUT_OPT_PARSER_RESULT |
 			     DPNI_BUF_LAYOUT_OPT_FRAME_STATUS |
 			     DPNI_BUF_LAYOUT_OPT_PRIVATE_DATA_SIZE |
-			     DPNI_BUF_LAYOUT_OPT_DATA_ALIGN;
+			     DPNI_BUF_LAYOUT_OPT_DATA_ALIGN |
+			     DPNI_BUF_LAYOUT_OPT_DATA_HEAD_ROOM;
 	err = dpni_set_buffer_layout(priv->mc_io, 0, priv->mc_token,
 				     DPNI_QUEUE_RX, &buf_layout);
 	if (err) {
@@ -2248,6 +2248,7 @@ static int netdev_init(struct net_device *net_dev)
 {
 	struct device *dev = net_dev->dev.parent;
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
+	u16 rx_headroom, req_headroom;
 	u8 bcast_addr[ETH_ALEN];
 	u8 num_queues;
 	int err;
@@ -2270,6 +2271,19 @@ static int netdev_init(struct net_device *net_dev)
 	 * NOTE: priv->tx_data_offset MUST be initialized at this point.
 	 */
 	net_dev->needed_headroom = DPAA2_ETH_NEEDED_HEADROOM(priv);
+
+	/* If headroom guaranteed by hardware in the Rx frame buffer is
+	 * smaller than the Tx headroom required by the stack, issue a
+	 * one time warning. This will most likely mean skbs forwarded to
+	 * another DPAA2 network interface will get reallocated, with a
+	 * significant performance impact.
+	 */
+	req_headroom = LL_RESERVED_SPACE(net_dev) - ETH_HLEN;
+	rx_headroom = ALIGN(DPAA2_ETH_HWA_SIZE + DPAA2_ETH_SWA_SIZE +
+			    DPAA2_ETH_RX_HEAD_ROOM, priv->rx_buf_align);
+	if (req_headroom > rx_headroom)
+		dev_info_once(dev, "Required headroom (%d) greater than available (%d)\n",
+			      req_headroom, rx_headroom);
 
 	/* Set MTU limits */
 	net_dev->min_mtu = 68;

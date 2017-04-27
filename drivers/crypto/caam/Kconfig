@@ -160,6 +160,7 @@ config CRYPTO_DEV_FSL_DPAA2_CAAM
 	depends on FSL_MC_DPIO
 	default "m"
 	select CRYPTO_DEV_FSL_CAAM
+	select CRYPTO_BLKCIPHER
 	select CRYPTO_AUTHENC
 	select CRYPTO_AEAD
 	---help---

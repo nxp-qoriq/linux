@@ -39,6 +39,35 @@ config PTP_1588_CLOCK_GIANFAR
 	  To compile this driver as a module, choose M here: the module
 	  will be called gianfar_ptp.
 
+config PTP_1588_CLOCK_DPAA
+	tristate "Freescale DPAA as PTP clock"
+	depends on FSL_SDK_DPAA_ETH
+	select PTP_1588_CLOCK
+        select FSL_DPAA_TS
+        default n
+	help
+	  This driver adds support for using the DPAA 1588 timer module
+	  as a PTP clock. This clock is only useful if your PTP programs are
+	  getting hardware time stamps on the PTP Ethernet packets
+	  using the SO_TIMESTAMPING API.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called dpaa_ptp.
+
+config PTP_1588_CLOCK_DPAA2
+	tristate "Freescale DPAA2 as PTP clock"
+	depends on FSL_DPAA2_ETH
+	select PTP_1588_CLOCK
+	default y
+	help
+	  This driver adds support for using the DPAA2 1588 timer module
+	  as a PTP clock. This clock is only useful if your PTP programs are
+	  getting hardware time stamps on the PTP Ethernet packets
+	  using the SO_TIMESTAMPING API.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called dpaa2-rtc.
+
 config PTP_1588_CLOCK_IXP46X
 	tristate "Intel IXP46x as PTP clock"
 	depends on IXP4XX_ETH

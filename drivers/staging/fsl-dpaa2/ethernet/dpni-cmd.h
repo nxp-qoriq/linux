@@ -538,4 +538,29 @@ struct dpni_rsp_get_taildrop {
 	__le32 threshold;
 };
 
+#define DPNI_DEST_TYPE_SHIFT		0
+#define DPNI_DEST_TYPE_SIZE		4
+#define DPNI_CONG_UNITS_SHIFT		4
+#define DPNI_CONG_UNITS_SIZE		2
+
+struct dpni_cmd_set_congestion_notification {
+	/* cmd word 0 */
+	u8 qtype;
+	u8 tc;
+	u8 pad[6];
+	/* cmd word 1 */
+	u32 dest_id;
+	u16 notification_mode;
+	u8 dest_priority;
+	/* from LSB: dest_type: 4 units:2 */
+	u8 type_units;
+	/* cmd word 2 */
+	u64 message_iova;
+	/* cmd word 3 */
+	u64 message_ctx;
+	/* cmd word 4 */
+	u32 threshold_entry;
+	u32 threshold_exit;
+};
+
 #endif /* _FSL_DPNI_CMD_H */

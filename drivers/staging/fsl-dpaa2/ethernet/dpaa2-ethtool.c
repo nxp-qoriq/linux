@@ -69,6 +69,7 @@ static char dpaa2_ethtool_extras[][ETH_GSTRING_LEN] = {
 	"[drv] dequeue portal busy",
 	"[drv] channel pull errors",
 	"[drv] cdan",
+	"[drv] tx congestion state",
 };
 
 #define DPAA2_ETH_NUM_EXTRA_STATS	ARRAY_SIZE(dpaa2_ethtool_extras)
@@ -240,6 +241,8 @@ static void dpaa2_eth_get_ethtool_stats(struct net_device *net_dev,
 	*(data + i++) = portal_busy;
 	*(data + i++) = pull_err;
 	*(data + i++) = cdan;
+
+	*(data + i++) = dpaa2_cscn_state_congested(priv->cscn_mem);
 }
 
 static int dpaa2_eth_get_rxnfc(struct net_device *net_dev,

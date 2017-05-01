@@ -443,7 +443,7 @@ static int vfio_fsl_mc_mmap_mmio(struct vfio_fsl_mc_region region,
 	 * if a user migrates to another core.
 	 */
 	if (region.type & VFIO_FSL_MC_REGION_TYPE_CACHEABLE)
-		vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
+		vma->vm_page_prot = pgprot_cached_ns(vma->vm_page_prot);
 	else
 		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 

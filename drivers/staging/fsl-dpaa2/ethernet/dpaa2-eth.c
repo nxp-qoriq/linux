@@ -1697,7 +1697,7 @@ static int setup_dpio(struct dpaa2_eth_priv *priv)
 		/* Register the new context */
 		err = dpaa2_io_service_register(NULL, nctx);
 		if (err) {
-			dev_info(dev, "No affine DPIO for cpu %d\n", i);
+			dev_dbg(dev, "No affine DPIO for cpu %d\n", i);
 			/* If no affine DPIO for this core, there's probably
 			 * none available for next cores either.
 			 */
@@ -1742,7 +1742,7 @@ err_service_reg:
 	free_channel(priv, channel);
 err_alloc_ch:
 	if (cpumask_empty(&priv->dpio_cpumask)) {
-		dev_err(dev, "No cpu with an affine DPIO/DPCON\n");
+		dev_dbg(dev, "No cpu with an affine DPIO/DPCON\n");
 		return -ENODEV;
 	}
 	cpumask_copy(&priv->txconf_cpumask, &priv->dpio_cpumask);
@@ -2954,8 +2954,11 @@ static int dpaa2_eth_probe(struct fsl_mc_device *dpni_dev)
 		goto err_dpni_setup;
 
 	err = setup_dpio(priv);
-	if (err)
+	if (err) {
+		dev_info(dev, "Defer probing as no DPIO available\n");
+		err = -EPROBE_DEFER;
 		goto err_dpio_setup;
+	}
 
 	setup_fqs(priv);
 

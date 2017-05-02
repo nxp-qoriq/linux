@@ -478,6 +478,12 @@ int dw_pcie_wait_for_link(struct pcie_port *pp)
 	return -ETIMEDOUT;
 }
 
+void dw_pcie_disable_outbound_atu(struct pcie_port *pp, int index)
+{
+	dw_pcie_writel_rc(pp, PCIE_ATU_VIEWPORT, PCIE_ATU_REGION_OUTBOUND | index);
+	dw_pcie_writel_rc(pp, PCIE_ATU_CR2, 0);
+}
+
 int dw_pcie_link_up(struct pcie_port *pp)
 {
 	u32 val;

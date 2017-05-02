@@ -7,8 +7,8 @@ endif
 
 ccflags-y += -DVERSION=\"\"
 
-obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM) += error.o
-obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM_PLAT_BACKEND) += caam.o
+obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM_COMMON) += error.o
+obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM) += caam.o
 obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM_JR) += caam_jr.o
 obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM_CRYPTO_API) += caamalg.o
 obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM_CRYPTO_API_QI) += caamalg_qi.o

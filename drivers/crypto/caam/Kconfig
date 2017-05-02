@@ -1,10 +1,10 @@
-config CRYPTO_DEV_FSL_CAAM
+config CRYPTO_DEV_FSL_CAAM_COMMON
 	tristate
 
-config CRYPTO_DEV_FSL_CAAM_PLAT_BACKEND
+config CRYPTO_DEV_FSL_CAAM
 	tristate "Freescale CAAM-Multicore platform driver backend"
 	depends on FSL_SOC || ARCH_MXC || ARCH_LAYERSCAPE
-	select CRYPTO_DEV_FSL_CAAM
+	select CRYPTO_DEV_FSL_CAAM_COMMON
 	help
 	  Enables the driver module for Freescale's Cryptographic Accelerator
 	  and Assurance Module (CAAM), also known as the SEC version 4 (SEC4).
@@ -15,7 +15,7 @@ config CRYPTO_DEV_FSL_CAAM_PLAT_BACKEND
 	  To compile this driver as a module, choose M here: the module
 	  will be called caam.
 
-if CRYPTO_DEV_FSL_CAAM_PLAT_BACKEND
+if CRYPTO_DEV_FSL_CAAM
 
 config CRYPTO_DEV_FSL_CAAM_IMX
 	def_bool SOC_IMX6 || SOC_IMX7D
@@ -153,13 +153,13 @@ config CRYPTO_DEV_FSL_CAAM_RNG_API
 
 endif # CRYPTO_DEV_FSL_CAAM_JR
 
-endif # CRYPTO_DEV_FSL_CAAM_PLAT_BACKEND
+endif # CRYPTO_DEV_FSL_CAAM
 
 config CRYPTO_DEV_FSL_DPAA2_CAAM
 	tristate "QorIQ DPAA2 CAAM (DPSECI) driver"
 	depends on FSL_MC_DPIO
 	default "m"
-	select CRYPTO_DEV_FSL_CAAM
+	select CRYPTO_DEV_FSL_CAAM_COMMON
 	select CRYPTO_BLKCIPHER
 	select CRYPTO_AUTHENC
 	select CRYPTO_AEAD

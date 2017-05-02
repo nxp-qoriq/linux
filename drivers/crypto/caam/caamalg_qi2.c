@@ -58,7 +58,7 @@
 #define DPSECI_VERS(maj, min)	(((maj) << 16) | (min))
 
 /* TODO: temporary workaround for MC f/w not providing CAAM endianness info */
-#ifndef CONFIG_CRYPTO_DEV_FSL_CAAM_PLAT_BACKEND
+#ifndef CONFIG_CRYPTO_DEV_FSL_CAAM
 bool caam_little_end;
 EXPORT_SYMBOL(caam_little_end);
 #endif

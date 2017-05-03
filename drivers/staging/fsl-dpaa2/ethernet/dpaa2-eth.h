@@ -77,9 +77,12 @@
  * to accommodate the buffer refill delay.
  */
 #define DPAA2_ETH_MAX_FRAMES_PER_QUEUE	(DPAA2_ETH_TAILDROP_THRESH / 64)
-#define DPAA2_ETH_NUM_BUFS		(DPAA2_ETH_MAX_FRAMES_PER_QUEUE + 256)
-#define DPAA2_ETH_REFILL_THRESH	\
-	(DPAA2_ETH_NUM_BUFS - DPAA2_ETH_BUFS_PER_CMD)
+#define DPAA2_ETH_NUM_BUFS_PER_CH	(DPAA2_ETH_MAX_FRAMES_PER_QUEUE + 256)
+#define DPAA2_ETH_REFILL_THRESH(priv)	\
+	((priv)->max_bufs_per_ch - DPAA2_ETH_BUFS_PER_CMD)
+
+/* Global buffer quota in case flow control is enabled */
+#define DPAA2_ETH_NUM_BUFS_FC		256
 
 /* Hardware requires alignment for ingress/egress buffer addresses */
 #define DPAA2_ETH_TX_BUF_ALIGN		64
@@ -333,6 +336,7 @@ struct dpaa2_eth_priv {
 	u16 tx_qdid;
 	u16 rx_buf_align;
 	struct iommu_domain *iommu_domain;
+	u32 max_bufs_per_ch;
 
 	void *cscn_mem;	/* Tx congestion notifications are written here */
 	void *cscn_unaligned;
@@ -381,5 +385,7 @@ static int dpaa2_eth_queue_count(struct dpaa2_eth_priv *priv)
 {
 	return priv->dpni_attrs.num_queues;
 }
+
+int set_rx_taildrop(struct dpaa2_eth_priv *priv, bool enable);
 
 #endif	/* __DPAA2_H */

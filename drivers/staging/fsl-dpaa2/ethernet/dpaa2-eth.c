@@ -1842,13 +1842,66 @@ err_dma_map:
 	return err;
 }
 
+static int set_buffer_layout(struct dpaa2_eth_priv *priv)
+{
+	struct device *dev = priv->net_dev->dev.parent;
+	struct dpni_buffer_layout buf_layout = {0};
+	int err;
+
+	/* We need to check for WRIOP version 1.0.0, but MC does not provide
+	 * this number correctly on rev1, so only read the last two digits;
+	 * if they're zero, we're on rev1, otherwise rev2 or above.
+	 */
+	priv->rx_buf_align = priv->dpni_attrs.wriop_version & 0x3FF ?
+			     DPAA2_ETH_RX_BUF_ALIGN :
+			     DPAA2_ETH_RX_BUF_ALIGN_REV1;
+
+	/* rx buffer */
+	buf_layout.pass_parser_result = true;
+	buf_layout.pass_frame_status = true;
+	buf_layout.private_data_size = DPAA2_ETH_SWA_SIZE;
+	buf_layout.data_align = priv->rx_buf_align;
+	buf_layout.data_head_room = DPAA2_ETH_RX_HEAD_ROOM;
+	buf_layout.options = DPNI_BUF_LAYOUT_OPT_PARSER_RESULT |
+			     DPNI_BUF_LAYOUT_OPT_FRAME_STATUS |
+			     DPNI_BUF_LAYOUT_OPT_PRIVATE_DATA_SIZE |
+			     DPNI_BUF_LAYOUT_OPT_DATA_ALIGN |
+			     DPNI_BUF_LAYOUT_OPT_DATA_HEAD_ROOM;
+	err = dpni_set_buffer_layout(priv->mc_io, 0, priv->mc_token,
+				     DPNI_QUEUE_RX, &buf_layout);
+	if (err) {
+		dev_err(dev, "dpni_set_buffer_layout(RX) failed\n");
+		return err;
+	}
+
+	/* tx buffer */
+	buf_layout.options = DPNI_BUF_LAYOUT_OPT_FRAME_STATUS |
+			     DPNI_BUF_LAYOUT_OPT_PRIVATE_DATA_SIZE;
+	err = dpni_set_buffer_layout(priv->mc_io, 0, priv->mc_token,
+				     DPNI_QUEUE_TX, &buf_layout);
+	if (err) {
+		dev_err(dev, "dpni_set_buffer_layout(TX) failed\n");
+		return err;
+	}
+
+	/* tx-confirm buffer */
+	buf_layout.options = DPNI_BUF_LAYOUT_OPT_FRAME_STATUS;
+	err = dpni_set_buffer_layout(priv->mc_io, 0, priv->mc_token,
+				     DPNI_QUEUE_TX_CONFIRM, &buf_layout);
+	if (err) {
+		dev_err(dev, "dpni_set_buffer_layout(TX_CONF) failed\n");
+		return err;
+	}
+
+	return 0;
+}
+
 /* Configure the DPNI object this interface is associated with */
 static int setup_dpni(struct fsl_mc_device *ls_dev)
 {
 	struct device *dev = &ls_dev->dev;
 	struct dpaa2_eth_priv *priv;
 	struct net_device *net_dev;
-	struct dpni_buffer_layout buf_layout = {0};
 	struct dpni_link_cfg cfg = {0};
 	int err;
 
@@ -1878,51 +1931,9 @@ static int setup_dpni(struct fsl_mc_device *ls_dev)
 		goto err_get_attr;
 	}
 
-	/* We need to check for WRIOP version 1.0.0, but MC does not provide
-	 * this number correctly on rev1, so only read the last two digits;
-	 * if they're zero, we're on rev1, otherwise rev2 or above.
-	 */
-	priv->rx_buf_align = priv->dpni_attrs.wriop_version & 0x3FF ?
-			     DPAA2_ETH_RX_BUF_ALIGN :
-			     DPAA2_ETH_RX_BUF_ALIGN_REV1;
-
-	/* Configure buffer layouts */
-	/* rx buffer */
-	buf_layout.pass_parser_result = true;
-	buf_layout.pass_frame_status = true;
-	buf_layout.private_data_size = DPAA2_ETH_SWA_SIZE;
-	buf_layout.data_align = priv->rx_buf_align;
-	buf_layout.data_head_room = DPAA2_ETH_RX_HEAD_ROOM;
-	buf_layout.options = DPNI_BUF_LAYOUT_OPT_PARSER_RESULT |
-			     DPNI_BUF_LAYOUT_OPT_FRAME_STATUS |
-			     DPNI_BUF_LAYOUT_OPT_PRIVATE_DATA_SIZE |
-			     DPNI_BUF_LAYOUT_OPT_DATA_ALIGN |
-			     DPNI_BUF_LAYOUT_OPT_DATA_HEAD_ROOM;
-	err = dpni_set_buffer_layout(priv->mc_io, 0, priv->mc_token,
-				     DPNI_QUEUE_RX, &buf_layout);
-	if (err) {
-		dev_err(dev, "dpni_set_buffer_layout(RX) failed\n");
+	err = set_buffer_layout(priv);
+	if (err)
 		goto err_buf_layout;
-	}
-
-	/* tx buffer */
-	buf_layout.options = DPNI_BUF_LAYOUT_OPT_FRAME_STATUS |
-			     DPNI_BUF_LAYOUT_OPT_PRIVATE_DATA_SIZE;
-	err = dpni_set_buffer_layout(priv->mc_io, 0, priv->mc_token,
-				     DPNI_QUEUE_TX, &buf_layout);
-	if (err) {
-		dev_err(dev, "dpni_set_buffer_layout(TX) failed\n");
-		goto err_buf_layout;
-	}
-
-	/* tx-confirm buffer */
-	buf_layout.options = DPNI_BUF_LAYOUT_OPT_FRAME_STATUS;
-	err = dpni_set_buffer_layout(priv->mc_io, 0, priv->mc_token,
-				     DPNI_QUEUE_TX_CONFIRM, &buf_layout);
-	if (err) {
-		dev_err(dev, "dpni_set_buffer_layout(TX_CONF) failed\n");
-		goto err_buf_layout;
-	}
 
 	/* Now that we've set our tx buffer layout, retrieve the minimum
 	 * required tx data offset.

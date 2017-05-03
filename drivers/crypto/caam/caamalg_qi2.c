@@ -61,6 +61,8 @@
 #ifndef CONFIG_CRYPTO_DEV_FSL_CAAM
 bool caam_little_end;
 EXPORT_SYMBOL(caam_little_end);
+bool caam_imx;
+EXPORT_SYMBOL(caam_imx);
 #endif
 
 /*
@@ -3669,6 +3671,8 @@ static int dpaa2_caam_probe(struct fsl_mc_device *dpseci_dev)
 	 * CAAM endianness info.
 	 */
 	caam_little_end = true;
+
+	caam_imx = false;
 
 	dev = &dpseci_dev->dev;
 

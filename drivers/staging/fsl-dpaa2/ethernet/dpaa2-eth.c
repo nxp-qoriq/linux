@@ -38,6 +38,7 @@
 #include <linux/msi.h>
 #include <linux/kthread.h>
 #include <linux/iommu.h>
+#include <linux/net_tstamp.h>
 
 #include <linux/fsl/mc.h>
 #include "dpaa2-eth.h"
@@ -266,6 +267,16 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 
 	prefetch(skb->data);
 
+	/* Get the timestamp value */
+	if (priv->ts_rx_en) {
+		struct skb_shared_hwtstamps *shhwtstamps = skb_hwtstamps(skb);
+		u64 *ns = dpaa2_get_ts(vaddr);
+
+		*ns = DPAA2_PTP_NOMINAL_FREQ_PERIOD_NS * le64_to_cpup(ns);
+		memset(shhwtstamps, 0, sizeof(*shhwtstamps));
+		shhwtstamps->hwtstamp = ns_to_ktime(*ns);
+	}
+
 	/* Check if we need to validate the L4 csum */
 	if (likely(dpaa2_fd_get_frc(fd) & DPAA2_FD_FRC_FASV)) {
 		status = le32_to_cpu(fas->status);
@@ -330,6 +341,24 @@ static int consume_frames(struct dpaa2_eth_channel *ch)
 	} while (!is_last);
 
 	return cleaned;
+}
+
+/* Configure the egress frame annotation for timestamp update */
+static void enable_tx_tstamp(struct dpaa2_fd *fd, void *buf_start)
+{
+	struct dpaa2_faead *faead;
+	u32 ctrl, frc;
+
+	/* Mark the egress frame annotation area as valid */
+	frc = dpaa2_fd_get_frc(fd);
+	dpaa2_fd_set_frc(fd, frc | DPAA2_FD_FRC_FAEADV);
+
+	/* enable UPD (update prepanded data) bit in FAEAD field of
+	 * hardware frame annotation area
+	 */
+	ctrl = DPAA2_FAEAD_A2V | DPAA2_FAEAD_UPDV | DPAA2_FAEAD_UPD;
+	faead = dpaa2_get_faead(buf_start);
+	faead->ctrl = cpu_to_le32(ctrl);
 }
 
 /* Create a frame descriptor based on a fragmented skb */
@@ -427,6 +456,9 @@ static int build_sg_fd(struct dpaa2_eth_priv *priv,
 	dpaa2_fd_set_ctrl(fd, DPAA2_FD_CTRL_ASAL | DPAA2_FD_CTRL_PTA |
 			  DPAA2_FD_CTRL_PTV1);
 
+	if (priv->ts_tx_en && skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)
+		enable_tx_tstamp(fd, sgt_buf);
+
 	return 0;
 
 dma_map_single_failed:
@@ -480,6 +512,9 @@ static int build_single_fd(struct dpaa2_eth_priv *priv,
 	dpaa2_fd_set_format(fd, dpaa2_fd_single);
 	dpaa2_fd_set_ctrl(fd, DPAA2_FD_CTRL_ASAL | DPAA2_FD_CTRL_PTA |
 			  DPAA2_FD_CTRL_PTV1);
+
+	if (priv->ts_tx_en && skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)
+		enable_tx_tstamp(fd, buffer_start);
 
 	return 0;
 }
@@ -542,6 +577,19 @@ static void free_tx_fd(const struct dpaa2_eth_priv *priv,
 		if (status)
 			*status = ~0;
 		return;
+	}
+
+	/* Get the timestamp value */
+	if (priv->ts_tx_en && skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP) {
+		struct skb_shared_hwtstamps shhwtstamps;
+		u64 *ns;
+
+		memset(&shhwtstamps, 0, sizeof(shhwtstamps));
+
+		ns = dpaa2_get_ts(skbh);
+		*ns = DPAA2_PTP_NOMINAL_FREQ_PERIOD_NS * le64_to_cpup(ns);
+		shhwtstamps.hwtstamp = ns_to_ktime(*ns);
+		skb_tstamp_tx(skb, &shhwtstamps);
 	}
 
 	/* Read the status from the Frame Annotation after we unmap the first
@@ -1405,6 +1453,45 @@ static int dpaa2_eth_set_features(struct net_device *net_dev,
 	return 0;
 }
 
+static int dpaa2_eth_ts_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
+{
+	struct dpaa2_eth_priv *priv = netdev_priv(dev);
+	struct hwtstamp_config config;
+
+	if (copy_from_user(&config, rq->ifr_data, sizeof(config)))
+		return -EFAULT;
+
+	switch (config.tx_type) {
+	case HWTSTAMP_TX_OFF:
+		priv->ts_tx_en = false;
+		break;
+	case HWTSTAMP_TX_ON:
+		priv->ts_tx_en = true;
+		break;
+	default:
+		return -ERANGE;
+	}
+
+	if (config.rx_filter == HWTSTAMP_FILTER_NONE) {
+		priv->ts_rx_en = false;
+	} else {
+		priv->ts_rx_en = true;
+		/* TS is set for all frame types, not only those requested */
+		config.rx_filter = HWTSTAMP_FILTER_ALL;
+	}
+
+	return copy_to_user(rq->ifr_data, &config, sizeof(config)) ?
+			-EFAULT : 0;
+}
+
+static int dpaa2_eth_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
+{
+	if (cmd == SIOCSHWTSTAMP)
+		return dpaa2_eth_ts_ioctl(dev, rq, cmd);
+
+	return -EINVAL;
+}
+
 static const struct net_device_ops dpaa2_eth_ops = {
 	.ndo_open = dpaa2_eth_open,
 	.ndo_start_xmit = dpaa2_eth_tx,
@@ -1415,6 +1502,7 @@ static const struct net_device_ops dpaa2_eth_ops = {
 	.ndo_change_mtu = dpaa2_eth_change_mtu,
 	.ndo_set_rx_mode = dpaa2_eth_set_rx_mode,
 	.ndo_set_features = dpaa2_eth_set_features,
+	.ndo_do_ioctl = dpaa2_eth_ioctl,
 };
 
 static void cdan_cb(struct dpaa2_io_notification_ctx *ctx)
@@ -1857,6 +1945,7 @@ static int set_buffer_layout(struct dpaa2_eth_priv *priv)
 	/* rx buffer */
 	buf_layout.pass_parser_result = true;
 	buf_layout.pass_frame_status = true;
+	buf_layout.pass_timestamp = true;
 	buf_layout.private_data_size = DPAA2_ETH_SWA_SIZE;
 	buf_layout.data_align = priv->rx_buf_align;
 	buf_layout.data_head_room = DPAA2_ETH_RX_HEAD_ROOM;
@@ -1864,7 +1953,8 @@ static int set_buffer_layout(struct dpaa2_eth_priv *priv)
 			     DPNI_BUF_LAYOUT_OPT_FRAME_STATUS |
 			     DPNI_BUF_LAYOUT_OPT_PRIVATE_DATA_SIZE |
 			     DPNI_BUF_LAYOUT_OPT_DATA_ALIGN |
-			     DPNI_BUF_LAYOUT_OPT_DATA_HEAD_ROOM;
+			     DPNI_BUF_LAYOUT_OPT_DATA_HEAD_ROOM |
+			     DPNI_BUF_LAYOUT_OPT_TIMESTAMP;
 	err = dpni_set_buffer_layout(priv->mc_io, 0, priv->mc_token,
 				     DPNI_QUEUE_RX, &buf_layout);
 	if (err) {
@@ -1874,6 +1964,7 @@ static int set_buffer_layout(struct dpaa2_eth_priv *priv)
 
 	/* tx buffer */
 	buf_layout.options = DPNI_BUF_LAYOUT_OPT_FRAME_STATUS |
+			     DPNI_BUF_LAYOUT_OPT_TIMESTAMP |
 			     DPNI_BUF_LAYOUT_OPT_PRIVATE_DATA_SIZE;
 	err = dpni_set_buffer_layout(priv->mc_io, 0, priv->mc_token,
 				     DPNI_QUEUE_TX, &buf_layout);
@@ -1883,7 +1974,8 @@ static int set_buffer_layout(struct dpaa2_eth_priv *priv)
 	}
 
 	/* tx-confirm buffer */
-	buf_layout.options = DPNI_BUF_LAYOUT_OPT_FRAME_STATUS;
+	buf_layout.options = DPNI_BUF_LAYOUT_OPT_FRAME_STATUS |
+			     DPNI_BUF_LAYOUT_OPT_TIMESTAMP;
 	err = dpni_set_buffer_layout(priv->mc_io, 0, priv->mc_token,
 				     DPNI_QUEUE_TX_CONFIRM, &buf_layout);
 	if (err) {

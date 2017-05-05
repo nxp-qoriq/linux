@@ -105,6 +105,9 @@
 #define DPAA2_ETH_BUF_RAW_SIZE(priv) \
 	(DPAA2_ETH_SKB_SIZE + (priv)->rx_buf_align)
 
+/* PTP nominal frequency 1GHz */
+#define DPAA2_PTP_NOMINAL_FREQ_PERIOD_NS 1
+
 /* Extra headroom space requested to hardware, in order to make sure there's
  * no realloc'ing in forwarding scenarios
  */
@@ -167,11 +170,32 @@ struct dpaa2_fas {
 #define DPAA2_FAS_OFFSET		0
 #define DPAA2_FAS_SIZE			(sizeof(struct dpaa2_fas))
 
+/* Timestamp is located in the next 8 bytes of the buffer's
+ * hardware annotation area
+ */
+#define DPAA2_TS_OFFSET			0x8
+
+/* Frame annotation egress action descriptor */
+#define DPAA2_FAEAD_OFFSET		0x58
+
+struct dpaa2_faead {
+	__le32 conf_fqid;
+	__le32 ctrl;
+};
+
+#define DPAA2_FAEAD_A2V			0x20000000
+#define DPAA2_FAEAD_UPDV		0x00001000
+#define DPAA2_FAEAD_UPD			0x00000010
+
 /* Accessors for the hardware annotation fields that we use */
 #define dpaa2_get_hwa(buf_addr) \
 	((void *)(buf_addr) + DPAA2_ETH_SWA_SIZE)
 #define dpaa2_get_fas(buf_addr) \
 	(struct dpaa2_fas *)(dpaa2_get_hwa(buf_addr) + DPAA2_FAS_OFFSET)
+#define dpaa2_get_ts(buf_addr) \
+	(u64 *)(dpaa2_get_hwa(buf_addr) + DPAA2_TS_OFFSET)
+#define dpaa2_get_faead(buf_addr) \
+	(struct dpaa2_faead *)(dpaa2_get_hwa(buf_addr) + DPAA2_FAEAD_OFFSET)
 
 /* Error and status bits in the frame annotation status word */
 /* Debug frame, otherwise supposed to be discarded */
@@ -331,6 +355,8 @@ struct dpaa2_eth_priv {
 	struct rtnl_link_stats64 __percpu *percpu_stats;
 	/* Extra stats, in addition to the ones known by the kernel */
 	struct dpaa2_eth_drv_stats __percpu *percpu_extras;
+	bool ts_tx_en; /* Tx timestamping enabled */
+	bool ts_rx_en; /* Rx timestamping enabled */
 	u16 tx_data_offset;
 	u16 bpid;
 	u16 tx_qdid;

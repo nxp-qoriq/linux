@@ -63,7 +63,7 @@ void *dpaa2_eth_iova_to_virt(struct iommu_domain *domain, dma_addr_t iova_addr)
 {
 	phys_addr_t phys_addr;
 
-	phys_addr = domain ? iommu_iova_to_phys(domain, iova_addr) : phys_addr;
+	phys_addr = domain ? iommu_iova_to_phys(domain, iova_addr) : iova_addr;
 
 	return phys_to_virt(phys_addr);
 }

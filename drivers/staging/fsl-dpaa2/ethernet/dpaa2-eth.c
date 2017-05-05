@@ -304,6 +304,54 @@ err_frame_format:
 	percpu_stats->rx_dropped++;
 }
 
+#ifdef CONFIG_FSL_DPAA2_ETH_USE_ERR_QUEUE
+/* Processing of Rx frames received on the error FQ
+ * We check and print the error bits and then free the frame
+ */
+static void dpaa2_eth_rx_err(struct dpaa2_eth_priv *priv,
+			     struct dpaa2_eth_channel *ch,
+			     const struct dpaa2_fd *fd,
+			     struct napi_struct *napi __always_unused,
+			     u16 queue_id __always_unused)
+{
+	struct device *dev = priv->net_dev->dev.parent;
+	dma_addr_t addr = dpaa2_fd_get_addr(fd);
+	void *vaddr;
+	struct rtnl_link_stats64 *percpu_stats;
+	struct dpaa2_fas *fas;
+	u32 status = 0;
+	u32 fd_errors;
+	bool has_fas_errors = false;
+
+	vaddr = dpaa2_iova_to_virt(priv->iommu_domain, addr);
+	dma_unmap_single(dev, addr, DPAA2_ETH_RX_BUF_SIZE, DMA_FROM_DEVICE);
+
+	/* check frame errors in the FD field */
+	fd_errors = dpaa2_fd_get_ctrl(fd) & DPAA2_FD_RX_ERR_MASK;
+	if (likely(fd_errors)) {
+		has_fas_errors = (fd_errors & DPAA2_FD_CTRL_FAERR) &&
+				 !!(dpaa2_fd_get_frc(fd) & DPAA2_FD_FRC_FASV);
+		if (net_ratelimit())
+			netdev_dbg(priv->net_dev, "RX frame FD err: %08x\n",
+				   fd_errors);
+	}
+
+	/* check frame errors in the FAS field */
+	if (has_fas_errors) {
+		fas = dpaa2_get_fas(vaddr);
+		status = le32_to_cpu(fas->status);
+		if (net_ratelimit())
+			netdev_dbg(priv->net_dev, "Rx frame FAS err: 0x%08x\n",
+				   status & DPAA2_FAS_RX_ERR_MASK);
+	}
+	free_rx_fd(priv, fd, vaddr);
+
+	percpu_stats = this_cpu_ptr(priv->percpu_stats);
+	percpu_stats->rx_errors++;
+	ch->buf_count--;
+}
+#endif
+
 /* Consume all frames pull-dequeued into the store. This is the simplest way to
  * make sure we don't accidentally issue another volatile dequeue which would
  * overwrite (leak) frames already in the store.
@@ -1761,6 +1809,7 @@ static void set_fq_affinity(struct dpaa2_eth_priv *priv)
 		fq = &priv->fq[i];
 		switch (fq->type) {
 		case DPAA2_RX_FQ:
+		case DPAA2_RX_ERR_FQ:
 			fq->target_cpu = rx_cpu;
 			rx_cpu = cpumask_next(rx_cpu, &priv->dpio_cpumask);
 			if (rx_cpu >= nr_cpu_ids)
@@ -1809,6 +1858,12 @@ static void setup_fqs(struct dpaa2_eth_priv *priv)
 		priv->fq[priv->num_fqs].consume = dpaa2_eth_rx;
 		priv->fq[priv->num_fqs++].flowid = (u16)i;
 	}
+
+#ifdef CONFIG_FSL_DPAA2_ETH_USE_ERR_QUEUE
+	/* We have exactly one Rx error queue per DPNI */
+	priv->fq[priv->num_fqs].type = DPAA2_RX_ERR_FQ;
+	priv->fq[priv->num_fqs++].consume = dpaa2_eth_rx_err;
+#endif
 
 	/* For each FQ, decide on which core to process incoming frames */
 	set_fq_affinity(priv);
@@ -2186,6 +2241,40 @@ static int setup_tx_flow(struct dpaa2_eth_priv *priv,
 	return 0;
 }
 
+#ifdef CONFIG_FSL_DPAA2_ETH_USE_ERR_QUEUE
+static int setup_rx_err_flow(struct dpaa2_eth_priv *priv,
+			     struct dpaa2_eth_fq *fq)
+{
+	struct device *dev = priv->net_dev->dev.parent;
+	struct dpni_queue q = { { 0 } };
+	struct dpni_queue_id qid;
+	u8 q_opt = DPNI_QUEUE_OPT_USER_CTX | DPNI_QUEUE_OPT_DEST;
+	int err;
+
+	err = dpni_get_queue(priv->mc_io, 0, priv->mc_token,
+			     DPNI_QUEUE_RX_ERR, 0, 0, &q, &qid);
+	if (err) {
+		dev_err(dev, "dpni_get_queue() failed (%d)\n", err);
+		return err;
+	}
+
+	fq->fqid = qid.fqid;
+
+	q.destination.id = fq->channel->dpcon_id;
+	q.destination.type = DPNI_DEST_DPCON;
+	q.destination.priority = 1;
+	q.user_context = (u64)fq;
+	err = dpni_set_queue(priv->mc_io, 0, priv->mc_token,
+			     DPNI_QUEUE_RX_ERR, 0, 0, q_opt, &q);
+	if (err) {
+		dev_err(dev, "dpni_set_queue() failed (%d)\n", err);
+		return err;
+	}
+
+	return 0;
+}
+#endif
+
 /* Hash key is a 5-tuple: IPsrc, IPdst, IPnextproto, L4src, L4dst */
 static const struct dpaa2_eth_hash_fields hash_fields[] = {
 	{
@@ -2330,7 +2419,11 @@ static int bind_dpni(struct dpaa2_eth_priv *priv)
 	/* Configure handling of error frames */
 	err_cfg.errors = DPAA2_FAS_RX_ERR_MASK;
 	err_cfg.set_frame_annotation = 1;
+#ifdef CONFIG_FSL_DPAA2_ETH_USE_ERR_QUEUE
+	err_cfg.error_action = DPNI_ERROR_ACTION_SEND_TO_ERROR_QUEUE;
+#else
 	err_cfg.error_action = DPNI_ERROR_ACTION_DISCARD;
+#endif
 	err = dpni_set_errors_behavior(priv->mc_io, 0, priv->mc_token,
 				       &err_cfg);
 	if (err) {
@@ -2347,6 +2440,11 @@ static int bind_dpni(struct dpaa2_eth_priv *priv)
 		case DPAA2_TX_CONF_FQ:
 			err = setup_tx_flow(priv, &priv->fq[i]);
 			break;
+#ifdef CONFIG_FSL_DPAA2_ETH_USE_ERR_QUEUE
+		case DPAA2_RX_ERR_FQ:
+			err = setup_rx_err_flow(priv, &priv->fq[i]);
+			break;
+#endif
 		default:
 			dev_err(dev, "Invalid FQ type %d\n", priv->fq[i].type);
 			return -EINVAL;

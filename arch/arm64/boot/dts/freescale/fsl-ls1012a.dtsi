@@ -335,6 +335,15 @@
 			status = "disabled";
 		};
 
+		ftm0: ftm0@29d0000 {
+			compatible = "fsl,ftm-alarm";
+			reg = <0x0 0x29d0000 0x0 0x10000>,
+			      <0x0 0x1ee2140 0x0 0x4>;
+			reg-names = "ftm", "FlexTimer1";
+			interrupts = <0 86 0x4>;
+			big-endian;
+		};
+
 		i2c0: i2c@2180000 {
 			compatible = "fsl,vf610-i2c";
 			#address-cells = <1>;

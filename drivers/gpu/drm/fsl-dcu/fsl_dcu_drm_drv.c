@@ -45,20 +45,12 @@ static int fsl_dcu_drm_irq_init(struct drm_device *dev)
 	if (ret < 0)
 		dev_err(dev->dev, "failed to install IRQ handler\n");
 
-	ret = regmap_write(fsl_dev->regmap, DCU_INT_STATUS, 0);
-	if (ret)
-		dev_err(dev->dev, "set DCU_INT_STATUS failed\n");
-	ret = regmap_read(fsl_dev->regmap, DCU_INT_MASK, &value);
-	if (ret)
-		dev_err(dev->dev, "read DCU_INT_MASK failed\n");
+	regmap_write(fsl_dev->regmap, DCU_INT_STATUS, 0);
+	regmap_read(fsl_dev->regmap, DCU_INT_MASK, &value);
 	value &= DCU_INT_MASK_VBLANK;
-	ret = regmap_write(fsl_dev->regmap, DCU_INT_MASK, value);
-	if (ret)
-		dev_err(dev->dev, "set DCU_INT_MASK failed\n");
-	ret = regmap_write(fsl_dev->regmap, DCU_UPDATE_MODE,
-			   DCU_UPDATE_MODE_READREG);
-	if (ret)
-		dev_err(dev->dev, "set DCU_UPDATE_MODE failed\n");
+	regmap_write(fsl_dev->regmap, DCU_INT_MASK, value);
+	regmap_write(fsl_dev->regmap, DCU_UPDATE_MODE,
+		     DCU_UPDATE_MODE_READREG);
 
 	return ret;
 }

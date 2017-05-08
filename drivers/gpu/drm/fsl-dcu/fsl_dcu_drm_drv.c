@@ -46,8 +46,6 @@ static int fsl_dcu_drm_irq_init(struct drm_device *dev)
 
 	regmap_write(fsl_dev->regmap, DCU_INT_STATUS, 0);
 	regmap_write(fsl_dev->regmap, DCU_INT_MASK, ~0);
-	regmap_write(fsl_dev->regmap, DCU_UPDATE_MODE,
-		     DCU_UPDATE_MODE_READREG);
 
 	return ret;
 }

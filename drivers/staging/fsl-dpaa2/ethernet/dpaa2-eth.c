@@ -2102,16 +2102,24 @@ static int setup_dpni(struct fsl_mc_device *ls_dev)
 	if (err)
 		goto close;
 
+	/* allocate classification rule space */
+	priv->cls_rule = kzalloc(sizeof(*priv->cls_rule) *
+				 dpaa2_eth_fs_count(priv), GFP_KERNEL);
+	if (!priv->cls_rule)
+		goto close;
+
 	/* Enable flow control */
 	cfg.options = DPNI_LINK_OPT_AUTONEG | DPNI_LINK_OPT_PAUSE;
 	err = dpni_set_link_cfg(priv->mc_io, 0, priv->mc_token, &cfg);
 	if (err) {
 		dev_err(dev, "dpni_set_link_cfg() failed\n");
-		goto close;
+		goto cls_free;
 	}
 
 	return 0;
 
+cls_free:
+	kfree(priv->cls_rule);
 close:
 	dpni_close(priv->mc_io, 0, priv->mc_token);
 
@@ -2129,6 +2137,8 @@ static void free_dpni(struct dpaa2_eth_priv *priv)
 			    err);
 
 	dpni_close(priv->mc_io, 0, priv->mc_token);
+
+	kfree(priv->cls_rule);
 
 	dma_unmap_single(dev, priv->cscn_dma, DPAA2_CSCN_SIZE, DMA_FROM_DEVICE);
 	kfree(priv->cscn_unaligned);
@@ -2275,9 +2285,33 @@ static int setup_rx_err_flow(struct dpaa2_eth_priv *priv,
 }
 #endif
 
-/* Hash key is a 5-tuple: IPsrc, IPdst, IPnextproto, L4src, L4dst */
-static const struct dpaa2_eth_hash_fields hash_fields[] = {
+/* default hash key fields */
+static struct dpaa2_eth_hash_fields default_hash_fields[] = {
 	{
+		/* L2 header */
+		.rxnfc_field = RXH_L2DA,
+		.cls_prot = NET_PROT_ETH,
+		.cls_field = NH_FLD_ETH_DA,
+		.size = 6,
+	}, {
+		.cls_prot = NET_PROT_ETH,
+		.cls_field = NH_FLD_ETH_SA,
+		.size = 6,
+	}, {
+		/* This is the last ethertype field parsed:
+		 * depending on frame format, it can be the MAC ethertype
+		 * or the VLAN etype.
+		 */
+		.cls_prot = NET_PROT_ETH,
+		.cls_field = NH_FLD_ETH_TYPE,
+		.size = 2,
+	}, {
+		/* VLAN header */
+		.rxnfc_field = RXH_VLAN,
+		.cls_prot = NET_PROT_VLAN,
+		.cls_field = NH_FLD_VLAN_TCI,
+		.size = 2,
+	}, {
 		/* IP header */
 		.rxnfc_field = RXH_IP_SRC,
 		.cls_prot = NET_PROT_IP,
@@ -2309,45 +2343,29 @@ static const struct dpaa2_eth_hash_fields hash_fields[] = {
 	},
 };
 
-/* Set RX hash options
- * flags is a combination of RXH_ bits
- */
-static int dpaa2_eth_set_hash(struct net_device *net_dev, u64 flags)
+/* Set RX hash options */
+static int dpaa2_eth_set_hash(struct dpaa2_eth_priv *priv)
 {
-	struct device *dev = net_dev->dev.parent;
-	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
+	struct device *dev = priv->net_dev->dev.parent;
 	struct dpkg_profile_cfg cls_cfg;
 	struct dpni_rx_tc_dist_cfg dist_cfg;
 	u8 *dma_mem;
 	int i;
 	int err = 0;
 
-	if (!dpaa2_eth_hash_enabled(priv)) {
-		dev_dbg(dev, "Hashing support is not enabled\n");
-		return 0;
-	}
-
 	memset(&cls_cfg, 0, sizeof(cls_cfg));
 
-	for (i = 0; i < ARRAY_SIZE(hash_fields); i++) {
+	for (i = 0; i < priv->num_hash_fields; i++) {
 		struct dpkg_extract *key =
 			&cls_cfg.extracts[cls_cfg.num_extracts];
 
-		if (!(flags & hash_fields[i].rxnfc_field))
-			continue;
-
-		if (cls_cfg.num_extracts >= DPKG_MAX_NUM_OF_EXTRACTS) {
-			dev_err(dev, "error adding key extraction rule, too many rules?\n");
-			return -E2BIG;
-		}
-
 		key->type = DPKG_EXTRACT_FROM_HDR;
-		key->extract.from_hdr.prot = hash_fields[i].cls_prot;
+		key->extract.from_hdr.prot = priv->hash_fields[i].cls_prot;
 		key->extract.from_hdr.type = DPKG_FULL_FIELD;
-		key->extract.from_hdr.field = hash_fields[i].cls_field;
+		key->extract.from_hdr.field = priv->hash_fields[i].cls_field;
 		cls_cfg.num_extracts++;
 
-		priv->rx_hash_fields |= hash_fields[i].rxnfc_field;
+		priv->rx_hash_fields |= priv->hash_fields[i].rxnfc_field;
 	}
 
 	dma_mem = kzalloc(DPAA2_CLASSIFIER_DMA_SIZE, GFP_KERNEL);
@@ -2373,7 +2391,12 @@ static int dpaa2_eth_set_hash(struct net_device *net_dev, u64 flags)
 	}
 
 	dist_cfg.dist_size = dpaa2_eth_queue_count(priv);
-	dist_cfg.dist_mode = DPNI_DIST_MODE_HASH;
+	if (dpaa2_eth_fs_enabled(priv)) {
+		dist_cfg.dist_mode = DPNI_DIST_MODE_FS;
+		dist_cfg.fs_cfg.miss_action = DPNI_FS_MISS_HASH;
+	} else {
+		dist_cfg.dist_mode = DPNI_DIST_MODE_HASH;
+	}
 
 	err = dpni_set_rx_tc_dist(priv->mc_io, 0, priv->mc_token, 0, &dist_cfg);
 	dma_unmap_single(dev, dist_cfg.key_cfg_iova,
@@ -2409,12 +2432,23 @@ static int bind_dpni(struct dpaa2_eth_priv *priv)
 		return err;
 	}
 
-	/* have the interface implicitly distribute traffic based on supported
-	 * header fields
+	/* Verify classification options and disable hashing and/or
+	 * flow steering support in case of invalid configuration values
 	 */
-	err = dpaa2_eth_set_hash(net_dev, DPAA2_RXH_SUPPORTED);
-	if (err)
-		netdev_err(net_dev, "Failed to configure hashing\n");
+	priv->hash_fields = default_hash_fields;
+	priv->num_hash_fields = ARRAY_SIZE(default_hash_fields);
+	check_cls_support(priv);
+
+	/* have the interface implicitly distribute traffic based on
+	 * a static hash key
+	 */
+	if (dpaa2_eth_hash_enabled(priv)) {
+		err = dpaa2_eth_set_hash(priv);
+		if (err) {
+			dev_err(dev, "Failed to configure hashing\n");
+			return err;
+		}
+	}
 
 	/* Configure handling of error frames */
 	err_cfg.errors = DPAA2_FAS_RX_ERR_MASK;

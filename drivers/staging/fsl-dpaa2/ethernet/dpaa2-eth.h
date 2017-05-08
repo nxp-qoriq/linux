@@ -347,10 +347,16 @@ struct dpaa2_eth_channel {
 	struct dpaa2_eth_ch_stats stats;
 };
 
+struct dpaa2_eth_cls_rule {
+	struct ethtool_rx_flow_spec fs;
+	bool in_use;
+};
+
 struct dpaa2_eth_hash_fields {
 	u64 rxnfc_field;
 	enum net_prot cls_prot;
 	int cls_field;
+	int offset;
 	int size;
 };
 
@@ -395,18 +401,26 @@ struct dpaa2_eth_priv {
 	bool do_link_poll;
 	struct task_struct *poll_thread;
 
+	struct dpaa2_eth_hash_fields *hash_fields;
+	u8 num_hash_fields;
 	/* enabled ethtool hashing bits */
 	u64 rx_hash_fields;
+	/* array of classification rules */
+	struct dpaa2_eth_cls_rule *cls_rule;
 	struct dpni_tx_shaping_cfg shaping_cfg;
 };
 
-/* default Rx hash options, set during probing */
-#define DPAA2_RXH_SUPPORTED	(RXH_L2DA | RXH_VLAN | RXH_L3_PROTO \
-				| RXH_IP_SRC | RXH_IP_DST | RXH_L4_B_0_1 \
-				| RXH_L4_B_2_3)
-
 #define dpaa2_eth_hash_enabled(priv)	\
 	((priv)->dpni_attrs.num_queues > 1)
+
+#define dpaa2_eth_fs_enabled(priv)	\
+	(!((priv)->dpni_attrs.options & DPNI_OPT_NO_FS))
+
+#define dpaa2_eth_fs_mask_enabled(priv)	\
+	((priv)->dpni_attrs.options & DPNI_OPT_HAS_KEY_MASKING)
+
+#define dpaa2_eth_fs_count(priv)	\
+	((priv)->dpni_attrs.fs_entries)
 
 /* Required by struct dpni_rx_tc_dist_cfg::key_cfg_iova */
 #define DPAA2_CLASSIFIER_DMA_SIZE 256
@@ -414,10 +428,12 @@ struct dpaa2_eth_priv {
 extern const struct ethtool_ops dpaa2_ethtool_ops;
 extern const char dpaa2_eth_drv_version[];
 
-static int dpaa2_eth_queue_count(struct dpaa2_eth_priv *priv)
+static inline int dpaa2_eth_queue_count(struct dpaa2_eth_priv *priv)
 {
 	return priv->dpni_attrs.num_queues;
 }
+
+void check_cls_support(struct dpaa2_eth_priv *priv);
 
 int set_rx_taildrop(struct dpaa2_eth_priv *priv, bool enable);
 

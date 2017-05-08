@@ -375,10 +375,6 @@
 			#address-cells = <2>;
 			#size-cells = <1>;
 
-			ranges = <0 0 0x5 0x80000000 0x08000000
-				  2 0 0x5 0x30000000 0x00010000
-				  3 0 0x5 0x20000000 0x00010000>;
-			status = "disabled";
 		};
 
 		ftm0: ftm0@2800000 {

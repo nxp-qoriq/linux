@@ -511,6 +511,33 @@ struct dpni_cmd_set_queue {
 	__le64 user_context;
 };
 
+struct dpni_cmd_add_fs_entry {
+	/* cmd word 0 */
+	u16 options;
+	u8 tc_id;
+	u8 key_size;
+	u16 index;
+	u16 flow_id;
+	/* cmd word 1 */
+	u64 key_iova;
+	/* cmd word 2 */
+	u64 mask_iova;
+	/* cmd word 3 */
+	u64 flc;
+};
+
+struct dpni_cmd_remove_fs_entry {
+	/* cmd word 0 */
+	__le16 pad0;
+	u8 tc_id;
+	u8 key_size;
+	__le32 pad1;
+	/* cmd word 1 */
+	u64 key_iova;
+	/* cmd word 2 */
+	u64 mask_iova;
+};
+
 struct dpni_cmd_set_taildrop {
 	/* cmd word 0 */
 	u8 congestion_point;

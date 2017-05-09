@@ -218,7 +218,7 @@ static int fsl_ehci_drv_probe(struct platform_device *pdev)
 
 	/* Enable USB controller, 83xx or 8536 */
 	if (pdata->have_sysif_regs && pdata->controller_ver < FSL_USB_VER_1_6)
-	clrsetbits_be32(hcd->regs + FSL_SOC_USB_CTRL,
+		clrsetbits_be32(hcd->regs + FSL_SOC_USB_CTRL,
 				CONTROL_REGISTER_W1C_MASK, 0x4);
 
 	/*
@@ -317,6 +317,11 @@ static int ehci_fsl_setup_phy(struct usb_hcd *hcd,
 		portsc |= PORT_PTS_PTW;
 		/* fall through */
 	case FSL_USB2_PHY_UTMI:
+		if (pdata->has_fsl_erratum_a006918) {
+			pr_warn("fsl-ehci: USB PHY clock invalid\n");
+			return -EINVAL;
+		}
+
 	case FSL_USB2_PHY_UTMI_DUAL:
 		if (pdata->have_sysif_regs && pdata->controller_ver) {
 			/* controller version 1.6 or above */

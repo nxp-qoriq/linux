@@ -674,8 +674,10 @@ static netdev_tx_t dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 	 */
 	dma_sync_single_for_cpu(dev, priv->cscn_dma,
 				DPAA2_CSCN_SIZE, DMA_FROM_DEVICE);
-	if (unlikely(dpaa2_cscn_state_congested(priv->cscn_mem)))
+	if (unlikely(dpaa2_cscn_state_congested(priv->cscn_mem))) {
 		netif_stop_subqueue(net_dev, queue_mapping);
+		fq->stats.congestion_entry++;
+	}
 
 	percpu_stats = this_cpu_ptr(priv->percpu_stats);
 	percpu_extras = this_cpu_ptr(priv->percpu_extras);
@@ -2962,6 +2964,9 @@ static int dpaa2_eth_probe(struct fsl_mc_device *dpni_dev)
 	}
 
 	dpaa2_eth_sysfs_init(&net_dev->dev);
+#ifdef CONFIG_FSL_DPAA2_ETH_DEBUGFS
+	dpaa2_dbg_add(priv);
+#endif
 
 	dev_info(dev, "Probed interface %s\n", net_dev->name);
 	return 0;
@@ -3002,6 +3007,9 @@ static int dpaa2_eth_remove(struct fsl_mc_device *ls_dev)
 	net_dev = dev_get_drvdata(dev);
 	priv = netdev_priv(net_dev);
 
+#ifdef CONFIG_FSL_DPAA2_ETH_DEBUGFS
+	dpaa2_dbg_remove(priv);
+#endif
 	dpaa2_eth_sysfs_remove(&net_dev->dev);
 
 	unregister_netdev(net_dev);
@@ -3048,4 +3056,25 @@ static struct fsl_mc_driver dpaa2_eth_driver = {
 	.match_id_table = dpaa2_eth_match_id_table
 };
 
-module_fsl_mc_driver(dpaa2_eth_driver);
+static int __init dpaa2_eth_driver_init(void)
+{
+	int err;
+
+	dpaa2_eth_dbg_init();
+	err = fsl_mc_driver_register(&dpaa2_eth_driver);
+	if (err) {
+		dpaa2_eth_dbg_exit();
+		return err;
+	}
+
+	return 0;
+}
+
+static void __exit dpaa2_eth_driver_exit(void)
+{
+	dpaa2_eth_dbg_exit();
+	fsl_mc_driver_unregister(&dpaa2_eth_driver);
+}
+
+module_init(dpaa2_eth_driver_init);
+module_exit(dpaa2_eth_driver_exit);

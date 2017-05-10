@@ -12,56 +12,70 @@
 	compatible = "simple-bus";
 
 	bman-portal@0 {
+		cell-index = <0>;
 		compatible = "fsl,bman-portal";
 		reg = <0x0 0x4000 0x4000000 0x4000>;
 		interrupts = <0 173 0x4>;
 	};
 
 	bman-portal@10000 {
+		cell-index = <1>;
 		compatible = "fsl,bman-portal";
 		reg = <0x10000 0x4000 0x4010000 0x4000>;
 		interrupts = <0 175 0x4>;
 	};
 
 	bman-portal@20000 {
+		cell-index = <2>;
 		compatible = "fsl,bman-portal";
 		reg = <0x20000 0x4000 0x4020000 0x4000>;
 		interrupts = <0 177 0x4>;
 	};
 
 	bman-portal@30000 {
+		cell-index = <3>;
 		compatible = "fsl,bman-portal";
 		reg = <0x30000 0x4000 0x4030000 0x4000>;
 		interrupts = <0 179 0x4>;
 	};
 
 	bman-portal@40000 {
+		cell-index = <4>;
 		compatible = "fsl,bman-portal";
 		reg = <0x40000 0x4000 0x4040000 0x4000>;
 		interrupts = <0 181 0x4>;
 	};
 
 	bman-portal@50000 {
+		cell-index = <5>;
 		compatible = "fsl,bman-portal";
 		reg = <0x50000 0x4000 0x4050000 0x4000>;
 		interrupts = <0 183 0x4>;
 	};
 
 	bman-portal@60000 {
+		cell-index = <6>;
 		compatible = "fsl,bman-portal";
 		reg = <0x60000 0x4000 0x4060000 0x4000>;
 		interrupts = <0 185 0x4>;
 	};
 
 	bman-portal@70000 {
+		cell-index = <7>;
 		compatible = "fsl,bman-portal";
 		reg = <0x70000 0x4000 0x4070000 0x4000>;
 		interrupts = <0 187 0x4>;
 	};
 
 	bman-portal@80000 {
+		cell-index = <8>;
 		compatible = "fsl,bman-portal";
 		reg = <0x80000 0x4000 0x4080000 0x4000>;
 		interrupts = <0 189 0x4>;
+	};
+
+	 bman-bpids@0 {
+		compatible = "fsl,bpid-range";
+		fsl,bpid-range = <32 32>;
 	};
 };

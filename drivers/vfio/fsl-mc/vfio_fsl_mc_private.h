@@ -45,4 +45,8 @@ struct vfio_fsl_mc_device {
 
 int vfio_fsl_mc_irqs_init(struct vfio_fsl_mc_device *vdev);
 void vfio_fsl_mc_irqs_cleanup(struct vfio_fsl_mc_device *vdev);
+int vfio_fsl_mc_set_irqs_ioctl(struct vfio_fsl_mc_device *vdev,
+			       uint32_t flags, unsigned int index,
+			       unsigned int start, unsigned int count,
+			       void *data);
 #endif /* VFIO_PCI_PRIVATE_H */

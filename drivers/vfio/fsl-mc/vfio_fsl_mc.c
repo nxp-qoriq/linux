@@ -19,6 +19,9 @@
 #include <linux/vfio.h>
 
 #include "../../staging/fsl-mc/include/mc.h"
+#include "../../staging/fsl-mc/include/mc-bus.h"
+#include "../../staging/fsl-mc/include/mc-sys.h"
+
 #include "vfio_fsl_mc_private.h"
 
 #define DRIVER_VERSION	"0.10"
@@ -94,6 +97,103 @@ static const struct vfio_device_ops vfio_fsl_mc_ops = {
 	.mmap		= vfio_fsl_mc_mmap,
 };
 
+static int vfio_fsl_mc_initialize_dprc(struct vfio_fsl_mc_device *vdev)
+{
+	struct device *root_dprc_dev;
+	struct fsl_mc_device *mc_dev = vdev->mc_dev;
+	struct device *dev = &mc_dev->dev;
+	struct fsl_mc_bus *mc_bus;
+	unsigned int irq_count;
+	int ret;
+
+	/* device must be DPRC */
+	if (strcmp(mc_dev->obj_desc.type, "dprc"))
+		return -EINVAL;
+
+	/* mc_io must be un-initialized */
+	WARN_ON(mc_dev->mc_io);
+
+	/* allocate a portal from the root DPRC for vfio use */
+	fsl_mc_get_root_dprc(dev, &root_dprc_dev);
+	if (WARN_ON(!root_dprc_dev))
+		return -EINVAL;
+
+	ret = fsl_mc_portal_allocate(to_fsl_mc_device(root_dprc_dev),
+				     FSL_MC_IO_ATOMIC_CONTEXT_PORTAL,
+				     &mc_dev->mc_io);
+	if (ret < 0)
+		return ret;
+
+	/* Reset MCP before move on */
+	ret = fsl_mc_portal_reset(mc_dev->mc_io);
+	if (ret < 0) {
+		dev_err(dev, "dprc portal reset failed: error = %d\n", ret);
+		goto free_mc_portal;
+	}
+
+	ret = dprc_open(mc_dev->mc_io, 0, mc_dev->obj_desc.id,
+			&mc_dev->mc_handle);
+	if (ret) {
+		dev_err(dev, "dprc_open() failed: error = %d\n", ret);
+		goto free_mc_portal;
+	}
+
+	/* Initialize resource pool */
+	fsl_mc_init_all_resource_pools(mc_dev);
+
+	mc_bus = to_fsl_mc_bus(mc_dev);
+
+	mutex_init(&mc_bus->scan_mutex);
+
+	mutex_lock(&mc_bus->scan_mutex);
+	ret = dprc_scan_objects(mc_dev, mc_dev->driver_override,
+				&irq_count);
+	mutex_unlock(&mc_bus->scan_mutex);
+	if (ret) {
+		dev_err(dev, "dprc_scan_objects() fails (%d)\n", ret);
+		goto clean_resource_pool;
+	}
+
+	return 0;
+
+clean_resource_pool:
+	fsl_mc_cleanup_all_resource_pools(mc_dev);
+	dprc_close(mc_dev->mc_io, 0, mc_dev->mc_handle);
+
+free_mc_portal:
+	fsl_mc_portal_free(mc_dev->mc_io);
+	return ret;
+}
+
+static int vfio_fsl_mc_device_remove(struct device *dev, void *data)
+{
+	struct fsl_mc_device *mc_dev;
+
+	WARN_ON(dev == NULL);
+
+	mc_dev = to_fsl_mc_device(dev);
+	if (WARN_ON(mc_dev == NULL))
+		return -ENODEV;
+
+	fsl_mc_device_remove(mc_dev);
+	return 0;
+}
+
+static void vfio_fsl_mc_cleanup_dprc(struct vfio_fsl_mc_device *vdev)
+{
+	struct fsl_mc_device *mc_dev = vdev->mc_dev;
+
+	/* device must be DPRC */
+	if (strcmp(mc_dev->obj_desc.type, "dprc"))
+		return;
+
+	device_for_each_child(&mc_dev->dev, NULL, vfio_fsl_mc_device_remove);
+
+	fsl_mc_cleanup_all_resource_pools(mc_dev);
+	dprc_close(mc_dev->mc_io, 0, mc_dev->mc_handle);
+	fsl_mc_portal_free(mc_dev->mc_io);
+}
+
 static int vfio_fsl_mc_probe(struct fsl_mc_device *mc_dev)
 {
 	struct iommu_group *group;
@@ -118,11 +218,26 @@ static int vfio_fsl_mc_probe(struct fsl_mc_device *mc_dev)
 	ret = vfio_add_group_dev(dev, &vfio_fsl_mc_ops, vdev);
 	if (ret) {
 		dev_err(dev, "%s: Failed to add to vfio group\n", __func__);
-		kfree(vdev);
-		vfio_iommu_group_put(group, dev);
-		return ret;
+		goto free_vfio_device;
 	}
 
+	/* DPRC container scanned and it's chilren bound with vfio driver */
+	if (strcmp(mc_dev->obj_desc.type, "dprc") == 0) {
+		ret = vfio_fsl_mc_initialize_dprc(vdev);
+		if (ret) {
+			vfio_del_group_dev(dev);
+			goto free_vfio_device;
+		}
+	} else {
+		/* Handling for Non-DPRC device to be added */
+		ret = -EINVAL;
+		goto free_vfio_device;
+	}
+	return 0;
+
+free_vfio_device:
+	kfree(vdev);
+	vfio_iommu_group_put(group, dev);
 	return ret;
 }
 
@@ -134,6 +249,9 @@ static int vfio_fsl_mc_remove(struct fsl_mc_device *mc_dev)
 	vdev = vfio_del_group_dev(dev);
 	if (!vdev)
 		return -EINVAL;
+
+	if (strcmp(mc_dev->obj_desc.type, "dprc") == 0)
+		vfio_fsl_mc_cleanup_dprc(vdev);
 
 	vfio_iommu_group_put(mc_dev->dev.iommu_group, dev);
 	kfree(vdev);

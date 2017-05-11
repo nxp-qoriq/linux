@@ -123,6 +123,7 @@ struct tx_queue_properties {
 };
 
 int fec_enet_get_tx_queue_properties(int ifindex, struct tx_queue_properties *prop);
+int fec_enet_set_idle_slope(void *data, unsigned int queue_id, u32 idle_slope);
 int fec_enet_avb_register(const char *ifname, const struct avb_ops *avb, void *data);
 struct device *fec_enet_avb_get_device(const char *ifname);
 int fec_enet_avb_unregister(int ifindex, const struct avb_ops *avb);

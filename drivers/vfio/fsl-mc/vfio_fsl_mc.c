@@ -17,10 +17,12 @@
 #include <linux/slab.h>
 #include <linux/types.h>
 #include <linux/vfio.h>
+#include <linux/delay.h>
 
 #include "../../staging/fsl-mc/include/mc.h"
 #include "../../staging/fsl-mc/include/mc-bus.h"
 #include "../../staging/fsl-mc/include/mc-sys.h"
+#include "../../staging/fsl-mc/bus/dprc-cmd.h"
 
 #include "vfio_fsl_mc_private.h"
 
@@ -62,6 +64,9 @@ static int vfio_fsl_mc_regions_init(struct vfio_fsl_mc_device *vdev)
 			vdev->regions[i].type |=
 					VFIO_FSL_MC_REGION_TYPE_CACHEABLE;
 		vdev->regions[i].flags = VFIO_REGION_INFO_FLAG_MMAP;
+		vdev->regions[i].flags |= VFIO_REGION_INFO_FLAG_READ;
+		if (!(mc_dev->regions[i].flags & IORESOURCE_READONLY))
+			vdev->regions[i].flags |= VFIO_REGION_INFO_FLAG_WRITE;
 	}
 
 	vdev->num_regions = mc_dev->obj_desc.region_count;
@@ -70,6 +75,11 @@ static int vfio_fsl_mc_regions_init(struct vfio_fsl_mc_device *vdev)
 
 static void vfio_fsl_mc_regions_cleanup(struct vfio_fsl_mc_device *vdev)
 {
+	int i;
+
+	for (i = 0; i < vdev->num_regions; i++)
+		iounmap(vdev->regions[i].ioaddr);
+
 	vdev->num_regions = 0;
 	kfree(vdev->regions);
 }
@@ -272,13 +282,147 @@ static long vfio_fsl_mc_ioctl(void *device_data, unsigned int cmd,
 static ssize_t vfio_fsl_mc_read(void *device_data, char __user *buf,
 				size_t count, loff_t *ppos)
 {
-	return -EINVAL;
+	struct vfio_fsl_mc_device *vdev = device_data;
+	unsigned int index = VFIO_FSL_MC_OFFSET_TO_INDEX(*ppos);
+	loff_t off = *ppos & VFIO_FSL_MC_OFFSET_MASK;
+	struct vfio_fsl_mc_region *region;
+	uint64_t data[8];
+	int i;
+
+	/* Read ioctl supported only for DPRC device */
+	if (strcmp(vdev->mc_dev->obj_desc.type, "dprc"))
+		return -EINVAL;
+
+	if (index >= vdev->num_regions)
+		return -EINVAL;
+
+	region = &vdev->regions[index];
+
+	if (!(region->flags & VFIO_REGION_INFO_FLAG_READ))
+		return -EINVAL;
+
+	if (!region->type & VFIO_FSL_MC_REGION_TYPE_MMIO)
+		return -EINVAL;
+
+	if (!region->ioaddr) {
+		region->ioaddr = ioremap_nocache(region->addr, region->size);
+		if (!region->ioaddr)
+			return -ENOMEM;
+	}
+
+	if (count != 64 || off != 0)
+		return -EINVAL;
+
+	for (i = 7; i >= 0; i--)
+		data[i] = readq(region->ioaddr + i * sizeof(uint64_t));
+
+	if (copy_to_user(buf, data, 64))
+		return -EFAULT;
+
+	return count;
+}
+
+#define MC_CMD_COMPLETION_TIMEOUT_MS	5000
+#define MC_CMD_COMPLETION_POLLING_MAX_SLEEP_USECS    500
+
+static int vfio_fsl_mc_dprc_wait_for_response(void __iomem *ioaddr)
+{
+	enum mc_cmd_status status;
+	unsigned long timeout_usecs = MC_CMD_COMPLETION_TIMEOUT_MS * 1000;
+
+	for (;;) {
+		u64 header;
+		struct mc_cmd_header *resp_hdr;
+
+		__iormb();
+		header = readq(ioaddr);
+		__iormb();
+
+		resp_hdr = (struct mc_cmd_header *)&header;
+		status = (enum mc_cmd_status)resp_hdr->status;
+		if (status != MC_CMD_STATUS_READY)
+			break;
+
+		udelay(MC_CMD_COMPLETION_POLLING_MAX_SLEEP_USECS);
+		timeout_usecs -= MC_CMD_COMPLETION_POLLING_MAX_SLEEP_USECS;
+		if (timeout_usecs == 0)
+			return -ETIMEDOUT;
+	}
+
+	return 0;
+}
+
+static int vfio_fsl_mc_send_command(void __iomem *ioaddr, uint64_t *cmd_data)
+{
+	int i;
+
+	/* Write at command header in the end */
+	for (i = 7; i >= 0; i--)
+		writeq(cmd_data[i], ioaddr + i * sizeof(uint64_t));
+
+	/* Wait for response before returning to user-space
+	 * This can be optimized in future to even prepare response
+	 * before returning to user-space and avoid read ioctl.
+	 */
+	return vfio_fsl_mc_dprc_wait_for_response(ioaddr);
+}
+
+static int vfio_handle_dprc_commands(void __iomem *ioaddr, uint64_t *cmd_data)
+{
+	uint64_t cmd_hdr = cmd_data[0];
+	int cmd = (cmd_hdr >> 52) & 0xfff;
+
+	switch (cmd) {
+	case DPRC_CMDID_OPEN:
+	default:
+		return vfio_fsl_mc_send_command(ioaddr, cmd_data);
+	}
+
+	return 0;
 }
 
 static ssize_t vfio_fsl_mc_write(void *device_data, const char __user *buf,
 				 size_t count, loff_t *ppos)
 {
-	return -EINVAL;
+	struct vfio_fsl_mc_device *vdev = device_data;
+	unsigned int index = VFIO_FSL_MC_OFFSET_TO_INDEX(*ppos);
+	loff_t off = *ppos & VFIO_FSL_MC_OFFSET_MASK;
+	struct vfio_fsl_mc_region *region;
+	uint64_t data[8];
+	int ret;
+
+	/* Write ioctl supported only for DPRC device */
+	if (strcmp(vdev->mc_dev->obj_desc.type, "dprc"))
+		return -EINVAL;
+
+	if (index >= vdev->num_regions)
+		return -EINVAL;
+
+	region = &vdev->regions[index];
+
+	if (!(region->flags & VFIO_REGION_INFO_FLAG_WRITE))
+		return -EINVAL;
+
+	if (!region->type & VFIO_FSL_MC_REGION_TYPE_MMIO)
+		return -EINVAL;
+
+	if (!region->ioaddr) {
+		region->ioaddr = ioremap_nocache(region->addr, region->size);
+		if (!region->ioaddr)
+			return -ENOMEM;
+	}
+
+	if (count != 64 || off != 0)
+		return -EINVAL;
+
+	if (copy_from_user(&data, buf, 64))
+		return -EFAULT;
+
+	ret = vfio_handle_dprc_commands(region->ioaddr, data);
+	if (ret)
+		return ret;
+
+	return count;
 }
 
 static int vfio_fsl_mc_mmap_mmio(struct vfio_fsl_mc_region region,

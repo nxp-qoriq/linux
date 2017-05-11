@@ -24,6 +24,8 @@
 struct vfio_fsl_mc_irq {
 	u32			flags;
 	u32			count;
+	struct eventfd_ctx	*trigger;
+	char			*name;
 };
 
 struct vfio_fsl_mc_region {

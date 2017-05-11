@@ -525,7 +525,7 @@ static int aead_setkey(struct crypto_aead *aead, const u8 *key,
 	dev_err(dev, "split keylen %d split keylen padded %d\n",
 		ctx->adata.keylen, ctx->adata.keylen_pad);
 	print_hex_dump(KERN_ERR, "ctx.key@" __stringify(__LINE__)": ",
-		       DUMP_PREFIX_ADDRESS, 16, 4, key_in, keylen, 1);
+		       DUMP_PREFIX_ADDRESS, 16, 4, keys.authkey, keylen, 1);
 #endif
 
 	if (ctx->adata.keylen_pad + keys.enckeylen > CAAM_MAX_KEY_SIZE)
@@ -1570,7 +1570,7 @@ static void aead_encrypt_done(void *cbk_ctx, u32 status)
 	int ecode = 0;
 
 #ifdef DEBUG
-	dev_err(ctx->dev, "%s %d: err 0x%x\n", __func__, __LINE__, err);
+	dev_err(ctx->dev, "%s %d: err 0x%x\n", __func__, __LINE__, status);
 #endif
 
 	if (unlikely(status)) {
@@ -1595,7 +1595,7 @@ static void aead_decrypt_done(void *cbk_ctx, u32 status)
 	int ecode = 0;
 
 #ifdef DEBUG
-	dev_err(ctx->dev, "%s %d: err 0x%x\n", __func__, __LINE__, err);
+	dev_err(ctx->dev, "%s %d: err 0x%x\n", __func__, __LINE__, status);
 #endif
 
 	if (unlikely(status)) {
@@ -1701,7 +1701,7 @@ static void ablkcipher_done(void *cbk_ctx, u32 status)
 #ifdef DEBUG
 	int ivsize = crypto_ablkcipher_ivsize(ablkcipher);
 
-	dev_err(ctx->dev, "%s %d: err 0x%x\n", __func__, __LINE__, err);
+	dev_err(ctx->dev, "%s %d: err 0x%x\n", __func__, __LINE__, status);
 #endif
 
 	if (unlikely(status)) {
@@ -1713,9 +1713,9 @@ static void ablkcipher_done(void *cbk_ctx, u32 status)
 	print_hex_dump(KERN_ERR, "dstiv  @" __stringify(__LINE__)": ",
 		       DUMP_PREFIX_ADDRESS, 16, 4, req->info,
 		       edesc->src_nents > 1 ? 100 : ivsize, 1);
-	dbg_dump_sg(KERN_ERR, "dst    @" __stringify(__LINE__)": ",
-		    DUMP_PREFIX_ADDRESS, 16, 4, req->dst,
-		    edesc->dst_nents > 1 ? 100 : req->nbytes, 1);
+	caam_dump_sg(KERN_ERR, "dst    @" __stringify(__LINE__)": ",
+		     DUMP_PREFIX_ADDRESS, 16, 4, req->dst,
+		     edesc->dst_nents > 1 ? 100 : req->nbytes, 1);
 #endif
 
 	ablkcipher_unmap(ctx->dev, edesc, req);

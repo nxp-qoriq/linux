@@ -80,6 +80,12 @@ static void fec_enet_itr_coal_init(struct net_device *ndev);
 
 static const u16 fec_enet_vlan_pri_to_queue[8] = {0, 0, 1, 1, 1, 2, 2, 2};
 
+#ifdef CONFIG_AVB_SUPPORT
+/* Idle Slope values specific to AVB capable boards */
+static const unsigned short idle_slope_values[] = {1, 2, 4, 8, 16, 32, 64, 128,
+	256, 384, 512, 640, 768, 896, 1024, 1152, 1280, 1408, 1536};
+#endif
+
 /* Pause frame feild and FIFO threshold */
 #define FEC_ENET_FCE	(1 << 5)
 #define FEC_ENET_RSEM_V	0x84
@@ -626,7 +632,62 @@ static int fec_enet_start_xmit_best_effort(struct fec_enet_priv_tx_q *txq,
 	return NETDEV_TX_OK;
 }
 
+int fec_enet_set_idle_slope(void *data, unsigned int queue_id,
+		u32 desired_rate)
+{
+	struct fec_enet_private *fep = data;
+	struct fec_enet_priv_tx_q *txq;
+	u64 idle_slope;
+	u32 line_rate;
+	int i;
 
+	if (!fep)
+		return -EINVAL;
+
+	/* Nothing to be done for non-AVB boards */
+	if (!(fep->quirks & FEC_QUIRK_HAS_AVB))
+		return 0;
+
+	if ((queue_id == 0) || (queue_id >= fep->num_tx_queues))
+		return -EINVAL;
+
+	if ((fep->speed != SPEED_100) && (fep->speed != SPEED_1000))
+		return -EOPNOTSUPP;
+
+	line_rate = fep->speed * 1000000ULL;
+	if (desired_rate > line_rate)
+		return -EINVAL;
+
+	txq = fep->tx_queue[queue_id];
+
+	/*
+	 * Compute the desired Idle-Slope based on the desired rate and use
+	 * the round up to the next integer.
+	 */
+	idle_slope = (u64)desired_rate * IDLE_SLOPE_DIVISOR + line_rate - desired_rate - 1;
+	idle_slope = div_u64(idle_slope, line_rate - desired_rate);
+
+	for (i = 0; i < ARRAY_SIZE(idle_slope_values); i++)
+		if (idle_slope <= idle_slope_values[i])
+			break;
+
+	if (i >= ARRAY_SIZE(idle_slope_values))
+		return -EINVAL;
+	/*
+	 * If the desired rate is higher than the last available bandwidth
+	 * threshold then we should not configure the Credit-Based shaper
+	 * at all.
+	 */
+	if (idle_slope > idle_slope_values[i])
+		return -EINVAL;
+
+	txq->tx_idle_slope = idle_slope_values[i];
+	writel(DMA_CLASS_EN | txq->tx_idle_slope,
+			fep->hwp + FEC_DMA_CFG(queue_id));
+
+	return 0;
+}
+EXPORT_SYMBOL(fec_enet_set_idle_slope);
 #endif
 
 static struct bufdesc *
@@ -1202,6 +1263,7 @@ static void fec_enet_enable_ring(struct net_device *ndev)
 	struct fec_enet_private *fep = netdev_priv(ndev);
 	struct fec_enet_priv_tx_q *txq;
 	struct fec_enet_priv_rx_q *rxq;
+	unsigned long idle_slope;
 	int i;
 
 	for (i = 0; i < fep->num_rx_queues; i++) {
@@ -1220,9 +1282,16 @@ static void fec_enet_enable_ring(struct net_device *ndev)
 		writel(txq->bd.dma, fep->hwp + FEC_X_DES_START(i));
 
 		/* enable DMA1/2 */
-		if (i)
-			writel(DMA_CLASS_EN | IDLE_SLOPE(i),
+		if (i) {
+#ifdef CONFIG_AVB_SUPPORT
+			idle_slope = txq->tx_idle_slope;
+#else
+			idle_slope = IDLE_SLOPE(i);
+#endif
+
+			writel(DMA_CLASS_EN | idle_slope,
 			       fep->hwp + FEC_DMA_CFG(i));
+		}
 	}
 
 	/*
@@ -4700,6 +4769,9 @@ static int fec_enet_init(struct net_device *ndev)
 		txq->bd.dsize_log2 = dsize_log2;
 		txq->bd.reg_desc_active = fep->hwp + offset_des_active_txq[i];
 		bd_dma += size;
+#ifdef CONFIG_AVB_SUPPORT
+		txq->tx_idle_slope = IDLE_SLOPE(i);
+#endif
 		cbd_base = (struct bufdesc *)(((void *)cbd_base) + size);
 		txq->bd.last = (struct bufdesc *)(((void *)cbd_base) - dsize);
 	}

@@ -540,6 +540,10 @@ struct fec_enet_priv_tx_q {
 	struct bufdesc	*dirty_tx;
 	char *tso_hdrs;
 	dma_addr_t tso_hdrs_dma;
+
+#ifdef CONFIG_AVB_SUPPORT
+	unsigned long	tx_idle_slope;
+#endif
 };
 
 struct fec_enet_priv_rx_q {
@@ -701,6 +705,8 @@ static inline int fec_max_rate(struct fec_enet_private *fep)
 	int max_rate = (fep->quirks & FEC_QUIRK_HAS_AVB) ? FEC_MAX_RATE_HAS_AVB : FEC_MAX_RATE;
 	return min(max_rate, fep->speed);
 }
+
+#define IDLE_SLOPE_DIVISOR	512
 #endif
 
 void fec_ptp_init(struct platform_device *pdev, int irq_idx);

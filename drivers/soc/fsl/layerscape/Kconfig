@@ -1,0 +1,10 @@
+#
+# Layerscape Soc drivers
+#
+config  FTM_ALARM
+	bool "FTM alarm driver"
+	default n
+	help
+	Say y here to enable FTM alarm support.  The FTM alarm provides
+	alarm functions for wakeup system from deep sleep.  There is only
+	one FTM can be used in ALARM(FTM 0).

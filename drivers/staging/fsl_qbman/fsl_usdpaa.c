@@ -1135,8 +1135,7 @@ out:
 					 : PROT_WRITE),
 					MAP_SHARED,
 					start_frag->pfn_base,
-					&populate,
-					NULL);
+					&populate);
 		up_write(&current->mm->mmap_sem);
 		if (longret & ~PAGE_MASK) {
 			ret = (int)longret;
@@ -1215,7 +1214,7 @@ map_match:
 
 	base = vma->vm_start;
 	sz = vma->vm_end - vma->vm_start;
-	do_munmap(current->mm, base, sz, NULL);
+	do_munmap(current->mm, base, sz);
 	ret = 0;
  out:
 	up_write(&current->mm->mmap_sem);
@@ -1321,7 +1320,7 @@ static int portal_mmap(struct file *fp, struct resource *res, void **ptr)
 		return -EINVAL;
 	longret = do_mmap_pgoff(fp, PAGE_SIZE, (unsigned long)len,
 				PROT_READ | PROT_WRITE, MAP_SHARED,
-				res->start >> PAGE_SHIFT, &populate, NULL);
+				res->start >> PAGE_SHIFT, &populate);
 	up_write(&current->mm->mmap_sem);
 
 	if (longret & ~PAGE_MASK)
@@ -1334,7 +1333,7 @@ static int portal_mmap(struct file *fp, struct resource *res, void **ptr)
 static void portal_munmap(struct resource *res, void  *ptr)
 {
 	down_write(&current->mm->mmap_sem);
-	do_munmap(current->mm, (unsigned long)ptr, resource_size(res), NULL);
+	do_munmap(current->mm, (unsigned long)ptr, resource_size(res));
 	up_write(&current->mm->mmap_sem);
 }
 

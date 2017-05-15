@@ -344,6 +344,28 @@ static int bman_online_cpu(unsigned int cpu)
 	}
 	return 0;
 }
+static int bman_hotplug_cpu_callback(struct notifier_block *nfb,
+				     unsigned long action, void *hcpu)
+{
+	unsigned int cpu = (unsigned long)hcpu;
+
+	switch (action) {
+	case CPU_ONLINE:
+	case CPU_ONLINE_FROZEN:
+		bman_online_cpu(cpu);
+		break;
+	case CPU_DOWN_PREPARE:
+	case CPU_DOWN_PREPARE_FROZEN:
+		bman_offline_cpu(cpu);
+	default:
+		break;
+	}
+	return NOTIFY_OK;
+}
+
+static struct notifier_block bman_hotplug_cpu_notifier = {
+	.notifier_call = bman_hotplug_cpu_callback,
+};
 #endif /* CONFIG_HOTPLUG_CPU */
 
 /* Initialise the Bman driver. The meat of this function deals with portals. The
@@ -491,13 +513,7 @@ __init int bman_init(void)
 	for_each_cpu(cpu, &offline_cpus)
 		bman_offline_cpu(cpu);
 #ifdef CONFIG_HOTPLUG_CPU
-	ret = cpuhp_setup_state_nocalls(CPUHP_AP_ONLINE_DYN,
-					"soc/qbman_portal:online",
-					bman_online_cpu, bman_offline_cpu);
-	if (ret < 0) {
-		pr_err("bman: failed to register hotplug callbacks.\n");
-		return 0;
-	}
+	register_hotcpu_notifier(&bman_hotplug_cpu_notifier);
 #endif
 	return 0;
 }

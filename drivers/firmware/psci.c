@@ -366,8 +366,7 @@ CPUIDLE_METHOD_OF_DECLARE(psci, "arm,psci", &psci_cpuidle_ops);
 
 static int psci_system_suspend(unsigned long unused)
 {
-	return invoke_psci_fn(PSCI_FN_NATIVE(1_0, SYSTEM_SUSPEND),
-			      virt_to_phys(cpu_resume), 0, 0);
+	return psci_cpu_suspend(0, virt_to_phys(cpu_resume));
 }
 
 static int psci_system_suspend_enter(suspend_state_t state)
@@ -386,6 +385,8 @@ static void __init psci_init_system_suspend(void)
 
 	if (!IS_ENABLED(CONFIG_SUSPEND))
 		return;
+
+	suspend_set_ops(&psci_suspend_ops);
 
 	ret = psci_features(PSCI_FN_NATIVE(1_0, SYSTEM_SUSPEND));
 
@@ -464,6 +465,7 @@ static void __init psci_0_2_set_functions(void)
 	arm_pm_restart = psci_sys_reset;
 
 	pm_power_off = psci_sys_poweroff;
+	psci_init_system_suspend();
 }
 
 /*

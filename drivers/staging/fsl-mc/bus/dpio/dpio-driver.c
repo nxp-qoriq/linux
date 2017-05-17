@@ -171,7 +171,7 @@ static int dpaa2_dpio_probe(struct fsl_mc_device *dpio_dev)
 	 * Set the CENA regs to be the cache enabled area of the portal to
 	 * achieve the best performance.
 	 */
-	desc.regs_cena = ioremap_cache_ns(dpio_dev->regions[0].start,
+	desc.regs_cena = qbman_cena_ioremap(dpio_dev->regions[0].start,
 		resource_size(&dpio_dev->regions[0]));
 	desc.regs_cinh = ioremap(dpio_dev->regions[1].start,
 		resource_size(&dpio_dev->regions[1]));

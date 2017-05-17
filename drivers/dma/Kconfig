@@ -206,6 +206,8 @@ config FSL_QDMA
          or dequeuing DMA jobs from, different work queues.
          This module can be found on Freescale LS SoCs.
 
+source drivers/dma/dpaa2-qdma/Kconfig
+
 config FSL_RAID
         tristate "Freescale RAID engine Support"
         depends on FSL_SOC && !ASYNC_TX_ENABLE_CHANNEL_SWITCH

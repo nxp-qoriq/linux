@@ -8,4 +8,3 @@ obj-$(CONFIG_FSL_MC_DPIO) += fsl-mc-dpio.o
 
 fsl-mc-dpio-objs := dpio.o qbman-portal.o dpio-service.o dpio-driver.o
 
-obj-$(CONFIG_FSL_QBMAN_DEBUG) += qbman_debug.o

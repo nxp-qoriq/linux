@@ -37,9 +37,6 @@
 
 #include "qbman-portal.h"
 
-struct qb_attr_code code_generic_verb = QB_CODE(0, 0, 7);
-struct qb_attr_code code_generic_rslt = QB_CODE(0, 8, 8);
-
 #define QMAN_REV_4000   0x04000000
 #define QMAN_REV_4100   0x04010000
 #define QMAN_REV_4101   0x04010001
@@ -104,11 +101,6 @@ enum qbman_sdqcr_fc {
 
 #define dccvac(p) { asm volatile("dc cvac, %0;" : : "r" (p) : "memory"); }
 #define dcivac(p) { asm volatile("dc ivac, %0" : : "r"(p) : "memory"); }
-static inline void qbman_inval_prefetch(struct qbman_swp *p, uint32_t offset)
-{
-	dcivac(p->addr_cena + offset);
-	prefetch(p->addr_cena + offset);
-}
 
 /* Portal Access */
 
@@ -326,7 +318,7 @@ void qbman_swp_mc_submit(struct qbman_swp *p, void *cmd, u8 cmd_verb)
 
 	dma_wmb();
 	*v = cmd_verb | p->mc.valid_bit;
-	dccvac(cmd);
+	clean(cmd);
 }
 
 /*
@@ -448,7 +440,7 @@ int qbman_swp_enqueue(struct qbman_swp *s, const struct qbman_eq_desc *d,
 	/* Set the verb byte, have to substitute in the valid-bit */
 	dma_wmb();
 	p->verb = d->verb | EQAR_VB(eqar);
-	dccvac(p);
+	clean(p);
 
 	return 0;
 }
@@ -641,7 +633,7 @@ int qbman_swp_pull(struct qbman_swp *s, struct qbman_pull_desc *d)
 	/* Set the verb byte, have to substitute in the valid-bit */
 	p->verb = d->verb | s->vdq.valid_bit;
 	s->vdq.valid_bit ^= QB_VALID_BIT;
-	dccvac(p);
+	clean(p);
 
 	return 0;
 }
@@ -861,7 +853,7 @@ int qbman_swp_release(struct qbman_swp *s, const struct qbman_release_desc *d,
 	 */
 	dma_wmb();
 	p->verb = d->verb | RAR_VB(rar) | num_buffers;
-	dccvac(p);
+	clean(p);
 
 	return 0;
 }

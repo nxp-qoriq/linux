@@ -435,12 +435,25 @@ static void fsl_qspi_init_lut(struct fsl_qspi *q)
 			    LUT1(FSL_READ, PAD1, rxfifo),
 				base + QUADSPI_LUT(lut_base + 1));
 	} else if (nor->flash_read == SPI_NOR_QUAD) {
-		qspi_writel(q, LUT0(CMD, PAD1, read_op) |
-			    LUT1(ADDR, PAD1, addrlen),
-				base + QUADSPI_LUT(lut_base));
-		qspi_writel(q, LUT0(DUMMY, PAD1, read_dm) |
-			    LUT1(FSL_READ, PAD4, rxfifo),
-				base + QUADSPI_LUT(lut_base + 1));
+		if (q->nor_size == 0x4000000) {
+			read_op = 0xEC;
+		qspi_writel(q,
+			LUT0(CMD, PAD1, read_op) | LUT1(ADDR, PAD4, addrlen),
+			base + QUADSPI_LUT(lut_base));
+		qspi_writel(q,
+			LUT0(MODE, PAD4, 0xff) | LUT1(DUMMY, PAD4, read_dm),
+			base + QUADSPI_LUT(lut_base + 1));
+		qspi_writel(q,
+			LUT0(FSL_READ, PAD4, rxfifo),
+			base + QUADSPI_LUT(lut_base + 2));
+		} else {
+			qspi_writel(q, LUT0(CMD, PAD1, read_op) |
+				    LUT1(ADDR, PAD1, addrlen),
+				    base + QUADSPI_LUT(lut_base));
+			qspi_writel(q, LUT0(DUMMY, PAD1, read_dm) |
+				    LUT1(FSL_READ, PAD4, rxfifo),
+				    base + QUADSPI_LUT(lut_base + 1));
+		}
 	} else if (nor->flash_read == SPI_NOR_DDR_QUAD) {
 		/* read mode : 1-4-4, such as Spansion s25fl128s. */
 		qspi_writel(q, LUT0(CMD, PAD1, read_op)

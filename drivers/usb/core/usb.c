@@ -452,7 +452,6 @@ struct usb_device *usb_alloc_dev(struct usb_device *parent,
 	 */
 	dev->dev.dma_mask = bus->controller->dma_mask;
 	dev->dev.dma_pfn_offset = bus->controller->dma_pfn_offset;
-	set_dev_node(&dev->dev, dev_to_node(bus->sysdev));
 	set_dev_node(&dev->dev, dev_to_node(bus->controller));
 	dev->state = USB_STATE_ATTACHED;
 	dev->lpm_disable_count = 1;

@@ -142,6 +142,20 @@
 	};
 };
 
+&qspi {
+	num-cs = <2>;
+	status = "okay";
+
+	qflash0: n25q128a13@0 {
+		compatible = "n25q128a13", "jedec,spi-nor";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		m25p,fast-read;
+		spi-max-frequency = <20000000>;
+		reg = <0>;
+	};
+};
+
 &enet0 {
 	tbi-handle = <&tbi1>;
 	phy-handle = <&sgmii_phy2>;

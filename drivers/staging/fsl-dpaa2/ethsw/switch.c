@@ -1770,8 +1770,7 @@ ethsw_probe(struct fsl_mc_device *sw_dev)
 
 		rtnl_lock();
 
-		err = netdev_master_upper_dev_link(port_netdev, netdev,
-						   NULL, NULL);
+		err = netdev_master_upper_dev_link(port_netdev, netdev);
 		if (err) {
 			dev_err(dev, "netdev_master_upper_dev_link error %d\n",
 				err);

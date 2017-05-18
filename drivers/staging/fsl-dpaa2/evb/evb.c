@@ -1273,8 +1273,7 @@ static int evb_probe(struct fsl_mc_device *evb_dev)
 			}
 
 			rtnl_lock();
-			err = netdev_master_upper_dev_link(port_netdev, netdev,
-							   NULL, NULL);
+			err = netdev_master_upper_dev_link(port_netdev, netdev);
 			if (unlikely(err)) {
 				dev_err(dev, "netdev_master_upper_dev_link err %d\n",
 					err);

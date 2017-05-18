@@ -823,10 +823,6 @@ static int ethsw_port_open(struct net_device *netdev)
 	struct ethsw_port_priv	*port_priv = netdev_priv(netdev);
 	int			err;
 
-	if (!netif_oper_up(netdev) ||
-	    port_priv->stp_state == BR_STATE_DISABLED)
-		return 0;
-
 	err = dpsw_if_enable(port_priv->ethsw_priv->mc_io, 0,
 			     port_priv->ethsw_priv->dpsw_handle,
 			     port_priv->port_index);

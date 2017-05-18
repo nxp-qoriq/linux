@@ -831,7 +831,21 @@ static int ethsw_port_open(struct net_device *netdev)
 		return err;
 	}
 
+	/* sync carrier state */
+	err = _ethsw_port_carrier_state_sync(netdev);
+	if (err) {
+		netdev_err(netdev, "_ethsw_port_carrier_state_sync err %d\n",
+			   err);
+		goto err_carrier_sync;
+	}
+
 	return 0;
+
+err_carrier_sync:
+	dpsw_if_disable(port_priv->ethsw_priv->mc_io, 0,
+			port_priv->ethsw_priv->dpsw_handle,
+			port_priv->port_index);
+	return err;
 }
 
 static int ethsw_port_stop(struct net_device *netdev)
@@ -1787,13 +1801,6 @@ ethsw_probe(struct fsl_mc_device *sw_dev)
 		if (err)
 			dev_warn(&netdev->dev,
 				 "ethsw_port_fdb_add_mc err %d\n", err);
-
-		/* sync carrier state */
-		err = _ethsw_port_carrier_state_sync(port_netdev);
-		if (err)
-			netdev_err(netdev,
-				   "_ethsw_port_carrier_state_sync err %d\n",
-				   err);
 	}
 
 	/* the switch starts up enabled */

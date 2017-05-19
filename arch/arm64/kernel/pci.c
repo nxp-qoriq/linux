@@ -63,6 +63,25 @@ int pcibios_add_device(struct pci_dev *dev)
 	return 0;
 }
 
+int pci_mmap_page_range(struct pci_dev *dev, struct vm_area_struct *vma,
+			enum pci_mmap_state mmap_state, int write_combine)
+{
+	if (mmap_state == pci_mmap_io)
+		return -EINVAL;
+
+	/*
+	 * Mark this as IO
+	 */
+	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+
+	if (remap_pfn_range(vma, vma->vm_start, vma->vm_pgoff,
+			     vma->vm_end - vma->vm_start,
+			     vma->vm_page_prot))
+		return -EAGAIN;
+
+	return 0;
+}
+
 /*
  * Check device tree if the service interrupts are there
  */

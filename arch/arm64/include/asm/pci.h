@@ -33,6 +33,10 @@ static inline int pci_get_legacy_ide_irq(struct pci_dev *dev, int channel)
 	return -ENODEV;
 }
 
+#define HAVE_PCI_MMAP
+extern int pci_mmap_page_range(struct pci_dev *dev, struct vm_area_struct *vma,
+			       enum pci_mmap_state mmap_state,
+			       int write_combine);
 static inline int pci_proc_domain(struct pci_bus *bus)
 {
 	return 1;

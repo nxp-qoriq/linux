@@ -366,6 +366,31 @@ static u32 qspi_readl(struct fsl_qspi *q, void __iomem *addr)
 		return ioread32(addr);
 }
 
+static inline u32 *u8tou32(u32 *dest, const u8 *src, size_t n)
+{
+	size_t i;
+	*dest = 0;
+
+	n = n > 4 ? 4 : n;
+	for (i = 0; i < n; i++)
+		*dest |= *src++ << i * 8;
+
+	return dest;
+
+}
+
+static inline u8 *u32tou8(u8 *dest, const u32 *src, size_t n)
+{
+	size_t i;
+	u8 *xdest = dest;
+
+	n = n > 4 ? 4 : n;
+	for (i = 0; i < n; i++)
+		*xdest++ = *src >> i * 8;
+
+	return dest;
+}
+
 /*
  * An IC bug makes us to re-arrange the 32-bit data.
  * The following chips, such as IMX6SLX, have fixed this bug.
@@ -700,10 +725,10 @@ static void fsl_qspi_read_data(struct fsl_qspi *q, int len, u8 *rxbuf)
 				q->chip_base_addr, tmp);
 
 		if (len >= 4) {
-			*((u32 *)rxbuf) = tmp;
+			u32tou8(rxbuf, &tmp, 4);
 			rxbuf += 4;
 		} else {
-			memcpy(rxbuf, &tmp, len);
+			u32tou8(rxbuf, &tmp, len);
 			break;
 		}
 
@@ -737,7 +762,7 @@ static inline void fsl_qspi_invalid(struct fsl_qspi *q)
 }
 
 static ssize_t fsl_qspi_nor_write(struct fsl_qspi *q, struct spi_nor *nor,
-				u8 opcode, unsigned int to, u32 *txbuf,
+				u8 opcode, unsigned int to, u8 *txbuf,
 				unsigned count)
 {
 	int ret, i, j;
@@ -752,9 +777,10 @@ static ssize_t fsl_qspi_nor_write(struct fsl_qspi *q, struct spi_nor *nor,
 
 	/* fill the TX data to the FIFO */
 	for (j = 0, i = ((count + 3) / 4); j < i; j++) {
-		tmp = fsl_qspi_endian_xchg(q, *txbuf);
+		u8tou32(&tmp, txbuf, 4);
+		tmp = fsl_qspi_endian_xchg(q, tmp);
 		qspi_writel(q, tmp, q->iobase + QUADSPI_TBDR);
-		txbuf++;
+		txbuf += 4;
 	}
 
 	/* fill the TXFIFO upto 16 bytes for i.MX7d */
@@ -1011,7 +1037,7 @@ static int fsl_qspi_read_reg(struct spi_nor *nor, u8 opcode, u8 *buf, int len)
 	u32 to = 0;
 
 	if (opcode == SPINOR_OP_SPANSION_RDAR)
-		memcpy(&to, nor->cmd_buf, 4);
+		u8tou32(&to, nor->cmd_buf, 4);
 
 	ret = fsl_qspi_runcmd(q, opcode, to, len);
 	if (ret)
@@ -1028,7 +1054,7 @@ static int fsl_qspi_write_reg(struct spi_nor *nor, u8 opcode, u8 *buf, int len)
 	u32 to = 0;
 
 	if (opcode == SPINOR_OP_SPANSION_WRAR)
-		memcpy(&to, nor->cmd_buf, 4);
+		u8tou32(&to, nor->cmd_buf, 4);
 
 	if (!buf) {
 		ret = fsl_qspi_runcmd(q, opcode, to, 1);
@@ -1040,7 +1066,7 @@ static int fsl_qspi_write_reg(struct spi_nor *nor, u8 opcode, u8 *buf, int len)
 
 	} else if (len > 0) {
 		ret = fsl_qspi_nor_write(q, nor, opcode, 0,
-					(u32 *)buf, len);
+					buf, len);
 		if (ret > 0)
 			return 0;
 	} else {
@@ -1056,7 +1082,7 @@ static ssize_t fsl_qspi_write(struct spi_nor *nor, loff_t to,
 {
 	struct fsl_qspi *q = nor->priv;
 	ssize_t ret = fsl_qspi_nor_write(q, nor, nor->program_opcode, to,
-					 (u32 *)buf, len);
+					 (u8 *)buf, len);
 
 	/* invalid the data in the AHB buffer. */
 	fsl_qspi_invalid(q);

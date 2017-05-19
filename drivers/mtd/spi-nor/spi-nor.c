@@ -41,6 +41,11 @@
 #define SPI_NOR_MAX_ADDR_WIDTH	4
 
 #define SPI_NOR_MICRON_WRITE_ENABLE    0x7f
+/* Added for S25FS-S family flash */
+#define SPINOR_CONFIG_REG3_OFFSET      0x800004
+#define CR3V_4KB_ERASE_UNABLE  0x8
+#define SPINOR_S25FS_FAMILY_ID 0x81
+
 
 struct flash_info {
 	char		*name;
@@ -91,6 +96,7 @@ struct flash_info {
 };
 
 #define JEDEC_MFR(info)	((info)->id[0])
+#define EXT_ID(info)	((info)->id[5])
 
 static const struct flash_info *spi_nor_match_id(const char *name);
 
@@ -1061,6 +1067,7 @@ static const struct flash_info spi_nor_ids[] = {
 	{ "s70fl01gs",  INFO(0x010221, 0x4d00, 256 * 1024, 256, 0) },
 	{ "s25sl12800", INFO(0x012018, 0x0300, 256 * 1024,  64, 0) },
 	{ "s25sl12801", INFO(0x012018, 0x0301,  64 * 1024, 256, 0) },
+	{ "s25fs256s1", INFO6(0x010219, 0x4d0181, 64 * 1024, 512, 0)},
 	{ "s25fl128s",	INFO6(0x012018, 0x4d0180, 64 * 1024, 256, SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
 	{ "s25fl129p0", INFO(0x012018, 0x4d00, 256 * 1024,  64, SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
 	{ "s25fs512s",  INFO6(0x010220, 0x4d0081, 256 * 1024, 256, SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ)},
@@ -1203,6 +1210,53 @@ static const struct flash_info *spi_nor_read_id(struct spi_nor *nor)
 		id[0], id[1], id[2]);
 	return ERR_PTR(-ENODEV);
 }
+/*
+ * The S25FS-S family physical sectors may be configured as a
+ * hybrid combination of eight 4-kB parameter sectors
+ * at the top or bottom of the address space with all
+ * but one of the remaining sectors being uniform size.
+ * The Parameter Sector Erase commands (20h or 21h) must
+ * be used to erase the 4-kB parameter sectors individually.
+ * The Sector (uniform sector) Erase commands (D8h or DCh)
+ * must be used to erase any of the remaining
+ * sectors, including the portion of highest or lowest address
+ * sector that is not overlaid by the parameter sectors.
+ * The uniform sector erase command has no effect on parameter sectors.
+ */
+static int spansion_s25fs_disable_4kb_erase(struct spi_nor *nor)
+{
+	struct fsl_qspi *q;
+	u32 cr3v_addr  = SPINOR_CONFIG_REG3_OFFSET;
+	u8 cr3v = 0x0;
+	int ret = 0x0;
+
+	q = nor->priv;
+
+	nor->cmd_buf[2] = cr3v_addr >> 16;
+	nor->cmd_buf[1] = cr3v_addr >> 8;
+	nor->cmd_buf[0] = cr3v_addr >> 0;
+
+	ret = nor->read_reg(nor, SPINOR_OP_SPANSION_RDAR, &cr3v, 1);
+	if (ret)
+		return ret;
+	if (cr3v & CR3V_4KB_ERASE_UNABLE)
+		return 0;
+	ret = nor->write_reg(nor, SPINOR_OP_WREN, NULL, 0);
+	if (ret)
+		return ret;
+	cr3v = CR3V_4KB_ERASE_UNABLE;
+	nor->program_opcode = SPINOR_OP_SPANSION_WRAR;
+	nor->write(nor, cr3v_addr, 1, &cr3v);
+
+	ret = nor->read_reg(nor, SPINOR_OP_SPANSION_RDAR, &cr3v, 1);
+	if (ret)
+		return ret;
+	if (!(cr3v & CR3V_4KB_ERASE_UNABLE))
+		return -EPERM;
+
+	return 0;
+}
+
 
 static int spi_nor_read(struct mtd_info *mtd, loff_t from, size_t len,
 			size_t *retlen, u_char *buf)
@@ -1614,6 +1668,13 @@ int spi_nor_scan(struct spi_nor *nor, const char *name, enum read_mode mode)
 		write_enable(nor);
 		write_sr(nor, ret)
 	}
+
+	if (EXT_ID(info) == SPINOR_S25FS_FAMILY_ID) {
+		ret = spansion_s25fs_disable_4kb_erase(nor);
+		if (ret)
+			return ret;
+	}
+
 
 	if (!mtd->name)
 		mtd->name = dev_name(dev);

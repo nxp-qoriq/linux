@@ -2,7 +2,6 @@
 # Freescale SOC drivers
 #
 
-source "drivers/soc/fsl/qbman/Kconfig"
 source "drivers/soc/fsl/qe/Kconfig"
 
 config FSL_GUTS

@@ -118,6 +118,7 @@
 		#interrupt-cells = <3>;
 		#address-cells = <2>;
 		#size-cells = <2>;
+		ranges;
 		interrupt-controller;
 		reg = <0x0 0x06000000 0 0x10000>, /* GIC Dist */
 		      <0x0 0x06100000 0 0x100000>, /* GICR(RD_base+SGI_base)*/

@@ -1072,7 +1072,7 @@ static ssize_t fsl_qspi_read(struct spi_nor *nor, loff_t from,
 		len);
 
 	/* Read out the data directly from the AHB buffer.*/
-	memcpy(buf, q->ahb_addr + q->chip_base_addr + from - q->memmap_offs,
+	memcpy_toio(buf, q->ahb_addr + q->chip_base_addr + from - q->memmap_offs,
 		len);
 
 	return len;

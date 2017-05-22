@@ -210,6 +210,12 @@
 				reg = <0xa>;
 			};
 		};
+
+		dcfg: dcfg@1e00000 {
+			compatible = "fsl,ls1088a-dcfg", "syscon";
+			reg = <0x0 0x1e00000 0x0 0x10000>;
+			little-endian;
+		};
 	};
 
 	sysclk: sysclk {

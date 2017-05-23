@@ -360,7 +360,7 @@
 			compatible = "fsl,ls2088a-pcie", "fsl,ls1088a-pcie",
 				     "snps,dw-pcie";
 			reg = <0x00 0x03400000 0x0 0x00100000   /* controller registers */
-			       0x10 0x00000000 0x0 0x00002000>; /* configuration space */
+			       0x20 0x00000000 0x0 0x00002000>; /* configuration space */
 			reg-names = "regs", "config";
 			interrupts = <0 108 IRQ_TYPE_LEVEL_HIGH>; /* aer interrupt */
 			interrupt-names = "aer";
@@ -385,7 +385,7 @@
 			compatible = "fsl,ls2088a-pcie", "fsl,ls1088a-pcie",
 				     "snps,dw-pcie";
 			reg = <0x00 0x03500000 0x0 0x00100000   /* controller registers */
-			       0x12 0x00000000 0x0 0x00002000>; /* configuration space */
+			       0x28 0x00000000 0x0 0x00002000>; /* configuration space */
 			reg-names = "regs", "config";
 			interrupts = <0 113 IRQ_TYPE_LEVEL_HIGH>; /* aer interrupt */
 			interrupt-names = "aer";
@@ -410,7 +410,7 @@
 			compatible = "fsl,ls2088a-pcie", "fsl,ls1088a-pcie",
 				     "snps,dw-pcie";
 			reg = <0x00 0x03600000 0x0 0x00100000   /* controller registers */
-			       0x14 0x00000000 0x0 0x00002000>; /* configuration space */
+			       0x30 0x00000000 0x0 0x00002000>; /* configuration space */
 			reg-names = "regs", "config";
 			interrupts = <0 118 IRQ_TYPE_LEVEL_HIGH>; /* aer interrupt */
 			interrupt-names = "aer";

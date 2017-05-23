@@ -317,6 +317,11 @@ static int ehci_fsl_setup_phy(struct usb_hcd *hcd,
 		/* fall through */
 	case FSL_USB2_PHY_UTMI:
 	case FSL_USB2_PHY_UTMI_DUAL:
+		if (pdata->has_fsl_erratum_a006918) {
+			pr_warn("fsl-ehci: USB PHY clock invalid\n");
+			return -EINVAL;
+		}
+
 		if (pdata->have_sysif_regs && pdata->controller_ver) {
 			/* controller version 1.6 or above */
 			clrsetbits_be32(non_ehci + FSL_SOC_USB_CTRL,

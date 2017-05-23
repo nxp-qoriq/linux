@@ -13,23 +13,40 @@
 	#size-cells= <2>;
 
 	cpus{
-		#address-cells= <0x2>;
+		#address-cells= <0x1>;
 		#size-cells= <0x0>;
 
 		cpu0:cpu@0 {
 			device_type= "cpu";
 			compatible= "arm,cortex-a72", "arm,armv8";
-			reg= <0x0 0x0>;	/* check if address is correct */
-			enable-method= "psci"; /* check if this is needed */
+			reg = <0x0>;
+			enable-method= "psci";
 		};
 
 		cpu1:cpu@1 {
 			device_type= "cpu";
 			compatible= "arm,cortex-a72", "arm,armv8";
-			reg= <0x0 0x1>;	/* check if address is correct */
-			enable-method= "psci";/* check if this is needed */
+			reg= <0x1>;
+			enable-method= "psci";
 		};
 	};
+
+	memory@01080000 {
+		device_type = "memory";
+		reg = <0x00000000 0x01080000 0 0x80000000>; /* DRAM space - 1, size : 2 GB DRAM */
+	};
+
+/* Sudhanshu : 2017-04-05 : Commented for later use.
+ *	gpu_2d: gpu@F0C0000 {
+ *		compatible = "vivante,gc";
+ *		reg = <0x0 0x0F0C0000 0x0 0x1000>;
+ *		interrupts = <0 10 IRQ_TYPE_LEVEL_HIGH>;
+ *		clocks = <&clks IMX6QDL_CLK_GPU2D_AXI>,
+ *			<&clks IMX6QDL_CLK_GPU2D_CORE>;
+ *		clock-names = "bus", "core";
+ *		power-domains = <&gpc 1>;
+ *	};
+ */
 
 	sysclk:sysclk {
 		compatible= "fixed-clock";
@@ -43,11 +60,6 @@
 		reg= <0x0 0x1300000 0x0 0x1000>;
 		#clock-cells= <2>;
 		clocks= <&sysclk>;
-	};
-
-	memory@01080000{
-		device_type= "memory";
-		reg= <0x00000000 0x01080000 0 0x80000000>;/* DRAM space - 1, size : 2 GB DRAM */
 	};
 
 	gic:interrupt-controller@6000000 {
@@ -93,36 +105,68 @@
 			    <1 10 0x8>; /* Hypervisor PPI, active-low */
 	};
 
-	flextimer{
-		compatible= "fsl,flextimer";
-		reg= <0x0 0x02800000 0 0x10000>, /* FTMR1 */
-		     <0x0 0x02810000 0 0x10000>, /* FTMR2 */
-		     <0x0 0x02820000 0 0x10000>, /* FTMR3 */
-		     <0x0 0x02830000 0 0x10000>, /* FTMR4 */
-		     <0x0 0x02840000 0 0x10000>, /* FTMR3 */
-		     <0x0 0x02850000 0 0x10000>, /* FTMR3 */
-		     <0x0 0x02860000 0 0x10000>, /* FTMR3 */
-		     <0x0 0x02870000 0 0x10000>; /* FTMR3 */
-		interrupts= <1 13 0x8>, /* Physical Secure PPI, active-low */
-		    <1 14 0x8>, /* Physical Non-Secure PPI, active-low */
-		    <1 11 0x8>, /* Virtual PPI, active-low */
-		    <1 10 0x8>; /* Hypervisor PPI, active-low */
+	flextimer1: flextimer@2800000 {
+		compatible = "fsl,flextimer";
+		reg = <0x0 0x02800000 0 0x10000>; /* FTMR1 */
+		interrupts = <0 44 0x8>;
 	};
 
-	serial0:serial@21C0000 {
+	flextimer2: flextimer@2810000 {
+		compatible = "fsl,flextimer";
+		reg = <0x0 0x02810000 0 0x10000>; /* FTMR2 */
+		interrupts = <0 45 0x8>;
+	};
+
+	flextimer3: flextimer@2820000 {
+		compatible = "fsl,flextimer";
+		reg = <0x0 0x02820000 0 0x10000>; /* FTMR3 */
+		interrupts = <0 242 0x8>;
+	};
+
+	flextimer4: flextimer@2830000 {
+		compatible = "fsl,flextimer";
+		reg = <0x0 0x02830000 0 0x10000>; /* FTMR4 */
+		interrupts = <0 243 0x8>;
+	};
+
+	flextimer5: flextimer@2840000 {
+		compatible = "fsl,flextimer";
+		reg = <0x0 0x02840000 0 0x10000>, /* FTMR5 */
+		interrupts = <0 243 0x8>;
+	};
+
+	flextimer6: flextimer@2850000 {
+		compatible = "fsl,flextimer";
+		reg = <0x0 0x02850000 0 0x10000>, /* FTMR6 */
+		interrupts = <0 243 0x8>;
+	};
+
+	flextimer7: flextimer@2860000 {
+		compatible = "fsl,flextimer";
+		reg = <0x0 0x02860000 0 0x10000>, /* FTMR7 */
+		interrupts = <0 243 0x8>;
+	};
+
+	flextimer8: flextimer@2870000 {
+		compatible = "fsl,flextimer";
+		reg = <0x0 0x02870000 0 0x10000>; /* FTMR8 */
+		interrupts = <0 243 0x8>;
+	};
+
+	serial0: serial@21C0000 {		/* DUART */
 		device_type= "serial";
 		compatible= "fsl,ns16550", "ns16550a";
 		reg= <0x0 0x21C0000 0x0 0x1000>;
 		clock-frequency= <0>;	/* Updated by bootloader */
-		interrupts= <0 32 0x1>;	/* edge triggered */
+		interrupts = <1 0 0x1>; /* SP Interrupt = 1 & edge triggered */
 	};
 
-	serial1:serial@2260000 {
+	serial1: serial@2260000 {		/* LPUART */
 		device_type= "serial";
 		compatible= "fsl,ns16550", "ns16550a";
 		reg= <0x0 0x2260000 0x0 0x1000>;
 		clock-frequency= <0>;	/* Updated by bootloader */
-		interrupts= <0 32 0x1>;	/* edge triggered */
+		interrupts = <1 50 0x1>; /* SP Interrupt = 1 & edge triggered */
 	};
 
 	dspi1:dspi@2100000 {
@@ -143,18 +187,6 @@
 		num-cs= <6>;
 	};
 
-/* TODO: Remove this node. This is NOT defined in CCSR block offsets for Ch3.2
- *	qspi:quadspi@1550000 {
- *		compatible= "fsl,vf610-qspi";
- *		#address-cells= <1>;
- *		#size-cells= <0>;
- *		reg= <0x0 0x20c0000 0x0 0x10000>,
- *			<0x00x20000000 0x0 0x10000000>;
- *		reg-names= "QuadSPI", "QuadSPI-memory";
- *		num-cs= <4>;
- *	};
- */
-
 	usb0:usb3@3100000 {
 		compatible= "fsl,layerscape-dwc3";
 		reg= <0x0 0x3100000 0x0 0x10000>;
@@ -167,6 +199,24 @@
 		reg= <0x0 0x3110000 0x0 0x10000>;
 		interrupts= <0 81 0x4>; /* Level high type */
 		dr_mode= "host";
+	};
+
+	sdhci_0: sdhci@02140000 {
+		compatible = "samsung,exynos4210-sdhci";
+		reg = <0x0 0x02140000 0x0 0x1000>;
+		interrupts = <0 28 0x4>;
+		clocks = <&clock CLK_SDMMC0>, <&clock CLK_SCLK_MMC0>;
+		clock-names = "hsmmc", "mmc_busclk.2";
+		status = "disabled";
+	};
+
+	sdhci_1: sdhci@02150000 {
+		compatible = "samsung,exynos4210-sdhci";
+		reg = <0x0 0x02150000 0x0 0x1000>;
+		interrupts = <0 63 0x4>;
+		clocks = <&clock CLK_SDMMC1>, <&clock CLK_SCLK_MMC1>;
+		clock-names = "hsmmc", "mmc_busclk.2";
+		status = "disabled";
 	};
 
 	sata@3200000{
@@ -209,4 +259,119 @@
 		ranges= <0x81000000 0x0 0x00000000 0x12 0x00020000 0x0 0x00010000   /* downstream I/O */
 			 0x82000000 0x0 0x40000000 0x12 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
 	};
+
+	i2c1: i2c@2000000 {
+		compatible = "fsl,vf610-i2c";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x0 0x2000000 0x0 0x1000>;
+		interrupts = <0 66 0x4>;/* Interrupt lines of i2c1,2 are ORed */
+		clock-names = "i2c";
+		clocks = <&platform_clk 1>;
+		status = "disabled";
+	};
+
+	i2c2: i2c@2010000 {
+		compatible = "fsl,vf610-i2c";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x0 0x2010000 0x0 0x1000>;
+		interrupts = <0 66 0x4>;/* Interrupt lines of i2c1,2 are ORed */
+		clock-names = "i2c";
+		clocks = <&platform_clk 1>;
+		status = "disabled";
+	};
+
+	i2c3: i2c@2020000 {
+		compatible = "fsl,vf610-i2c";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x0 0x2020000 0x0 0x1000>;
+		interrupts = <0 67 0x4>;/* Interrupt lines of i2c3,4 are ORed */
+		clock-names = "i2c";
+		clocks = <&platform_clk 1>;
+		status = "disabled";
+	};
+
+	i2c4: i2c@2030000 {
+		compatible = "fsl,vf610-i2c";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x0 0x2030000 0x0 0x1000>;
+		interrupts = <0 67 0x4>;/* Interrupt lines of i2c3,4 are ORed */
+		clock-names = "i2c";
+		clocks = <&platform_clk 1>;
+		status = "disabled";
+	};
+
+	i2c5: i2c@2040000 {
+		compatible = "fsl,vf610-i2c";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x0 0x2040000 0x0 0x1000>;
+		interrupts = <0 106 0x4>;/* Interrupt lines of i2c6,7 are ORed*/
+		clock-names = "i2c";
+		clocks = <&platform_clk 1>;
+		status = "disabled";
+	};
+
+	i2c6: i2c@2050000 {
+		compatible = "fsl,vf610-i2c";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x0 0x2050000 0x0 0x1000>;
+		interrupts = <0 106 0x4>;/* Interrupt lines of i2c6,7 are ORed*/
+		clock-names = "i2c";
+		clocks = <&platform_clk 1>;
+		status = "disabled";
+	};
+
+	i2c7: i2c@2060000 {
+		compatible = "fsl,vf610-i2c";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x0 0x2060000 0x0 0x1000>;
+		interrupts = <0 107 0x4>;/* Interrupt lines of i2c7,8 are ORed*/
+		clock-names = "i2c";
+		clocks = <&platform_clk 1>;
+		status = "disabled";
+	};
+
+	i2c8: i2c@2070000 {
+		compatible = "fsl,vf610-i2c";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x0 0x2070000 0x0 0x1000>;
+		interrupts = <0 107 0x4>;/* Interrupt lines of i2c7,8 are ORed*/
+		clock-names = "i2c";
+		clocks = <&platform_clk 1>;
+		status = "disabled";
+	};
+
+	can1: flexcan@02180000 {
+		compatible = "fsl,imx6ul-flexcan", "fsl,imx6q-flexcan";
+		reg = <0x0 0x02180000 0x0 0x1000>;
+		interrupts = <0 21 0x4>;
+		clocks = <&clks IMX6UL_CLK_CAN1_IPG>,
+			 <&clks IMX6UL_CLK_CAN1_SERIAL>;
+		clock-names = "ipg", "per";
+		status = "disabled";
+	};
+
+	can2: flexcan@02190000 {
+		compatible = "fsl,imx6ul-flexcan", "fsl,imx6q-flexcan";
+		reg = <0x0 0x02190000 0x0 0x1000>;
+		interrupts = <0 22 0x4>;
+		clocks = <&clks IMX6UL_CLK_CAN2_IPG>,
+			 <&clks IMX6UL_CLK_CAN2_SERIAL>;
+		clock-names = "ipg", "per";
+		status = "disabled";
+	};
+
+/*
+ * TODO : Sudhanshu 20170406:  Add Nodes for
+ * 1) GPIO
+ * 2) FlexSPI *1 controller
+ */
+
 };

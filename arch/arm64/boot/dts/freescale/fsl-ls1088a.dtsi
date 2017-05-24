@@ -458,6 +458,7 @@
 			reg-names = "ahci", "sata-ecc";
 			interrupts = <0 133 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clockgen 4 3>;
+			dma-coherent;
 			status = "disabled";
 		};
 

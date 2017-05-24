@@ -634,6 +634,7 @@
 			reg-names = "ahci", "sata-ecc";
 			interrupts = <GIC_SPI 69 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clockgen 4 1>;
+			dma-coherent;
 		};
 
 		msi1: msi-controller@1580000 {

@@ -1,4 +1,4 @@
-/* Copyright 2013-2015 Freescale Semiconductor, Inc.
+/* Copyright 2013-2016 Freescale Semiconductor, Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -36,30 +36,33 @@
 #define DPDMAI_VER_MAJOR				2
 #define DPDMAI_VER_MINOR				2
 
+#define DPDMAI_CMD_BASE_VERSION			0
+#define DPDMAI_CMD_ID_OFFSET				4
+
 /* Command IDs */
-#define DPDMAI_CMDID_CLOSE				0x800
-#define DPDMAI_CMDID_OPEN				0x80E
-#define DPDMAI_CMDID_CREATE				0x90E
-#define DPDMAI_CMDID_DESTROY				0x900
+#define DPDMAI_CMDID_CLOSE                           ((0x800 << DPDMAI_CMD_ID_OFFSET) | DPDMAI_CMD_BASE_VERSION)
+#define DPDMAI_CMDID_OPEN                            ((0x80E << DPDMAI_CMD_ID_OFFSET) | DPDMAI_CMD_BASE_VERSION)
+#define DPDMAI_CMDID_CREATE                          ((0x90E << DPDMAI_CMD_ID_OFFSET) | DPDMAI_CMD_BASE_VERSION)
+#define DPDMAI_CMDID_DESTROY                         ((0x900 << DPDMAI_CMD_ID_OFFSET) | DPDMAI_CMD_BASE_VERSION)
 
-#define DPDMAI_CMDID_ENABLE				0x002
-#define DPDMAI_CMDID_DISABLE				0x003
-#define DPDMAI_CMDID_GET_ATTR				0x004
-#define DPDMAI_CMDID_RESET				0x005
-#define DPDMAI_CMDID_IS_ENABLED				0x006
+#define DPDMAI_CMDID_ENABLE                          ((0x002 << DPDMAI_CMD_ID_OFFSET) | DPDMAI_CMD_BASE_VERSION)
+#define DPDMAI_CMDID_DISABLE                         ((0x003 << DPDMAI_CMD_ID_OFFSET) | DPDMAI_CMD_BASE_VERSION)
+#define DPDMAI_CMDID_GET_ATTR                        ((0x004 << DPDMAI_CMD_ID_OFFSET) | DPDMAI_CMD_BASE_VERSION)
+#define DPDMAI_CMDID_RESET                           ((0x005 << DPDMAI_CMD_ID_OFFSET) | DPDMAI_CMD_BASE_VERSION)
+#define DPDMAI_CMDID_IS_ENABLED                      ((0x006 << DPDMAI_CMD_ID_OFFSET) | DPDMAI_CMD_BASE_VERSION)
 
-#define DPDMAI_CMDID_SET_IRQ				0x010
-#define DPDMAI_CMDID_GET_IRQ				0x011
-#define DPDMAI_CMDID_SET_IRQ_ENABLE			0x012
-#define DPDMAI_CMDID_GET_IRQ_ENABLE			0x013
-#define DPDMAI_CMDID_SET_IRQ_MASK			0x014
-#define DPDMAI_CMDID_GET_IRQ_MASK			0x015
-#define DPDMAI_CMDID_GET_IRQ_STATUS			0x016
-#define DPDMAI_CMDID_CLEAR_IRQ_STATUS			0x017
+#define DPDMAI_CMDID_SET_IRQ                         ((0x010 << DPDMAI_CMD_ID_OFFSET) | DPDMAI_CMD_BASE_VERSION)
+#define DPDMAI_CMDID_GET_IRQ                         ((0x011 << DPDMAI_CMD_ID_OFFSET) | DPDMAI_CMD_BASE_VERSION)
+#define DPDMAI_CMDID_SET_IRQ_ENABLE                  ((0x012 << DPDMAI_CMD_ID_OFFSET) | DPDMAI_CMD_BASE_VERSION)
+#define DPDMAI_CMDID_GET_IRQ_ENABLE                  ((0x013 << DPDMAI_CMD_ID_OFFSET) | DPDMAI_CMD_BASE_VERSION)
+#define DPDMAI_CMDID_SET_IRQ_MASK                    ((0x014 << DPDMAI_CMD_ID_OFFSET) | DPDMAI_CMD_BASE_VERSION)
+#define DPDMAI_CMDID_GET_IRQ_MASK                    ((0x015 << DPDMAI_CMD_ID_OFFSET) | DPDMAI_CMD_BASE_VERSION)
+#define DPDMAI_CMDID_GET_IRQ_STATUS                  ((0x016 << DPDMAI_CMD_ID_OFFSET) | DPDMAI_CMD_BASE_VERSION)
+#define DPDMAI_CMDID_CLEAR_IRQ_STATUS                ((0x017 << DPDMAI_CMD_ID_OFFSET) | DPDMAI_CMD_BASE_VERSION)
 
-#define DPDMAI_CMDID_SET_RX_QUEUE			0x1A0
-#define DPDMAI_CMDID_GET_RX_QUEUE			0x1A1
-#define DPDMAI_CMDID_GET_TX_QUEUE			0x1A2
+#define DPDMAI_CMDID_SET_RX_QUEUE                    ((0x1A0 << DPDMAI_CMD_ID_OFFSET) | DPDMAI_CMD_BASE_VERSION)
+#define DPDMAI_CMDID_GET_RX_QUEUE                    ((0x1A1 << DPDMAI_CMD_ID_OFFSET) | DPDMAI_CMD_BASE_VERSION)
+#define DPDMAI_CMDID_GET_TX_QUEUE                    ((0x1A2 << DPDMAI_CMD_ID_OFFSET) | DPDMAI_CMD_BASE_VERSION)
 
 
 #define MC_CMD_HDR_TOKEN_O 32  /* Token field offset */

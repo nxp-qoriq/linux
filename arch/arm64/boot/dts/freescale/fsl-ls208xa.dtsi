@@ -354,6 +354,7 @@
 			msi-parent = <&its>;
 			#address-cells = <3>;
 			#size-cells = <1>;
+			#stream-id-cells = <2>;
 
 			/*
 			 * Region type 0x0 - MC portals

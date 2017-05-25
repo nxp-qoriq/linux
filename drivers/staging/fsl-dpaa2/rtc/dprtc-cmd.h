@@ -33,153 +33,128 @@
 #define _FSL_DPRTC_CMD_H
 
 /* DPRTC Version */
-#define DPRTC_VER_MAJOR				1
-#define DPRTC_VER_MINOR				0
+#define DPRTC_VER_MAJOR			2
+#define DPRTC_VER_MINOR			0
 
-#define DPRTC_CMD_BASE_VER				0
-#define DPRTC_CMD_ID_OFF				4
-#define DPRTC_CMD_ID(id) (((id) << DPRTC_CMD_ID_OFF) | DPRTC_CMD_BASE_VER)
+/* Command versioning */
+#define DPRTC_CMD_BASE_VERSION		1
+#define DPRTC_CMD_ID_OFFSET		4
+
+#define DPRTC_CMD(id)	(((id) << DPRTC_CMD_ID_OFFSET) | DPRTC_CMD_BASE_VERSION)
 
 /* Command IDs */
-#define DPRTC_CMDID_CLOSE                     DPRTC_CMD_ID(0x800)
-#define DPRTC_CMDID_OPEN                      DPRTC_CMD_ID(0x810)
-#define DPRTC_CMDID_CREATE                    DPRTC_CMD_ID(0x910)
-#define DPRTC_CMDID_DESTROY                   DPRTC_CMD_ID(0x900)
+#define DPRTC_CMDID_CLOSE			DPRTC_CMD(0x800)
+#define DPRTC_CMDID_OPEN			DPRTC_CMD(0x810)
+#define DPRTC_CMDID_CREATE			DPRTC_CMD(0x910)
+#define DPRTC_CMDID_DESTROY			DPRTC_CMD(0x990)
+#define DPRTC_CMDID_GET_API_VERSION		DPRTC_CMD(0xa10)
 
-#define DPRTC_CMDID_ENABLE                    DPRTC_CMD_ID(0x002)
-#define DPRTC_CMDID_DISABLE                   DPRTC_CMD_ID(0x003)
-#define DPRTC_CMDID_GET_ATTR                  DPRTC_CMD_ID(0x004)
-#define DPRTC_CMDID_RESET                     DPRTC_CMD_ID(0x005)
-#define DPRTC_CMDID_IS_ENABLED                DPRTC_CMD_ID(0x006)
+#define DPRTC_CMDID_ENABLE			DPRTC_CMD(0x002)
+#define DPRTC_CMDID_DISABLE			DPRTC_CMD(0x003)
+#define DPRTC_CMDID_GET_ATTR			DPRTC_CMD(0x004)
+#define DPRTC_CMDID_RESET			DPRTC_CMD(0x005)
+#define DPRTC_CMDID_IS_ENABLED			DPRTC_CMD(0x006)
 
-#define DPRTC_CMDID_SET_IRQ                   DPRTC_CMD_ID(0x010)
-#define DPRTC_CMDID_GET_IRQ                   DPRTC_CMD_ID(0x011)
-#define DPRTC_CMDID_SET_IRQ_ENABLE            DPRTC_CMD_ID(0x012)
-#define DPRTC_CMDID_GET_IRQ_ENABLE            DPRTC_CMD_ID(0x013)
-#define DPRTC_CMDID_SET_IRQ_MASK              DPRTC_CMD_ID(0x014)
-#define DPRTC_CMDID_GET_IRQ_MASK              DPRTC_CMD_ID(0x015)
-#define DPRTC_CMDID_GET_IRQ_STATUS            DPRTC_CMD_ID(0x016)
-#define DPRTC_CMDID_CLEAR_IRQ_STATUS          DPRTC_CMD_ID(0x017)
+#define DPRTC_CMDID_SET_IRQ_ENABLE		DPRTC_CMD(0x012)
+#define DPRTC_CMDID_GET_IRQ_ENABLE		DPRTC_CMD(0x013)
+#define DPRTC_CMDID_SET_IRQ_MASK		DPRTC_CMD(0x014)
+#define DPRTC_CMDID_GET_IRQ_MASK		DPRTC_CMD(0x015)
+#define DPRTC_CMDID_GET_IRQ_STATUS		DPRTC_CMD(0x016)
+#define DPRTC_CMDID_CLEAR_IRQ_STATUS		DPRTC_CMD(0x017)
 
-#define DPRTC_CMDID_SET_CLOCK_OFFSET          DPRTC_CMD_ID(0x1d0)
-#define DPRTC_CMDID_SET_FREQ_COMPENSATION     DPRTC_CMD_ID(0x1d1)
-#define DPRTC_CMDID_GET_FREQ_COMPENSATION     DPRTC_CMD_ID(0x1d2)
-#define DPRTC_CMDID_GET_TIME                  DPRTC_CMD_ID(0x1d3)
-#define DPRTC_CMDID_SET_TIME                  DPRTC_CMD_ID(0x1d4)
-#define DPRTC_CMDID_SET_ALARM                 DPRTC_CMD_ID(0x1d5)
-#define DPRTC_CMDID_SET_PERIODIC_PULSE        DPRTC_CMD_ID(0x1d6)
-#define DPRTC_CMDID_CLEAR_PERIODIC_PULSE      DPRTC_CMD_ID(0x1d7)
-#define DPRTC_CMDID_SET_EXT_TRIGGER           DPRTC_CMD_ID(0x1d8)
-#define DPRTC_CMDID_CLEAR_EXT_TRIGGER         DPRTC_CMD_ID(0x1d9)
-#define DPRTC_CMDID_GET_EXT_TRIGGER_TIMESTAMP DPRTC_CMD_ID(0x1dA)
+#define DPRTC_CMDID_SET_CLOCK_OFFSET		DPRTC_CMD(0x1d0)
+#define DPRTC_CMDID_SET_FREQ_COMPENSATION	DPRTC_CMD(0x1d1)
+#define DPRTC_CMDID_GET_FREQ_COMPENSATION	DPRTC_CMD(0x1d2)
+#define DPRTC_CMDID_GET_TIME			DPRTC_CMD(0x1d3)
+#define DPRTC_CMDID_SET_TIME			DPRTC_CMD(0x1d4)
+#define DPRTC_CMDID_SET_ALARM			DPRTC_CMD(0x1d5)
+#define DPRTC_CMDID_SET_PERIODIC_PULSE		DPRTC_CMD(0x1d6)
+#define DPRTC_CMDID_CLEAR_PERIODIC_PULSE	DPRTC_CMD(0x1d7)
+#define DPRTC_CMDID_SET_EXT_TRIGGER		DPRTC_CMD(0x1d8)
+#define DPRTC_CMDID_CLEAR_EXT_TRIGGER		DPRTC_CMD(0x1d9)
+#define DPRTC_CMDID_GET_EXT_TRIGGER_TIMESTAMP	DPRTC_CMD(0x1dA)
 
-/*                cmd, param, offset, width, type, arg_name */
-#define DPRTC_CMD_OPEN(cmd, dpbp_id) \
-	MC_CMD_OP(cmd, 0, 0,  32, int,	    dpbp_id)
+/* Macros for accessing command fields smaller than 1byte */
+#define DPRTC_MASK(field)        \
+	GENMASK(DPRTC_##field##_SHIFT + DPRTC_##field##_SIZE - 1, \
+		DPRTC_##field##_SHIFT)
+#define dprtc_get_field(var, field)      \
+	(((var) & DPRTC_MASK(field)) >> DPRTC_##field##_SHIFT)
 
-/*                cmd, param, offset, width, type, arg_name */
-#define DPRTC_RSP_IS_ENABLED(cmd, en) \
-	MC_RSP_OP(cmd, 0, 0,  1,  int,	    en)
+#pragma pack(push, 1)
+struct dprtc_cmd_open {
+	uint32_t dprtc_id;
+};
 
-/*                cmd, param, offset, width, type, arg_name */
-#define DPRTC_CMD_SET_IRQ(cmd, irq_index, irq_cfg) \
-do { \
-	MC_CMD_OP(cmd, 0, 0,  8,  uint8_t,  irq_index);\
-	MC_CMD_OP(cmd, 0, 32, 32, uint32_t, irq_cfg->val);\
-	MC_CMD_OP(cmd, 1, 0,  64, uint64_t, irq_cfg->addr); \
-	MC_CMD_OP(cmd, 2, 0,  32, int,	    irq_cfg->irq_num); \
-} while (0)
+struct dprtc_cmd_destroy {
+	uint32_t object_id;
+};
 
-/*                cmd, param, offset, width, type, arg_name */
-#define DPRTC_CMD_GET_IRQ(cmd, irq_index) \
-	MC_CMD_OP(cmd, 0, 32, 8,  uint8_t,  irq_index)
+#define DPRTC_ENABLE_SHIFT	0
+#define DPRTC_ENABLE_SIZE	1
 
-/*                cmd, param, offset, width, type, arg_name */
-#define DPRTC_RSP_GET_IRQ(cmd, type, irq_cfg) \
-do { \
-	MC_RSP_OP(cmd, 0, 0,  32, uint32_t, irq_cfg->val); \
-	MC_RSP_OP(cmd, 1, 0,  64, uint64_t, irq_cfg->addr); \
-	MC_RSP_OP(cmd, 2, 0,  32, int,	    irq_cfg->irq_num); \
-	MC_RSP_OP(cmd, 2, 32, 32, int,	    type); \
-} while (0)
+struct dprtc_rsp_is_enabled {
+	uint8_t en;
+};
 
-/*                cmd, param, offset, width, type, arg_name */
-#define DPRTC_CMD_SET_IRQ_ENABLE(cmd, irq_index, en) \
-do { \
-	MC_CMD_OP(cmd, 0, 0,  8,  uint8_t,  en); \
-	MC_CMD_OP(cmd, 0, 32, 8,  uint8_t,  irq_index);\
-} while (0)
+struct dprtc_cmd_get_irq {
+	uint32_t pad;
+	uint8_t irq_index;
+};
 
-/*                cmd, param, offset, width, type, arg_name */
-#define DPRTC_CMD_GET_IRQ_ENABLE(cmd, irq_index) \
-	MC_CMD_OP(cmd, 0, 32, 8,  uint8_t,  irq_index)
+struct dprtc_cmd_set_irq_enable {
+	uint8_t en;
+	uint8_t pad[3];
+	uint8_t irq_index;
+};
 
-/*                cmd, param, offset, width, type, arg_name */
-#define DPRTC_RSP_GET_IRQ_ENABLE(cmd, en) \
-	MC_RSP_OP(cmd, 0, 0,  8,  uint8_t,  en)
+struct dprtc_rsp_get_irq_enable {
+	uint8_t en;
+};
 
-/*                cmd, param, offset, width, type, arg_name */
-#define DPRTC_CMD_SET_IRQ_MASK(cmd, irq_index, mask) \
-do { \
-	MC_CMD_OP(cmd, 0, 0,  32, uint32_t, mask);\
-	MC_CMD_OP(cmd, 0, 32, 8,  uint8_t,  irq_index);\
-} while (0)
+struct dprtc_cmd_set_irq_mask {
+	uint32_t mask;
+	uint8_t irq_index;
+};
 
-/*                cmd, param, offset, width, type, arg_name */
-#define DPRTC_CMD_GET_IRQ_MASK(cmd, irq_index) \
-	MC_CMD_OP(cmd, 0, 32, 8,  uint8_t,  irq_index)
+struct dprtc_rsp_get_irq_mask {
+	uint32_t mask;
+};
 
-/*                cmd, param, offset, width, type, arg_name */
-#define DPRTC_RSP_GET_IRQ_MASK(cmd, mask) \
-	MC_RSP_OP(cmd, 0, 0,  32, uint32_t, mask)
+struct dprtc_cmd_get_irq_status {
+	uint32_t status;
+	uint8_t irq_index;
+};
 
-/*                cmd, param, offset, width, type, arg_name */
-#define DPRTC_CMD_GET_IRQ_STATUS(cmd, irq_index, status) \
-do { \
-	MC_CMD_OP(cmd, 0, 0,  32, uint32_t, status);\
-	MC_CMD_OP(cmd, 0, 32, 8,  uint8_t,  irq_index);\
-} while (0)
-/*                cmd, param, offset, width, type, arg_name */
-#define DPRTC_RSP_GET_IRQ_STATUS(cmd, status) \
-	MC_RSP_OP(cmd, 0, 0,  32, uint32_t, status)
+struct dprtc_rsp_get_irq_status {
+	uint32_t status;
+};
 
-/*                cmd, param, offset, width, type, arg_name */
-#define DPRTC_CMD_CLEAR_IRQ_STATUS(cmd, irq_index, status) \
-do { \
-	MC_CMD_OP(cmd, 0, 0,  32, uint32_t, status); \
-	MC_CMD_OP(cmd, 0, 32, 8,  uint8_t,  irq_index);\
-} while (0)
+struct dprtc_cmd_clear_irq_status {
+	uint32_t status;
+	uint8_t irq_index;
+};
 
-/*                cmd, param, offset, width, type,	arg_name */
-#define DPRTC_RSP_GET_ATTRIBUTES(cmd, attr) \
-do { \
-	MC_RSP_OP(cmd, 0, 32, 32, int,	    attr->id);\
-	MC_RSP_OP(cmd, 1, 0,  16, uint16_t, attr->version.major);\
-	MC_RSP_OP(cmd, 1, 16, 16, uint16_t, attr->version.minor);\
-} while (0)
+struct dprtc_rsp_get_attributes {
+	uint32_t pad;
+	uint32_t id;
+};
 
-/*                cmd, param, offset, width, type, arg_name */
-#define DPRTC_CMD_SET_CLOCK_OFFSET(cmd, offset) \
-	MC_CMD_OP(cmd, 0, 0,  64, int64_t, offset)
+struct dprtc_cmd_set_clock_offset {
+	uint64_t offset;
+};
 
-/*                cmd, param, offset, width, type, arg_name */
-#define DPRTC_CMD_SET_FREQ_COMPENSATION(cmd, freq_compensation) \
-	MC_CMD_OP(cmd, 0, 0,  32, uint32_t, freq_compensation)
+struct dprtc_get_freq_compensation {
+	uint32_t freq_compensation;
+};
 
-/*                cmd, param, offset, width, type, arg_name */
-#define DPRTC_RSP_GET_FREQ_COMPENSATION(cmd, freq_compensation) \
-	MC_RSP_OP(cmd, 0, 0,  32, uint32_t, freq_compensation)
+struct dprtc_time {
+	uint64_t time;
+};
 
-/*                cmd, param, offset, width, type, arg_name */
-#define DPRTC_RSP_GET_TIME(cmd, timestamp) \
-	MC_RSP_OP(cmd, 0, 0,  64, uint64_t, timestamp)
-
-/*                cmd, param, offset, width, type, arg_name */
-#define DPRTC_CMD_SET_TIME(cmd, timestamp) \
-	MC_CMD_OP(cmd, 0, 0,  64, uint64_t, timestamp)
-
-/*                cmd, param, offset, width, type, arg_name */
-#define DPRTC_CMD_SET_ALARM(cmd, time) \
-	MC_CMD_OP(cmd, 0, 0,  64, uint64_t, time)
-
+struct dprtc_rsp_get_api_version {
+	uint16_t major;
+	uint16_t minor;
+};
+#pragma pack(pop)
 #endif /* _FSL_DPRTC_CMD_H */

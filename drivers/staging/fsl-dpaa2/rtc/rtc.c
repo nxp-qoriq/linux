@@ -219,12 +219,10 @@ static int rtc_remove(struct fsl_mc_device *mc_dev)
 	return 0;
 }
 
-static const struct fsl_mc_device_match_id rtc_match_id_table[] = {
+static const struct fsl_mc_device_id rtc_match_id_table[] = {
 	{
 		.vendor = FSL_MC_VENDOR_FREESCALE,
 		.obj_type = "dprtc",
-		.ver_major = DPRTC_VER_MAJOR,
-		.ver_minor = DPRTC_VER_MINOR,
 	},
 	{}
 };

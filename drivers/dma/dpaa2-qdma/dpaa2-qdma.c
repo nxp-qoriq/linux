@@ -129,7 +129,7 @@ static void dpaa2_qdma_populate_fd(uint32_t format,
 	fd->simple.bpid = QMAN_FD_BMT_ENABLE;
 	fd->simple.format_offset = QMAN_FD_FMT_ENABLE | QMAN_FD_SL_DISABLE;
 
-	fd->simple.frc = format | QDMA_SER_CTX | QDMA_FD_SPF_ENALBE;
+	fd->simple.frc = format | QDMA_SER_CTX;
 	fd->simple.ctrl = QMAN_FD_VA_DISABLE |
 			QMAN_FD_CBMT_ENABLE | QMAN_FD_SC_DISABLE;
 }
@@ -142,10 +142,11 @@ static void dpaa2_qdma_populate_first_framel(
 	struct dpaa2_qdma_sd_d *sdd;
 
 	sdd = (struct dpaa2_qdma_sd_d *)dpaa2_comp->desc_virt_addr;
+	memset(sdd, 0, 2 * (sizeof(*sdd)));
 	/* source and destination descriptor */
-	sdd->cmd = CMD_TTYPE_RW; /* source descriptor CMD */
+	sdd->cmd = QDMA_SD_CMD_RDTTYPE_COHERENT; /* source descriptor CMD */
 	sdd++;
-	sdd->cmd = CMD_TTYPE_RW; /* destination descriptor CMD */
+	sdd->cmd = QDMA_DD_CMD_WRTTYPE_COHERENT; /* dest descriptor CMD */
 
 	memset(f_list, 0, sizeof(struct dpaa2_frame_list));
 	/* first frame list to source descriptor */

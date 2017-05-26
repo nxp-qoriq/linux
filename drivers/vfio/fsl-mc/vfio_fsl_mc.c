@@ -150,6 +150,9 @@ static long vfio_fsl_mc_ioctl(void *device_data, unsigned int cmd,
 			return -EINVAL;
 
 		info.flags = VFIO_DEVICE_FLAGS_FSL_MC;
+		if (strcmp(mc_dev->obj_desc.type, "dprc") == 0)
+			info.flags |= VFIO_DEVICE_FLAGS_RESET;
+
 		info.num_regions = mc_dev->obj_desc.region_count;
 		info.num_irqs = mc_dev->obj_desc.irq_count;
 
@@ -260,7 +263,12 @@ static long vfio_fsl_mc_ioctl(void *device_data, unsigned int cmd,
 	}
 	case VFIO_DEVICE_RESET:
 	{
-		return -EINVAL;
+		if (strcmp(mc_dev->obj_desc.type, "dprc") != 0)
+			return -EINVAL;
+
+		return dprc_reset_container(mc_dev->mc_io, 0,
+					    mc_dev->mc_handle,
+					    mc_dev->obj_desc.id);
 	}
 	default:
 		return -EINVAL;

@@ -85,12 +85,18 @@ static int vfio_fsl_mc_open(void *device_data)
 		ret = vfio_fsl_mc_regions_init(vdev);
 		if (ret)
 			goto error_region_init;
+
+		ret = vfio_fsl_mc_irqs_init(vdev);
+		if (ret)
+			goto error_irq_init;
 	}
 
 	vdev->refcnt++;
 	mutex_unlock(&driver_lock);
 	return 0;
 
+error_irq_init:
+	vfio_fsl_mc_regions_cleanup(vdev);
 error_region_init:
 	mutex_unlock(&driver_lock);
 	if (ret)
@@ -105,8 +111,10 @@ static void vfio_fsl_mc_release(void *device_data)
 
 	mutex_lock(&driver_lock);
 
-	if (!(--vdev->refcnt))
+	if (!(--vdev->refcnt)) {
 		vfio_fsl_mc_regions_cleanup(vdev);
+		vfio_fsl_mc_irqs_cleanup(vdev);
+	}
 
 	mutex_unlock(&driver_lock);
 
@@ -166,11 +174,84 @@ static long vfio_fsl_mc_ioctl(void *device_data, unsigned int cmd,
 	}
 	case VFIO_DEVICE_GET_IRQ_INFO:
 	{
-		return -EINVAL;
+		struct vfio_irq_info info;
+
+		minsz = offsetofend(struct vfio_irq_info, count);
+		if (copy_from_user(&info, (void __user *)arg, minsz))
+			return -EFAULT;
+
+		if (info.argsz < minsz)
+			return -EINVAL;
+
+		if (info.index >= mc_dev->obj_desc.irq_count)
+			return -EINVAL;
+
+		if (vdev->mc_irqs != NULL) {
+			info.flags = vdev->mc_irqs[info.index].flags;
+			info.count = vdev->mc_irqs[info.index].count;
+		} else {
+			/*
+			 * If IRQs are not initialized then these can not
+			 * be configuted and used by user-space/
+			 */
+			info.flags = 0;
+			info.count = 0;
+		}
+
+		return copy_to_user((void __user *)arg, &info, minsz);
 	}
 	case VFIO_DEVICE_SET_IRQS:
 	{
-		return -EINVAL;
+		struct vfio_irq_set hdr;
+		u8 *data = NULL;
+		int ret = 0;
+
+		minsz = offsetofend(struct vfio_irq_set, count);
+
+		if (copy_from_user(&hdr, (void __user *)arg, minsz))
+			return -EFAULT;
+
+		if (hdr.argsz < minsz)
+			return -EINVAL;
+
+		if (hdr.index >= mc_dev->obj_desc.irq_count)
+			return -EINVAL;
+
+		if (hdr.start != 0 || hdr.count > 1)
+			return -EINVAL;
+
+		if (hdr.count == 0 &&
+		    (!(hdr.flags & VFIO_IRQ_SET_DATA_NONE) ||
+		    !(hdr.flags & VFIO_IRQ_SET_ACTION_TRIGGER)))
+			return -EINVAL;
+
+		if (hdr.flags & ~(VFIO_IRQ_SET_DATA_TYPE_MASK |
+				  VFIO_IRQ_SET_ACTION_TYPE_MASK))
+			return -EINVAL;
+
+		if (!(hdr.flags & VFIO_IRQ_SET_DATA_NONE)) {
+			size_t size;
+
+			if (hdr.flags & VFIO_IRQ_SET_DATA_BOOL)
+				size = sizeof(uint8_t);
+			else if (hdr.flags & VFIO_IRQ_SET_DATA_EVENTFD)
+				size = sizeof(int32_t);
+			else
+				return -EINVAL;
+
+			if (hdr.argsz - minsz < hdr.count * size)
+				return -EINVAL;
+
+			data = memdup_user((void __user *)(arg + minsz),
+					   hdr.count * size);
+			if (IS_ERR(data))
+				return PTR_ERR(data);
+		}
+
+		ret = vfio_fsl_mc_set_irqs_ioctl(vdev, hdr.flags,
+						 hdr.index, hdr.start,
+						 hdr.count, data);
+		return ret;
 	}
 	case VFIO_DEVICE_RESET:
 	{
@@ -218,6 +299,16 @@ static int vfio_fsl_mc_mmap_mmio(struct vfio_fsl_mc_region region,
 			       size, vma->vm_page_prot);
 }
 
+static int vfio_fsl_mc_mmap_msipage(struct vm_area_struct *vma)
+{
+	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+
+	return remap_pfn_range(vma, vma->vm_start, vma->vm_pgoff,
+			       PAGE_SIZE, vma->vm_page_prot);
+}
+
+#define GIC_TRANSLATOR_ADDR	0x6030000
+
 /* Allows mmaping fsl_mc device regions in assigned DPRC */
 static int vfio_fsl_mc_mmap(void *device_data, struct vm_area_struct *vma)
 {
@@ -225,6 +316,9 @@ static int vfio_fsl_mc_mmap(void *device_data, struct vm_area_struct *vma)
 	struct fsl_mc_device *mc_dev = vdev->mc_dev;
 	unsigned long size, addr;
 	int index;
+
+	if (vma->vm_pgoff == (GIC_TRANSLATOR_ADDR >> PAGE_SHIFT))
+		return vfio_fsl_mc_mmap_msipage(vma);
 
 	index = vma->vm_pgoff >> (VFIO_FSL_MC_OFFSET_SHIFT - PAGE_SHIFT);
 
@@ -277,6 +371,7 @@ static int vfio_fsl_mc_initialize_dprc(struct vfio_fsl_mc_device *vdev)
 	struct fsl_mc_device *mc_dev = vdev->mc_dev;
 	struct device *dev = &mc_dev->dev;
 	struct fsl_mc_bus *mc_bus;
+	struct irq_domain *mc_msi_domain;
 	unsigned int irq_count;
 	int ret;
 
@@ -296,7 +391,7 @@ static int vfio_fsl_mc_initialize_dprc(struct vfio_fsl_mc_device *vdev)
 				     FSL_MC_IO_ATOMIC_CONTEXT_PORTAL,
 				     &mc_dev->mc_io);
 	if (ret < 0)
-		return ret;
+		goto clean_msi_domain;
 
 	/* Reset MCP before move on */
 	ret = fsl_mc_portal_reset(mc_dev->mc_io);
@@ -304,6 +399,13 @@ static int vfio_fsl_mc_initialize_dprc(struct vfio_fsl_mc_device *vdev)
 		dev_err(dev, "dprc portal reset failed: error = %d\n", ret);
 		goto free_mc_portal;
 	}
+
+	/* MSI domain set up */
+	ret = fsl_mc_find_msi_domain(root_dprc_dev->parent, &mc_msi_domain);
+	if (ret < 0)
+		goto free_mc_portal;
+
+	dev_set_msi_domain(&mc_dev->dev, mc_msi_domain);
 
 	ret = dprc_open(mc_dev->mc_io, 0, mc_dev->obj_desc.id,
 			&mc_dev->mc_handle);
@@ -317,6 +419,15 @@ static int vfio_fsl_mc_initialize_dprc(struct vfio_fsl_mc_device *vdev)
 
 	mc_bus = to_fsl_mc_bus(mc_dev);
 
+	if (!mc_bus->irq_resources) {
+		irq_count = FSL_MC_IRQ_POOL_MAX_TOTAL_IRQS;
+		ret = fsl_mc_populate_irq_pool(mc_bus, irq_count);
+		if (ret < 0) {
+			dev_err(dev, "%s: Failed to init irq-pool\n", __func__);
+			goto clean_resource_pool;
+		}
+	}
+
 	mutex_init(&mc_bus->scan_mutex);
 
 	mutex_lock(&mc_bus->scan_mutex);
@@ -325,10 +436,19 @@ static int vfio_fsl_mc_initialize_dprc(struct vfio_fsl_mc_device *vdev)
 	mutex_unlock(&mc_bus->scan_mutex);
 	if (ret) {
 		dev_err(dev, "dprc_scan_objects() fails (%d)\n", ret);
-		goto clean_resource_pool;
+		goto clean_irq_pool;
+	}
+
+	if (irq_count > FSL_MC_IRQ_POOL_MAX_TOTAL_IRQS) {
+		dev_warn(&mc_dev->dev,
+			 "IRQs needed (%u) exceed IRQs preallocated (%u)\n",
+			 irq_count, FSL_MC_IRQ_POOL_MAX_TOTAL_IRQS);
 	}
 
 	return 0;
+
+clean_irq_pool:
+	fsl_mc_cleanup_irq_pool(mc_bus);
 
 clean_resource_pool:
 	fsl_mc_cleanup_all_resource_pools(mc_dev);
@@ -336,6 +456,10 @@ clean_resource_pool:
 
 free_mc_portal:
 	fsl_mc_portal_free(mc_dev->mc_io);
+
+clean_msi_domain:
+	dev_set_msi_domain(&mc_dev->dev, NULL);
+
 	return ret;
 }
 
@@ -356,12 +480,19 @@ static int vfio_fsl_mc_device_remove(struct device *dev, void *data)
 static void vfio_fsl_mc_cleanup_dprc(struct vfio_fsl_mc_device *vdev)
 {
 	struct fsl_mc_device *mc_dev = vdev->mc_dev;
+	struct fsl_mc_bus *mc_bus;
 
 	/* device must be DPRC */
 	if (strcmp(mc_dev->obj_desc.type, "dprc"))
 		return;
 
 	device_for_each_child(&mc_dev->dev, NULL, vfio_fsl_mc_device_remove);
+
+	mc_bus = to_fsl_mc_bus(mc_dev);
+	if (dev_get_msi_domain(&mc_dev->dev))
+		fsl_mc_cleanup_irq_pool(mc_bus);
+
+	dev_set_msi_domain(&mc_dev->dev, NULL);
 
 	fsl_mc_cleanup_all_resource_pools(mc_dev);
 	dprc_close(mc_dev->mc_io, 0, mc_dev->mc_handle);
@@ -413,6 +544,10 @@ static int vfio_fsl_mc_probe(struct fsl_mc_device *mc_dev)
 		}
 
 		mc_dev->mc_io = mc_bus_dev->mc_io;
+
+		/* Inherit parent MSI domain */
+		dev_set_msi_domain(&mc_dev->dev,
+				   dev_get_msi_domain(mc_dev->dev.parent));
 	}
 	return 0;
 
@@ -433,6 +568,8 @@ static int vfio_fsl_mc_remove(struct fsl_mc_device *mc_dev)
 
 	if (strcmp(mc_dev->obj_desc.type, "dprc") == 0)
 		vfio_fsl_mc_cleanup_dprc(vdev);
+	else
+		dev_set_msi_domain(&mc_dev->dev, NULL);
 
 	mc_dev->mc_io = NULL;
 

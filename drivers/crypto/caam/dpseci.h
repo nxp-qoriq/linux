@@ -63,6 +63,11 @@ int dpseci_open(struct fsl_mc_io *mc_io, u32 cmd_flags, int dpseci_id,
 int dpseci_close(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token);
 
 /**
+ * Enable the Congestion Group support
+ */
+#define DPSECI_OPT_HAS_CG		0x000020
+
+/**
  * Enable the Order Restoration support
  */
 #define DPSECI_OPT_HAS_OPR		0x000040
@@ -75,6 +80,7 @@ int dpseci_close(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token);
 /**
  * struct dpseci_cfg - Structure representing DPSECI configuration
  * @options: Any combination of the following options:
+ *		DPSECI_OPT_HAS_CG
  *		DPSECI_OPT_HAS_OPR
  *		DPSECI_OPT_OPR_SHARED
  * @num_tx_queues: num of queues towards the SEC
@@ -129,11 +135,16 @@ int dpseci_clear_irq_status(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
  * @id: DPSECI object ID
  * @num_tx_queues: number of queues towards the SEC
  * @num_rx_queues: number of queues back from the SEC
+ * @options: any combination of the following options:
+ *		DPSECI_OPT_HAS_CG
+ *		DPSECI_OPT_HAS_OPR
+ *		DPSECI_OPT_OPR_SHARED
  */
 struct dpseci_attr {
 	int id;
 	u8 num_tx_queues;
 	u8 num_rx_queues;
+	u32 options;
 };
 
 int dpseci_get_attributes(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,

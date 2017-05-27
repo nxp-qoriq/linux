@@ -127,9 +127,11 @@ struct dpseci_cmd_irq_status {
 
 struct dpseci_rsp_get_attributes {
 	__le32 id;
-	__le32 pad;
+	__le32 pad0;
 	u8 num_tx_queues;
 	u8 num_rx_queues;
+	u8 pad1[6];
+	__le32 options;
 };
 
 struct dpseci_cmd_queue {

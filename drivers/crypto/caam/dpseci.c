@@ -477,6 +477,7 @@ int dpseci_get_attributes(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
 	attr->id = le32_to_cpu(rsp_params->id);
 	attr->num_tx_queues = rsp_params->num_tx_queues;
 	attr->num_rx_queues = rsp_params->num_rx_queues;
+	attr->options = le32_to_cpu(rsp_params->options);
 
 	return 0;
 }

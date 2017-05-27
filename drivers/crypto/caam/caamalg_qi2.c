@@ -3952,7 +3952,12 @@ static int dpaa2_dpseci_congestion_setup(struct dpaa2_caam_priv *priv,
 	struct device *dev = priv->dev;
 	int err;
 
-	if (DPSECI_VER(priv->major_ver, priv->minor_ver) < DPSECI_VERSION)
+	/*
+	 * Congestion group feature supported starting with DPSECI API v5.1
+	 * and only when object has been created with this capability.
+	 */
+	if ((DPSECI_VER(priv->major_ver, priv->minor_ver) < DPSECI_VER(5, 1)) ||
+	    !(priv->dpseci_attr.options & DPSECI_OPT_HAS_CG))
 		return 0;
 
 	priv->cscn_mem = kzalloc(DPAA2_CSCN_SIZE + DPAA2_CSCN_ALIGN,

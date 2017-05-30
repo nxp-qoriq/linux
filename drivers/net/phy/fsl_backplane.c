@@ -242,13 +242,13 @@ void tune_tecr0(struct fsl_xgkr_inst *inst)
 		inst->ratio_pst1q << POST_COE_SHIFT;
 
 	/* reset the lane */
-	iowrite32be(ioread32be(&reg_base->gcr0) & ~GCR0_RESET_MASK,
+	iowrite32(ioread32(&reg_base->gcr0) & ~GCR0_RESET_MASK,
 		    &reg_base->gcr0);
 	udelay(1);
-	iowrite32be(val, &reg_base->tecr0);
+	iowrite32(val, &reg_base->tecr0);
 	udelay(1);
 	/* unreset the lane */
-	iowrite32be(ioread32be(&reg_base->gcr0) | GCR0_RESET_MASK,
+	iowrite32(ioread32(&reg_base->gcr0) | GCR0_RESET_MASK,
 		    &reg_base->gcr0);
 	udelay(1);
 }
@@ -267,10 +267,10 @@ static void reset_gcr0(struct fsl_xgkr_inst *inst)
 {
 	struct per_lane_ctrl_status *reg_base = inst->reg_base;
 
-	iowrite32be(ioread32be(&reg_base->gcr0) & ~GCR0_RESET_MASK,
+	iowrite32(ioread32(&reg_base->gcr0) & ~GCR0_RESET_MASK,
 		    &reg_base->gcr0);
 	udelay(1);
-	iowrite32be(ioread32be(&reg_base->gcr0) | GCR0_RESET_MASK,
+	iowrite32(ioread32(&reg_base->gcr0) | GCR0_RESET_MASK,
 		    &reg_base->gcr0);
 	udelay(1);
 }
@@ -281,25 +281,25 @@ void lane_set_1gkx(void *reg)
 	u32 val;
 
 	/* reset the lane */
-	iowrite32be(ioread32be(&reg_base->gcr0) & ~GCR0_RESET_MASK,
+	iowrite32(ioread32(&reg_base->gcr0) & ~GCR0_RESET_MASK,
 		    &reg_base->gcr0);
 	udelay(1);
 
 	/* set gcr1 for 1GKX */
-	val = ioread32be(&reg_base->gcr1);
+	val = ioread32(&reg_base->gcr1);
 	val &= ~(GCR1_REIDL_TH_MASK | GCR1_REIDL_EX_SEL_MASK |
 		 GCR1_REIDL_ET_MAS_MASK);
-	iowrite32be(val, &reg_base->gcr1);
+	iowrite32(val, &reg_base->gcr1);
 	udelay(1);
 
 	/* set tecr0 for 1GKX */
-	val = ioread32be(&reg_base->tecr0);
+	val = ioread32(&reg_base->tecr0);
 	val &= ~TECR0_AMP_RED_MASK;
-	iowrite32be(val, &reg_base->tecr0);
+	iowrite32(val, &reg_base->tecr0);
 	udelay(1);
 
 	/* unreset the lane */
-	iowrite32be(ioread32be(&reg_base->gcr0) | GCR0_RESET_MASK,
+	iowrite32(ioread32(&reg_base->gcr0) | GCR0_RESET_MASK,
 		    &reg_base->gcr0);
 	udelay(1);
 }
@@ -388,7 +388,7 @@ static int get_median_gaink2(u32 *reg)
 	for (i = 0; i < BIN_SNAPSHOT_NUM; i++) {
 		/* wait RECR1_CTL_SNP_DONE_MASK has cleared */
 		timeout = 100;
-		while (ioread32be(&reg_base->recr1) &
+		while (ioread32(&reg_base->recr1) &
 		       RECR1_CTL_SNP_DONE_MASK) {
 			udelay(1);
 			timeout--;
@@ -397,13 +397,13 @@ static int get_median_gaink2(u32 *reg)
 		}
 
 		/* start snap shot */
-		iowrite32be((ioread32be(&reg_base->gcr1) |
+		iowrite32((ioread32(&reg_base->gcr1) |
 			    GCR1_CTL_SNP_START_MASK),
 			    &reg_base->gcr1);
 
 		/* wait for SNP done */
 		timeout = 100;
-		while (!(ioread32be(&reg_base->recr1) &
+		while (!(ioread32(&reg_base->recr1) &
 		       RECR1_CTL_SNP_DONE_MASK)) {
 			udelay(1);
 			timeout--;
@@ -412,12 +412,12 @@ static int get_median_gaink2(u32 *reg)
 		}
 
 		/* read and save the snap shot */
-		rx_eq_snp = ioread32be(&reg_base->recr1);
+		rx_eq_snp = ioread32(&reg_base->recr1);
 		gaink2_snap_shot[i] = (rx_eq_snp & RECR1_GAINK2_MASK) >>
 					RECR1_GAINK2_SHIFT;
 
 		/* terminate the snap shot by setting GCR1[REQ_CTL_SNP] */
-		iowrite32be((ioread32be(&reg_base->gcr1) &
+		iowrite32((ioread32(&reg_base->gcr1) &
 			    ~GCR1_CTL_SNP_START_MASK),
 			    &reg_base->gcr1);
 	}
@@ -452,7 +452,7 @@ static bool is_bin_early(int bin_sel, void *reg)
 	for (i = 0; i < BIN_SNAPSHOT_NUM; i++) {
 		/* wait RECR1_SNP_DONE_MASK has cleared */
 		timeout = 100;
-		while ((ioread32be(&reg_base->recr1) & RECR1_SNP_DONE_MASK)) {
+		while ((ioread32(&reg_base->recr1) & RECR1_SNP_DONE_MASK)) {
 			udelay(1);
 			timeout--;
 			if (timeout == 0)
@@ -461,22 +461,22 @@ static bool is_bin_early(int bin_sel, void *reg)
 
 		/* set TCSR1[CDR_SEL] to BinM1/BinLong */
 		if (bin_sel == BIN_M1) {
-			iowrite32be((ioread32be(&reg_base->tcsr1) &
+			iowrite32((ioread32(&reg_base->tcsr1) &
 				    ~CDR_SEL_MASK) | BIN_M1_SEL,
 				    &reg_base->tcsr1);
 		} else {
-			iowrite32be((ioread32be(&reg_base->tcsr1) &
+			iowrite32((ioread32(&reg_base->tcsr1) &
 				    ~CDR_SEL_MASK) | BIN_Long_SEL,
 				    &reg_base->tcsr1);
 		}
 
 		/* start snap shot */
-		iowrite32be(ioread32be(&reg_base->gcr1) | GCR1_SNP_START_MASK,
+		iowrite32(ioread32(&reg_base->gcr1) | GCR1_SNP_START_MASK,
 			    &reg_base->gcr1);
 
 		/* wait for SNP done */
 		timeout = 100;
-		while (!(ioread32be(&reg_base->recr1) & RECR1_SNP_DONE_MASK)) {
+		while (!(ioread32(&reg_base->recr1) & RECR1_SNP_DONE_MASK)) {
 			udelay(1);
 			timeout--;
 			if (timeout == 0)
@@ -484,13 +484,13 @@ static bool is_bin_early(int bin_sel, void *reg)
 		}
 
 		/* read and save the snap shot */
-		bin_snap_shot[i] = (ioread32be(&reg_base->tcsr1) &
+		bin_snap_shot[i] = (ioread32(&reg_base->tcsr1) &
 				TCSR1_SNP_DATA_MASK) >> TCSR1_SNP_DATA_SHIFT;
 		if (bin_snap_shot[i] & TCSR1_EQ_SNPBIN_SIGN_MASK)
 			negative_count++;
 
 		/* terminate the snap shot by setting GCR1[REQ_CTL_SNP] */
-		iowrite32be(ioread32be(&reg_base->gcr1) & ~GCR1_SNP_START_MASK,
+		iowrite32(ioread32(&reg_base->gcr1) & ~GCR1_SNP_START_MASK,
 			    &reg_base->gcr1);
 	}
 

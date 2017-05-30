@@ -40,6 +40,9 @@
 #define TRAIN_DISABLE				0x1
 #define RX_STAT					0x1
 
+#define FSL_KR_RX_LINK_STAT_MASK		0x1000
+#define FSL_XFI_PCS_10GR_SR1                    0x20
+
 /* Freescale KX PCS mode register */
 #define FSL_PCS_IF_MODE				0x8014
 
@@ -784,10 +787,10 @@ static int is_link_up(struct phy_device *phydev)
 {
 	int val;
 
-	phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_STAT1);
-	val = phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_STAT1);
+	phy_read_mmd(phydev, MDIO_MMD_PCS, FSL_XFI_PCS_10GR_SR1);
+	val = phy_read_mmd(phydev, MDIO_MMD_PCS, FSL_XFI_PCS_10GR_SR1);
 
-	return (val & AN_LNK_UP_MASK) ? 1 : 0;
+	return (val & FSL_KR_RX_LINK_STAT_MASK) ? 1 : 0;
 }
 
 static int is_link_training_fail(struct phy_device *phydev)

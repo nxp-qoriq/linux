@@ -211,4 +211,5 @@ struct iommu_group *fsl_mc_device_group(struct device *dev);
 #define fsl_mc_device_group(__dev) NULL
 #endif
 
+extern struct bus_type fsl_mc_bus_type;
 #endif /* _FSL_MC_H_ */

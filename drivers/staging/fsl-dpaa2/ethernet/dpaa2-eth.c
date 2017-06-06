@@ -2471,7 +2471,7 @@ static int set_hash(struct dpaa2_eth_priv *priv)
 		priv->rx_flow_hash |= priv->hash_fields[i].rxnfc_field;
 	}
 
-	dma_mem = kzalloc(DPAA2_CLASSIFIER_DMA_SIZE, GFP_DMA | GFP_KERNEL);
+	dma_mem = kzalloc(DPAA2_CLASSIFIER_DMA_SIZE, GFP_KERNEL);
 	if (!dma_mem)
 		return -ENOMEM;
 

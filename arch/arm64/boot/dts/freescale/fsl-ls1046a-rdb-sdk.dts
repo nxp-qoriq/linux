@@ -63,6 +63,13 @@
 #include "qoriq-dpaa-eth.dtsi"
 };
 
+&fsldpaa {
+	ethernet@9 {
+		compatible = "fsl,dpa-ethernet";
+		fsl,fman-mac = <&enet7>;
+	};
+};
+
 &fman0 {
 	compatible = "fsl,fman", "simple-bus";
 };

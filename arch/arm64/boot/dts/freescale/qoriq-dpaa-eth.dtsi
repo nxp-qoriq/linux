@@ -32,7 +32,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-fsl,dpaa {
+fsldpaa: fsl,dpaa {
 	compatible = "fsl,ls1043a-dpaa", "simple-bus", "fsl,dpaa";
 	ethernet@0 {
 		compatible = "fsl,dpa-ethernet";

@@ -128,7 +128,7 @@ config CRYPTO_DEV_FSL_CAAM_AHASH_API
 
 config CRYPTO_DEV_FSL_CAAM_PKC_API
         tristate "Register public key cryptography implementations with Crypto API"
-        default y
+        default y if !ARCH_LX2160A_SIMU
         select CRYPTO_RSA
         help
           Selecting this will allow SEC Public key support for RSA.

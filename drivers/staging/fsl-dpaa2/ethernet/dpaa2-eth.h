@@ -393,6 +393,7 @@ struct dpaa2_eth_priv {
 
 	/* Tx congestion notifications are written here */
 	void *cscn_mem;
+	void *cscn_unaligned;
 	dma_addr_t cscn_dma;
 
 	u8 num_fqs;

@@ -1936,12 +1936,12 @@ static int setup_tx_congestion(struct dpaa2_eth_priv *priv)
 	struct device *dev = priv->net_dev->dev.parent;
 	int err;
 
-	priv->cscn_mem = kzalloc(DPAA2_CSCN_SIZE + DPAA2_CSCN_ALIGN,
-				 GFP_KERNEL);
-	if (!priv->cscn_mem)
+	priv->cscn_unaligned = kzalloc(DPAA2_CSCN_SIZE + DPAA2_CSCN_ALIGN,
+				       GFP_KERNEL);
+	if (!priv->cscn_unaligned)
 		return -ENOMEM;
 
-	priv->cscn_mem = PTR_ALIGN(priv->cscn_mem, DPAA2_CSCN_ALIGN);
+	priv->cscn_mem = PTR_ALIGN(priv->cscn_unaligned, DPAA2_CSCN_ALIGN);
 	priv->cscn_dma = dma_map_single(dev, priv->cscn_mem, DPAA2_CSCN_SIZE,
 					DMA_FROM_DEVICE);
 	if (dma_mapping_error(dev, priv->cscn_dma)) {
@@ -1971,7 +1971,7 @@ static int setup_tx_congestion(struct dpaa2_eth_priv *priv)
 err_set_cong:
 	dma_unmap_single(dev, priv->cscn_dma, DPAA2_CSCN_SIZE, DMA_FROM_DEVICE);
 err_dma_map:
-	kfree(priv->cscn_mem);
+	kfree(priv->cscn_unaligned);
 
 	return err;
 }
@@ -2147,7 +2147,7 @@ static void free_dpni(struct dpaa2_eth_priv *priv)
 	kfree(priv->cls_rule);
 
 	dma_unmap_single(dev, priv->cscn_dma, DPAA2_CSCN_SIZE, DMA_FROM_DEVICE);
-	kfree(priv->cscn_mem);
+	kfree(priv->cscn_unaligned);
 }
 
 int setup_fqs_taildrop(struct dpaa2_eth_priv *priv,

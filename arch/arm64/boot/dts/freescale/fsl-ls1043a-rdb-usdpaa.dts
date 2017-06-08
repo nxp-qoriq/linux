@@ -10,7 +10,7 @@
 
 #include "fsl-ls1043a-rdb-sdk.dts"
 
-/ {
+&soc {
 	bp7: buffer-pool@7 {
 		compatible = "fsl,p4080-bpool", "fsl,bpool";
 		fsl,bpid = <7>;
@@ -92,6 +92,8 @@
 			fsl,fman-oh-port = <&fman0_oh2>;
 		};
 	};
+};
+/ {
 	reserved-memory {
 		#address-cells = <2>;
 		#size-cells = <2>;

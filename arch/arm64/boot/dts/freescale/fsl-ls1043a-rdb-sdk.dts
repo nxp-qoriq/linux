@@ -61,6 +61,7 @@
 
 &soc {
 #include "qoriq-dpaa-eth.dtsi"
+#include "qoriq-fman3-0-6oh.dtsi"
 };
 
 &fman0 {

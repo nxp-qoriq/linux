@@ -4,7 +4,7 @@
 
 config LS_SOC_DRIVERS
 	bool "Layerscape Soc Drivers"
-	depends on ARCH_LAYERSCAPE
+	depends on ARCH_LAYERSCAPE || SOC_LS1021A
 	default n
 	help
 	Say y here to enable Freescale Layerscape Soc Device Drivers support.

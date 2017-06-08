@@ -492,6 +492,7 @@ void qbman_swp_push_set(struct qbman_swp *s, u8 channel_idx, int enable)
 #define QB_VDQCR_VERB_DT_SHIFT     2
 #define QB_VDQCR_VERB_RLS_SHIFT    4
 #define QB_VDQCR_VERB_WAE_SHIFT    5
+#define QB_VDQCR_VERB_RAD_SHIFT    6
 
 enum qb_pull_dt_e {
 	qb_pull_dt_channel,
@@ -602,6 +603,24 @@ void qbman_pull_desc_set_channel(struct qbman_pull_desc *d, u32 chid,
 	d->verb |= dct << QB_VDQCR_VERB_DCT_SHIFT;
 	d->verb |= qb_pull_dt_channel << QB_VDQCR_VERB_DT_SHIFT;
 	d->dq_src = cpu_to_le32(chid);
+}
+
+/**
+ * qbman_pull_desc_set_rad() - Decide whether reschedule the fq after dequeue
+ *
+ * @rad: 1 = Reschedule the FQ after dequeue.
+ *	 0 = Allow the FQ to remain active after dequeue.
+ */
+void qbman_pull_desc_set_rad(struct qbman_pull_desc *d, int rad)
+{
+	if (d->verb & (1 << QB_VDQCR_VERB_RLS_SHIFT)) {
+		if (rad)
+			d->verb |= 1 << QB_VDQCR_VERB_RAD_SHIFT;
+		else
+			d->verb &= ~(1 << QB_VDQCR_VERB_RAD_SHIFT);
+	} else {
+		pr_warn("The RAD feature is not valid when RLS = 0\n");
+	}
 }
 
 /**

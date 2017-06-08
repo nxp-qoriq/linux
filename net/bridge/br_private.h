@@ -1058,6 +1058,8 @@ void nbp_switchdev_frame_mark(const struct net_bridge_port *p,
 			      struct sk_buff *skb);
 bool nbp_switchdev_allowed_egress(const struct net_bridge_port *p,
 				  const struct sk_buff *skb);
+void br_switchdev_fdb_notify(const struct net_bridge_fdb_entry *fdb,
+			     int type);
 #else
 static inline int nbp_switchdev_mark_set(struct net_bridge_port *p)
 {
@@ -1073,6 +1075,11 @@ static inline bool nbp_switchdev_allowed_egress(const struct net_bridge_port *p,
 						const struct sk_buff *skb)
 {
 	return true;
+}
+
+static inline void
+br_switchdev_fdb_notify(const struct net_bridge_fdb_entry *fdb, int type)
+{
 }
 #endif /* CONFIG_NET_SWITCHDEV */
 

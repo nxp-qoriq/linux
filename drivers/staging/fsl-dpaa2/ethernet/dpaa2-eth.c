@@ -2795,8 +2795,9 @@ static ssize_t dpaa2_eth_write_tx_shaping(struct device *dev,
 		return -EINVAL;
 	}
 	/* Size restriction as per MC API documentation */
-	if (scfg.max_burst_size > 64000) {
-		pr_err("max_burst_size must be <= 64000, thanks.\n");
+	if (scfg.max_burst_size > DPAA2_ETH_MAX_BURST_SIZE) {
+		pr_err("max_burst_size must be <= %d\n",
+		       DPAA2_ETH_MAX_BURST_SIZE);
 		return -EINVAL;
 	}
 

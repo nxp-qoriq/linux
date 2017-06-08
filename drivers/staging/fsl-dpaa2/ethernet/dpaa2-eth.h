@@ -61,6 +61,9 @@
 /* Convert L3 MTU to L2 MFL */
 #define DPAA2_ETH_L2_MAX_FRM(mtu)	((mtu) + VLAN_ETH_HLEN)
 
+/* Maximum burst size value for Tx shaping */
+#define DPAA2_ETH_MAX_BURST_SIZE	0xF7FF
+
 /* Maximum number of buffers that can be acquired/released through a single
  * QBMan command
  */

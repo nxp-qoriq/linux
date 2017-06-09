@@ -101,6 +101,7 @@ struct dpaa2_qdma_sg {
 
 #define QMAN_FD_FMT_ENABLE (1 << 12) /* frame list table enable */
 #define QMAN_FD_BMT_ENABLE (1 << 15) /* bypass memory translation */
+#define QMAN_FD_BMT_DISABLE (0 << 15) /* bypass memory translation */
 #define QMAN_FD_SL_DISABLE (0 << 14) /* short lengthe disabled */
 #define QMAN_FD_SL_ENABLE (1 << 14) /* short lengthe enabled */
 
@@ -126,6 +127,7 @@ struct dpaa2_qdma_sg {
 #define QDMA_FL_FMT_SBF 0x0	/* Single buffer frame */
 #define QDMA_FL_FMT_SGE 0x2 /* Scatter gather frame */
 #define QDMA_FL_BMT_ENABLE 0x1 /* enable bypass memory translation */
+#define QDMA_FL_BMT_DISABLE 0x0 /* enable bypass memory translation */
 #define QDMA_FL_SL_LONG 0x0 /* long length */
 #define QDMA_FL_SL_SHORT 0x1 /* short length */
 #define QDMA_FL_F 0x1 /* last frame list bit */
@@ -223,6 +225,7 @@ struct dpaa2_qdma_engine {
 struct dpaa2_qdma_priv {
 	int dpqdma_id;
 
+	struct iommu_domain *iommu_domain;
 	struct dpdmai_attr dpdmai_attr;
 	struct device *dev;
 	struct fsl_mc_io *mc_io;

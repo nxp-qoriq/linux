@@ -30,6 +30,7 @@
 #include <linux/of_dma.h>
 #include <linux/types.h>
 #include <linux/delay.h>
+#include <linux/iommu.h>
 
 #include "../virt-dma.h"
 
@@ -39,6 +40,8 @@
 #include "fsl_dpdmai_cmd.h"
 #include "fsl_dpdmai.h"
 #include "dpaa2-qdma.h"
+
+static bool smmu_disable = true;
 
 static struct dpaa2_qdma_chan *to_dpaa2_qdma_chan(struct dma_chan *chan)
 {
@@ -126,12 +129,12 @@ static void dpaa2_qdma_populate_fd(uint32_t format,
 	/* fd populated */
 	fd->simple.addr = dpaa2_comp->fl_bus_addr;
 	/* Bypass memory translation, Frame list format, short length disable */
-	fd->simple.bpid = QMAN_FD_BMT_ENABLE;
+	/* we need to disable BMT if fsl-mc use iova addr */
+	if (smmu_disable)
+		fd->simple.bpid = QMAN_FD_BMT_ENABLE;
 	fd->simple.format_offset = QMAN_FD_FMT_ENABLE | QMAN_FD_SL_DISABLE;
 
 	fd->simple.frc = format | QDMA_SER_CTX;
-	fd->simple.ctrl = QMAN_FD_VA_DISABLE |
-			QMAN_FD_CBMT_ENABLE | QMAN_FD_SC_DISABLE;
 }
 
 /* first frame list for descriptor buffer */
@@ -154,7 +157,8 @@ static void dpaa2_qdma_populate_first_framel(
 	f_list->addr_hi = (dpaa2_comp->desc_bus_addr >> 32);
 	f_list->data_len.data_len_sl0 = 0x20; /* source/destination desc len */
 	f_list->fmt = QDMA_FL_FMT_SBF; /* single buffer frame */
-	f_list->bmt = QDMA_FL_BMT_ENABLE; /* bypass memory translation */
+	if (smmu_disable)
+		f_list->bmt = QDMA_FL_BMT_ENABLE; /* bypass memory translation */
 	f_list->sl = QDMA_FL_SL_LONG; /* long length */
 	f_list->f = 0; /* not the last frame list */
 }
@@ -169,7 +173,8 @@ static void dpaa2_qdma_populate_frames(struct dpaa2_frame_list *f_list,
 	f_list->addr_hi = (src >> 32);
 	f_list->data_len.data_len_sl0 = len;
 	f_list->fmt = fmt; /* single buffer frame or scatter gather frame */
-	f_list->bmt = QDMA_FL_BMT_ENABLE; /* bypass memory translation */
+	if (smmu_disable)
+		f_list->bmt = QDMA_FL_BMT_ENABLE; /* bypass memory translation */
 	f_list->sl = QDMA_FL_SL_LONG; /* long length */
 	f_list->f = 0; /* not the last frame list */
 
@@ -180,7 +185,8 @@ static void dpaa2_qdma_populate_frames(struct dpaa2_frame_list *f_list,
 	f_list->addr_hi = (dst >> 32);
 	f_list->data_len.data_len_sl0 = len;
 	f_list->fmt = fmt; /* single buffer frame or scatter gather frame */
-	f_list->bmt = QDMA_FL_BMT_ENABLE; /* bypass memory translation */
+	if (smmu_disable)
+		f_list->bmt = QDMA_FL_BMT_ENABLE; /* bypass memory translation */
 	f_list->sl = QDMA_FL_SL_LONG; /* long length */
 	f_list->f = QDMA_FL_F; /* Final bit: 1, for last frame list */
 }
@@ -819,6 +825,10 @@ static int dpaa2_qdma_probe(struct fsl_mc_device *dpdmai_dev)
 		return -ENOMEM;
 	dev_set_drvdata(dev, priv);
 	priv->dpdmai_dev = dpdmai_dev;
+
+	priv->iommu_domain = iommu_get_domain_for_dev(dev);
+	if (priv->iommu_domain)
+		smmu_disable = false;
 
 	/* obtain a MC portal */
 	err = fsl_mc_portal_allocate(dpdmai_dev, 0, &priv->mc_io);

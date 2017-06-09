@@ -2009,6 +2009,8 @@ static int alg_test_null(const struct alg_test_desc *desc,
 	return 0;
 }
 
+#define __VECS(tv)     { .vecs = tv, .count = ARRAY_SIZE(tv) }
+
 /* Please keep this list sorted by algorithm name. */
 static const struct alg_test_desc alg_test_descs[] = {
 	{

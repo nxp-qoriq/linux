@@ -2442,14 +2442,14 @@ static int bind_dpni(struct dpaa2_eth_priv *priv)
 	/* Verify classification options and disable hashing and/or
 	 * flow steering support in case of invalid configuration values
 	 */
+	priv->hash_fields = default_hash_fields;
+	priv->num_hash_fields = ARRAY_SIZE(default_hash_fields);
 	check_cls_support(priv);
 
 	/* have the interface implicitly distribute traffic based on
 	 * a static hash key
 	 */
 	if (dpaa2_eth_hash_enabled(priv)) {
-		priv->hash_fields = default_hash_fields;
-		priv->num_hash_fields = ARRAY_SIZE(default_hash_fields);
 		err = set_hash(priv);
 		if (err) {
 			dev_err(dev, "Hashing configuration failed\n");

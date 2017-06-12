@@ -100,7 +100,7 @@ config CRYPTO_DEV_FSL_CAAM_CRYPTO_API
 
 config CRYPTO_DEV_FSL_CAAM_CRYPTO_API_QI
 	tristate "Queue Interface as Crypto API backend"
-	depends on FSL_DPAA && NET
+	depends on FSL_SDK_DPA && NET
 	default y
 	select CRYPTO_AUTHENC
 	select CRYPTO_BLKCIPHER

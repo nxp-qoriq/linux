@@ -28,8 +28,8 @@ struct tls_instance_ctx {
 struct crypto_tls_ctx {
 	unsigned int reqoff;
 	struct crypto_ahash *auth;
-	struct crypto_skcipher *enc;
-	struct crypto_skcipher *null;
+	struct crypto_ablkcipher *enc;
+	struct crypto_blkcipher *null;
 };
 
 struct tls_request_ctx {
@@ -66,7 +66,7 @@ static int crypto_tls_setkey(struct crypto_aead *tls, const u8 *key,
 {
 	struct crypto_tls_ctx *ctx = crypto_aead_ctx(tls);
 	struct crypto_ahash *auth = ctx->auth;
-	struct crypto_skcipher *enc = ctx->enc;
+	struct crypto_ablkcipher *enc = ctx->enc;
 	struct crypto_authenc_keys keys;
 	int err = -EINVAL;
 
@@ -83,11 +83,11 @@ static int crypto_tls_setkey(struct crypto_aead *tls, const u8 *key,
 	if (err)
 		goto out;
 
-	crypto_skcipher_clear_flags(enc, CRYPTO_TFM_REQ_MASK);
-	crypto_skcipher_set_flags(enc, crypto_aead_get_flags(tls) &
+	crypto_ablkcipher_clear_flags(enc, CRYPTO_TFM_REQ_MASK);
+	crypto_ablkcipher_set_flags(enc, crypto_aead_get_flags(tls) &
 					 CRYPTO_TFM_REQ_MASK);
-	err = crypto_skcipher_setkey(enc, keys.enckey, keys.enckeylen);
-	crypto_aead_set_flags(tls, crypto_skcipher_get_flags(enc) &
+	err = crypto_ablkcipher_setkey(enc, keys.enckey, keys.enckeylen);
+	crypto_aead_set_flags(tls, crypto_ablkcipher_get_flags(enc) &
 				       CRYPTO_TFM_RES_MASK);
 
 out:
@@ -178,14 +178,11 @@ static int crypto_tls_copy_data(struct aead_request *req,
 {
 	struct crypto_aead *tls = crypto_aead_reqtfm(req);
 	struct crypto_tls_ctx *ctx = crypto_aead_ctx(tls);
-	SKCIPHER_REQUEST_ON_STACK(skreq, ctx->null);
+	struct blkcipher_desc desc = {
+			.tfm = ctx->null,
+	};
 
-	skcipher_request_set_tfm(skreq, ctx->null);
-	skcipher_request_set_callback(skreq, aead_request_flags(req),
-				      NULL, NULL);
-	skcipher_request_set_crypt(skreq, src, dst, len, NULL);
-
-	return crypto_skcipher_encrypt(skreq);
+	return crypto_blkcipher_encrypt(&desc, dst, src, len);
 }
 
 static int crypto_tls_encrypt(struct aead_request *req)
@@ -193,7 +190,7 @@ static int crypto_tls_encrypt(struct aead_request *req)
 	struct crypto_aead *tls = crypto_aead_reqtfm(req);
 	struct crypto_tls_ctx *ctx = crypto_aead_ctx(tls);
 	struct tls_request_ctx *treq_ctx = aead_request_ctx(req);
-	struct skcipher_request *skreq;
+	struct ablkcipher_request *abreq;
 	struct scatterlist *cipher = treq_ctx->cipher;
 	struct scatterlist *tmp = treq_ctx->tmp;
 	struct scatterlist *sg, *src, *dst;
@@ -276,16 +273,16 @@ static int crypto_tls_encrypt(struct aead_request *req)
 	 * The hash and the cipher are applied at different times and their
 	 * requests can use the same memory space without interference
 	 */
-	skreq = (void *)(treq_ctx->tail + ctx->reqoff);
-	skcipher_request_set_tfm(skreq, ctx->enc);
-	skcipher_request_set_crypt(skreq, src, dst, cryptlen, req->iv);
-	skcipher_request_set_callback(skreq, aead_request_flags(req),
+	abreq = (void *)(treq_ctx->tail + ctx->reqoff);
+	ablkcipher_request_set_tfm(abreq, ctx->enc);
+	ablkcipher_request_set_crypt(abreq, src, dst, cryptlen, req->iv);
+	ablkcipher_request_set_callback(abreq, aead_request_flags(req),
 				      req->base.complete, req->base.data);
 	/*
 	 * Apply the cipher transform. The result will be in req->dst when the
 	 * asynchronuous call terminates
 	 */
-	err = crypto_skcipher_encrypt(skreq);
+	err = crypto_ablkcipher_encrypt(abreq);
 
 	return err;
 }
@@ -298,7 +295,7 @@ static int crypto_tls_decrypt(struct aead_request *req)
 	unsigned int cryptlen = req->cryptlen;
 	unsigned int hash_size = crypto_aead_authsize(tls);
 	unsigned int block_size = crypto_aead_blocksize(tls);
-	struct skcipher_request *skreq = (void *)(treq_ctx->tail + ctx->reqoff);
+	struct ablkcipher_request *abreq = (void *)(treq_ctx->tail + ctx->reqoff);
 	struct scatterlist *tmp = treq_ctx->tmp;
 	struct scatterlist *src, *dst;
 
@@ -330,11 +327,11 @@ static int crypto_tls_decrypt(struct aead_request *req)
 	dst = src;
 
 	init_completion(&ciph_op.completion);
-	skcipher_request_set_tfm(skreq, ctx->enc);
-	skcipher_request_set_callback(skreq, aead_request_flags(req),
+	ablkcipher_request_set_tfm(abreq, ctx->enc);
+	ablkcipher_request_set_callback(abreq, aead_request_flags(req),
 				      tls_async_op_done, &ciph_op);
-	skcipher_request_set_crypt(skreq, src, dst, cryptlen, req->iv);
-	err = crypto_skcipher_decrypt(skreq);
+	ablkcipher_request_set_crypt(abreq, src, dst, cryptlen, req->iv);
+	err = crypto_ablkcipher_decrypt(abreq);
 	if (err == -EINPROGRESS) {
 		err = wait_for_completion_interruptible(&ciph_op.completion);
 		if (!err)
@@ -411,8 +408,8 @@ static int crypto_tls_init_tfm(struct crypto_aead *tfm)
 	struct tls_instance_ctx *ictx = aead_instance_ctx(inst);
 	struct crypto_tls_ctx *ctx = crypto_aead_ctx(tfm);
 	struct crypto_ahash *auth;
-	struct crypto_skcipher *enc;
-	struct crypto_skcipher *null;
+	struct crypto_ablkcipher *enc;
+	struct crypto_blkcipher *null;
 	int err;
 
 	auth = crypto_spawn_ahash(&ictx->auth);
@@ -424,7 +421,7 @@ static int crypto_tls_init_tfm(struct crypto_aead *tfm)
 	if (IS_ERR(enc))
 		goto err_free_ahash;
 
-	null = crypto_get_default_null_skcipher2();
+	null = crypto_get_default_null_skcipher();
 	err = PTR_ERR(null);
 	if (IS_ERR(null))
 		goto err_free_skcipher;
@@ -443,7 +440,7 @@ static int crypto_tls_init_tfm(struct crypto_aead *tfm)
 			    crypto_ahash_alignmask(auth),
 			    crypto_ahash_alignmask(auth) + 1) +
 			    max(crypto_ahash_digestsize(auth),
-				crypto_skcipher_blocksize(enc));
+				crypto_ablkcipher_blocksize(enc));
 
 	crypto_aead_set_reqsize(tfm,
 				sizeof(struct tls_request_ctx) +
@@ -451,13 +448,13 @@ static int crypto_tls_init_tfm(struct crypto_aead *tfm)
 				max_t(unsigned int,
 				      crypto_ahash_reqsize(auth) +
 				      sizeof(struct ahash_request),
-				      crypto_skcipher_reqsize(enc) +
-				      sizeof(struct skcipher_request)));
+				      crypto_ablkcipher_reqsize(enc) +
+				      sizeof(struct ablkcipher_request)));
 
 	return 0;
 
 err_free_skcipher:
-	crypto_free_skcipher(enc);
+	crypto_free_ablkcipher(enc);
 err_free_ahash:
 	crypto_free_ahash(auth);
 	return err;
@@ -468,8 +465,8 @@ static void crypto_tls_exit_tfm(struct crypto_aead *tfm)
 	struct crypto_tls_ctx *ctx = crypto_aead_ctx(tfm);
 
 	crypto_free_ahash(ctx->auth);
-	crypto_free_skcipher(ctx->enc);
-	crypto_put_default_null_skcipher2();
+	crypto_free_ablkcipher(ctx->enc);
+	crypto_put_default_null_skcipher();
 }
 
 static void crypto_tls_free(struct aead_instance *inst)
@@ -487,7 +484,7 @@ static int crypto_tls_create(struct crypto_template *tmpl, struct rtattr **tb)
 	struct aead_instance *inst;
 	struct hash_alg_common *auth;
 	struct crypto_alg *auth_base;
-	struct skcipher_alg *enc;
+	struct crypto_alg *enc;
 	struct tls_instance_ctx *ctx;
 	const char *enc_name;
 	int err;
@@ -531,30 +528,29 @@ static int crypto_tls_create(struct crypto_template *tmpl, struct rtattr **tb)
 	if (err)
 		goto err_drop_auth;
 
-	enc = crypto_spawn_skcipher_alg(&ctx->enc);
+	enc = crypto_skcipher_spawn_alg(&ctx->enc);
 
 	err = -ENAMETOOLONG;
 	if (snprintf(inst->alg.base.cra_name, CRYPTO_MAX_ALG_NAME,
 		     "tls10(%s,%s)", auth_base->cra_name,
-		     enc->base.cra_name) >= CRYPTO_MAX_ALG_NAME)
+		     enc->cra_name) >= CRYPTO_MAX_ALG_NAME)
 		goto err_drop_enc;
 
 	if (snprintf(inst->alg.base.cra_driver_name, CRYPTO_MAX_ALG_NAME,
 		     "tls10(%s,%s)", auth_base->cra_driver_name,
-		     enc->base.cra_driver_name) >= CRYPTO_MAX_ALG_NAME)
+		     enc->cra_driver_name) >= CRYPTO_MAX_ALG_NAME)
 		goto err_drop_enc;
 
 	inst->alg.base.cra_flags = (auth_base->cra_flags |
-					enc->base.cra_flags) & CRYPTO_ALG_ASYNC;
-	inst->alg.base.cra_priority = enc->base.cra_priority * 10 +
+					enc->cra_flags) & CRYPTO_ALG_ASYNC;
+	inst->alg.base.cra_priority = enc->cra_priority * 10 +
 					auth_base->cra_priority;
-	inst->alg.base.cra_blocksize = enc->base.cra_blocksize;
+	inst->alg.base.cra_blocksize = enc->cra_blocksize;
 	inst->alg.base.cra_alignmask = auth_base->cra_alignmask |
-					enc->base.cra_alignmask;
+					enc->cra_alignmask;
 	inst->alg.base.cra_ctxsize = sizeof(struct crypto_tls_ctx);
 
-	inst->alg.ivsize = crypto_skcipher_alg_ivsize(enc);
-	inst->alg.chunksize = crypto_skcipher_alg_chunksize(enc);
+	inst->alg.ivsize = enc->cra_ablkcipher.ivsize;
 	inst->alg.maxauthsize = auth->digestsize;
 
 	inst->alg.init = crypto_tls_init_tfm;

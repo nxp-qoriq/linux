@@ -222,6 +222,7 @@ st	STMicroelectronics
 ste	ST-Ericsson
 stericsson	ST-Ericsson
 synology	Synology, Inc.
+syscon Syscon Instruments ,Pvt. Ltd
 tbs	TBS Technologies
 tcl	Toby Churchill Ltd.
 thine	THine Electronics, Inc.

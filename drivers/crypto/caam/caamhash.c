@@ -1719,6 +1719,7 @@ static int caam_hash_cra_init(struct crypto_tfm *tfm)
 					 HASH_MSG_LEN + 64,
 					 HASH_MSG_LEN + SHA512_DIGEST_SIZE };
 	dma_addr_t dma_addr;
+	DEFINE_DMA_ATTRS(attrs);
 
 	/*
 	 * Get a Job ring from Job Ring driver to ensure in-order
@@ -1730,10 +1731,11 @@ static int caam_hash_cra_init(struct crypto_tfm *tfm)
 		return PTR_ERR(ctx->jrdev);
 	}
 
+	dma_set_attr(DMA_ATTR_SKIP_CPU_SYNC, &attrs);
 	dma_addr = dma_map_single_attrs(ctx->jrdev, ctx->sh_desc_update,
 					offsetof(struct caam_hash_ctx,
 						 sh_desc_update_dma),
-					DMA_TO_DEVICE, DMA_ATTR_SKIP_CPU_SYNC);
+					DMA_TO_DEVICE, &attrs);
 	if (dma_mapping_error(ctx->jrdev, dma_addr)) {
 		dev_err(ctx->jrdev, "unable to map shared descriptors\n");
 		caam_jr_free(ctx->jrdev);
@@ -1764,11 +1766,13 @@ static int caam_hash_cra_init(struct crypto_tfm *tfm)
 static void caam_hash_cra_exit(struct crypto_tfm *tfm)
 {
 	struct caam_hash_ctx *ctx = crypto_tfm_ctx(tfm);
+	DEFINE_DMA_ATTRS(attrs);
 
+	dma_set_attr(DMA_ATTR_SKIP_CPU_SYNC, &attrs);
 	dma_unmap_single_attrs(ctx->jrdev, ctx->sh_desc_update_dma,
 			       offsetof(struct caam_hash_ctx,
 					sh_desc_update_dma),
-			       DMA_TO_DEVICE, DMA_ATTR_SKIP_CPU_SYNC);
+			       DMA_TO_DEVICE, &attrs);
 	caam_jr_free(ctx->jrdev);
 }
 

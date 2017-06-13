@@ -3224,6 +3224,7 @@ struct caam_crypto_alg {
 static int caam_init_common(struct caam_ctx *ctx, struct caam_alg_entry *caam)
 {
 	dma_addr_t dma_addr;
+	DEFINE_DMA_ATTRS(attrs);
 
 	ctx->jrdev = caam_jr_alloc();
 	if (IS_ERR(ctx->jrdev)) {
@@ -3231,10 +3232,11 @@ static int caam_init_common(struct caam_ctx *ctx, struct caam_alg_entry *caam)
 		return PTR_ERR(ctx->jrdev);
 	}
 
+	dma_set_attr(DMA_ATTR_SKIP_CPU_SYNC, &attrs);
 	dma_addr = dma_map_single_attrs(ctx->jrdev, ctx->sh_desc_enc,
 					offsetof(struct caam_ctx,
 						 sh_desc_enc_dma),
-					DMA_TO_DEVICE, DMA_ATTR_SKIP_CPU_SYNC);
+					DMA_TO_DEVICE, &attrs);
 	if (dma_mapping_error(ctx->jrdev, dma_addr)) {
 		dev_err(ctx->jrdev, "unable to map key, shared descriptors\n");
 		caam_jr_free(ctx->jrdev);
@@ -3277,9 +3279,12 @@ static int caam_aead_init(struct crypto_aead *tfm)
 
 static void caam_exit_common(struct caam_ctx *ctx)
 {
+	DEFINE_DMA_ATTRS(attrs);
+
+	dma_set_attr(DMA_ATTR_SKIP_CPU_SYNC, &attrs);
 	dma_unmap_single_attrs(ctx->jrdev, ctx->sh_desc_enc_dma,
 			       offsetof(struct caam_ctx, sh_desc_enc_dma),
-			       DMA_TO_DEVICE, DMA_ATTR_SKIP_CPU_SYNC);
+			       DMA_TO_DEVICE, &attrs);
 	caam_jr_free(ctx->jrdev);
 }
 

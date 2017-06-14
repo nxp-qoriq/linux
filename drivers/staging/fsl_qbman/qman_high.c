@@ -676,6 +676,7 @@ struct qman_portal *qman_create_portal(
 		pr_err("qman_portal - platform_device_alloc() failed\n");
 		goto fail_devalloc;
 	}
+	arch_setup_dma_ops(&portal->pdev->dev, 0, 0, NULL, true);
 #if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	portal->pdev->dev.coherent_dma_mask = DMA_BIT_MASK(40);
 	portal->pdev->dev.dma_mask = &portal->pdev->dev.coherent_dma_mask;

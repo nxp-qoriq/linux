@@ -706,10 +706,9 @@
 			reg = <0x0 0x3100000 0x0 0x10000>;
 			interrupts = <GIC_SPI 93 IRQ_TYPE_LEVEL_HIGH>;
 			dr_mode = "host";
-			snps,quirk-frame-length-adjustment = <0x20>;
+			configure-gfladj;
+			dma-coherent;
 			snps,dis_rxdet_inp3_quirk;
-			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
-			snps,dma-snooping;
 		};
 
 		pcie@3400000 {

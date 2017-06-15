@@ -664,6 +664,8 @@ static int prep_cls_rule(struct net_device *net_dev,
 	return 0;
 }
 
+static int del_cls(struct net_device *net_dev, int location);
+
 static int do_cls(struct net_device *net_dev,
 		  struct ethtool_rx_flow_spec *fs,
 		  bool add)
@@ -686,6 +688,13 @@ static int do_cls(struct net_device *net_dev,
 	     fs->ring_cookie >= dpaa2_eth_queue_count(priv)) ||
 	     fs->location >= rule_cnt)
 		return -EINVAL;
+
+	/* When adding a new rule, check if location if available,
+	 * and if not free the existing table entry before inserting
+	 * the new one
+	 */
+	if (add && (priv->cls_rule[fs->location].in_use == true))
+		del_cls(net_dev, fs->location);
 
 	memset(&rule_cfg, 0, sizeof(rule_cfg));
 	rule_cfg.key_size = cls_key_size(priv);

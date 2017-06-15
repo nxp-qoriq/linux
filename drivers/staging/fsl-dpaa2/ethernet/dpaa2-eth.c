@@ -684,6 +684,7 @@ static void free_tx_fd(const struct dpaa2_eth_priv *priv,
 static int dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 {
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
+	struct device *dev = net_dev->dev.parent;
 	struct dpaa2_fd fd;
 	struct rtnl_link_stats64 *percpu_stats;
 	struct dpaa2_eth_drv_stats *percpu_extras;
@@ -695,6 +696,9 @@ static int dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 	 * current skb happens regardless of congestion state
 	 */
 	fq = &priv->fq[queue_mapping];
+
+	dma_sync_single_for_cpu(dev, priv->cscn_dma,
+				DPAA2_CSCN_SIZE, DMA_FROM_DEVICE);
 	if (unlikely(dpaa2_cscn_state_congested(priv->cscn_mem))) {
 		netif_stop_subqueue(net_dev, queue_mapping);
 		fq->stats.congestion_entry++;
@@ -780,6 +784,7 @@ static void dpaa2_eth_tx_conf(struct dpaa2_eth_priv *priv,
 			      struct napi_struct *napi __always_unused,
 			      u16 queue_id)
 {
+	struct device *dev = priv->net_dev->dev.parent;
 	struct rtnl_link_stats64 *percpu_stats;
 	struct dpaa2_eth_drv_stats *percpu_extras;
 	u32 status = 0;
@@ -794,9 +799,12 @@ static void dpaa2_eth_tx_conf(struct dpaa2_eth_priv *priv,
 	percpu_extras->tx_conf_bytes += dpaa2_fd_get_len(fd);
 
 	/* Check congestion state and wake all queues if necessary */
-	if (unlikely(__netif_subqueue_stopped(priv->net_dev, queue_id) &&
-		     !dpaa2_cscn_state_congested(priv->cscn_mem)))
-		netif_tx_wake_all_queues(priv->net_dev);
+	if (unlikely(__netif_subqueue_stopped(priv->net_dev, queue_id))) {
+		dma_sync_single_for_cpu(dev, priv->cscn_dma,
+					DPAA2_CSCN_SIZE, DMA_FROM_DEVICE);
+		if (!dpaa2_cscn_state_congested(priv->cscn_mem))
+			netif_tx_wake_all_queues(priv->net_dev);
+	}
 
 	/* check frame errors in the FD field */
 	if (unlikely(errors)) {

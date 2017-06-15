@@ -256,10 +256,6 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 		break;
 	case dpaa2_fd_sg:
 		skb = build_frag_skb(priv, ch, buf_data);
-
-		/* prefetch newly built skb data */
-		prefetch(skb->data);
-
 		put_page(virt_to_head_page(vaddr));
 		percpu_extras->rx_sg_frames++;
 		percpu_extras->rx_sg_bytes += dpaa2_fd_get_len(fd);
@@ -271,6 +267,8 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 
 	if (unlikely(!skb))
 		goto err_build_skb;
+
+	prefetch(skb->data);
 
 	/* Get the timestamp value */
 	if (priv->ts_rx_en) {

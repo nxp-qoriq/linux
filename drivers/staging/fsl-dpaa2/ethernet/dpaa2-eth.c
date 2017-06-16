@@ -763,7 +763,7 @@ static int dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 		free_tx_fd(priv, &fd, NULL);
 	} else {
 		percpu_stats->tx_packets++;
-		percpu_stats->tx_bytes += skb->len;
+		percpu_stats->tx_bytes += dpaa2_fd_get_len(&fd);
 	}
 
 	return NETDEV_TX_OK;

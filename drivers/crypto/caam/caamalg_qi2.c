@@ -321,8 +321,8 @@ skip_enc:
 	ctx->adata.key_inline = !!(inl_mask & 1);
 	ctx->cdata.key_inline = !!(inl_mask & 2);
 
-	flc = &ctx->flc[GIVENCRYPT];
-	flc_dma = &ctx->flc_dma[GIVENCRYPT];
+	flc = &ctx->flc[ENCRYPT];
+	flc_dma = &ctx->flc_dma[ENCRYPT];
 	desc = flc->sh_desc;
 
 	cnstr_shdsc_aead_givencap(desc, &ctx->cdata, &ctx->adata,

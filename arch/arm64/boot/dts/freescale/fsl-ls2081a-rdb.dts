@@ -87,6 +87,18 @@
 			};
 		};
 
+		i2c@2 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x02>;
+
+			ina220@40 {
+				compatible = "ti,ina220";
+				reg = <0x40>;
+				shunt-resistor = <500>;
+			};
+		};
+
 		i2c@3 {
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -111,23 +123,33 @@
 	};
 };
 
-
 &qspi {
 	status = "okay";
-	flash0: n25q512a@0 {
+	fsl,qspi-has-second-chip;
+	flash0: s25fs512s@0 {
 		#address-cells = <1>;
 		#size-cells = <1>;
-		compatible = "st,m25p80";
+		compatible = "spansion,m25p80";
+		m25p,fast-read;
 		spi-max-frequency = <20000000>;
 		reg = <0>;
 	};
-	flash1: n25q512a@1 {
+	flash1: s25fs512s@1 {
 		#address-cells = <1>;
 		#size-cells = <1>;
-		compatible = "st,m25p80";
+		compatible = "spansion,m25p80";
+		m25p,fast-read;
 		spi-max-frequency = <20000000>;
-		reg = <0>;
+		reg = <1>;
 	};
+};
+
+&sata0 {
+	status = "okay";
+};
+
+&sata1 {
+	status = "okay";
 };
 
 &usb0 {

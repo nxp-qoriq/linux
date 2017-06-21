@@ -98,6 +98,7 @@ static int fixed_phy_update_regs(struct fixed_phy *fp)
 			bmcr |= BMCR_FULLDPLX;
 
 			switch (fp->status.speed) {
+			case 10000:
 			case 1000:
 				bmcr |= BMCR_SPEED1000;
 				lpagb |= LPA_1000FULL;
@@ -115,6 +116,7 @@ static int fixed_phy_update_regs(struct fixed_phy *fp)
 			}
 		} else {
 			switch (fp->status.speed) {
+			case 10000:
 			case 1000:
 				bmcr |= BMCR_SPEED1000;
 				lpagb |= LPA_1000HALF;

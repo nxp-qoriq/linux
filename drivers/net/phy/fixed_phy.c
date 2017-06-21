@@ -59,6 +59,8 @@ static int fixed_phy_update_regs(struct fixed_phy *fp)
 
 	if (fp->status.duplex) {
 		switch (fp->status.speed) {
+		case 10000:
+			break;
 		case 1000:
 			bmsr |= BMSR_ESTATEN;
 			break;
@@ -73,6 +75,8 @@ static int fixed_phy_update_regs(struct fixed_phy *fp)
 		}
 	} else {
 		switch (fp->status.speed) {
+		case 10000:
+			break;
 		case 1000:
 			bmsr |= BMSR_ESTATEN;
 			break;

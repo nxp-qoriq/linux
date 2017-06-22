@@ -134,10 +134,11 @@
 
 &qspi {
 	status = "okay";
-	flash0: s25fl256s1@0 {
+	flash0: s25fs512s@0 {
 		#address-cells = <1>;
 		#size-cells = <1>;
-		compatible = "st,m25p80";
+		compatible = "spansion,m25p80";
+		m25p,fast-read;
 		spi-max-frequency = <20000000>;
 		reg = <0>;
 	};

@@ -76,7 +76,7 @@ struct flash_info {
 #define SPI_NOR_DUAL_READ	BIT(5)	/* Flash supports Dual Read */
 #define SPI_NOR_QUAD_READ	BIT(6)	/* Flash supports Quad Read */
 #define USE_FSR			BIT(13)	/* use flag status register */
-#define SPI_NOR_DDR_QUAD_READ	BIT(13)	/* Flash supports DDR Quad Read */
+#define SPI_NOR_DDR_QUAD_READ	BIT(7)	/* Flash supports DDR Quad Read */
 #define SPI_NOR_HAS_LOCK	BIT(8)	/* Flash supports lock/unlock via SR */
 #define SPI_NOR_HAS_TB		BIT(9)	/*
 					 * Flash SR has Top/Bottom (TB) protect

@@ -301,4 +301,13 @@ config VMD
 	  To compile this driver as a module, choose M here: the
 	  module will be called vmd.
 
+menu "Mobiveil PCI Core Support"
+config PCIE_MOBIVEIL
+	bool
+
+config PCIE_MOBIVEIL_HOST
+        bool
+        select PCIE_MOBIVEIL
+endmenu
+
 endmenu

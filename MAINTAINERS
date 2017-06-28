@@ -9431,6 +9431,13 @@ S:	Supported
 F:	Documentation/devicetree/bindings/pci/pci-thunder-*
 F:	drivers/pci/host/pci-thunder-*
 
+PCI DRIVER FOR MOBIVEIL
+M:	Hou Zhiqiang <zhiqiang.hou@nxp.com>
+L:	linux-pci@vger.kernel.org
+S:	Maintained
+F:	Documentation/devicetree/bindings/pci/mobiveil-pcie.txt
+F:	drivers/pci/host/*mobiveil*
+
 PCMCIA SUBSYSTEM
 P:	Linux PCMCIA Team
 L:	linux-pcmcia@lists.infradead.org

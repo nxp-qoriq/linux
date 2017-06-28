@@ -1,0 +1,46 @@
+* Mobiveil PCIe interface
+
+Required properties:
+- reg: Should contain the configuration address space.
+- reg-names: Must be "config" for the PCIe configuration space.
+    (The old way of getting the configuration address space from "ranges"
+    is deprecated and should be avoided.)
+RC mode:
+- #address-cells: set to <3>
+- #size-cells: set to <2>
+- device_type: set to "pci"
+- ranges: ranges for the PCI memory and I/O regions
+- #interrupt-cells: set to <1>
+- interrupt-map-mask and interrupt-map: standard PCI properties to define
+    the mapping of the PCIe interface to interrupt numbers.
+
+Optional properties:
+RC mode:
+- apio-wins: number of outbound address translation windows
+- ppio-wins-rc: number of inbound address translation windows
+- bus-range: PCI bus numbers covered (it is recommended for new devicetrees
+    to specify this property, to keep backwards compatibility a range of
+    0x00-0xff is assumed if not present)
+
+Example configuration:
+
+	pcie@3400000 {
+		compatible = "fsl,lx2160a-pcie";
+		reg = <0x00 0x03400000 0x0 0x00100000   /* controller registers */
+		       0x80 0x00000000 0x0 0x00020000>; /* configuration space */
+		reg-names = "regs", "config";
+		#address-cells = <3>;
+		#size-cells = <2>;
+		device_type = "pci";
+		apio-wins = <3>;
+		ppio-wins-rc = <3>;
+		bus-range = <0x0 0xff>;
+		ranges = <0x81000000 0x0 0x00000000 0x80 0x00020000 0x0 0x00010000
+			  0x82000000 0x0 0x40000000 0x80 0x40000000 0x0 0x40000000>;
+		#interrupt-cells = <1>;
+		interrupt-map-mask = <0 0 0 7>;
+		interrupt-map = <0000 0 0 1 &gic 0 109 0x4>,
+				<0000 0 0 2 &gic 0 110 0x4>,
+				<0000 0 0 3 &gic 0 111 0x4>,
+				<0000 0 0 4 &gic 0 112 0x4>;
+	};

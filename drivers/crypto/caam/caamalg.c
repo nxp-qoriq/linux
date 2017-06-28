@@ -855,10 +855,10 @@ static void ablkcipher_encrypt_done(struct device *jrdev, u32 *desc, u32 err,
 {
 	struct ablkcipher_request *req = context;
 	struct ablkcipher_edesc *edesc;
-#ifdef DEBUG
 	struct crypto_ablkcipher *ablkcipher = crypto_ablkcipher_reqtfm(req);
 	int ivsize = crypto_ablkcipher_ivsize(ablkcipher);
 
+#ifdef DEBUG
 	dev_err(jrdev, "%s %d: err 0x%x\n", __func__, __LINE__, err);
 #endif
 
@@ -877,6 +877,14 @@ static void ablkcipher_encrypt_done(struct device *jrdev, u32 *desc, u32 err,
 		     edesc->dst_nents > 1 ? 100 : req->nbytes, 1);
 
 	ablkcipher_unmap(jrdev, edesc, req);
+
+	/*
+	 * The crypto API expects us to set the IV (req->info) to the last
+	 * ciphertext block. This is used e.g. by the CTS mode.
+	 */
+	scatterwalk_map_and_copy(req->info, req->dst, req->nbytes - ivsize,
+				 ivsize, 0);
+
 	kfree(edesc);
 
 	ablkcipher_request_complete(req, err);
@@ -887,10 +895,10 @@ static void ablkcipher_decrypt_done(struct device *jrdev, u32 *desc, u32 err,
 {
 	struct ablkcipher_request *req = context;
 	struct ablkcipher_edesc *edesc;
-#ifdef DEBUG
 	struct crypto_ablkcipher *ablkcipher = crypto_ablkcipher_reqtfm(req);
 	int ivsize = crypto_ablkcipher_ivsize(ablkcipher);
 
+#ifdef DEBUG
 	dev_err(jrdev, "%s %d: err 0x%x\n", __func__, __LINE__, err);
 #endif
 
@@ -908,6 +916,14 @@ static void ablkcipher_decrypt_done(struct device *jrdev, u32 *desc, u32 err,
 		     edesc->dst_nents > 1 ? 100 : req->nbytes, 1);
 
 	ablkcipher_unmap(jrdev, edesc, req);
+
+	/*
+	 * The crypto API expects us to set the IV (req->info) to the last
+	 * ciphertext block.
+	 */
+	scatterwalk_map_and_copy(req->info, req->src, req->nbytes - ivsize,
+				 ivsize, 0);
+
 	kfree(edesc);
 
 	ablkcipher_request_complete(req, err);

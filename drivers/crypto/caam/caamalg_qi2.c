@@ -1162,7 +1162,9 @@ static int ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 	u32 *desc;
 	u32 ctx1_iv_off = 0;
 	const bool ctr_mode = ((ctx->cdata.algtype & OP_ALG_AAI_MASK) ==
-			       OP_ALG_AAI_CTR_MOD128);
+				OP_ALG_AAI_CTR_MOD128) &&
+				((ctx->cdata.algtype & OP_ALG_ALGSEL_MASK) !=
+				OP_ALG_ALGSEL_CHACHA20);
 	const bool is_rfc3686 = (ctr_mode && strstr(alg_name, "rfc3686"));
 
 #ifdef DEBUG
@@ -2164,6 +2166,22 @@ static struct caam_alg_template driver_algs[] = {
 			.ivsize = AES_BLOCK_SIZE,
 		},
 		.class1_alg_type = OP_ALG_ALGSEL_AES | OP_ALG_AAI_XTS,
+	},
+	{
+		.name = "chacha20",
+		.driver_name = "chacha20-caam-qi2",
+		.blocksize = 1,
+		.type = CRYPTO_ALG_TYPE_ABLKCIPHER,
+		.template_ablkcipher = {
+			.setkey = ablkcipher_setkey,
+			.encrypt = ablkcipher_encrypt,
+			.decrypt = ablkcipher_decrypt,
+			.geniv = "seqiv",
+			.min_keysize = CHACHA20_KEY_SIZE,
+			.max_keysize = CHACHA20_KEY_SIZE,
+			.ivsize = CHACHA20_IV_SIZE,
+		},
+		.class1_alg_type = OP_ALG_ALGSEL_CHACHA20,
 	}
 };
 

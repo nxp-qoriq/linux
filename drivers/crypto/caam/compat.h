@@ -1,5 +1,6 @@
 /*
  * Copyright 2008-2011 Freescale Semiconductor, Inc.
+ * Copyright 2017 NXP
  */
 
 #ifndef CAAM_COMPAT_H
@@ -34,6 +35,7 @@
 #include <crypto/des.h>
 #include <crypto/sha.h>
 #include <crypto/md5.h>
+#include <crypto/chacha20.h>
 #include <crypto/internal/aead.h>
 #include <crypto/authenc.h>
 #include <crypto/akcipher.h>

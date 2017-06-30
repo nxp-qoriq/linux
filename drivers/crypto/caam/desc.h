@@ -3,6 +3,7 @@
  * Definitions to support CAAM descriptor instruction generation
  *
  * Copyright 2008-2011 Freescale Semiconductor, Inc.
+ * Copyright 2017 NXP
  */
 
 #ifndef DESC_H
@@ -1154,6 +1155,7 @@
 #define OP_ALG_ALGSEL_KASUMI	(0x70 << OP_ALG_ALGSEL_SHIFT)
 #define OP_ALG_ALGSEL_CRC	(0x90 << OP_ALG_ALGSEL_SHIFT)
 #define OP_ALG_ALGSEL_SNOW_F9	(0xA0 << OP_ALG_ALGSEL_SHIFT)
+#define OP_ALG_ALGSEL_CHACHA20 (0xD0 << OP_ALG_ALGSEL_SHIFT)
 
 #define OP_ALG_AAI_SHIFT	4
 #define OP_ALG_AAI_MASK		(0x1ff << OP_ALG_AAI_SHIFT)
@@ -1200,6 +1202,11 @@
 #define OP_ALG_AAI_RNG4_PS	(0x40 << OP_ALG_AAI_SHIFT)
 #define OP_ALG_AAI_RNG4_AI	(0x80 << OP_ALG_AAI_SHIFT)
 #define OP_ALG_AAI_RNG4_SK	(0x100 << OP_ALG_AAI_SHIFT)
+
+/* Chacha20 AAI set */
+#define OP_ALG_AAI_AEAD	(0x002 << OP_ALG_AAI_SHIFT)
+#define OP_ALG_AAI_KEYSTREAM	(0x001 << OP_ALG_AAI_SHIFT)
+#define OP_ALG_AAI_BC8		(0x008 << OP_ALG_AAI_SHIFT)
 
 /* hmac/smac AAI set */
 #define OP_ALG_AAI_HASH		(0x00 << OP_ALG_AAI_SHIFT)

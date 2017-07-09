@@ -6,7 +6,7 @@
  * SPDX-License-Identifier:	GPL-2.0+
  */
 
-/{
+/ {
 	compatible= "fsl,ls1028a";
 	interrupt-parent= <&gic>;
 	#address-cells= <2>;
@@ -18,14 +18,14 @@
 
 		cpu0:cpu@0 {
 			device_type= "cpu";
-			compatible= "arm,cortex-a72", "arm,armv8";
+			compatible= "arm,cortex-a72", "arm";
 			reg = <0x0>;
 			enable-method= "psci";
 		};
 
 		cpu1:cpu@1 {
 			device_type= "cpu";
-			compatible= "arm,cortex-a72", "arm,armv8";
+			compatible= "arm,cortex-a72", "arm";
 			reg= <0x1>;
 			enable-method= "psci";
 		};
@@ -33,14 +33,13 @@
 
 	memory@01080000 {
 		device_type = "memory";
-		reg = <0x00000000 0x01080000 0 0x80000000>; /* DRAM space - 1, size : 2 GB DRAM */
 	};
 
 /* Sudhanshu : 2017-04-05 : Commented for later use.
  *	gpu_2d: gpu@F0C0000 {
  *		compatible = "vivante,gc";
  *		reg = <0x0 0x0F0C0000 0x0 0x10000>;
- *		interrupts = <0 10 IRQ_TYPE_LEVEL_HIGH>;
+ *		interrupts = <0 10 0x4>;
  *		clocks = <&clks IMX6QDL_CLK_GPU2D_AXI>,
  *			<&clks IMX6QDL_CLK_GPU2D_CORE>;
  *		clock-names = "bus", "core";
@@ -57,10 +56,11 @@
 
 	clockgen:clocking@1300000 {	/* Clock Generation Unit  CGU_CGA*/
 		compatible= "fsl,ls1028a-clockgen";
-		reg= <0x0 0x1300000 0x0 0x10000>;
+		reg= <0x0 0x1300000 0x0 0xa0000>;
 		#clock-cells= <2>;
 		clocks= <&sysclk>;
 	};
+
 
 	gic:interrupt-controller@6000000 {
 		compatible= "arm,gic-v3";
@@ -70,8 +70,8 @@
 			<0x0 0x06040000 0 0x40000>; /* GIC Redistributor */
 		#interrupt-cells= <3>;
 		interrupt-controller;
-		interrupts= <1 9 0x4>;/* modify interrupts specifiers */
-		gic-its@6020000{
+		interrupts= <1 9 0x4>;
+		its:gic-its@6020000{
 			compatible= "arm,gic-v3-its";
 			msi-controller;
 			#msi-cells= <1>;
@@ -81,28 +81,17 @@
 
 	timer{
 		compatible= "arm,armv8-timer";
-		reg= <0x0 0x023D0000 0 0x10000>, /* Generic Reference Timer (GRT) */
-			<0x0 0x023E0000 0 0x10000>, /* GRT control CNTControlBase */
-			<0x0 0x023F0000 0 0x10000>, /* GRT status CNTReadBase */
-			<0x0 0x02880000 0 0x10000>, /* GRT non-secure control CNTCTLBase_NS */
-			<0x0 0x02890000 0 0x10000>, /* GRT secure control CNTCTLBase_S */
-			<0x0 0x028A0000 0 0x10000>, /* GRT non-secure base0 CNTCTLBase0 */
-			<0x0 0x028B0000 0 0x10000>, /* GRT non-secure base1 CNTCTLBase1  */
-			<0x0 0x028C0000 0 0x10000>, /* GRT secure base2 CNTCTLBase2 */
-			<0x0 0x028D0000 0 0x10000>, /* GRT secure base3 CNTCTLBase3  */
-			<0x0 0x028E0000 0 0x10000>, /* GRT non-secure base0 CNTCTLEL0Base0 */
-			<0x0 0x028F0000 0 0x10000>; /* GRT secure base2 CNTCTLEL0Base2 */
-		interrupts= <1 13 0x8>, /* Physical Secure PPI, active-low */
-			    <1 14 0x8>, /* Physical Non-Secure PPI, active-low */
-			    <1 11 0x8>, /* Virtual PPI, active-low */
-			    <1 10 0x8>; /* Hypervisor PPI, active-low */
+		interrupts= <1 13 0x4>, /* Physical Secure PPI, active-low */
+			    <1 14 0x4>, /* Physical Non-Secure PPI,active-low */
+			    <1 11 0x4>, /* Virtual PPI, active-low */
+			    <1 10 0x4>; /* Hypervisor PPI, active-low */
 	};
 
 	watchdogtimer{
 		compatible= "arm,armv8-timer";
-		reg= <0x0 0x023C0000 0 0x10000>; /* TZWDT TrustZone Watchdog timer */
+		reg= <0x0 0x023C0000 0 0x10000>; /* TZWDT TrustZone WD timer */
 		interrupts= <1 13 0x8>, /* Physical Secure PPI, active-low */
-			    <1 14 0x8>, /* Physical Non-Secure PPI, active-low */
+			    <1 14 0x8>, /* Physical Non-Secure PPI,active-low */
 			    <1 11 0x8>, /* Virtual PPI, active-low */
 			    <1 10 0x8>; /* Hypervisor PPI, active-low */
 	};
@@ -155,60 +144,119 @@
 		interrupts = <0 247 0x8>;
 	};
 
-	serial0: serial@21C0500 {		/* DUART */
-		device_type= "serial";
+	serial0: serial@21C0500 {
 		compatible= "fsl,ns16550", "ns16550a";
-		reg= <0x0 0x21C0500 0x0 0x10000>;
-		clock-frequency= <0>;	/* Updated by bootloader */
-		interrupts = <0 32 0x4>;	/* IRQ_TYPE_LEVEL_HIGH */
+		reg= <0x0 0x21C0500 0x0 0x100>;
+		interrupts = <0 32 0x4>;
 	};
 
-	serial1: serial@2260000 {		/* LPUART */
-		device_type= "serial";
+	serial1: serial@21C0600 {
 		compatible= "fsl,ns16550", "ns16550a";
+		reg= <0x0 0x21C0600 0x0 0x100>;
+		interrupts = <0 32 0x4>;
+	};
+
+	lpuart1: serial@2260000 {
+		compatible= "fsl,ls1021a-lpuart";
 		reg = <0x0 0x2260000 0x0 0x10000>;
 		clock-frequency= <0>;	/* Updated by bootloader */
-		interrupts = <0 32 0x4>;	/* IRQ_TYPE_LEVEL_HIGH */
+		interrupts = <0 232 0x4>;
+		clocks = <&clockgen 4 0>;
+		clock-names = "ipg";
+		status = "disabled";
+	};
+
+	lpuart2: serial@0x2270000 {
+		compatible= "fsl,ls1021a-lpuart";
+		reg = <0x0 0x2270000 0x0 0x10000>;
+		clock-frequency= <0>;	/* Updated by bootloader */
+		interrupts = <0 233 0x4>;
+		clocks = <&clockgen 4 0>;
+		clock-names = "ipg";
+		status = "disabled";
+	};
+
+	lpuart3: serial@0x2280000 {
+		compatible= "fsl,ls1021a-lpuart";
+		reg = <0x0 0x2280000 0x0 0x10000>;
+		clock-frequency= <0>;	/* Updated by bootloader */
+		interrupts = <0 234 0x4>;
+		clocks = <&clockgen 4 0>;
+		clock-names = "ipg";
+		status = "disabled";
+	};
+
+	lpuart4: serial@0x2290000 {
+		compatible= "fsl,ls1021a-lpuart";
+		reg = <0x0 0x2290000 0x0 0x10000>;
+		clock-frequency= <0>;	/* Updated by bootloader */
+		interrupts = <0 235 0x4>;
+		clocks = <&clockgen 4 0>;
+		clock-names = "ipg";
+		status = "disabled";
+	};
+
+	lpuart5: serial@0x22A0000 {
+		compatible= "fsl,ls1021a-lpuart";
+		reg = <0x0 0x22A0000 0x0 0x10000>;
+		clock-frequency= <0>;	/* Updated by bootloader */
+		interrupts = <0 236 0x4>;
+		clocks = <&clockgen 4 0>;
+		clock-names = "ipg";
+		status = "disabled";
+	};
+
+	lpuart6: serial@0x22B0000 {
+		compatible= "fsl,ls1021a-lpuart";
+		reg = <0x0 0x22B0000 0x0 0x10000>;
+		clock-frequency= <0>;	/* Updated by bootloader */
+		interrupts = <0 237 0x4>;
+		clocks = <&clockgen 4 0>;
+		clock-names = "ipg";
+		status = "disabled";
 	};
 
 	dspi1:dspi@2100000 {
-		compatible= "fsl,vf610-dspi";
+		compatible= "fsl,ls1021a-v1.0-dspi";
 		#address-cells= <1>;
 		#size-cells= <0>;
 		reg = <0x0 0x2100000 0x0 0x10000>;
-		interrupts= <0 26 0x4>; /* Level high type */
-		num-cs= <6>;
+		interrupts= <0 26 0x4>;
+		clocks = <&clockgen 1>;
+		clock-names = "dspi";
+		spi-num-chipselects = <5>;
 	};
 
 	dspi2:dspi@2110000 {
-		compatible= "fsl,vf610-dspi";
+		compatible= "fsl,ls1021a-v1.0-dspi";
 		#address-cells= <1>;
 		#size-cells= <0>;
 		reg= <0x0 0x2110000 0x0 0x1000>;
-		interrupts= <0 26 0x4>; /* Level high type */
-		num-cs= <6>;
+		interrupts= <0 26 0x4>;
+		clocks = <&clockgen 1>;
+		clock-names = "dspi";
+		spi-num-chipselects = <5>;
 	};
 
 	usb0:usb3@3100000 {
-		compatible= "fsl,layerscape-dwc3";
+		compatible= "snps,dwc3";
 		reg= <0x0 0x3100000 0x0 0x10000>;
-		interrupts= <0 80 0x4>; /* Level high type */
+		interrupts= <0 80 0x4>;
 		dr_mode= "host";
 	};
 
 	usb1:usb3@3110000 {
-		compatible= "fsl,layerscape-dwc3";
+		compatible= "snps,dwc3";
 		reg= <0x0 0x3110000 0x0 0x10000>;
-		interrupts= <0 81 0x4>; /* Level high type */
+		interrupts= <0 81 0x4>;
 		dr_mode= "host";
 	};
 
 	sdhci_0: sdhci@02140000 {
-		compatible = "samsung,exynos4210-sdhci";
+		compatible = "fsl,ls1028a-esdhc", "fsl,esdhc";
 		reg = <0x0 0x02140000 0x0 0x1000>;
 		interrupts = <0 28 0x4>;
 		//clocks = <&clock CLK_SDMMC0>, <&clock CLK_SCLK_MMC0>;
-		clock-names = "hsmmc", "mmc_busclk.2";
 		status = "disabled";
 	};
 
@@ -217,142 +265,159 @@
 		reg = <0x0 0x02150000 0x0 0x1000>;
 		interrupts = <0 63 0x4>;
 		//clocks = <&clock CLK_SDMMC1>, <&clock CLK_SCLK_MMC1>;
-		clock-names = "hsmmc", "mmc_busclk.2";
 		status = "disabled";
 	};
 
 	sata@3200000{
-		compatible= "marvell,orion-sata";
+		compatible= "fsl,ls1043a-ahci", "fsl,ls1028a-ahci";
 		reg= <0X0 0X03200000 0X0 0x1000>;
-		interrupts= <0 133 0x4>; /* Level high type */
-		//clocks= <&gateclk 14>, <&gateclk 20>;/* add appropriate clocks */
-		clock-names= "0", "1";
+		interrupts= <0 133 0x4>;
+		//clocks= <&gateclk 14>, <&gateclk 20>;/* TODO: add clocks */
 		status= "disabled";
 	};
 
-	pcie@3400000{		/* rcie_enetc */
-		compatible= "fsl,ls-pcie", "snps,dw-pcie";
-		reg= <0x00 0x03400000 0x0 0x10000   /* PF0 / shared registers */
-		      0x00 0x03480000 0x0 0x10000   /* AMQ map registers */
-		      0x00 0x034C0000 0x0 0x10000>; /* control registers */
-		reg-names= "pf0", "amq", "control";
-		interrupts= <0 109 0x4>; /* Level high type */
-		#address-cells= <3>;
-		#size-cells= <2>;
-		device_type= "pci";
-		num-lanes= <4>;
-		bus-range= <0x0 0xff>;
-		ranges= <0x81000000 0x0 0x00000000 0x10 0x00020000 0x0 0x00010000   /* downstream I/O */
-			 0x82000000 0x0 0x40000000 0x10 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+	pcie@3400000 {
+		compatible = "fsl,ls2085a-pcie", "fsl,ls1088a-pcie",
+			     "snps,dw-pcie";
+		reg = <0x00 0x03400000 0x0 0x00100000 /* controller registers */
+		       0x20 0x00000000 0x0 0x00002000>;/* configuration space */
+		reg-names = "regs", "config";
+		interrupts = <0 108 0x4>; /* aer interrupt */
+		interrupt-names = "aer";
+		#address-cells = <3>;
+		#size-cells = <2>;
+		device_type = "pci";
+		dma-coherent;
+		num-lanes = <4>;
+		bus-range = <0x0 0xff>;
+		ranges = <0x81000000 0x0 0x00000000 0x20 0x00010000 0x0 0x00010000   /* downstream I/O */
+			  0x82000000 0x0 0x40000000 0x20 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+		msi-parent = <&its>;
+		#interrupt-cells = <1>;
+		interrupt-map-mask = <0 0 0 7>;
+		interrupt-map = <0000 0 0 1 &gic 0 0 0 109 0x4>,
+				<0000 0 0 2 &gic 0 0 0 110 0x4>,
+				<0000 0 0 3 &gic 0 0 0 111 0x4>,
+				<0000 0 0 4 &gic 0 0 0 112 0x4>;
 	};
 
-	pcie@3500000{		/* pex2_device */
-		compatible= "fsl,ls-pcie", "snps,dw-pcie";
-		reg= <0x00 0x03500000 0x0 0x10000   /* PF0 / shared registers */
-		      0x00 0x03580000 0x0 0x10000   /* AMQ map registers */
-		      0x00 0x035C0000 0x0 0x10000>; /* control registers */
-		reg-names= "pf0", "amq", "control";
-		interrupts= <0 114 0x4>; /* Level high type */
-		#address-cells= <3>;
-		#size-cells= <2>;
-		device_type= "pci";
-		num-lanes= <4>;
-		bus-range= <0x0 0xff>;
-		ranges= <0x81000000 0x0 0x00000000 0x12 0x00020000 0x0 0x00010000   /* downstream I/O */
-			 0x82000000 0x0 0x40000000 0x12 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+	pcie@3500000 {
+		compatible = "fsl,ls2085a-pcie", "fsl,ls1088a-pcie",
+			     "snps,dw-pcie";
+		reg = <0x00 0x03500000 0x0 0x00100000 /* controller registers */
+		       0x28 0x00000000 0x0 0x00002000>;/* configuration space */
+		reg-names = "regs", "config";
+		interrupts = <0 113 0x4>; /* aer interrupt */
+		interrupt-names = "aer";
+		#address-cells = <3>;
+		#size-cells = <2>;
+		device_type = "pci";
+		dma-coherent;
+		num-lanes = <4>;
+		bus-range = <0x0 0xff>;
+		ranges = <0x81000000 0x0 0x00000000 0x28 0x00010000 0x0 0x00010000   /* downstream I/O */
+			  0x82000000 0x0 0x40000000 0x28 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+		msi-parent = <&its>;
+		#interrupt-cells = <1>;
+		interrupt-map-mask = <0 0 0 7>;
+		interrupt-map = <0000 0 0 1 &gic 0 0 0 114 0x4>,
+				<0000 0 0 2 &gic 0 0 0 115 0x4>,
+				<0000 0 0 3 &gic 0 0 0 116 0x4>,
+				<0000 0 0 4 &gic 0 0 0 117 0x4>;
 	};
 
-	i2c1: i2c@2000000 {
+
+	i2c0: i2c@2000000 {
 		compatible = "fsl,vf610-i2c";
 		#address-cells = <1>;
 		#size-cells = <0>;
-		reg = <0x0 0x2000000 0x0 0x1000>;
-		interrupts = <0 66 0x4>;/* Interrupt lines of i2c1,2 are ORed */
+		reg = <0x0 0x2000000 0x0 0x10000>;
+		interrupts = <0 34 0x4>;/* Interrupt lines of i2c1,2 are ORed */
 		clock-names = "i2c";
-		//clocks = <&platform_clk 1>;
+		clocks = <&clockgen 4 3>;
 		status = "disabled";
 	};
 
-	i2c2: i2c@2010000 {
+	i2c1: i2c@2010000 {
 		compatible = "fsl,vf610-i2c";
 		#address-cells = <1>;
 		#size-cells = <0>;
-		reg = <0x0 0x2010000 0x0 0x1000>;
-		interrupts = <0 66 0x4>;/* Interrupt lines of i2c1,2 are ORed */
+		reg = <0x0 0x2010000 0x0 0x10000>;
+		interrupts = <0 34 0x4>;/* Interrupt lines of i2c1,2 are ORed */
 		clock-names = "i2c";
-		//clocks = <&platform_clk 1>;
+		clocks = <&clockgen 4 3>;
 		status = "disabled";
 	};
 
-	i2c3: i2c@2020000 {
+	i2c2: i2c@2020000 {
 		compatible = "fsl,vf610-i2c";
 		#address-cells = <1>;
 		#size-cells = <0>;
-		reg = <0x0 0x2020000 0x0 0x1000>;
-		interrupts = <0 67 0x4>;/* Interrupt lines of i2c3,4 are ORed */
+		reg = <0x0 0x2020000 0x0 0x10000>;
+		interrupts = <0 35 0x4>;/* Interrupt lines of i2c3,4 are ORed */
 		clock-names = "i2c";
-		//clocks = <&platform_clk 1>;
+		clocks = <&clockgen 4 3>;
 		status = "disabled";
 	};
 
-	i2c4: i2c@2030000 {
+	i2c3: i2c@2030000 {
 		compatible = "fsl,vf610-i2c";
 		#address-cells = <1>;
 		#size-cells = <0>;
-		reg = <0x0 0x2030000 0x0 0x1000>;
-		interrupts = <0 67 0x4>;/* Interrupt lines of i2c3,4 are ORed */
+		reg = <0x0 0x2030000 0x0 0x10000>;
+		interrupts = <0 35 0x4>;/* Interrupt lines of i2c3,4 are ORed */
 		clock-names = "i2c";
-		//clocks = <&platform_clk 1>;
+		clocks = <&clockgen 4 3>;
 		status = "disabled";
 	};
 
-	i2c5: i2c@2040000 {
+	i2c4: i2c@2040000 {
 		compatible = "fsl,vf610-i2c";
 		#address-cells = <1>;
 		#size-cells = <0>;
-		reg = <0x0 0x2040000 0x0 0x1000>;
-		interrupts = <0 106 0x4>;/* Interrupt lines of i2c6,7 are ORed*/
+		reg = <0x0 0x2040000 0x0 0x10000>;
+		interrupts = <0 74 0x4>;/* Interrupt lines of i2c6,7 are ORed*/
 		clock-names = "i2c";
-		//clocks = <&platform_clk 1>;
+		clocks = <&clockgen 4 3>;
 		status = "disabled";
 	};
 
-	i2c6: i2c@2050000 {
+	i2c5: i2c@2050000 {
 		compatible = "fsl,vf610-i2c";
 		#address-cells = <1>;
 		#size-cells = <0>;
-		reg = <0x0 0x2050000 0x0 0x1000>;
-		interrupts = <0 106 0x4>;/* Interrupt lines of i2c6,7 are ORed*/
+		reg = <0x0 0x2050000 0x0 0x10000>;
+		interrupts = <0 74 0x4>;/* Interrupt lines of i2c6,7 are ORed*/
 		clock-names = "i2c";
-		//clocks = <&platform_clk 1>;
+		clocks = <&clockgen 4 3>;
 		status = "disabled";
 	};
 
-	i2c7: i2c@2060000 {
+	i2c6: i2c@2060000 {
 		compatible = "fsl,vf610-i2c";
 		#address-cells = <1>;
 		#size-cells = <0>;
-		reg = <0x0 0x2060000 0x0 0x1000>;
-		interrupts = <0 107 0x4>;/* Interrupt lines of i2c7,8 are ORed*/
+		reg = <0x0 0x2060000 0x0 0x10000>;
+		interrupts = <0 75 0x4>;/* Interrupt lines of i2c7,8 are ORed*/
 		clock-names = "i2c";
-		//clocks = <&platform_clk 1>;
+		clocks = <&clockgen 4 3>;
 		status = "disabled";
 	};
 
-	i2c8: i2c@2070000 {
+	i2c7: i2c@2070000 {
 		compatible = "fsl,vf610-i2c";
 		#address-cells = <1>;
 		#size-cells = <0>;
-		reg = <0x0 0x2070000 0x0 0x1000>;
-		interrupts = <0 107 0x4>;/* Interrupt lines of i2c7,8 are ORed*/
+		reg = <0x0 0x2070000 0x0 0x10000>;
+		interrupts = <0 75 0x4>;/* Interrupt lines of i2c7,8 are ORed*/
 		clock-names = "i2c";
-		//clocks = <&platform_clk 1>;
+		clocks = <&clockgen 4 3>;
 		status = "disabled";
 	};
 
 	can1: flexcan@02180000 {
 		compatible = "fsl,imx6ul-flexcan", "fsl,imx6q-flexcan";
-		reg = <0x0 0x02180000 0x0 0x1000>;
+		reg = <0x0 0x02180000 0x0 0x10000>;
 		interrupts = <0 21 0x4>;
 		//clocks = <&clks IMX6UL_CLK_CAN1_IPG>,
 		//	<&clks IMX6UL_CLK_CAN1_SERIAL>;
@@ -362,7 +427,7 @@
 
 	can2: flexcan@02190000 {
 		compatible = "fsl,imx6ul-flexcan", "fsl,imx6q-flexcan";
-		reg = <0x0 0x02190000 0x0 0x1000>;
+		reg = <0x0 0x02190000 0x0 0x10000>;
 		interrupts = <0 22 0x4>;
 		//clocks = <&clks IMX6UL_CLK_CAN2_IPG>,
 		//	 <&clks IMX6UL_CLK_CAN2_SERIAL>;
@@ -370,10 +435,50 @@
 		status = "disabled";
 	};
 
-/*
- * TODO : Sudhanshu 20170406:  Add Nodes for
- * 1) GPIO
- * 2) FlexSPI *1 controller
- */
+	gpio0: gpio@2300000 {
+		compatible = "fsl,ls1028a-gpio", "fsl,qoriq-gpio";
+		reg = <0x0 0x2300000 0x0 0x10000>;
+		interrupts = <0 36 0x4>; /* Level high type */
+		gpio-controller;
+		little-endian;
+		#gpio-cells = <2>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+	};
+
+	gpio1: gpio@2310000 {
+		compatible = "fsl,ls1028a-gpio", "fsl,qoriq-gpio";
+		reg = <0x0 0x2310000 0x0 0x10000>;
+		interrupts = <0 36 0x4>; /* Level high type */
+		gpio-controller;
+		little-endian;
+		#gpio-cells = <2>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+	};
+
+	gpio2: gpio@2320000 {
+		compatible = "fsl,ls1028a-gpio", "fsl,qoriq-gpio";
+		reg = <0x0 0x2320000 0x0 0x10000>;
+		interrupts = <0 37 0x4>; /* Level high type */
+		gpio-controller;
+		little-endian;
+		#gpio-cells = <2>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+	};
+
+	fspi: flexspi@20C0000 {
+		compatible = "nxp,dn-flexspi";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x0 0x20C0000 0x0 0x10000>,
+			<0x0 0x20000000 0x0 0x4000000>; /*64MB flash*/
+			/* <0x0 0x20000000 0x0 0x4000000>;*/ /*How to incoperate 512M here*/
+		interrupts = <0 25 0x4>; /* Level high type */
+		reg-names = "FlexSPI", "FlexSPI-memory";
+		num-cs = <1>;
+		status = "disabled";
+	};
 
 };

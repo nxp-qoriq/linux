@@ -544,6 +544,9 @@ struct aead_edesc {
 	unsigned int assoclen;
 	dma_addr_t assoclen_dma;
 	struct caam_drv_req drv_req;
+#define CAAM_QI_MAX_AEAD_SG						\
+	((CAAM_QI_MEMCACHE_SIZE - offsetof(struct aead_edesc, sgt)) /	\
+	 sizeof(struct qm_sg_entry))
 	struct qm_sg_entry sgt[0];
 };
 
@@ -587,6 +590,9 @@ struct ablkcipher_edesc {
 	int qm_sg_bytes;
 	dma_addr_t qm_sg_dma;
 	struct caam_drv_req drv_req;
+#define CAAM_QI_MAX_ABLKCIPHER_SG					    \
+	((CAAM_QI_MEMCACHE_SIZE - offsetof(struct ablkcipher_edesc, sgt)) / \
+	 sizeof(struct qm_sg_entry))
 	struct qm_sg_entry sgt[0];
 };
 
@@ -829,6 +835,14 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 	 */
 	qm_sg_ents = 1 + !!ivsize + mapped_src_nents +
 		     (mapped_dst_nents > 1 ? mapped_dst_nents : 0);
+	if (unlikely(qm_sg_ents > CAAM_QI_MAX_AEAD_SG)) {
+		dev_err(qidev, "Insufficient S/G entries: %d > %lu\n",
+			qm_sg_ents, CAAM_QI_MAX_AEAD_SG);
+		caam_unmap(qidev, req->src, req->dst, src_nents, dst_nents,
+			   iv_dma, ivsize, op_type, 0, 0);
+		qi_cache_free(edesc);
+		return ERR_PTR(-ENOMEM);
+	}
 	sg_table = &edesc->sgt[0];
 	qm_sg_bytes = qm_sg_ents * sizeof(*sg_table);
 
@@ -1291,6 +1305,15 @@ static struct ablkcipher_edesc *ablkcipher_edesc_alloc(struct ablkcipher_request
 	}
 	dst_sg_idx = qm_sg_ents;
 
+	qm_sg_ents += mapped_dst_nents > 1 ? mapped_dst_nents : 0;
+	if (unlikely(qm_sg_ents > CAAM_QI_MAX_ABLKCIPHER_SG)) {
+		dev_err(qidev, "Insufficient S/G entries: %d > %lu\n",
+			qm_sg_ents, CAAM_QI_MAX_ABLKCIPHER_SG);
+		caam_unmap(qidev, req->src, req->dst, src_nents, dst_nents,
+			   iv_dma, ivsize, op_type, 0, 0);
+		return ERR_PTR(-ENOMEM);
+	}
+
 	/* allocate space for base edesc and link tables */
 	edesc = qi_cache_alloc(GFP_DMA | flags);
 	if (unlikely(!edesc)) {
@@ -1303,7 +1326,6 @@ static struct ablkcipher_edesc *ablkcipher_edesc_alloc(struct ablkcipher_request
 	edesc->src_nents = src_nents;
 	edesc->dst_nents = dst_nents;
 	edesc->iv_dma = iv_dma;
-	qm_sg_ents += mapped_dst_nents > 1 ? mapped_dst_nents : 0;
 	sg_table = &edesc->sgt[0];
 	edesc->qm_sg_bytes = qm_sg_ents * sizeof(*sg_table);
 	edesc->drv_req.app_ctx = req;
@@ -1435,6 +1457,14 @@ static struct ablkcipher_edesc *ablkcipher_giv_edesc_alloc(
 	} else {
 		out_contig = false;
 		qm_sg_ents += 1 + mapped_dst_nents;
+	}
+
+	if (unlikely(qm_sg_ents > CAAM_QI_MAX_ABLKCIPHER_SG)) {
+		dev_err(qidev, "Insufficient S/G entries: %d > %lu\n",
+			qm_sg_ents, CAAM_QI_MAX_ABLKCIPHER_SG);
+		caam_unmap(qidev, req->src, req->dst, src_nents, dst_nents,
+			   iv_dma, ivsize, GIVENCRYPT, 0, 0);
+		return ERR_PTR(-ENOMEM);
 	}
 
 	/* allocate space for base edesc and link tables */

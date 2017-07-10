@@ -1061,15 +1061,15 @@ int memac_init(struct fman_mac *memac)
 			 * register address space and access each one of 4
 			 * ports inside QSGMII.
 			 */
-			phy_addr = memac->pcsphy->mdio.addr;
+			phy_addr = memac->pcsphy->addr;
 			qsmgii_phy_addr = (u8)((phy_addr << 2) | i);
-			memac->pcsphy->mdio.addr = qsmgii_phy_addr;
+			memac->pcsphy->addr = qsmgii_phy_addr;
 			if (memac->basex_if)
 				setup_sgmii_internal_phy_base_x(memac);
 			else
 				setup_sgmii_internal_phy(memac, fixed_link);
 
-			memac->pcsphy->mdio.addr = phy_addr;
+			memac->pcsphy->addr = phy_addr;
 		}
 	}
 
@@ -1112,7 +1112,7 @@ int memac_free(struct fman_mac *memac)
 	free_init_resources(memac);
 
 	if (memac->pcsphy)
-		put_device(&memac->pcsphy->mdio.dev);
+		put_device(&memac->pcsphy->dev);
 
 	kfree(memac->memac_drv_param);
 	kfree(memac);

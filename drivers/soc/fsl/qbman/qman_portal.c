@@ -218,6 +218,28 @@ static int qman_online_cpu(unsigned int cpu)
 	return 0;
 }
 
+static int qman_hotplug_cpu_callback(struct notifier_block *nfb,
+				     unsigned long action, void *hcpu)
+{
+	unsigned int cpu = (unsigned long)hcpu;
+
+	switch (action) {
+	case CPU_ONLINE:
+	case CPU_ONLINE_FROZEN:
+		qman_online_cpu(cpu);
+		break;
+	case CPU_DOWN_PREPARE:
+	case CPU_DOWN_PREPARE_FROZEN:
+		qman_offline_cpu(cpu);
+	default:
+		break;
+	}
+	return NOTIFY_OK;
+}
+
+static struct notifier_block qman_hotplug_cpu_notifier = {
+	.notifier_call = qman_hotplug_cpu_callback,
+};
 static int qman_portal_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -350,14 +372,8 @@ static int __init qman_portal_driver_register(struct platform_driver *drv)
 	if (ret < 0)
 		return ret;
 
-	ret = cpuhp_setup_state_nocalls(CPUHP_AP_ONLINE_DYN,
-					"soc/qman_portal:online",
-					qman_online_cpu, qman_offline_cpu);
-	if (ret < 0) {
-		pr_err("qman: failed to register hotplug callbacks.\n");
-		platform_driver_unregister(drv);
-		return ret;
-	}
+	register_hotcpu_notifier(&qman_hotplug_cpu_notifier);
+
 	return 0;
 }
 

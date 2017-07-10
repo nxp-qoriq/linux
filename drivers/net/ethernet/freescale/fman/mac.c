@@ -898,7 +898,7 @@ static int mac_probe(struct platform_device *_of_dev)
 		priv->fixed_link->pause = phy->pause;
 		priv->fixed_link->asym_pause = phy->asym_pause;
 
-		put_device(&phy->mdio.dev);
+		put_device(&phy->dev);
 	}
 
 	err = mac_dev->init(mac_dev);

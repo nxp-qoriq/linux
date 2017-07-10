@@ -321,8 +321,8 @@ static void dpaa_tx_timeout(struct net_device *net_dev)
 /* Calculates the statistics for the given device by adding the statistics
  * collected by each CPU.
  */
-static void dpaa_get_stats64(struct net_device *net_dev,
-			     struct rtnl_link_stats64 *s)
+static struct rtnl_link_stats64 *dpaa_get_stats64(struct net_device *net_dev,
+						  struct rtnl_link_stats64 *s)
 {
 	int numstats = sizeof(struct rtnl_link_stats64) / sizeof(u64);
 	struct dpaa_priv *priv = netdev_priv(net_dev);
@@ -340,41 +340,8 @@ static void dpaa_get_stats64(struct net_device *net_dev,
 		for (j = 0; j < numstats; j++)
 			netstats[j] += cpustats[j];
 	}
-}
 
-static int dpaa_setup_tc(struct net_device *net_dev, u32 handle, __be16 proto,
-			 struct tc_to_netdev *tc)
-{
-	struct dpaa_priv *priv = netdev_priv(net_dev);
-	int i;
-
-	if (tc->type != TC_SETUP_MQPRIO)
-		return -EINVAL;
-
-	if (tc->tc == priv->num_tc)
-		return 0;
-
-	if (!tc->tc) {
-		netdev_reset_tc(net_dev);
-		goto out;
-	}
-
-	if (tc->tc > DPAA_TC_NUM) {
-		netdev_err(net_dev, "Too many traffic classes: max %d supported.\n",
-			   DPAA_TC_NUM);
-		return -EINVAL;
-	}
-
-	netdev_set_num_tc(net_dev, tc->tc);
-
-	for (i = 0; i < tc->tc; i++)
-		netdev_set_tc_queue(net_dev, i, DPAA_TC_TXQ_NUM,
-				    i * DPAA_TC_TXQ_NUM);
-
-out:
-	priv->num_tc = tc->tc ? tc->tc : 1;
-	netif_set_real_num_tx_queues(net_dev, priv->num_tc * DPAA_TC_TXQ_NUM);
-	return 0;
+	return s;
 }
 
 static struct mac_device *dpaa_mac_dev_get(struct platform_device *pdev)
@@ -2453,7 +2420,6 @@ static const struct net_device_ops dpaa_ops = {
 	.ndo_validate_addr = eth_validate_addr,
 	.ndo_set_rx_mode = dpaa_set_rx_mode,
 	.ndo_do_ioctl = dpaa_ioctl,
-	.ndo_setup_tc = dpaa_setup_tc,
 };
 
 static int dpaa_napi_add(struct net_device *net_dev)

@@ -93,6 +93,7 @@ config GIANFAR
 	  on the 8540.
 
 source "drivers/net/ethernet/freescale/fman/Kconfig"
+source "drivers/net/ethernet/freescale/dpaa/Kconfig"
 
 source "drivers/net/ethernet/freescale/sdk_fman/Kconfig"
 source "drivers/net/ethernet/freescale/sdk_dpaa/Kconfig"

@@ -183,6 +183,11 @@
 #define DWC3_DESCFETCHQ                13
 #define DWC3_EVENTQ            15
 
+/* Global RX Threshold Configuration Register */
+#define DWC3_GRXTHRCFG_MAXRXBURSTSIZE(n) (((n) & 0x1f) << 19)
+#define DWC3_GRXTHRCFG_RXPKTCNT(n) (((n) & 0xf) << 24)
+#define DWC3_GRXTHRCFG_PKTCNTSEL (1 << 29)
+
 /* Global Configuration Register */
 #define DWC3_GCTL_PWRDNSCALE(n)	((n) << 19)
 #define DWC3_GCTL_U2RSTECN	(1 << 16)
@@ -243,6 +248,14 @@
 #define DWC3_GEVNTSIZ_INTMASK		(1 << 31)
 #define DWC3_GEVNTSIZ_SIZE(n)		((n) & 0xffff)
 
+/* Global HWPARAMS0 Register */
+#define DWC3_GHWPARAMS0_USB3_MODE(n)    ((n) & 0x3)
+#define DWC3_GHWPARAMS0_MBUS_TYPE(n)    (((n) >> 3) & 0x7)
+#define DWC3_GHWPARAMS0_SBUS_TYPE(n)    (((n) >> 6) & 0x3)
+#define DWC3_GHWPARAMS0_MDWIDTH(n)      (((n) >> 8) & 0xff)
+#define DWC3_GHWPARAMS0_SDWIDTH(n)      (((n) >> 16) & 0xff)
+#define DWC3_GHWPARAMS0_AWIDTH(n)       (((n) >> 24) & 0xff)
+
 /* Global HWPARAMS1 Register */
 #define DWC3_GHWPARAMS1_EN_PWROPT(n)	(((n) & (3 << 24)) >> 24)
 #define DWC3_GHWPARAMS1_EN_PWROPT_NO	0
@@ -254,6 +267,8 @@
 /* Global HWPARAMS3 Register */
 #define DWC3_GHWPARAMS3_SSPHY_IFC(n)		((n) & 3)
 #define DWC3_GHWPARAMS3_SSPHY_IFC_DIS		0
+#define DWC3_GHWPARAMS3_SSPHY_IFC_GEN1          1
+#define DWC3_GHWPARAMS3_SSPHY_IFC_GEN2          2 /* DWC_usb31 only */
 #define DWC3_GHWPARAMS3_SSPHY_IFC_ENA		1
 #define DWC3_GHWPARAMS3_HSPHY_IFC(n)		(((n) & (3 << 2)) >> 2)
 #define DWC3_GHWPARAMS3_HSPHY_IFC_DIS		0
@@ -271,6 +286,10 @@
 /* Global HWPARAMS6 Register */
 #define DWC3_GHWPARAMS6_EN_FPGA			(1 << 7)
 
+/* Global HWPARAMS7 Register */
+#define DWC3_GHWPARAMS7_RAM1_DEPTH(n)   ((n) & 0xffff)
+#define DWC3_GHWPARAMS7_RAM2_DEPTH(n)   (((n) >> 16) & 0xffff)
+
 /* Global Frame Length Adjustment Register */
 #define DWC3_GFLADJ_30MHZ_SDBND_SEL		(1 << 7)
 #define DWC3_GFLADJ_30MHZ_MASK			0x3f
@@ -284,12 +303,16 @@
 #define DWC3_DCFG_DEVADDR_MASK	DWC3_DCFG_DEVADDR(0x7f)
 
 #define DWC3_DCFG_SPEED_MASK	(7 << 0)
+#define DWC3_DCFG_SUPERSPEED_PLUS (5 << 0)  /* DWC_usb31 only */
 #define DWC3_DCFG_SUPERSPEED	(4 << 0)
 #define DWC3_DCFG_HIGHSPEED	(0 << 0)
 #define DWC3_DCFG_FULLSPEED2	(1 << 0)
 #define DWC3_DCFG_LOWSPEED	(2 << 0)
 #define DWC3_DCFG_FULLSPEED1	(3 << 0)
 
+#define DWC3_DCFG_NUMP_SHIFT    17
+#define DWC3_DCFG_NUMP(n)       (((n) >> DWC3_DCFG_NUMP_SHIFT) & 0x1f)
+#define DWC3_DCFG_NUMP_MASK     (0x1f << DWC3_DCFG_NUMP_SHIFT)
 #define DWC3_DCFG_LPM_CAP	(1 << 22)
 
 /* Device Control Register */
@@ -1065,6 +1088,12 @@ struct dwc3_gadget_ep_cmd_params {
 /* prototypes */
 void dwc3_set_mode(struct dwc3 *dwc, u32 mode);
 u32 dwc3_core_fifo_space(struct dwc3_ep *dep, u8 type);
+
+/* check whether we are on the DWC_usb31 core */
+static inline bool dwc3_is_usb31(struct dwc3 *dwc)
+{
+	return !!(dwc->revision & DWC3_REVISION_IS_DWC31);
+}
 
 #if IS_ENABLED(CONFIG_USB_DWC3_HOST) || IS_ENABLED(CONFIG_USB_DWC3_DUAL_ROLE)
 int dwc3_host_init(struct dwc3 *dwc);

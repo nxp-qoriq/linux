@@ -506,95 +506,19 @@ static int dwc3_phy_setup(struct dwc3 *dwc)
 	return 0;
 }
 
-/* set global soc bus configuration registers */
-static void dwc3_set_soc_bus_cfg(struct dwc3 *dwc)
+static void dwc3_core_exit(struct dwc3 *dwc)
 {
-	struct device *dev = dwc->dev;
-	u32 *vals;
-	u32 cfg;
-	int ntype;
-	int ret;
-	int i;
+	dwc3_event_buffers_cleanup(dwc);
 
-	cfg = dwc3_readl(dwc->regs, DWC3_GSBUSCFG0);
+	usb_phy_shutdown(dwc->usb2_phy);
+	usb_phy_shutdown(dwc->usb3_phy);
+	phy_exit(dwc->usb2_generic_phy);
+	phy_exit(dwc->usb3_generic_phy);
 
-	/*
-	 * Handle property "snps,incr-burst-type-adjustment".
-	 * Get the number of value from this property:
-	 * result <= 0, means this property is not supported.
-	 * result = 1, means INCRx burst mode supported.
-	 * result > 1, means undefined length burst mode supported.
-	 */
-	ntype = device_property_read_u32_array(dev,
-			"snps,incr-burst-type-adjustment", NULL, 0);
-	if (ntype > 0) {
-		vals = kcalloc(ntype, sizeof(u32), GFP_KERNEL);
-		if (!vals) {
-			dev_err(dev, "Error to get memory\n");
-			return;
-		}
-		/* Get INCR burst type, and parse it */
-		ret = device_property_read_u32_array(dev,
-			"snps,incr-burst-type-adjustment", vals, ntype);
-		if (ret) {
-			dev_err(dev, "Error to get property\n");
-			return;
-		}
-		*(dwc->incrx_type + 1) = vals[0];
-		if (ntype > 1) {
-			*dwc->incrx_type = 1;
-			for (i = 1; i < ntype; i++) {
-				if (vals[i] > *(dwc->incrx_type + 1))
-					*(dwc->incrx_type + 1) = vals[i];
-			}
-		} else
-			*dwc->incrx_type = 0;
-
-		/* Enable Undefined Length INCR Burst and Enable INCRx Burst */
-		cfg &= ~DWC3_GSBUSCFG0_INCRBRST_MASK;
-		if (*dwc->incrx_type)
-			cfg |= DWC3_GSBUSCFG0_INCRBRSTENA;
-		switch (*(dwc->incrx_type + 1)) {
-		case 256:
-			cfg |= DWC3_GSBUSCFG0_INCR256BRSTENA;
-			break;
-		case 128:
-			cfg |= DWC3_GSBUSCFG0_INCR128BRSTENA;
-			break;
-		case 64:
-			cfg |= DWC3_GSBUSCFG0_INCR64BRSTENA;
-			break;
-		case 32:
-			cfg |= DWC3_GSBUSCFG0_INCR32BRSTENA;
-			break;
-		case 16:
-			cfg |= DWC3_GSBUSCFG0_INCR16BRSTENA;
-			break;
-		case 8:
-			cfg |= DWC3_GSBUSCFG0_INCR8BRSTENA;
-			break;
-		case 4:
-			cfg |= DWC3_GSBUSCFG0_INCR4BRSTENA;
-			break;
-		case 1:
-			break;
-		default:
-			dev_err(dev, "Invalid property\n");
-			break;
-		}
-	}
-
-	/* Handle usb snooping */
-	if (dwc->dma_snooping_quirk) {
-		cfg &= ~DWC3_GSBUSCFG0_SNP_MASK;
-		cfg |= (AXI3_CACHE_TYPE_SNP << DWC3_GSBUSCFG0_DATARD_SHIFT) |
-			(AXI3_CACHE_TYPE_SNP << DWC3_GSBUSCFG0_DESCRD_SHIFT) |
-			(AXI3_CACHE_TYPE_SNP << DWC3_GSBUSCFG0_DATAWR_SHIFT) |
-			(AXI3_CACHE_TYPE_SNP << DWC3_GSBUSCFG0_DESCWR_SHIFT);
-	}
-
-	dwc3_writel(dwc->regs, DWC3_GSBUSCFG0, cfg);
-
+	usb_phy_set_suspend(dwc->usb2_phy, 1);
+	usb_phy_set_suspend(dwc->usb3_phy, 1);
+	phy_power_off(dwc->usb2_generic_phy);
+	phy_power_off(dwc->usb3_generic_phy);
 }
 
 /**
@@ -877,21 +801,6 @@ static int dwc3_core_init_mode(struct dwc3 *dwc)
 	return 0;
 }
 
-static void dwc3_core_exit(struct dwc3 *dwc)
-{
-	dwc3_event_buffers_cleanup(dwc);
-
-	usb_phy_shutdown(dwc->usb2_phy);
-	usb_phy_shutdown(dwc->usb3_phy);
-	phy_exit(dwc->usb2_generic_phy);
-	phy_exit(dwc->usb3_generic_phy);
-
-	usb_phy_set_suspend(dwc->usb2_phy, 1);
-	usb_phy_set_suspend(dwc->usb3_phy, 1);
-	phy_power_off(dwc->usb2_generic_phy);
-	phy_power_off(dwc->usb3_generic_phy);
-}
-
 static void dwc3_get_properties(struct dwc3 *dwc)
 {
 	struct device           *dev = dwc->dev;
@@ -933,8 +842,6 @@ static void dwc3_get_properties(struct dwc3 *dwc)
 				&hird_threshold);
 	dwc->usb3_lpm_capable = device_property_read_bool(dev,
 				"snps,usb3_lpm_capable");
-
-	dwc->needs_fifo_resize = of_property_read_bool(node, "tx-fifo-resize");
 
 	dwc->configure_gfladj =
 				of_property_read_bool(node, "configure-gfladj");
@@ -987,6 +894,25 @@ static void dwc3_get_properties(struct dwc3 *dwc)
 		| (dwc->is_utmi_l1_suspend << 4);
 
 	dwc->imod_interval = 0;
+}
+
+static void dwc3_core_exit_mode(struct dwc3 *dwc)
+{
+	switch (dwc->dr_mode) {
+	case USB_DR_MODE_PERIPHERAL:
+		dwc3_gadget_exit(dwc);
+		break;
+	case USB_DR_MODE_HOST:
+		dwc3_host_exit(dwc);
+		break;
+	case USB_DR_MODE_OTG:
+		dwc3_host_exit(dwc);
+		dwc3_gadget_exit(dwc);
+		break;
+	default:
+		/* do nothing */
+		break;
+	}
 }
 
 #define DWC3_ALIGN_MASK		(16 - 1)
@@ -1222,7 +1148,6 @@ static int dwc3_probe(struct platform_device *pdev)
 		DWC3_GHWPARAMS3_SSPHY_IFC_GEN2))
 		dwc->maximum_speed = USB_SPEED_SUPER_PLUS;
 
-		break;
 	}
 
 	/* Adjust Frame Length */

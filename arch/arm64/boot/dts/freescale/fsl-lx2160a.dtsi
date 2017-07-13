@@ -768,5 +768,162 @@
 				};
 			};
 		};
+
+		pcie@3400000 {
+			compatible = "fsl,lx2160a-pcie";
+			reg = <0x00 0x03400000 0x0 0x00100000   /* controller registers */
+			       0x80 0x00000000 0x0 0x00020000>; /* configuration space */
+			reg-names = "regs", "config";
+			interrupts = <0 108 0x4>, /* AER interrupt */
+				     <0 108 0x4>; /* PME interrupt */
+			interrupt-names = "aer", "pme";
+			#address-cells = <3>;
+			#size-cells = <2>;
+			device_type = "pci";
+			dma-coherent;
+			apio-wins = <3>;
+			ppio-wins-rc = <3>;
+			bus-range = <0x0 0xff>;
+			ranges = <0x81000000 0x0 0x00000000 0x80 0x00020000 0x0 0x00010000   /* downstream I/O */
+				  0x82000000 0x0 0x40000000 0x80 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+			msi-parent = <&its>;
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0 0 0 7>;
+			interrupt-map = <0000 0 0 1 &gic 0 0 0 109 0x4>,
+					<0000 0 0 2 &gic 0 0 0 110 0x4>,
+					<0000 0 0 3 &gic 0 0 0 111 0x4>,
+					<0000 0 0 4 &gic 0 0 0 112 0x4>;
+		};
+
+		pcie@3500000 {
+			compatible = "fsl,lx2160a-pcie";
+			reg = <0x00 0x03500000 0x0 0x00100000   /* controller registers */
+			       0x88 0x00000000 0x0 0x00020000>; /* configuration space */
+			reg-names = "regs", "config";
+			interrupts = <0 113 0x4>, /* AER interrupt */
+				     <0 113 0x4>; /* PME interrupt */
+			interrupt-names = "aer", "pme";
+			#address-cells = <3>;
+			#size-cells = <2>;
+			device_type = "pci";
+			dma-coherent;
+			apio-wins = <3>;
+			ppio-wins-rc = <3>;
+			bus-range = <0x0 0xff>;
+			ranges = <0x81000000 0x0 0x00000000 0x88 0x00020000 0x0 0x00010000   /* downstream I/O */
+				  0x82000000 0x0 0x40000000 0x88 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+			msi-parent = <&its>;
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0 0 0 7>;
+			interrupt-map = <0000 0 0 1 &gic 0 0 0 114 0x4>,
+					<0000 0 0 2 &gic 0 0 0 115 0x4>,
+					<0000 0 0 3 &gic 0 0 0 116 0x4>,
+					<0000 0 0 4 &gic 0 0 0 117 0x4>;
+		};
+
+		pcie@3600000 {
+			compatible = "fsl,lx2160a-pcie";
+			reg = <0x00 0x03600000 0x0 0x00100000   /* controller registers */
+			       0x90 0x00000000 0x0 0x00020000>; /* configuration space */
+			reg-names = "regs", "config";
+			interrupts = <0 118 0x4>, /* AER interrupt */
+				     <0 118 0x4>; /* PME interrupt */
+			interrupt-names = "aer", "pme";
+			#address-cells = <3>;
+			#size-cells = <2>;
+			device_type = "pci";
+			dma-coherent;
+			apio-wins = <3>;
+			ppio-wins-rc = <3>;
+			bus-range = <0x0 0xff>;
+			ranges = <0x81000000 0x0 0x00000000 0x90 0x00020000 0x0 0x00010000   /* downstream I/O */
+				  0x82000000 0x0 0x40000000 0x90 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+			msi-parent = <&its>;
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0 0 0 7>;
+			interrupt-map = <0000 0 0 1 &gic 0 0 0 119 0x4>,
+					<0000 0 0 2 &gic 0 0 0 120 0x4>,
+					<0000 0 0 3 &gic 0 0 0 121 0x4>,
+					<0000 0 0 4 &gic 0 0 0 122 0x4>;
+		};
+
+		pcie@3700000 {
+			compatible = "fsl,lx2160a-pcie";
+			reg = <0x00 0x03700000 0x0 0x00100000   /* controller registers */
+			       0x98 0x00000000 0x0 0x00020000>; /* configuration space */
+			reg-names = "regs", "config";
+			interrupts = <0 123 0x4>, /* AER interrupt */
+				     <0 123 0x4>; /* PME interrupt */
+			interrupt-names = "aer", "pme";
+			#address-cells = <3>;
+			#size-cells = <2>;
+			device_type = "pci";
+			dma-coherent;
+			apio-wins = <3>;
+			ppio-wins-rc = <3>;
+			bus-range = <0x0 0xff>;
+			ranges = <0x81000000 0x0 0x00000000 0x98 0x00020000 0x0 0x00010000   /* downstream I/O */
+				  0x82000000 0x0 0x40000000 0x98 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+			msi-parent = <&its>;
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0 0 0 7>;
+			interrupt-map = <0000 0 0 1 &gic 0 0 0 124 0x4>,
+					<0000 0 0 2 &gic 0 0 0 125 0x4>,
+					<0000 0 0 3 &gic 0 0 0 126 0x4>,
+					<0000 0 0 4 &gic 0 0 0 127 0x4>;
+		};
+
+		pcie@3800000 {
+			compatible = "fsl,lx2160a-pcie";
+			reg = <0x00 0x03800000 0x0 0x00100000   /* controller registers */
+			       0xa0 0x00000000 0x0 0x00020000>; /* configuration space */
+			reg-names = "regs", "config";
+			interrupts = <0 128 0x4>, /* AER interrupt */
+				     <0 128 0x4>; /* PME interrupt */
+			interrupt-names = "aer", "pme";
+			#address-cells = <3>;
+			#size-cells = <2>;
+			device_type = "pci";
+			dma-coherent;
+			apio-wins = <3>;
+			ppio-wins-rc = <3>;
+			bus-range = <0x0 0xff>;
+			ranges = <0x81000000 0x0 0x00000000 0xa0 0x00020000 0x0 0x00010000   /* downstream I/O */
+				  0x82000000 0x0 0x40000000 0xa0 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+			msi-parent = <&its>;
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0 0 0 7>;
+			interrupt-map = <0000 0 0 1 &gic 0 0 0 129 0x4>,
+					<0000 0 0 2 &gic 0 0 0 130 0x4>,
+					<0000 0 0 3 &gic 0 0 0 131 0x4>,
+					<0000 0 0 4 &gic 0 0 0 132 0x4>;
+		};
+
+		pcie@3900000 {
+			compatible = "fsl,lx2160a-pcie";
+			reg = <0x00 0x03900000 0x0 0x00100000   /* controller registers */
+			       0xa8 0x00000000 0x0 0x00020000>; /* configuration space */
+			reg-names = "regs", "config";
+			interrupts = <0 103 0x4>, /* AER interrupt */
+				     <0 103 0x4>; /* PME interrupt */
+			interrupt-names = "aer", "pme";
+			#address-cells = <3>;
+			#size-cells = <2>;
+			device_type = "pci";
+			dma-coherent;
+			apio-wins = <3>;
+			ppio-wins-rc = <3>;
+			bus-range = <0x0 0xff>;
+			ranges = <0x81000000 0x0 0x00000000 0xa8 0x00020000 0x0 0x00010000   /* downstream I/O */
+				  0x82000000 0x0 0x40000000 0xa8 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+			msi-parent = <&its>;
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0 0 0 7>;
+			interrupt-map = <0000 0 0 1 &gic 0 0 0 104 0x4>,
+					<0000 0 0 2 &gic 0 0 0 105 0x4>,
+					<0000 0 0 3 &gic 0 0 0 106 0x4>,
+					<0000 0 0 4 &gic 0 0 0 107 0x4>;
+		};
+
 	};
 };

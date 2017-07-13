@@ -9438,6 +9438,13 @@ S:	Maintained
 F:	Documentation/devicetree/bindings/pci/mobiveil-pcie.txt
 F:	drivers/pci/host/*mobiveil*
 
+PCI DRIVER FOR FREESCALE LX
+M:	Hou Zhiqiang <zhiqiang.hou@nxp.com>
+L:	linux-pci@vger.kernel.org
+L:	linux-arm-kernel@lists.infradead.org
+S:	Maintained
+F:	drivers/pci/host/pci-lx.c
+
 PCMCIA SUBSYSTEM
 P:	Linux PCMCIA Team
 L:	linux-pcmcia@lists.infradead.org

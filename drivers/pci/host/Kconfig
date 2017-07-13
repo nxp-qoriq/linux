@@ -308,6 +308,16 @@ config PCIE_MOBIVEIL
 config PCIE_MOBIVEIL_HOST
         bool
         select PCIE_MOBIVEIL
+
+config PCI_LX
+	bool "Freescale LX PCIe controller"
+	depends on PCI
+	depends on OF && (ARM || ARCH_LAYERSCAPE)
+	depends on PCI_MSI_IRQ_DOMAIN
+	select MFD_SYSCON
+	select PCIE_MOBIVEIL_HOST
+	help
+	  Say Y here if you want PCIe controller support on LX SoCs.
 endmenu
 
 endmenu

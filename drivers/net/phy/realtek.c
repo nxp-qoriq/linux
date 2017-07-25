@@ -107,7 +107,8 @@ static int rtl8211f_config_init(struct phy_device *phydev)
 
 	/* enable TX-delay for rgmii-id and rgmii-txid, otherwise disable it */
 	if (phydev->interface == PHY_INTERFACE_MODE_RGMII_ID ||
-	    phydev->interface == PHY_INTERFACE_MODE_RGMII_TXID)
+	    phydev->interface == PHY_INTERFACE_MODE_RGMII_TXID ||
+	    phydev->interface == PHY_INTERFACE_MODE_RGMII)
 		reg |= RTL8211F_TX_DELAY;
 	else
 		reg &= ~RTL8211F_TX_DELAY;

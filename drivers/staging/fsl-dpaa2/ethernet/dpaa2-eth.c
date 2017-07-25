@@ -39,6 +39,9 @@
 #include <linux/msi.h>
 #include <linux/net_tstamp.h>
 #include <linux/iommu.h>
+#include <linux/bpf.h>
+#include <linux/filter.h>
+#include <linux/atomic.h>
 
 #include "../../fsl-mc/include/dpbp.h"
 #include "../../fsl-mc/include/dpcon.h"
@@ -259,6 +262,9 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 	struct dpaa2_fas *fas;
 	void *buf_data;
 	u32 status = 0;
+	struct bpf_prog *xdp_prog;
+	struct xdp_buff xdp;
+	u32 xdp_act;
 
 	/* Tracing point */
 	trace_dpaa2_rx_fd(priv->net_dev, fd);
@@ -276,8 +282,34 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 	percpu_stats = this_cpu_ptr(priv->percpu_stats);
 	percpu_extras = this_cpu_ptr(priv->percpu_extras);
 
+	xdp_prog = READ_ONCE(ch->xdp_prog);
+
 	switch (fd_format) {
 	case dpaa2_fd_single:
+		if (xdp_prog) {
+			xdp.data = buf_data;
+			xdp.data_end = buf_data + dpaa2_fd_get_len(fd);
+			/* we don't support header changes for now */
+			xdp.data_hard_start = buf_data;
+
+			/* update stats here, as we won't reach the code
+			 * that does that for standard frames
+			 */
+			percpu_stats->rx_packets++;
+			percpu_stats->rx_bytes += dpaa2_fd_get_len(fd);
+
+			xdp_act = bpf_prog_run_xdp(xdp_prog, &xdp);
+			switch (xdp_act) {
+			case XDP_PASS:
+				break;
+			default:
+				bpf_warn_invalid_xdp_action(xdp_act);
+			case XDP_ABORTED:
+			case XDP_DROP:
+				ch->buf_count--;
+				goto drop_fd;
+			}
+		}
 		skb = build_linear_skb(priv, ch, fd, vaddr);
 		break;
 	case dpaa2_fd_sg:
@@ -288,11 +320,11 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 		break;
 	default:
 		/* We don't support any other format */
-		goto err_frame_format;
+		goto drop_cnt;
 	}
 
 	if (unlikely(!skb))
-		goto err_build_skb;
+		goto drop_fd;
 
 	prefetch(skb->data);
 
@@ -327,9 +359,9 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 
 	return;
 
-err_build_skb:
+drop_fd:
 	free_rx_fd(priv, fd, vaddr);
-err_frame_format:
+drop_cnt:
 	percpu_stats->rx_dropped++;
 }
 
@@ -1552,6 +1584,56 @@ static int dpaa2_eth_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 	return -EINVAL;
 }
 
+static int dpaa2_eth_set_xdp(struct net_device *net_dev, struct bpf_prog *prog)
+{
+	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
+	struct dpaa2_eth_channel *ch;
+	struct bpf_prog *old_prog;
+	int i;
+
+	/* No support for SG frames */
+	if (DPAA2_ETH_L2_MAX_FRM(net_dev->mtu) > DPAA2_ETH_RX_BUF_SIZE)
+		return -EINVAL;
+
+	if (netif_running(net_dev))
+		dpaa2_eth_stop(net_dev);
+
+	if (prog) {
+		prog = bpf_prog_add(prog, priv->num_channels - 1);
+		if (IS_ERR(prog))
+			return PTR_ERR(prog);
+	}
+
+	priv->has_xdp_prog = !!prog;
+
+	for (i = 0; i < priv->num_channels; i++) {
+		ch = priv->channel[i];
+		old_prog = xchg(&ch->xdp_prog, prog);
+		if (old_prog)
+			bpf_prog_put(old_prog);
+	}
+
+	if (netif_running(net_dev))
+		dpaa2_eth_open(net_dev);
+
+	return 0;
+}
+
+static int dpaa2_eth_xdp(struct net_device *dev, struct netdev_xdp *xdp)
+{
+	struct dpaa2_eth_priv *priv = netdev_priv(dev);
+
+	switch (xdp->command) {
+	case XDP_SETUP_PROG:
+		return dpaa2_eth_set_xdp(dev, xdp->prog);
+	case XDP_QUERY_PROG:
+		xdp->prog_attached = priv->has_xdp_prog;
+		return 0;
+	default:
+		return -EINVAL;
+	}
+}
+
 static const struct net_device_ops dpaa2_eth_ops = {
 	.ndo_open = dpaa2_eth_open,
 	.ndo_start_xmit = dpaa2_eth_tx,
@@ -1563,6 +1645,7 @@ static const struct net_device_ops dpaa2_eth_ops = {
 	.ndo_set_rx_mode = dpaa2_eth_set_rx_mode,
 	.ndo_set_features = dpaa2_eth_set_features,
 	.ndo_do_ioctl = dpaa2_eth_ioctl,
+	.ndo_xdp = dpaa2_eth_xdp,
 };
 
 static void cdan_cb(struct dpaa2_io_notification_ctx *ctx)
@@ -1675,7 +1758,14 @@ err_setup:
 static void free_channel(struct dpaa2_eth_priv *priv,
 			 struct dpaa2_eth_channel *channel)
 {
+	struct bpf_prog *prog;
+
 	free_dpcon(priv, channel->dpcon);
+
+	prog = READ_ONCE(channel->xdp_prog);
+	if (prog)
+		bpf_prog_put(prog);
+
 	kfree(channel);
 }
 

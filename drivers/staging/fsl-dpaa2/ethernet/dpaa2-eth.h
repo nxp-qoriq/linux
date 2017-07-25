@@ -356,6 +356,7 @@ struct dpaa2_eth_channel {
 	struct dpaa2_eth_priv *priv;
 	int buf_count;
 	struct dpaa2_eth_ch_stats stats;
+	struct bpf_prog *xdp_prog;
 };
 
 struct dpaa2_eth_cls_rule {
@@ -387,6 +388,7 @@ struct dpaa2_eth_priv {
 	struct iommu_domain *iommu_domain;
 	u32 max_bufs_per_ch;
 	u32 refill_thresh;
+	bool has_xdp_prog;
 
 	void *cscn_mem;	/* Tx congestion notifications are written here */
 	void *cscn_unaligned;

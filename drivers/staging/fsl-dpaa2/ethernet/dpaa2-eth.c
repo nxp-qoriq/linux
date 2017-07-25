@@ -230,6 +230,53 @@ err_build:
 	return NULL;
 }
 
+static int dpaa2_eth_xdp_xmit(struct dpaa2_eth_priv *priv,
+			      const struct dpaa2_fd *fd,
+			      void *buf_start,
+			      u16 queue_id)
+{
+	struct dpaa2_eth_fq *fq;
+	struct rtnl_link_stats64 *percpu_stats;
+	struct dpaa2_eth_drv_stats *percpu_extras;
+	struct dpaa2_fd tx_fd;
+	struct dpaa2_faead *faead;
+	u32 ctrl, frc;
+	int i, err;
+
+	/* Clone the FD, as we need to make changes to it */
+	memcpy(&tx_fd, fd, sizeof(tx_fd));
+
+	/* Mark the egress frame annotation area as valid */
+	frc = dpaa2_fd_get_frc(&tx_fd);
+	dpaa2_fd_set_frc(&tx_fd, frc | DPAA2_FD_FRC_FAEADV);
+
+	ctrl = DPAA2_FAEAD_A4V | DPAA2_FAEAD_A2V | DPAA2_FAEAD_EBDDV;
+	faead = dpaa2_get_faead(buf_start);
+	faead->ctrl = cpu_to_le32(ctrl);
+	faead->conf_fqid = 0;
+
+	percpu_stats = this_cpu_ptr(priv->percpu_stats);
+	percpu_extras = this_cpu_ptr(priv->percpu_extras);
+
+	fq = &priv->fq[queue_id];
+	for (i = 0; i < DPAA2_ETH_ENQUEUE_RETRIES; i++) {
+		err = dpaa2_io_service_enqueue_qd(NULL, priv->tx_qdid, 0,
+						  fq->tx_qdbin, &tx_fd);
+		if (err != -EBUSY)
+			break;
+	}
+
+	percpu_extras->tx_portal_busy += i;
+	if (unlikely(err)) {
+		percpu_stats->tx_errors++;
+	} else {
+		percpu_stats->tx_packets++;
+		percpu_stats->tx_bytes += dpaa2_fd_get_len(fd);
+	}
+
+	return err;
+}
+
 static void free_bufs(struct dpaa2_eth_priv *priv, u64 *buf_array, int count)
 {
 	struct device *dev = priv->net_dev->dev.parent;
@@ -308,6 +355,16 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 			case XDP_DROP:
 				ch->buf_count--;
 				goto drop_fd;
+			case XDP_TX:
+				if (dpaa2_eth_xdp_xmit(priv, fd, vaddr,
+						       queue_id)) {
+					dma_unmap_single(dev, addr,
+							 DPAA2_ETH_RX_BUF_SIZE,
+							 DMA_BIDIRECTIONAL);
+					free_rx_fd(priv, fd, vaddr);
+					ch->buf_count--;
+				}
+				return;
 			}
 		}
 		skb = build_linear_skb(priv, ch, fd, vaddr);
@@ -653,7 +710,7 @@ static int build_single_fd(struct dpaa2_eth_priv *priv,
  * Optionally, return the frame annotation status word (FAS), which needs
  * to be checked if we're on the confirmation path.
  */
-static void free_tx_fd(const struct dpaa2_eth_priv *priv,
+static void free_tx_fd(struct dpaa2_eth_priv *priv,
 		       const struct dpaa2_fd *fd,
 		       u32 *status, bool in_napi)
 {

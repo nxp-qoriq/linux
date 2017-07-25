@@ -351,6 +351,7 @@ struct dpaa2_eth_channel {
 	struct dpaa2_eth_priv *priv;
 	int buf_count;
 	struct dpaa2_eth_ch_stats stats;
+	struct bpf_prog *xdp_prog;
 };
 
 struct dpaa2_eth_cls_rule {
@@ -388,6 +389,7 @@ struct dpaa2_eth_priv {
 	int tx_pause_frames;
 	int num_bufs;
 	int refill_thresh;
+	bool has_xdp_prog;
 
 	/* Tx congestion notifications are written here */
 	void *cscn_mem;

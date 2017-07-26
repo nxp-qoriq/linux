@@ -330,7 +330,7 @@ static void dpaa2_eth_rx_err(struct dpaa2_eth_priv *priv,
 
 	/* check frame errors in the FD field */
 	if (fd->simple.ctrl & DPAA2_FD_RX_ERR_MASK) {
-		check_fas_errors = !!(fd->simple.ctrl & DPAA2_FD_CTRL_FAERR) &&
+		check_fas_errors = !!(fd->simple.ctrl & FD_CTRL_FAERR) &&
 			!!(dpaa2_fd_get_frc(fd) & DPAA2_FD_FRC_FASV);
 		if (net_ratelimit())
 			netdev_dbg(priv->net_dev, "Rx frame FD err: %x08\n",
@@ -521,8 +521,7 @@ static int build_sg_fd(struct dpaa2_eth_priv *priv,
 	dpaa2_fd_set_addr(fd, addr);
 	dpaa2_fd_set_len(fd, skb->len);
 
-	fd->simple.ctrl = DPAA2_FD_CTRL_ASAL | DPAA2_FD_CTRL_PTA |
-			  DPAA2_FD_CTRL_PTV1;
+	fd->simple.ctrl = DPAA2_FD_CTRL_ASAL | FD_CTRL_PTA | FD_CTRL_PTV1;
 
 	if (priv->ts_tx_en && skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)
 		enable_tx_tstamp(fd, sgt_buf);
@@ -579,8 +578,7 @@ static int build_single_fd(struct dpaa2_eth_priv *priv,
 	dpaa2_fd_set_len(fd, skb->len);
 	dpaa2_fd_set_format(fd, dpaa2_fd_single);
 
-	fd->simple.ctrl = DPAA2_FD_CTRL_ASAL | DPAA2_FD_CTRL_PTA |
-			  DPAA2_FD_CTRL_PTV1;
+	fd->simple.ctrl = DPAA2_FD_CTRL_ASAL | FD_CTRL_PTA | FD_CTRL_PTV1;
 
 	if (priv->ts_tx_en && skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)
 		enable_tx_tstamp(fd, buffer_start);
@@ -808,7 +806,7 @@ static void dpaa2_eth_tx_conf(struct dpaa2_eth_priv *priv,
 
 	/* check frame errors in the FD field */
 	if (unlikely(errors)) {
-		check_fas_errors = !!(fd->simple.ctrl & DPAA2_FD_CTRL_FAERR) &&
+		check_fas_errors = !!(fd->simple.ctrl & FD_CTRL_FAERR) &&
 			!!(dpaa2_fd_get_frc(fd) & DPAA2_FD_FRC_FASV);
 		if (net_ratelimit())
 			netdev_dbg(priv->net_dev, "Tx frame FD err: %x08\n",

@@ -277,11 +277,13 @@
 	};
 
 	pcie@3400000 {
-		compatible = "fsl,ls2085a-pcie", "fsl,ls1088a-pcie",
+		compatible = "fsl,ls-pcie", "fsl,ls2085a-pcie", "fsl,ls1088a-pcie",
 			     "snps,dw-pcie";
-		reg = <0x00 0x03400000 0x0 0x00100000 /* controller registers */
-		       0x20 0x00000000 0x0 0x00002000>;/* configuration space */
-		reg-names = "regs", "config";
+		reg = <0x00 0x03400000 0x0 0x80000
+			0x00 0x03480000 0x0 0x40000   /* lut registers */
+			0x00 0x034c0000 0x0 0x40000  /* pf controls registers */
+			0x80 0x00000000 0x0 0x20000>; /* configuration space */
+		reg-names = "dbi", "lut", "ctrl", "config";
 		interrupts = <0 108 0x4>; /* aer interrupt */
 		interrupt-names = "aer";
 		#address-cells = <3>;
@@ -290,8 +292,8 @@
 		dma-coherent;
 		num-lanes = <4>;
 		bus-range = <0x0 0xff>;
-		ranges = <0x81000000 0x0 0x00000000 0x20 0x00010000 0x0 0x00010000   /* downstream I/O */
-			  0x82000000 0x0 0x40000000 0x20 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+		ranges = <0x81000000 0x0 0x00000000 0x80 0x00020000 0x0 0x00010000   /* downstream I/O */
+			  0x82000000 0x0 0x40000000 0x80 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
 		msi-parent = <&its>;
 		#interrupt-cells = <1>;
 		interrupt-map-mask = <0 0 0 7>;
@@ -302,11 +304,13 @@
 	};
 
 	pcie@3500000 {
-		compatible = "fsl,ls2085a-pcie", "fsl,ls1088a-pcie",
+		compatible = "fsl,ls-pcie", "fsl,ls2085a-pcie", "fsl,ls1088a-pcie",
 			     "snps,dw-pcie";
-		reg = <0x00 0x03500000 0x0 0x00100000 /* controller registers */
-		       0x28 0x00000000 0x0 0x00002000>;/* configuration space */
-		reg-names = "regs", "config";
+		reg = <0x00 0x03500000 0x0 0x80000
+			0x00 0x03580000 0x0 0x40000   /* lut registers */
+			0x00 0x035c0000 0x0 0x40000  /* pf controls registers */
+			0x88 0x00000000 0x0 0x20000>; /* configuration space */
+		reg-names = "dbi", "lut", "ctrl", "config";
 		interrupts = <0 113 0x4>; /* aer interrupt */
 		interrupt-names = "aer";
 		#address-cells = <3>;
@@ -315,8 +319,8 @@
 		dma-coherent;
 		num-lanes = <4>;
 		bus-range = <0x0 0xff>;
-		ranges = <0x81000000 0x0 0x00000000 0x28 0x00010000 0x0 0x00010000   /* downstream I/O */
-			  0x82000000 0x0 0x40000000 0x28 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+		ranges = <0x81000000 0x0 0x00000000 0x88 0x00020000 0x0 0x00010000   /* downstream I/O */
+			  0x82000000 0x0 0x40000000 0x88 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
 		msi-parent = <&its>;
 		#interrupt-cells = <1>;
 		interrupt-map-mask = <0 0 0 7>;

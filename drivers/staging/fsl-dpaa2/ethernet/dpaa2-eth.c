@@ -118,7 +118,7 @@ static void free_rx_fd(struct dpaa2_eth_priv *priv,
 		sg_vaddr = dpaa2_eth_iova_to_virt(priv->iommu_domain, addr);
 
 		dma_unmap_single(dev, addr, DPAA2_ETH_RX_BUF_SIZE,
-				 DMA_FROM_DEVICE);
+				 DMA_BIDIRECTIONAL);
 
 		put_page(virt_to_head_page(sg_vaddr));
 
@@ -178,7 +178,7 @@ static struct sk_buff *build_frag_skb(struct dpaa2_eth_priv *priv,
 		sg_addr = dpaa2_sg_get_addr(sge);
 		sg_vaddr = dpaa2_eth_iova_to_virt(priv->iommu_domain, sg_addr);
 		dma_unmap_single(dev, sg_addr, DPAA2_ETH_RX_BUF_SIZE,
-				 DMA_FROM_DEVICE);
+				 DMA_BIDIRECTIONAL);
 
 		sg_length = dpaa2_sg_get_len(sge);
 
@@ -240,7 +240,7 @@ static void free_bufs(struct dpaa2_eth_priv *priv, u64 *buf_array, int count)
 		/* Same logic as on regular Rx path */
 		vaddr = dpaa2_eth_iova_to_virt(priv->iommu_domain, buf_array[i]);
 		dma_unmap_single(dev, buf_array[i], DPAA2_ETH_RX_BUF_SIZE,
-				 DMA_FROM_DEVICE);
+				 DMA_BIDIRECTIONAL);
 		put_page(virt_to_head_page(vaddr));
 	}
 }
@@ -270,7 +270,7 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 	trace_dpaa2_rx_fd(priv->net_dev, fd);
 
 	vaddr = dpaa2_eth_iova_to_virt(priv->iommu_domain, addr);
-	dma_unmap_single(dev, addr, DPAA2_ETH_RX_BUF_SIZE, DMA_FROM_DEVICE);
+	dma_unmap_single(dev, addr, DPAA2_ETH_RX_BUF_SIZE, DMA_BIDIRECTIONAL);
 
 	/* HWA - FAS, timestamp */
 	fas = dpaa2_eth_get_fas(vaddr);
@@ -289,7 +289,7 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 		if (xdp_prog) {
 			xdp.data = buf_data;
 			xdp.data_end = buf_data + dpaa2_fd_get_len(fd);
-			/* we don't support header changes for now */
+			/* for now, we don't support changes in header size */
 			xdp.data_hard_start = buf_data;
 
 			/* update stats here, as we won't reach the code
@@ -384,7 +384,7 @@ static void dpaa2_eth_rx_err(struct dpaa2_eth_priv *priv,
 	bool check_fas_errors = false;
 
 	vaddr = dpaa2_eth_iova_to_virt(priv->iommu_domain, addr);
-	dma_unmap_single(dev, addr, DPAA2_ETH_RX_BUF_SIZE, DMA_FROM_DEVICE);
+	dma_unmap_single(dev, addr, DPAA2_ETH_RX_BUF_SIZE, DMA_BIDIRECTIONAL);
 
 	/* check frame errors in the FD field */
 	if (fd->simple.ctrl & DPAA2_FD_RX_ERR_MASK) {
@@ -518,7 +518,7 @@ static int build_sg_fd(struct dpaa2_eth_priv *priv,
 
 	sg_init_table(scl, nr_frags + 1);
 	num_sg = skb_to_sgvec(skb, scl, 0, skb->len);
-	num_dma_bufs = dma_map_sg(dev, scl, num_sg, DMA_TO_DEVICE);
+	num_dma_bufs = dma_map_sg(dev, scl, num_sg, DMA_BIDIRECTIONAL);
 	if (unlikely(!num_dma_bufs)) {
 		err = -ENOMEM;
 		goto dma_map_sg_failed;
@@ -589,7 +589,7 @@ static int build_sg_fd(struct dpaa2_eth_priv *priv,
 dma_map_single_failed:
 	kfree(sgt_buf);
 sgt_buf_alloc_failed:
-	dma_unmap_sg(dev, scl, num_sg, DMA_TO_DEVICE);
+	dma_unmap_sg(dev, scl, num_sg, DMA_BIDIRECTIONAL);
 dma_map_sg_failed:
 	kfree(scl);
 	return err;
@@ -694,7 +694,7 @@ static void free_tx_fd(const struct dpaa2_eth_priv *priv,
 		num_dma_bufs = swa->num_dma_bufs;
 
 		/* Unmap the scatterlist */
-		dma_unmap_sg(dev, scl, num_sg, DMA_TO_DEVICE);
+		dma_unmap_sg(dev, scl, num_sg, DMA_BIDIRECTIONAL);
 		kfree(scl);
 
 		/* Unmap the SGT buffer */
@@ -954,7 +954,7 @@ static int add_bufs(struct dpaa2_eth_priv *priv, u16 bpid)
 		buf = PTR_ALIGN(buf, priv->rx_buf_align);
 
 		addr = dma_map_single(dev, buf, DPAA2_ETH_RX_BUF_SIZE,
-				      DMA_FROM_DEVICE);
+				      DMA_BIDIRECTIONAL);
 		if (unlikely(dma_mapping_error(dev, addr)))
 			goto err_map;
 

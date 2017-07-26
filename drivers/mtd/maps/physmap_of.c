@@ -20,6 +20,7 @@
 #include <linux/mtd/map.h>
 #include <linux/mtd/partitions.h>
 #include <linux/mtd/concat.h>
+#include <linux/mtd/cfi_endian.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/of_platform.h>
@@ -246,6 +247,9 @@ static int of_flash_probe(struct platform_device *dev)
 			dev_err(&dev->dev, "Can't probe Versatile VPP\n");
 			return err;
 		}
+
+		if (of_property_read_bool(dp->parent, "big-endian"))
+			info->list[i].map.swap = CFI_BIG_ENDIAN;
 
 		err = -ENOMEM;
 		info->list[i].map.virt = ioremap(info->list[i].map.phys,

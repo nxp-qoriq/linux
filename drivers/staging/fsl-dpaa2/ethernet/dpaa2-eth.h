@@ -33,6 +33,7 @@
 #define __DPAA2_ETH_H
 
 #include <linux/atomic.h>
+#include <linux/dcbnl.h>
 #include <linux/netdevice.h>
 #include <linux/if_vlan.h>
 #include "../../fsl-mc/include/dpaa2-io.h"
@@ -431,6 +432,9 @@ struct dpaa2_eth_priv {
 	struct dpaa2_eth_cls_rule *cls_rule;
 
 	struct dpni_tx_shaping_cfg shaping_cfg;
+
+	u8 dcbx_mode;
+	struct ieee_pfc pfc;
 };
 
 #define dpaa2_eth_hash_enabled(priv)	\

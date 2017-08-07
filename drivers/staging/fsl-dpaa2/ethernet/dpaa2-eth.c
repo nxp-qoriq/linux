@@ -2927,6 +2927,76 @@ static void dpaa2_eth_sysfs_remove(struct device *dev)
 		device_remove_file(dev, &dpaa2_eth_attrs[i]);
 }
 
+#ifdef CONFIG_FSL_DPAA2_ETH_DCB
+static int dpaa2_eth_dcbnl_ieee_getpfc(struct net_device *net_dev,
+				       struct ieee_pfc *pfc)
+{
+	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
+
+	pfc->pfc_cap = dpaa2_eth_tc_count(priv);
+	pfc->pfc_en = priv->pfc.pfc_en;
+	pfc->mbc = priv->pfc.mbc;
+	pfc->delay = priv->pfc.delay;
+
+	return 0;
+}
+
+static int dpaa2_eth_dcbnl_ieee_setpfc(struct net_device *net_dev,
+				       struct ieee_pfc *pfc)
+{
+	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
+
+	memcpy(&priv->pfc, pfc, sizeof(priv->pfc));
+
+	return 0;
+}
+
+static u8 dpaa2_eth_dcbnl_getdcbx(struct net_device *net_dev)
+{
+	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
+
+	return priv->dcbx_mode;
+}
+
+static u8 dpaa2_eth_dcbnl_setdcbx(struct net_device *net_dev, u8 mode)
+{
+	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
+
+	priv->dcbx_mode = mode;
+	return 0;
+}
+
+static u8 dpaa2_eth_dcbnl_getcap(struct net_device *net_dev, int capid, u8 *cap)
+{
+	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
+
+	switch (capid) {
+	case DCB_CAP_ATTR_PFC:
+		*cap = true;
+		break;
+	case DCB_CAP_ATTR_PFC_TCS:
+		*cap = 1 << dpaa2_eth_tc_count(priv);
+		break;
+	case DCB_CAP_ATTR_DCBX:
+		*cap = priv->dcbx_mode;
+		break;
+	default:
+		*cap = false;
+		break;
+	}
+
+	return 0;
+}
+
+const struct dcbnl_rtnl_ops dpaa2_eth_dcbnl_ops = {
+	.ieee_getpfc	= dpaa2_eth_dcbnl_ieee_getpfc,
+	.ieee_setpfc	= dpaa2_eth_dcbnl_ieee_setpfc,
+	.getdcbx	= dpaa2_eth_dcbnl_getdcbx,
+	.setdcbx	= dpaa2_eth_dcbnl_setdcbx,
+	.getcap		= dpaa2_eth_dcbnl_getcap,
+};
+#endif
+
 static int dpaa2_eth_probe(struct fsl_mc_device *dpni_dev)
 {
 	struct device *dev;
@@ -3027,6 +3097,10 @@ static int dpaa2_eth_probe(struct fsl_mc_device *dpni_dev)
 		goto err_alloc_rings;
 
 	net_dev->ethtool_ops = &dpaa2_ethtool_ops;
+#ifdef CONFIG_FSL_DPAA2_ETH_DCB
+	net_dev->dcbnl_ops = &dpaa2_eth_dcbnl_ops;
+	priv->dcbx_mode = DCB_CAP_DCBX_HOST | DCB_CAP_DCBX_VER_IEEE;
+#endif
 
 	err = setup_irqs(dpni_dev);
 	if (err) {

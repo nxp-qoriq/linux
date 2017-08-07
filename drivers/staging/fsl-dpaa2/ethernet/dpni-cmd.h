@@ -87,6 +87,8 @@
 
 #define DPNI_CMDID_SET_RX_TC_DIST			DPNI_CMD(0x235)
 
+#define DPNI_CMDID_SET_QOS_TBL				DPNI_CMD(0x240)
+#define DPNI_CMDID_ADD_QOS_ENT				DPNI_CMD(0x241)
 #define DPNI_CMDID_ADD_FS_ENT				DPNI_CMD(0x244)
 #define DPNI_CMDID_REMOVE_FS_ENT			DPNI_CMD(0x245)
 #define DPNI_CMDID_CLR_FS_ENT				DPNI_CMD(0x246)
@@ -511,6 +513,36 @@ struct dpni_cmd_set_queue {
 	__le64 flc;
 	/* cmd word 3 */
 	__le64 user_context;
+};
+
+#define DPNI_DISCARD_ON_MISS_SHIFT	0
+#define DPNI_DISCARD_ON_MISS_SIZE	1
+
+struct dpni_cmd_set_qos_table {
+	u32 pad;
+	u8 default_tc;
+	/* only the LSB */
+	u8 discard_on_miss;
+	u16 pad1[21];
+	u64 key_cfg_iova;
+};
+
+struct dpni_cmd_add_qos_entry {
+	u16 pad;
+	u8 tc_id;
+	u8 key_size;
+	u16 index;
+	u16 pad2;
+	u64 key_iova;
+	u64 mask_iova;
+};
+
+struct dpni_cmd_remove_qos_entry {
+	u8 pad1[3];
+	u8 key_size;
+	u32 pad2;
+	u64 key_iova;
+	u64 mask_iova;
 };
 
 struct dpni_cmd_add_fs_entry {

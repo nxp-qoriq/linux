@@ -2941,10 +2941,113 @@ static int dpaa2_eth_dcbnl_ieee_getpfc(struct net_device *net_dev,
 	return 0;
 }
 
+/* Configure ingress classification based on VLAN PCP */
+static int set_vlan_qos(struct dpaa2_eth_priv *priv)
+{
+	struct device *dev = priv->net_dev->dev.parent;
+	struct dpkg_profile_cfg kg_cfg = {0};
+	struct dpni_qos_tbl_cfg qos_cfg = {0};
+	struct dpni_rule_cfg key_params;
+	u8 *params_iova;
+	__be16 key, mask = cpu_to_be16(VLAN_PRIO_MASK);
+	int err = 0, i, j = 0;
+
+	if (priv->vlan_clsf_set)
+		return 0;
+
+	params_iova = kzalloc(DPAA2_CLASSIFIER_DMA_SIZE, GFP_KERNEL);
+	if (!params_iova)
+		return -ENOMEM;
+
+	kg_cfg.num_extracts = 1;
+	kg_cfg.extracts[0].type = DPKG_EXTRACT_FROM_HDR;
+	kg_cfg.extracts[0].extract.from_hdr.prot = NET_PROT_VLAN;
+	kg_cfg.extracts[0].extract.from_hdr.type = DPKG_FULL_FIELD;
+	kg_cfg.extracts[0].extract.from_hdr.field = NH_FLD_VLAN_TCI;
+
+	err = dpni_prepare_key_cfg(&kg_cfg, params_iova);
+	if (err) {
+		dev_err(dev, "dpkg_prepare_key_cfg failed: %d\n", err);
+		goto out_free;
+	}
+
+	/* Set QoS table */
+	qos_cfg.default_tc = 0;
+	qos_cfg.discard_on_miss = 0;
+	qos_cfg.key_cfg_iova = dma_map_single(dev, params_iova,
+					      DPAA2_CLASSIFIER_DMA_SIZE,
+					      DMA_TO_DEVICE);
+	if (dma_mapping_error(dev, qos_cfg.key_cfg_iova)) {
+		dev_err(dev, "%s: DMA mapping failed\n", __func__);
+		err = -ENOMEM;
+		goto out_free;
+	}
+	err = dpni_set_qos_table(priv->mc_io, 0, priv->mc_token, &qos_cfg);
+	dma_unmap_single(dev, qos_cfg.key_cfg_iova,
+			 DPAA2_CLASSIFIER_DMA_SIZE, DMA_TO_DEVICE);
+
+	if (err) {
+		dev_err(dev, "dpni_set_qos_table failed: %d\n", err);
+		goto out_free;
+	}
+
+	key_params.key_size = sizeof(key);
+
+	if (dpaa2_eth_fs_mask_enabled(priv)) {
+		key_params.mask_iova = dma_map_single(dev, &mask, sizeof(mask),
+						      DMA_TO_DEVICE);
+		if (dma_mapping_error(dev, key_params.mask_iova)) {
+			dev_err(dev, "DMA mapping failed %s\n", __func__);
+			err = -ENOMEM;
+			goto out_free;
+		}
+	} else {
+		key_params.mask_iova = 0;
+	}
+
+	key_params.key_iova = dma_map_single(dev, &key, sizeof(key),
+					     DMA_TO_DEVICE);
+	if (dma_mapping_error(dev, key_params.key_iova)) {
+		dev_err(dev, "%s: DMA mapping failed\n", __func__);
+		err = -ENOMEM;
+		goto out_unmap_mask;
+	}
+
+	for (i = 0; i < dpaa2_eth_tc_count(priv); i++) {
+		key = cpu_to_be16(i << VLAN_PRIO_SHIFT);
+		dma_sync_single_for_device(dev, key_params.key_iova,
+					   sizeof(key), DMA_TO_DEVICE);
+
+		err = dpni_add_qos_entry(priv->mc_io, 0, priv->mc_token,
+					 &key_params, i, j++);
+		if (err) {
+			dev_err(dev, "dpni_add_qos_entry failed: %d\n", err);
+			goto out_unmap;
+		}
+	}
+
+	priv->vlan_clsf_set = true;
+
+out_unmap:
+	dma_unmap_single(dev, key_params.key_iova, sizeof(key), DMA_TO_DEVICE);
+out_unmap_mask:
+	if (key_params.mask_iova)
+		dma_unmap_single(dev, key_params.mask_iova, sizeof(mask),
+				 DMA_TO_DEVICE);
+out_free:
+	kfree(params_iova);
+	return err;
+}
+
 static int dpaa2_eth_dcbnl_ieee_setpfc(struct net_device *net_dev,
 				       struct ieee_pfc *pfc)
 {
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
+	int err;
+
+	err = set_vlan_qos(priv);
+	if (err)
+		return err;
 
 	memcpy(&priv->pfc, pfc, sizeof(priv->pfc));
 

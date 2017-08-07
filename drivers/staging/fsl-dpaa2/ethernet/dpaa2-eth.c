@@ -1832,7 +1832,7 @@ static void set_fq_affinity(struct dpaa2_eth_priv *priv)
 
 static void setup_fqs(struct dpaa2_eth_priv *priv)
 {
-	int i;
+	int i, j;
 
 	/* We have one TxConf FQ per Tx flow. Tx queues MUST be at the
 	 * beginning of the queue array.
@@ -1845,11 +1845,13 @@ static void setup_fqs(struct dpaa2_eth_priv *priv)
 		priv->fq[priv->num_fqs++].flowid = (u16)i;
 	}
 
-	for (i = 0; i < dpaa2_eth_queue_count(priv); i++) {
-		priv->fq[priv->num_fqs].type = DPAA2_RX_FQ;
-		priv->fq[priv->num_fqs].consume = dpaa2_eth_rx;
-		priv->fq[priv->num_fqs++].flowid = (u16)i;
-	}
+	for (i = 0; i < dpaa2_eth_tc_count(priv); i++)
+		for (j = 0; j < dpaa2_eth_queue_count(priv); j++) {
+			priv->fq[priv->num_fqs].type = DPAA2_RX_FQ;
+			priv->fq[priv->num_fqs].consume = dpaa2_eth_rx;
+			priv->fq[priv->num_fqs].tc = (u8)i;
+			priv->fq[priv->num_fqs++].flowid = (u16)j;
+		}
 
 #ifdef CONFIG_FSL_DPAA2_ETH_USE_ERR_QUEUE
 	/* We have exactly one Rx error queue per DPNI */
@@ -2174,8 +2176,9 @@ int setup_fqs_taildrop(struct dpaa2_eth_priv *priv,
 			continue;
 
 		err = dpni_set_taildrop(priv->mc_io, 0, priv->mc_token,
-					DPNI_CP_QUEUE, DPNI_QUEUE_RX, 0,
-					priv->fq[i].flowid, &td);
+					DPNI_CP_QUEUE, DPNI_QUEUE_RX,
+					priv->fq[i].tc, priv->fq[i].flowid,
+					&td);
 		if (err) {
 			dev_err(dev, "dpni_set_taildrop() failed (%d)\n", err);
 			break;
@@ -2195,7 +2198,7 @@ static int setup_rx_flow(struct dpaa2_eth_priv *priv,
 	int err;
 
 	err = dpni_get_queue(priv->mc_io, 0, priv->mc_token,
-			     DPNI_QUEUE_RX, 0, fq->flowid, &q, &qid);
+			     DPNI_QUEUE_RX, fq->tc, fq->flowid, &q, &qid);
 	if (err) {
 		dev_err(dev, "dpni_get_queue() failed (%d)\n", err);
 		return err;
@@ -2208,7 +2211,7 @@ static int setup_rx_flow(struct dpaa2_eth_priv *priv,
 	q.destination.priority = 1;
 	q.user_context = (u64)fq;
 	err = dpni_set_queue(priv->mc_io, 0, priv->mc_token,
-			     DPNI_QUEUE_RX, 0, fq->flowid, q_opt, &q);
+			     DPNI_QUEUE_RX, fq->tc, fq->flowid, q_opt, &q);
 	if (err) {
 		dev_err(dev, "dpni_set_queue() failed (%d)\n", err);
 		return err;
@@ -2405,7 +2408,13 @@ static int set_hash(struct dpaa2_eth_priv *priv)
 		dist_cfg.dist_mode = DPNI_DIST_MODE_HASH;
 	}
 
-	err = dpni_set_rx_tc_dist(priv->mc_io, 0, priv->mc_token, 0, &dist_cfg);
+	for (i = 0; i < dpaa2_eth_tc_count(priv); i++) {
+		err = dpni_set_rx_tc_dist(priv->mc_io, 0, priv->mc_token, i,
+					  &dist_cfg);
+		if (err)
+			break;
+	}
+
 	dma_unmap_single(dev, dist_cfg.key_cfg_iova,
 			 DPAA2_CLASSIFIER_DMA_SIZE, DMA_TO_DEVICE);
 	if (err)

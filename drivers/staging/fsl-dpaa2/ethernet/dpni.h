@@ -131,13 +131,15 @@ struct dpni_pools_cfg {
 	/**
 	 * struct pools - Buffer pools parameters
 	 * @dpbp_id: DPBP object ID
+	 * @priority_mask: priorities served by DPBP
 	 * @buffer_size: Buffer size
 	 * @backup_pool: Backup pool
 	 */
 	struct {
-		int	dpbp_id;
+		u16	dpbp_id;
+		u8	priority_mask;
 		u16	buffer_size;
-		int	backup_pool;
+		u8	backup_pool;
 	} pools[DPNI_MAX_DPBP];
 };
 

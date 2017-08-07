@@ -81,6 +81,14 @@ void cnstr_shdsc_ahash(u32 * const desc, struct alginfo *adata, u32 state,
 		op |= OP_ALG_AAI_HMAC_PRECOMP;
 	}
 
+	/*
+	 * For Poly1305 load key as first 32 bytes from input data and update
+	 * remaining bytes to read.
+	 */
+	if ((state != OP_ALG_AS_UPDATE) &&
+	    ((op & OP_ALG_ALGSEL_MASK) == OP_ALG_ALGSEL_POLY1305))
+		append_seq_key(desc, POLY1305_KEY_SIZE, CLASS_2);
+
 	/* If needed, import context from software */
 	if (import_ctx)
 		append_seq_load(desc, ctx_len, LDST_CLASS_2_CCB |

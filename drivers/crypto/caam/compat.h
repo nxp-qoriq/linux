@@ -44,5 +44,6 @@
 #include <crypto/internal/hash.h>
 #include <crypto/internal/rsa.h>
 #include <crypto/internal/akcipher.h>
+#include <crypto/poly1305.h>
 
 #endif /* !defined(CAAM_COMPAT_H) */

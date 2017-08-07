@@ -2,6 +2,7 @@
  * caam descriptor construction helper functions
  *
  * Copyright 2008-2012 Freescale Semiconductor, Inc.
+ * Copyright 2017 NXP
  */
 
 #ifndef DESC_CONSTR_H
@@ -225,6 +226,7 @@ APPEND_CMD_LEN(seq_load, SEQ_LOAD)
 APPEND_CMD_LEN(seq_store, SEQ_STORE)
 APPEND_CMD_LEN(seq_fifo_load, SEQ_FIFO_LOAD)
 APPEND_CMD_LEN(seq_fifo_store, SEQ_FIFO_STORE)
+APPEND_CMD_LEN(seq_key, SEQ_KEY)
 
 #define APPEND_CMD_PTR(cmd, op) \
 static inline void append_##cmd(u32 * const desc, dma_addr_t ptr, \

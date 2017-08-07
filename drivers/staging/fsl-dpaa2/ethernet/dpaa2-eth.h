@@ -301,15 +301,16 @@ struct dpaa2_eth_ch_stats {
 	__u64 pull_err;
 };
 
+#define DPAA2_ETH_MAX_DPCONS		NR_CPUS
+#define DPAA2_ETH_MAX_TCS		8
+
 /* Maximum number of queues associated with a DPNI */
-#define DPAA2_ETH_MAX_RX_QUEUES		16
-#define DPAA2_ETH_MAX_TX_QUEUES		NR_CPUS
+#define DPAA2_ETH_MAX_RX_QUEUES		(DPNI_MAX_DIST_SIZE * DPAA2_ETH_MAX_TCS)
+#define DPAA2_ETH_MAX_TX_QUEUES		DPNI_MAX_SENDERS
 #define DPAA2_ETH_MAX_RX_ERR_QUEUES	1
 #define DPAA2_ETH_MAX_QUEUES		(DPAA2_ETH_MAX_RX_QUEUES + \
 					DPAA2_ETH_MAX_TX_QUEUES + \
 					DPAA2_ETH_MAX_RX_ERR_QUEUES)
-
-#define DPAA2_ETH_MAX_DPCONS		NR_CPUS
 
 enum dpaa2_eth_fq_type {
 	DPAA2_RX_FQ = 0,
@@ -323,6 +324,7 @@ struct dpaa2_eth_fq {
 	u32 fqid;
 	u32 tx_qdbin;
 	u16 flowid;
+	u8 tc;
 	int target_cpu;
 	struct dpaa2_eth_channel *channel;
 	enum dpaa2_eth_fq_type type;
@@ -452,6 +454,11 @@ extern const char dpaa2_eth_drv_version[];
 static inline int dpaa2_eth_queue_count(struct dpaa2_eth_priv *priv)
 {
 	return priv->dpni_attrs.num_queues;
+}
+
+static inline int dpaa2_eth_tc_count(struct dpaa2_eth_priv *priv)
+{
+	return priv->dpni_attrs.num_tcs;
 }
 
 void check_cls_support(struct dpaa2_eth_priv *priv);

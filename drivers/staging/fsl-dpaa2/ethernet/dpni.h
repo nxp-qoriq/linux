@@ -668,6 +668,26 @@ int dpni_prepare_key_cfg(const struct dpkg_profile_cfg *cfg,
 			 u8 *key_cfg_buf);
 
 /**
+ * struct dpni_qos_tbl_cfg - Structure representing QOS table configuration
+ * @key_cfg_iova: I/O virtual address of 256 bytes DMA-able memory filled with
+ *		key extractions to be used as the QoS criteria by calling
+ *		dpkg_prepare_key_cfg()
+ * @discard_on_miss: Set to '1' to discard frames in case of no match (miss);
+ *		'0' to use the 'default_tc' in such cases
+ * @default_tc: Used in case of no-match and 'discard_on_miss'= 0
+ */
+struct dpni_qos_tbl_cfg {
+	u64 key_cfg_iova;
+	int discard_on_miss;
+	u8 default_tc;
+};
+
+int dpni_set_qos_table(struct fsl_mc_io *mc_io,
+		       u32 cmd_flags,
+		       u16 token,
+		       const struct dpni_qos_tbl_cfg *cfg);
+
+/**
  * struct dpni_rx_tc_dist_cfg - Rx traffic class distribution configuration
  * @dist_size: Set the distribution size;
  *	supported values: 1,2,3,4,6,7,8,12,14,16,24,28,32,48,56,64,96,
@@ -938,6 +958,22 @@ struct dpni_rule_cfg {
 	u64	mask_iova;
 	u8	key_size;
 };
+
+int dpni_add_qos_entry(struct fsl_mc_io *mc_io,
+		       u32 cmd_flags,
+		       u16 token,
+		       const struct dpni_rule_cfg *cfg,
+		       u8 tc_id,
+		       u16 index);
+
+int dpni_remove_qos_entry(struct fsl_mc_io *mc_io,
+			  u32 cmd_flags,
+			  u16 token,
+			  const struct dpni_rule_cfg *cfg);
+
+int dpni_clear_qos_table(struct fsl_mc_io *mc_io,
+			 u32 cmd_flags,
+			 u16 token);
 
 /**
  * Discard matching traffic.  If set, this takes precedence over any other

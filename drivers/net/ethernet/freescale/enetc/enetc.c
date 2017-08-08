@@ -688,6 +688,7 @@ static void enetc_setup_rx_ring(struct enetc_ndev_priv *priv)
 	/* enable ring */
 	enetc_rxbdr_wr(hw, 0, ENETC_RBMR, rbmr);
 
+	enetc_rxbdr_wr(hw, 0, ENETC_RBPIR, 0);
 	rx_ring->rcir = hw->reg + ENETC_BDR(RX, 0, ENETC_RBCIR);
 	enetc_refill_rx_ring(rx_ring, enetc_bd_unused(rx_ring));
 }

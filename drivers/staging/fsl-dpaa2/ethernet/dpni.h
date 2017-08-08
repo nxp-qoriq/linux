@@ -519,6 +519,10 @@ int dpni_reset_statistics(struct fsl_mc_io *mc_io,
  * Enable a-symmetric pause frames
  */
 #define DPNI_LINK_OPT_ASYM_PAUSE	0x0000000000000008ULL
+/**
+ * Enable priority flow control pause frames
+ */
+#define DPNI_LINK_OPT_PFC_PAUSE		0x0000000000000010ULL
 
 /**
  * struct - Structure representing DPNI link configuration
@@ -880,6 +884,12 @@ struct dpni_dest_cfg {
  * sw-portal's DQRR, the DQRI interrupt is asserted immediately (if enabled)
  */
 #define DPNI_CONG_OPT_INTR_COALESCING_DISABLED	0x00000020
+/**
+ * This congestion will trigger flow control or priority flow control.
+ * This will have effect only if flow control is enabled with
+ * dpni_set_link_cfg().
+ */
+#define DPNI_CONG_OPT_FLOW_CONTROL	0x00000040
 
 /**
  * struct dpni_congestion_notification_cfg - congestion notification

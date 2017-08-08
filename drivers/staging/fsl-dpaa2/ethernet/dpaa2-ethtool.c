@@ -674,7 +674,7 @@ static int do_cls(struct net_device *net_dev,
 	struct dpni_rule_cfg rule_cfg;
 	struct dpni_fs_action_cfg fs_act = { 0 };
 	void *dma_mem;
-	int err = 0;
+	int err = 0, tc;
 
 	if (!dpaa2_eth_fs_enabled(priv)) {
 		netdev_err(net_dev, "dev does not support steering!\n");
@@ -710,12 +710,19 @@ static int do_cls(struct net_device *net_dev,
 	else
 		fs_act.flow_id = fs->ring_cookie;
 
-	if (add)
-		err = dpni_add_fs_entry(priv->mc_io, 0, priv->mc_token,
-					0, fs->location, &rule_cfg, &fs_act);
-	else
-		err = dpni_remove_fs_entry(priv->mc_io, 0, priv->mc_token,
-					   0, &rule_cfg);
+	for (tc = 0; tc < dpaa2_eth_tc_count(priv); tc++) {
+		if (add)
+			err = dpni_add_fs_entry(priv->mc_io, 0, priv->mc_token,
+						tc, fs->location, &rule_cfg,
+						&fs_act);
+		else
+			err = dpni_remove_fs_entry(priv->mc_io, 0,
+						   priv->mc_token, tc,
+						   &rule_cfg);
+
+		if (err)
+			break;
+	}
 
 	dma_unmap_single(dev, rule_cfg.key_iova,
 			 rule_cfg.key_size * 2, DMA_TO_DEVICE);

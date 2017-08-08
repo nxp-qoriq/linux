@@ -2092,6 +2092,7 @@ static int setup_dpni(struct fsl_mc_device *ls_dev)
 
 	/* Enable flow control */
 	cfg.options = DPNI_LINK_OPT_AUTONEG | DPNI_LINK_OPT_PAUSE;
+	priv->tx_pause_frames = true;
 	err = dpni_set_link_cfg(priv->mc_io, 0, priv->mc_token, &cfg);
 	if (err) {
 		dev_err(dev, "dpni_set_link_cfg() failed\n");
@@ -2159,20 +2160,11 @@ static int setup_rx_flow(struct dpaa2_eth_priv *priv,
 	return 0;
 }
 
-/* Enable/disable Rx FQ taildrop
- *
- * Rx FQ taildrop is mutually exclusive with flow control and it only gets
- * disabled when FC is active. Depending on FC status, we need to compute
- * the maximum number of buffers in the pool differently, so use the
- * opportunity to update max number of buffers as well.
- */
-int set_rx_taildrop(struct dpaa2_eth_priv *priv, bool enable)
+static int set_queue_taildrop(struct dpaa2_eth_priv *priv,
+			      struct dpni_taildrop *td)
 {
-	struct dpni_taildrop td = {0};
+	struct device *dev = priv->net_dev->dev.parent;
 	int i, err;
-
-	td.enable = enable;
-	td.threshold = DPAA2_ETH_TAILDROP_THRESH;
 
 	for (i = 0; i < priv->num_fqs; i++) {
 		if (priv->fq[i].type != DPAA2_RX_FQ)
@@ -2180,13 +2172,96 @@ int set_rx_taildrop(struct dpaa2_eth_priv *priv, bool enable)
 		err = dpni_set_taildrop(priv->mc_io, 0, priv->mc_token,
 					DPNI_CP_QUEUE, DPNI_QUEUE_RX,
 					priv->fq[i].tc, priv->fq[i].flowid,
-					&td);
-		if (err)
+					td);
+		if (err) {
+			dev_err(dev, "dpni_set_taildrop() failed (%d)\n", err);
 			return err;
+		}
 	}
 
-	priv->max_bufs_per_ch = enable ? DPAA2_ETH_NUM_BUFS_PER_CH :
-				DPAA2_ETH_NUM_BUFS_FC / priv->num_channels;
+	return 0;
+}
+
+static int set_group_taildrop(struct dpaa2_eth_priv *priv,
+			      struct dpni_taildrop *td)
+{
+	struct device *dev = priv->net_dev->dev.parent;
+	struct dpni_taildrop disable_td, *tc_td;
+	int i, err;
+
+	memset(&disable_td, 0, sizeof(struct dpni_taildrop));
+	for (i = 0; i < dpaa2_eth_tc_count(priv); i++) {
+		if (td->enable && dpaa2_eth_is_pfc_enabled(priv, i))
+			/* Do not set taildrop thresholds for PFC-enabled
+			 * traffic classes. We will enable congestion
+			 * notifications for them.
+			 */
+			tc_td = &disable_td;
+		else
+			tc_td = td;
+
+		err = dpni_set_taildrop(priv->mc_io, 0, priv->mc_token,
+					DPNI_CP_GROUP, DPNI_QUEUE_RX,
+					i, 0, tc_td);
+		if (err) {
+			dev_err(dev, "dpni_set_taildrop() failed (%d)\n", err);
+			return err;
+		}
+	}
+
+	return 0;
+}
+
+/* Enable/disable Rx FQ taildrop
+ *
+ * Rx FQ taildrop is mutually exclusive with flow control and it only gets
+ * disabled when FC is active. Depending on FC status, we need to compute
+ * the maximum number of buffers in the pool differently, so use the
+ * opportunity to update max number of buffers as well.
+ */
+int set_rx_taildrop(struct dpaa2_eth_priv *priv)
+{
+	enum dpaa2_eth_td_cfg cfg = dpaa2_eth_get_td_type(priv);
+	struct dpni_taildrop td_queue, td_group;
+	int err = 0;
+
+	switch (cfg) {
+	case DPAA2_ETH_TD_NONE:
+		memset(&td_queue, 0, sizeof(struct dpni_taildrop));
+		memset(&td_group, 0, sizeof(struct dpni_taildrop));
+		priv->max_bufs_per_ch = DPAA2_ETH_NUM_BUFS_FC /
+					priv->num_channels;
+		break;
+	case DPAA2_ETH_TD_QUEUE:
+		memset(&td_group, 0, sizeof(struct dpni_taildrop));
+		td_queue.enable = 1;
+		td_queue.units = DPNI_CONGESTION_UNIT_BYTES;
+		td_queue.threshold = DPAA2_ETH_TAILDROP_THRESH /
+				     dpaa2_eth_tc_count(priv);
+		priv->max_bufs_per_ch = DPAA2_ETH_NUM_BUFS_PER_CH;
+		break;
+	case DPAA2_ETH_TD_GROUP:
+		memset(&td_queue, 0, sizeof(struct dpni_taildrop));
+		td_group.enable = 1;
+		td_group.units = DPNI_CONGESTION_UNIT_FRAMES;
+		td_group.threshold = NAPI_POLL_WEIGHT *
+				     dpaa2_eth_queue_count(priv);
+		priv->max_bufs_per_ch = NAPI_POLL_WEIGHT *
+					dpaa2_eth_tc_count(priv);
+		break;
+	default:
+		break;
+	}
+
+	err = set_queue_taildrop(priv, &td_queue);
+	if (err)
+		return err;
+
+	err = set_group_taildrop(priv, &td_group);
+	if (err)
+		return err;
+
+	priv->refill_thresh = DPAA2_ETH_REFILL_THRESH(priv);
 
 	return 0;
 }

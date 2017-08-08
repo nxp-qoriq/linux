@@ -428,7 +428,7 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring, int work_limit)
 
 static bool enetc_page_reusable(struct page *page)
 {
-	return (page_count(page) == 1 && !page_is_pfmemalloc(page));
+	return (!page_is_pfmemalloc(page) && page_ref_count(page) == 1);
 }
 
 static void enetc_reuse_page(struct enetc_bdr *rx_ring,
@@ -443,26 +443,49 @@ static void enetc_reuse_page(struct enetc_bdr *rx_ring,
 
 	/* copy page reference */
 	*new = *old;
+}
 
-	/* sync for use by the device */
-	dma_sync_single_range_for_device(rx_ring->dev, old->dma,
-					 old->page_offset, ENETC_RXB_DMA_SIZE,
-					 DMA_FROM_DEVICE);
+struct enetc_rx_swbd *enetc_get_rx_buff(struct enetc_bdr *rx_ring, int i,
+					unsigned int size)
+{
+	struct enetc_rx_swbd *rx_swbd = &rx_ring->rx_swbd[i];
+
+	dma_sync_single_range_for_cpu(rx_ring->dev, rx_swbd->dma,
+				      rx_swbd->page_offset,
+				      size, DMA_FROM_DEVICE);
+	return rx_swbd;
+}
+
+static void enetc_put_rx_buff(struct enetc_bdr *rx_ring,
+			      struct enetc_rx_swbd *rx_swbd)
+{
+	if (likely(enetc_page_reusable(rx_swbd->page))) {
+		rx_swbd->page_offset ^= ENETC_RXB_TRUESIZE;
+		page_ref_inc(rx_swbd->page);
+
+		enetc_reuse_page(rx_ring, rx_swbd);
+
+		/* sync for use by the device */
+		dma_sync_single_range_for_device(rx_ring->dev, rx_swbd->dma,
+						 rx_swbd->page_offset,
+						 ENETC_RXB_DMA_SIZE,
+						 DMA_FROM_DEVICE);
+	} else {
+		dma_unmap_page(rx_ring->dev, rx_swbd->dma,
+			       PAGE_SIZE, DMA_FROM_DEVICE);
+	}
+
+	rx_swbd->page = NULL;
 }
 
 static struct sk_buff *enetc_map_rx_buff_to_skb(struct enetc_bdr *rx_ring,
 						int i, unsigned int size)
 {
-	struct enetc_rx_swbd *rx_swbd = &rx_ring->rx_swbd[i];
-	struct page *page = rx_swbd->page;
+	struct enetc_rx_swbd *rx_swbd = enetc_get_rx_buff(rx_ring, i, size);
 	struct sk_buff *skb;
 	void *ba;
 
-	dma_sync_single_range_for_cpu(rx_ring->dev, rx_swbd->dma,
-				      rx_swbd->page_offset,
-				      size, DMA_FROM_DEVICE);
-
-	ba = page_address(page) + rx_swbd->page_offset;
+	ba = page_address(rx_swbd->page) + rx_swbd->page_offset;
 	skb = build_skb(ba - ENETC_RXB_PAD, ENETC_RXB_TRUESIZE);
 	if (unlikely(!skb)) {
 		// TODO: alloc err counter
@@ -472,18 +495,7 @@ static struct sk_buff *enetc_map_rx_buff_to_skb(struct enetc_bdr *rx_ring,
 	skb_reserve(skb, ENETC_RXB_PAD);
 	__skb_put(skb, size);
 
-	if (unlikely(!enetc_page_reusable(page))) {
-		dma_unmap_page(rx_ring->dev, rx_swbd->dma,
-			       PAGE_SIZE, DMA_FROM_DEVICE);
-		rx_swbd->page = NULL;
-
-		return skb;
-	}
-
-	rx_swbd->page_offset ^= ENETC_RXB_TRUESIZE;
-	page_ref_inc(page);
-
-	enetc_reuse_page(rx_ring, rx_swbd);
+	enetc_put_rx_buff(rx_ring, rx_swbd);
 
 	return skb;
 }
@@ -491,28 +503,12 @@ static struct sk_buff *enetc_map_rx_buff_to_skb(struct enetc_bdr *rx_ring,
 static void enetc_add_rx_buff_to_skb(struct enetc_bdr *rx_ring, int i,
 				     unsigned int size, struct sk_buff *skb)
 {
-	struct enetc_rx_swbd *rx_swbd = &rx_ring->rx_swbd[i];
-	struct page *page = rx_swbd->page;
+	struct enetc_rx_swbd *rx_swbd = enetc_get_rx_buff(rx_ring, i, size);
 
-	dma_sync_single_range_for_cpu(rx_ring->dev, rx_swbd->dma,
-				      rx_swbd->page_offset,
-				      size, DMA_FROM_DEVICE);
-
-	skb_add_rx_frag(skb, skb_shinfo(skb)->nr_frags, page,
+	skb_add_rx_frag(skb, skb_shinfo(skb)->nr_frags, rx_swbd->page,
 			rx_swbd->page_offset, size, ENETC_RXB_TRUESIZE);
 
-	if (unlikely(!enetc_page_reusable(page))) {
-		dma_unmap_page(rx_ring->dev, rx_swbd->dma,
-			       PAGE_SIZE, DMA_FROM_DEVICE);
-		rx_swbd->page = NULL;
-
-		return;
-	}
-
-	rx_swbd->page_offset ^= ENETC_RXB_TRUESIZE;
-	page_ref_inc(page);
-
-	enetc_reuse_page(rx_ring, rx_swbd);
+	enetc_put_rx_buff(rx_ring, rx_swbd);
 }
 
 static void enetc_process_skb(struct enetc_bdr *rx_ring,

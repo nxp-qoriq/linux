@@ -3114,13 +3114,69 @@ static int dpaa2_eth_dcbnl_ieee_setpfc(struct net_device *net_dev,
 				       struct ieee_pfc *pfc)
 {
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
-	int err;
+	struct dpni_congestion_notification_cfg notification_cfg = {0};
+	struct dpni_link_state state = {0};
+	struct dpni_link_cfg cfg = {0};
+	int err = 0, i;
+
+	if (priv->pfc.pfc_en == pfc->pfc_en)
+		/* Same enabled mask, nothing to be done */
+		return 0;
 
 	err = set_vlan_qos(priv);
 	if (err)
 		return err;
 
+	err = dpni_get_link_state(priv->mc_io, 0, priv->mc_token, &state);
+	if (err) {
+		netdev_err(net_dev, "ERROR %d getting link state", err);
+		return err;
+	}
+
+	cfg.rate = state.rate;
+	cfg.options = state.options;
+	if (pfc->pfc_en)
+		cfg.options |= DPNI_LINK_OPT_PFC_PAUSE;
+	else
+		cfg.options &= ~DPNI_LINK_OPT_PFC_PAUSE;
+
+	err = dpni_set_link_cfg(priv->mc_io, 0, priv->mc_token, &cfg);
+	if (err) {
+		netdev_err(net_dev, "ERROR %d setting link cfg", err);
+		return err;
+	}
+
 	memcpy(&priv->pfc, pfc, sizeof(priv->pfc));
+
+	err = set_rx_taildrop(priv);
+	if (err)
+		return err;
+
+	/* configure congestion notifications */
+	notification_cfg.notification_mode = DPNI_CONG_OPT_FLOW_CONTROL;
+	notification_cfg.units = DPNI_CONGESTION_UNIT_FRAMES;
+	notification_cfg.message_iova = 0ULL;
+	notification_cfg.message_ctx = 0ULL;
+
+	for (i = 0; i < dpaa2_eth_tc_count(priv); i++) {
+		if (dpaa2_eth_is_pfc_enabled(priv, i)) {
+			notification_cfg.threshold_entry = NAPI_POLL_WEIGHT;
+			notification_cfg.threshold_exit = NAPI_POLL_WEIGHT / 2;
+		} else {
+			notification_cfg.threshold_entry = 0;
+			notification_cfg.threshold_exit = 0;
+		}
+
+		err = dpni_set_congestion_notification(priv->mc_io, 0,
+						       priv->mc_token,
+						       DPNI_QUEUE_RX,
+						       i, &notification_cfg);
+		if (err) {
+			netdev_err(net_dev, "Error %d setting congestion notif",
+				   err);
+			return err;
+		}
+	}
 
 	return 0;
 }

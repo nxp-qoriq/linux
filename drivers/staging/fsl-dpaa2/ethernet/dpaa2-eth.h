@@ -436,6 +436,7 @@ struct dpaa2_eth_priv {
 	u8 dcbx_mode;
 	struct ieee_pfc pfc;
 	bool vlan_clsf_set;
+	bool tx_pause_frames;
 };
 
 #define dpaa2_eth_hash_enabled(priv)	\
@@ -466,7 +467,32 @@ static inline int dpaa2_eth_tc_count(struct dpaa2_eth_priv *priv)
 	return priv->dpni_attrs.num_tcs;
 }
 
+static inline bool dpaa2_eth_is_pfc_enabled(struct dpaa2_eth_priv *priv,
+					    int traffic_class)
+{
+	return priv->pfc.pfc_en & (1 << traffic_class);
+}
+
+enum dpaa2_eth_td_cfg {
+	DPAA2_ETH_TD_NONE,
+	DPAA2_ETH_TD_QUEUE,
+	DPAA2_ETH_TD_GROUP
+};
+
+static inline enum dpaa2_eth_td_cfg
+dpaa2_eth_get_td_type(struct dpaa2_eth_priv *priv)
+{
+	bool pfc_enabled = !!(priv->pfc.pfc_en);
+
+	if (pfc_enabled)
+		return DPAA2_ETH_TD_GROUP;
+	else if (priv->tx_pause_frames)
+		return DPAA2_ETH_TD_NONE;
+	else
+		return DPAA2_ETH_TD_QUEUE;
+}
+
 void check_cls_support(struct dpaa2_eth_priv *priv);
 
-int setup_fqs_taildrop(struct dpaa2_eth_priv *priv, bool enable);
+int set_rx_taildrop(struct dpaa2_eth_priv *priv);
 #endif	/* __DPAA2_H */

@@ -230,7 +230,8 @@ static int dpaa2_eth_set_pauseparam(struct net_device *net_dev,
 	if (current_tx_pause == pause->tx_pause)
 		goto out;
 
-	err = setup_fqs_taildrop(priv, !pause->tx_pause);
+	priv->tx_pause_frames = pause->tx_pause;
+	err = set_rx_taildrop(priv);
 	if (err)
 		netdev_dbg(net_dev, "ERROR %d configuring taildrop", err);
 

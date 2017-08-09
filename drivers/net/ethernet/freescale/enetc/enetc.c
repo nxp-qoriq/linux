@@ -11,6 +11,8 @@ static const char enetc_drv_ver[] = ENETC_DRV_VER_STR;
 static const char enetc_drv_name[] = "ENETC driver";
 
 static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb);
+static void enetc_unmap_tx_buff(struct enetc_bdr *tx_ring,
+				struct enetc_tx_swbd *tx_swbd);
 static void enetc_update_txbdr(struct enetc_bdr *tx_ring, int count,
 			       unsigned int frm_len);
 static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring);
@@ -104,11 +106,11 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb)
 		}
 
 		tx_swbd->len = len;
+		tx_swbd->is_dma_page = 1;
 		tx_swbd->dma = skb_frag_dma_map(tx_ring->dev, frag, 0, len,
 						DMA_TO_DEVICE);
 		if (dma_mapping_error(tx_ring->dev, tx_swbd->dma))
 			goto dma_err;
-		tx_swbd->is_dma_page = 1;
 		count++;
 	}
 	tx_ring->tx_swbd[i].skb = skb;
@@ -118,23 +120,14 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb)
 
 dma_err:
 	dev_err(tx_ring->dev, "DMA map error");
-	tx_swbd->dma = 0;
-	if (count)
-		count--;
 
-	while (count > 1) {
-		dma_unmap_page(tx_ring->dev, tx_swbd->dma, tx_swbd->len,
-			       DMA_TO_DEVICE);
-		tx_swbd->dma = 0;
-		count--;
-	}
-
-	if (count) {
-		dma_unmap_single(tx_ring->dev, tx_swbd->dma, tx_swbd->len,
-				 DMA_TO_DEVICE);
-		tx_swbd->dma = 0;
-		count--;
-	}
+	do {
+		tx_swbd = &tx_ring->tx_swbd[i];
+		enetc_unmap_tx_buff(tx_ring, tx_swbd);
+		if (i == 0)
+			i = tx_ring->bd_count;
+		i--;
+	} while (count--);
 
 	return 0;
 }
@@ -612,6 +605,23 @@ static void enetc_free_rx_resources(struct enetc_ndev_priv *priv)
 	rxr->rx_swbd = NULL;
 }
 
+static void enetc_free_tx_ring(struct enetc_bdr *tx_ring)
+{
+	int i;
+
+	if (!tx_ring->tx_swbd)
+		return;
+
+	for (i = 0; i < tx_ring->bd_count; i++) {
+		struct enetc_tx_swbd *tx_swbd = &tx_ring->tx_swbd[i];
+
+		enetc_unmap_tx_buff(tx_ring, tx_swbd);
+	}
+
+	tx_ring->next_to_clean = 0;
+	tx_ring->next_to_use = 0;
+}
+
 static void enetc_free_rx_ring(struct enetc_bdr *rx_ring)
 {
 	int i;
@@ -658,6 +668,8 @@ static void enetc_setup_tx_ring(struct enetc_ndev_priv *priv)
 	/* enable ring */
 	enetc_txbdr_wr(hw, 0, ENETC_TBMR, tbmr);
 
+	enetc_txbdr_wr(hw, 0, ENETC_TBCIR, 0);
+	enetc_txbdr_wr(hw, 0, ENETC_TBCISR, 0);
 	tx_ring->tcir = hw->reg + ENETC_BDR(TX, 0, ENETC_TBCIR);
 	tx_ring->tcisr = hw->reg + ENETC_BDR(TX, 0, ENETC_TBCISR);
 }
@@ -769,6 +781,7 @@ static int enetc_close(struct net_device *ndev)
 	netif_stop_queue(ndev);
 
 	enetc_free_rx_ring(&priv->rx_ring);
+	enetc_free_tx_ring(&priv->tx_ring);
 
 	enetc_free_rx_resources(priv);
 	enetc_free_tx_resources(priv);

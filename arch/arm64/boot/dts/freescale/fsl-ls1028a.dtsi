@@ -471,6 +471,21 @@
 					<0000 0 0 4 &gic GIC_SPI 120 IRQ_TYPE_LEVEL_HIGH>;
 			status = "disabled";
 		};
+
+		pcie@1F0000000 { /* rcie_enetc */
+			compatible = "pci-host-ecam-generic";
+			reg = <0x01 0xF0000000 0x0 0x100000>;
+			#address-cells = <3>;
+			#size-cells = <2>;
+			#interrupt-cells = <1>;
+			msi-parent = <&its>;
+			device_type = "pci";
+			bus-range = <0x0 0x0>;
+			ranges = <0x82000000 0x0 0x00000000  0x1 0xff000000  0x0 0x100000     /* non-prefetchable memory */
+				  0xc2000000 0x0 0x00000000  0x1 0xff100000  0x0 0x100000     /* prefetchable memory */
+				  0x82000000 0x0 0x00000000  0x1 0xff200000  0x0 0x100000     /* non-prefetchable memory */
+				  0xc2000000 0x0 0x00000000  0x1 0xff300000  0x0 0x100000>;   /* prefetchable memory */
+		};
 	};
 };
 

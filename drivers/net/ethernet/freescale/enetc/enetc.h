@@ -41,6 +41,7 @@ struct enetc_bdr {
 		void __iomem *tcir;
 		void __iomem *rcir;
 	};
+	u16 index;
 	int bd_count; /* # of BDs */
 	int next_to_use;
 	int next_to_clean;
@@ -56,7 +57,7 @@ struct enetc_bdr {
 	struct enetc_ring_stats stats;
 
 	dma_addr_t bd_dma_base;
-};
+} ____cacheline_aligned_in_smp;
 
 static inline void enetc_bdr_idx_inc(struct enetc_bdr *bdr, int *i)
 {
@@ -83,18 +84,31 @@ struct enetc_si {
 	struct net_device *ndev; /* back ref. */
 };
 
+#define ENETC_MAX_NUM_TXQS	8
+
+struct enetc_int_vector {
+	struct napi_struct napi;
+	char name[IFNAMSIZ + 8];
+
+	struct enetc_bdr tx_ring ____cacheline_aligned_in_smp;
+	struct enetc_bdr rx_ring;
+};
+
 struct enetc_ndev_priv {
 	struct net_device *ndev;
 	struct device *dev; /* dma-mapping device */
 	struct enetc_si *si;
 
-	struct enetc_bdr tx_ring ____cacheline_aligned_in_smp;
-	struct enetc_bdr rx_ring;
-
-	struct napi_struct napi;
+	int num_int_vectors;
+	struct enetc_int_vector *int_vector;
+	struct msix_entry *msix_entries;
+	u16 num_rx_rings, num_tx_rings;
+	u16 rx_bd_count, tx_bd_count;
 
 	u16 msg_enable;
-	struct timer_list rxtx_int_timer;
+
+	struct enetc_bdr *tx_ring[16];
+	struct enetc_bdr *rx_ring[16];
 };
 
 void enetc_set_ethtool_ops(struct net_device *ndev);

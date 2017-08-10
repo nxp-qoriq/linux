@@ -6,6 +6,10 @@
 
 #define ENETC_SICAPR0	0x900
 #define ENETC_SICAPR1	0x904
+
+#define ENETC_SIMSITRV(n) (0xB00 + (n) * 0x4)
+#define ENETC_SIMSIRRV(n) (0xB80 + (n) * 0x4)
+
 #define ENETC_SICCAPR	0x1200
 
 /** SI BDR sub-blocks, n = 0..7 */
@@ -49,6 +53,10 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PSIPMR	0x10018
 #define ENETC_PCAPR0	0x10900
 #define ENETC_PCAPR1	0x10904
+
+#define ENETC_PV0CFGR	0x10920
+#define ENETC_PVCFGR_SET_TXBDR(val)	((val) & 0xffff)
+#define ENETC_PVCFGR_SET_RXBDR(val)	(((val) & 0xffff) << 8)
 
 #define ENETC_PM0_CMD_CFG	0x18008
 #define ENETC_PM0_TX_EN		BIT(31)

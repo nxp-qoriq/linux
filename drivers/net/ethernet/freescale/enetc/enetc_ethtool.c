@@ -36,6 +36,7 @@ static void enetc_get_regs(struct net_device *ndev, struct ethtool_regs *regs,
 	PR_BDR_REG(hw, tx, 0, TBBAR1);
 	PR_BDR_REG(hw, tx, 0, TBCIR);
 	PR_BDR_REG(hw, tx, 0, TBCISR);
+	PR_BDR_REG(hw, tx, 0, TBIER);
 	/** Rx BDR dump */
 	PR_BDR_REG(hw, rx, 0, RBMR);
 	PR_BDR_REG(hw, rx, 0, RBSR);
@@ -45,6 +46,7 @@ static void enetc_get_regs(struct net_device *ndev, struct ethtool_regs *regs,
 	PR_BDR_REG(hw, rx, 0, RBBAR1);
 	PR_BDR_REG(hw, rx, 0, RBPIR);
 	PR_BDR_REG(hw, rx, 0, RBICIR0);
+	PR_BDR_REG(hw, rx, 0, RBIER);
 
 	/* Port regs */
 	PR_REG(hw, PMR);

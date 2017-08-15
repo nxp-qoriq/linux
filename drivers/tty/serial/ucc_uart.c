@@ -34,6 +34,7 @@
 #include <soc/fsl/qe/ucc_slow.h>
 
 #include <linux/firmware.h>
+#include <asm/cpm.h>
 #include <asm/reg.h>
 
 /*

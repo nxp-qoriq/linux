@@ -24,3 +24,4 @@ ucc_geth_driver-objs := ucc_geth.o ucc_geth_ethtool.o
 obj-$(if $(CONFIG_FSL_SDK_FMAN),y) += sdk_fman/
 obj-$(if $(CONFIG_FSL_SDK_DPAA_ETH),y) += sdk_dpaa/
 obj-$(CONFIG_FSL_FMAN) += fman/
+obj-$(CONFIG_FSL_DPAA_ETH) += dpaa/

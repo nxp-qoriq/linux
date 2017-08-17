@@ -418,7 +418,12 @@ CPUIDLE_METHOD_OF_DECLARE(psci, "psci", &psci_cpuidle_ops);
 
 static int psci_system_suspend(unsigned long unused)
 {
-	return psci_cpu_suspend(0, virt_to_phys(cpu_resume));
+	u32 state;
+
+	state = ( 2 << PSCI_0_2_POWER_STATE_AFFL_SHIFT) |
+		(1 << PSCI_0_2_POWER_STATE_TYPE_SHIFT);
+
+	return psci_cpu_suspend(state, virt_to_phys(cpu_resume));
 }
 
 static int psci_system_suspend_enter(suspend_state_t state)
@@ -518,6 +523,7 @@ static void __init psci_0_2_set_functions(void)
 
 	pm_power_off = psci_sys_poweroff;
 	psci_init_system_suspend();
+	suspend_set_ops(&psci_suspend_ops);
 }
 
 /*

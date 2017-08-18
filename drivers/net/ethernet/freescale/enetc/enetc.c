@@ -13,14 +13,13 @@ static const char enetc_drv_name[] = "ENETC driver";
 static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb);
 static void enetc_unmap_tx_buff(struct enetc_bdr *tx_ring,
 				struct enetc_tx_swbd *tx_swbd);
-static void enetc_update_txbdr(struct enetc_bdr *tx_ring, int count,
-			       unsigned int frm_len);
+static void enetc_update_txbdr(struct enetc_bdr *tx_ring, int count, u16 len);
 static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring);
 
 static struct sk_buff *enetc_map_rx_buff_to_skb(struct enetc_bdr *rx_ring,
-						int i, unsigned int size);
+						int i, u16 size);
 static void enetc_add_rx_buff_to_skb(struct enetc_bdr *rx_ring, int i,
-				     unsigned int size, struct sk_buff *skb);
+				     u16 size, struct sk_buff *skb);
 static void enetc_process_skb(struct enetc_bdr *rx_ring, struct sk_buff *skb);
 static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring, int work_limit);
 
@@ -132,8 +131,7 @@ dma_err:
 	return 0;
 }
 
-static void enetc_update_txbdr(struct enetc_bdr *tx_ring, int count,
-			       unsigned int frm_len)
+static void enetc_update_txbdr(struct enetc_bdr *tx_ring, int count, u16 len)
 {
 	struct enetc_tx_swbd *tx_swbd;
 	struct enetc_tx_bd *txbd;
@@ -144,7 +142,7 @@ static void enetc_update_txbdr(struct enetc_bdr *tx_ring, int count,
 	tx_swbd = &tx_ring->tx_swbd[i];
 
 	/* first BD needs frm_len set */
-	txbd->frm_len = cpu_to_le16(frm_len);
+	txbd->frm_len = cpu_to_le16(len);
 	txbd->flags = cpu_to_le16(ENETC_TXBD_FLAGS_IE);
 
 	while (count--) {
@@ -218,7 +216,7 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
 	int tx_frm_cnt = 0, tx_byte_cnt = 0;
 	struct enetc_tx_swbd *tx_swbd;
 	bool frame_cleaned = false;
-	unsigned int i, last;
+	int i, last;
 
 	i = tx_ring->next_to_clean;
 	tx_swbd = &tx_ring->tx_swbd[i];
@@ -344,8 +342,8 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring, int work_limit)
 	while (likely(rx_frm_cnt < work_limit)) {
 		union enetc_rx_bd *rxbd;
 		struct sk_buff *skb;
-		unsigned int size;
 		u32 bd_status;
+		u16 size;
 
 		if (cleaned_cnt >= ENETC_RXBD_BUNDLE) {
 			int count = enetc_refill_rx_ring(rx_ring, cleaned_cnt);
@@ -439,7 +437,7 @@ static void enetc_reuse_page(struct enetc_bdr *rx_ring,
 }
 
 struct enetc_rx_swbd *enetc_get_rx_buff(struct enetc_bdr *rx_ring, int i,
-					unsigned int size)
+					u16 size)
 {
 	struct enetc_rx_swbd *rx_swbd = &rx_ring->rx_swbd[i];
 
@@ -472,7 +470,7 @@ static void enetc_put_rx_buff(struct enetc_bdr *rx_ring,
 }
 
 static struct sk_buff *enetc_map_rx_buff_to_skb(struct enetc_bdr *rx_ring,
-						int i, unsigned int size)
+						int i, u16 size)
 {
 	struct enetc_rx_swbd *rx_swbd = enetc_get_rx_buff(rx_ring, i, size);
 	struct sk_buff *skb;
@@ -494,7 +492,7 @@ static struct sk_buff *enetc_map_rx_buff_to_skb(struct enetc_bdr *rx_ring,
 }
 
 static void enetc_add_rx_buff_to_skb(struct enetc_bdr *rx_ring, int i,
-				     unsigned int size, struct sk_buff *skb)
+				     u16 size, struct sk_buff *skb)
 {
 	struct enetc_rx_swbd *rx_swbd = enetc_get_rx_buff(rx_ring, i, size);
 

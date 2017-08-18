@@ -25,7 +25,7 @@ struct enetc_tx_swbd {
 struct enetc_rx_swbd {
 	dma_addr_t dma;
 	struct page *page;
-	unsigned int page_offset;
+	u16 page_offset;
 };
 
 struct enetc_ring_stats {
@@ -41,16 +41,16 @@ struct enetc_bdr {
 		void __iomem *tcir;
 		void __iomem *rcir;
 	};
-	unsigned int bd_count; /* # of BDs */
-	unsigned int next_to_use;
-	unsigned int next_to_clean;
+	int bd_count; /* # of BDs */
+	int next_to_use;
+	int next_to_clean;
 	union {
 		struct enetc_tx_swbd *tx_swbd;
 		struct enetc_rx_swbd *rx_swbd;
 	};
 	union {
 		void __iomem *tcisr; /* Tx */
-		unsigned int next_to_alloc; /* Rx */
+		int next_to_alloc; /* Rx */
 	};
 
 	struct enetc_ring_stats stats;

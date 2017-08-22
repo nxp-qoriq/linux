@@ -135,6 +135,13 @@ int pci_iov_add_virtfn(struct pci_dev *dev, int id, int reset)
 	virtfn->devfn = pci_iov_virtfn_devfn(dev, id);
 	virtfn->vendor = dev->vendor;
 	pci_read_config_word(dev, iov->pos + PCI_SRIOV_VF_DID, &virtfn->device);
+
+	if (!virtfn->device) {
+		dev_warn(&dev->dev, "alex: VF device ID = %04x, fix to 0xe001\n",
+				virtfn->device);
+		virtfn->device = 0xef00;
+	}
+
 	rc = pci_setup_device(virtfn);
 	if (rc)
 		goto failed0;

@@ -1017,6 +1017,9 @@ static void enetc_configure_port(struct enetc_ndev_priv *priv)
 	struct enetc_hw *hw = &priv->si->hw;
 	u32 val;
 
+	if (priv->si->is_vf)
+		return;
+
 	val = ENETC_PVCFGR_SET_TXBDR(priv->num_tx_rings);
 	val |= ENETC_PVCFGR_SET_RXBDR(priv->num_rx_rings);
 	enetc_wr(hw, ENETC_PV0CFGR, val);
@@ -1130,8 +1133,18 @@ static int enetc_pci_probe(struct pci_dev *pdev,
 	si->pdev = pdev;
 	hw = &si->hw;
 
-	hw->reg = ioremap(pci_resource_start(pdev, 0),
-			  pci_resource_len(pdev, 0));
+	if(pdev->device == 0xef00) {
+		/* VF fix-ups */
+		/* ENETC regs are in VF BAR4 instead of VF BAR0 */
+		dev_info(&pdev->dev,
+				"VF doesn't have BAR0, map BAR4 instead");
+		hw->reg = pci_iomap(pdev, 4, pci_resource_len(pdev, 4));
+		si->is_vf = 1;
+	} else {
+		hw->reg = ioremap(pci_resource_start(pdev, 0),
+				  pci_resource_len(pdev, 0));
+	}
+
 	if (!hw->reg) {
 		err = -ENXIO;
 		dev_err(&pdev->dev, "ioremap() failed\n");
@@ -1205,8 +1218,30 @@ static void enetc_pci_remove(struct pci_dev *pdev)
 	pci_disable_device(pdev);
 }
 
+#ifdef CONFIG_PCI_IOV
+static int enetc_sriov_configure(struct pci_dev *dev, int num_vfs)
+{
+	int err;
+
+	if (!num_vfs) {
+		dev_info(&dev->dev, "SR-IOV stop\n");
+		pci_disable_sriov(dev);
+	} else {
+		dev_info(&dev->dev, "SR-IOV start, %d VFs\n", num_vfs);
+		err = pci_enable_sriov(dev, num_vfs);
+		if (err) {
+			dev_err(&dev->dev, "pci_enable_sriov err %d\n", err);
+			return err;
+		}
+	}
+
+	return num_vfs;
+}
+#endif
+
 static const struct pci_device_id enetc_id_table[] = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_FREESCALE, 0xe001) },
+	{ PCI_DEVICE(PCI_VENDOR_ID_FREESCALE, 0xef00) },
 	{ 0, } /* End of table. */
 };
 MODULE_DEVICE_TABLE(pci, enetc_id_table);
@@ -1216,6 +1251,9 @@ static struct pci_driver enetc_driver = {
 	.id_table = enetc_id_table,
 	.probe = enetc_pci_probe,
 	.remove = enetc_pci_remove,
+#ifdef CONFIG_PCI_IOV
+	.sriov_configure = enetc_sriov_configure,
+#endif
 };
 module_pci_driver(enetc_driver);
 

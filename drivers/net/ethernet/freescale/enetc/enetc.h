@@ -80,6 +80,7 @@ static inline int enetc_bd_unused(struct enetc_bdr *bdr)
 struct enetc_si {
 	struct pci_dev *pdev;
 	struct enetc_hw hw;
+	int is_vf;
 
 	struct net_device *ndev; /* back ref. */
 };

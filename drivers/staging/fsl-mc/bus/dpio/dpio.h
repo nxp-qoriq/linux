@@ -94,6 +94,7 @@ struct dpio_attr {
 	enum dpio_channel_mode	channel_mode;
 	u8			num_priorities;
 	u32		qbman_version;
+	u32 		clk;
 };
 
 int dpio_get_attributes(struct fsl_mc_io	*mc_io,

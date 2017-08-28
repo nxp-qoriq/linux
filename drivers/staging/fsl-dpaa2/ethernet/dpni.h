@@ -923,6 +923,14 @@ int dpni_set_congestion_notification(struct fsl_mc_io *mc_io,
 			u8 tc_id,
 			const struct dpni_congestion_notification_cfg *cfg);
 
+int dpni_get_congestion_notification(
+			struct fsl_mc_io *mc_io,
+			u32 cmd_flags,
+			u16 token,
+			enum dpni_queue_type qtype,
+			u8 tc_id,
+			struct dpni_congestion_notification_cfg *cfg);
+
 /**
  * struct dpni_taildrop - Structure representing the taildrop
  * @enable:	Indicates whether the taildrop is active or not.

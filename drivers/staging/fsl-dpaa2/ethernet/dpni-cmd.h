@@ -632,4 +632,27 @@ struct dpni_cmd_set_congestion_notification {
 	u32 threshold_exit;
 };
 
+struct dpni_cmd_get_congestion_notification {
+	/* cmd word 0 */
+	u8 qtype;
+	u8 tc;
+};
+
+struct dpni_rsp_get_congestion_notification {
+	/* cmd word 0 */
+	u64 pad;
+	/* cmd word 1 */
+	u32 dest_id;
+	u16 notification_mode;
+	u8 dest_priority;
+	/* from LSB: dest_type: 4 units:2 */
+	u8 type_units;
+	/* cmd word 2 */
+	u64 message_iova;
+	/* cmd word 3 */
+	u64 message_ctx;
+	/* cmd word 4 */
+	u32 threshold_entry;
+	u32 threshold_exit;
+};
 #endif /* _FSL_DPNI_CMD_H */

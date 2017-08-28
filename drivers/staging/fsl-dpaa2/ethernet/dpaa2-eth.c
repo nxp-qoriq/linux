@@ -3009,8 +3009,37 @@ static int dpaa2_eth_dcbnl_ieee_getpfc(struct net_device *net_dev,
 				       struct ieee_pfc *pfc)
 {
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
+	struct dpni_congestion_notification_cfg notification_cfg;
+	struct dpni_link_state state;
+	int err, i;
 
 	pfc->pfc_cap = dpaa2_eth_tc_count(priv);
+
+	err = dpni_get_link_state(priv->mc_io, 0, priv->mc_token, &state);
+	if (err) {
+		netdev_err(net_dev, "ERROR %d getting link state", err);
+		return err;
+	}
+
+	if (!(state.options & DPNI_LINK_OPT_PFC_PAUSE))
+		return 0;
+
+	priv->pfc.pfc_en = 0;
+	for (i = 0; i < dpaa2_eth_tc_count(priv); i++) {
+		err = dpni_get_congestion_notification(priv->mc_io, 0,
+						       priv->mc_token,
+						       DPNI_QUEUE_RX,
+						       i, &notification_cfg);
+		if (err) {
+			netdev_err(net_dev, "Error %d getting congestion notif",
+				   err);
+			return err;
+		}
+
+		if (notification_cfg.threshold_entry)
+			priv->pfc.pfc_en |= 1 << i;
+	}
+
 	pfc->pfc_en = priv->pfc.pfc_en;
 	pfc->mbc = priv->pfc.mbc;
 	pfc->delay = priv->pfc.delay;

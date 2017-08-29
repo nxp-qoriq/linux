@@ -34,6 +34,16 @@ config FSL_DPAA2_ETH_DEBUGFS
 	default n
 	---help---
 	  Enable advanced statistics through debugfs interface.
+
+config FSL_DPAA2_ETH_DCB
+        bool "Data Center Bridging (DCB) Support"
+        default n
+        depends on DCB
+        ---help---
+          Say Y here if you want to use Data Center Bridging (DCB) features
+          (PFC) in the driver.
+
+          If unsure, say N.
 endif
 
 source "drivers/staging/fsl-dpaa2/mac/Kconfig"

@@ -1006,12 +1006,6 @@ static void enetc_netdev_setup(struct enetc_si *si, struct net_device *ndev)
 	ndev->features = NETIF_F_HIGHDMA | NETIF_F_SG;
 }
 
-static void enetc_free_netdev(struct net_device *ndev)
-{
-	unregister_netdev(ndev);
-	free_netdev(ndev);
-}
-
 static void enetc_configure_port(struct enetc_ndev_priv *priv)
 {
 	struct enetc_hw *hw = &priv->si->hw;
@@ -1086,7 +1080,6 @@ static void enetc_free_msix(struct enetc_ndev_priv *priv)
 	}
 
 	kfree(priv->int_vector);
-	pci_disable_msix(priv->si->pdev);
 	kfree(priv->msix_entries);
 }
 
@@ -1207,10 +1200,11 @@ static void enetc_pci_remove(struct pci_dev *pdev)
 
 	dev_info(&pdev->dev, "enetc_pci_remove()\n");
 
+	unregister_netdev(si->ndev);
+
 	enetc_free_msix(netdev_priv(si->ndev));
 
-	if (si->ndev)
-		enetc_free_netdev(si->ndev);
+	free_netdev(si->ndev);
 
 	iounmap(hw->reg);
 	kfree(si);

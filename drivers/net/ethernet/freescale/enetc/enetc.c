@@ -1234,7 +1234,7 @@ static int enetc_sriov_configure(struct pci_dev *dev, int num_vfs)
 #endif
 
 static const struct pci_device_id enetc_id_table[] = {
-	{ PCI_DEVICE(PCI_VENDOR_ID_FREESCALE, 0xe001) },
+	{ PCI_DEVICE(PCI_VENDOR_ID_FREESCALE, 0xe100) },
 	{ PCI_DEVICE(PCI_VENDOR_ID_FREESCALE, 0xef00) },
 	{ 0, } /* End of table. */
 };

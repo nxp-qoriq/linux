@@ -25,6 +25,7 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_RBBAR0	0x10
 #define ENETC_RBBAR1	0x14
 #define ENETC_RBPIR	0x18
+#define ENETC_RBLENR	0x20
 #define ENETC_RBIER	0xa0
 #define ENETC_RBIER_RXTIE	BIT(0)
 #define ENETC_RBIDR	0xa4
@@ -38,25 +39,27 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_TBBAR1	0x14
 #define ENETC_TBCIR	0x18
 #define ENETC_TBCISR	0x1c
+#define ENETC_TBLENR	0x20
 #define ENETC_TBCISR_IDX_MASK	0xffff
 #define ENETC_TBIER	0xa0
 #define ENETC_TBIER_TXFIE	BIT(1)
 #define ENETC_TBIDR	0xa4
 
-#define ENETC_RTBMR_RSIZE(n) __ilog2_u32((n) >> 6)
+//FIXME , BG 0.7: #define ENETC_RTBMR_RSIZE(n)  __ilog2_u32((n) >> 6)
+#define ENETC_RTBLENR_LEN(n)	(((n) >> 3) << 7)
 #define ENETC_TBMR_EN	BIT(31)
 
 /* Port regs, offset: 1_0000h */
 #define ENETC_PMR	0x10000
-#define ENETC_PMR_EN	BIT(31)
+#define ENETC_PMR_EN	GENMASK(17, 16)
 #define ENETC_PSR	0x10004 /* RO */
 #define ENETC_PSIPMR	0x10018
 #define ENETC_PCAPR0	0x10900
 #define ENETC_PCAPR1	0x10904
 
 #define ENETC_PV0CFGR	0x10920
-#define ENETC_PVCFGR_SET_TXBDR(val)	((val) & 0xffff)
-#define ENETC_PVCFGR_SET_RXBDR(val)	(((val) & 0xffff) << 8)
+#define ENETC_PVCFGR_SET_TXBDR(val)	((val) & 0xff)
+#define ENETC_PVCFGR_SET_RXBDR(val)	(((val) & 0xff) << 16)
 
 #define ENETC_PM0_CMD_CFG	0x18008
 #define ENETC_PM0_TX_EN		BIT(31)

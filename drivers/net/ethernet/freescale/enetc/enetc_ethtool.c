@@ -43,6 +43,7 @@ static void enetc_get_regs(struct net_device *ndev, struct ethtool_regs *regs,
 		PR_BDR_REG(hw, tx, i, TBBAR1);
 		PR_BDR_REG(hw, tx, i, TBCIR);
 		PR_BDR_REG(hw, tx, i, TBCISR);
+		PR_BDR_REG(hw, tx, i, TBLENR);
 		PR_BDR_REG(hw, tx, i, TBIER);
 	}
 	/** Rx BDR dump */
@@ -54,6 +55,7 @@ static void enetc_get_regs(struct net_device *ndev, struct ethtool_regs *regs,
 		PR_BDR_REG(hw, rx, i, RBBAR0);
 		PR_BDR_REG(hw, rx, i, RBBAR1);
 		PR_BDR_REG(hw, rx, i, RBPIR);
+		PR_BDR_REG(hw, rx, i, RBLENR);
 		PR_BDR_REG(hw, rx, i, RBICIR0);
 		PR_BDR_REG(hw, rx, i, RBIER);
 	}
@@ -63,6 +65,7 @@ static void enetc_get_regs(struct net_device *ndev, struct ethtool_regs *regs,
 	PR_REG(hw, PSIPMR);
 	PR_REG(hw, PCAPR0);
 	PR_REG(hw, PCAPR1);
+	PR_REG(hw, PV0CFGR);
 	PR_REG(hw, PM0_CMD_CFG);
 	PR_REG(hw, PM0_MAXFRM);
 

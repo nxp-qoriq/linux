@@ -710,10 +710,12 @@ static void enetc_setup_txbdr(struct enetc_hw *hw, struct enetc_bdr *tx_ring)
 	enetc_txbdr_wr(hw, idx, ENETC_TBBAR1,
 		       upper_32_bits(tx_ring->bd_dma_base));
 
-	WARN_ON(tx_ring->bd_count & 0x3f); // must be multiple of 64
+	WARN_ON(tx_ring->bd_count & 0x3f); //FIXME: must be multiple of 64
 
-	tbmr = ENETC_RTBMR_RSIZE(tx_ring->bd_count);
-	tbmr |= ENETC_TBMR_EN;
+	enetc_txbdr_wr(hw, idx, ENETC_TBLENR,
+		       ENETC_RTBLENR_LEN(tx_ring->bd_count));
+
+	tbmr = ENETC_TBMR_EN;
 	/* enable ring */
 	enetc_txbdr_wr(hw, idx, ENETC_TBMR, tbmr);
 
@@ -736,15 +738,17 @@ static void enetc_setup_rxbdr(struct enetc_hw *hw, struct enetc_bdr *rx_ring)
 	enetc_rxbdr_wr(hw, idx, ENETC_RBBAR1,
 		       upper_32_bits(rx_ring->bd_dma_base));
 
-	WARN_ON(rx_ring->bd_count & 0x3f); // must be multiple of 64
+	WARN_ON(rx_ring->bd_count & 0x3f); //FIXME: must be multiple of 64
+
+	enetc_rxbdr_wr(hw, idx, ENETC_RBLENR,
+		       ENETC_RTBLENR_LEN(rx_ring->bd_count));
 
 	enetc_rxbdr_wr(hw, idx, ENETC_RBBSR, ENETC_RXB_DMA_SIZE);
 
 	/* enable Rx ints by setting pkt thr to 1 (BG 0.7) */
 	enetc_rxbdr_wr(hw, idx, ENETC_RBICIR0, ENETC_RBICIR0_ICEN | 0x1);
 
-	rbmr = ENETC_RTBMR_RSIZE(rx_ring->bd_count);
-	rbmr |= ENETC_RBMR_EN;
+	rbmr = ENETC_RBMR_EN;
 	/* enable ring */
 	enetc_rxbdr_wr(hw, idx, ENETC_RBMR, rbmr);
 

@@ -281,7 +281,7 @@ static struct fsl_qspi_devtype_data ls2080a_data = {
 	.rxfifo = 128,
 	.txfifo = 64,
 	.ahb_buf_size = 1024,
-	.driver_data = QUADSPI_AMBA_BASE_INTERNAL,
+	.driver_data = QUADSPI_AMBA_BASE_INTERNAL | QUADSPI_QUIRK_TKT253890,
 };
 
 #define FSL_QSPI_MAX_CHIP	4

@@ -107,6 +107,9 @@ int dwc3_host_init(struct dwc3 *dwc)
 	if (dwc->quirk_stop_transfer_in_block)
 		props[prop_idx++].name = "quirk-stop-transfer-in-block";
 
+	if (dwc->quirk_stop_ep_in_u1)
+		props[prop_idx++].name = "quirk-stop-ep-in-u1";
+
 	if (dwc->usb3_lpm_capable)
 		props[prop_idx++].name = "usb3-lpm-capable";
 

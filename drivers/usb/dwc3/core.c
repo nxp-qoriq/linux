@@ -1079,6 +1079,8 @@ static void dwc3_get_properties(struct dwc3 *dwc)
 				"snps,quirk_reverse_in_out");
 	dwc->quirk_stop_transfer_in_block = device_property_read_bool(dev,
 				"snps,quirk_stop_transfer_in_block");
+	dwc->quirk_stop_ep_in_u1 = device_property_read_bool(dev,
+				"snps,quirk_stop_ep_in_u1");
 
 	dwc->needs_fifo_resize = of_property_read_bool(node, "tx-fifo-resize");
 

@@ -1077,6 +1077,9 @@ static void dwc3_get_properties(struct dwc3 *dwc)
 				"snps,usb3_lpm_capable");
 	dwc->quirk_reverse_in_out = device_property_read_bool(dev,
 				"snps,quirk_reverse_in_out");
+	dwc->quirk_stop_transfer_in_block = device_property_read_bool(dev,
+				"snps,quirk_stop_transfer_in_block");
+
 	dwc->needs_fifo_resize = of_property_read_bool(node, "tx-fifo-resize");
 
 	dwc->configure_gfladj =

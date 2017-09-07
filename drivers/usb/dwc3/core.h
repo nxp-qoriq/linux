@@ -1019,6 +1019,7 @@ struct dwc3 {
 	unsigned		tx_de_emphasis:2;
 	unsigned		disable_devinit_u1u2_quirk:1;
 	unsigned                quirk_reverse_in_out:1;
+	unsigned                quirk_stop_transfer_in_block:1;
 
 	u16                     imod_interval;
 };

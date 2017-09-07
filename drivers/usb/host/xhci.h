@@ -1659,6 +1659,7 @@ struct xhci_hcd {
 #define XHCI_MISSING_CAS	(1 << 24)
 #define XHCI_DIS_U1U2_WHEN_U3 (1 << 32)
 #define XHCI_REVERSE_IN_OUT    (1 << 29)
+#define XHCI_STOP_TRANSFER_IN_BLOCK    (1 << 30)
 /* For controller with a broken Port Disable implementation */
 #define XHCI_BROKEN_PORT_PED	(1 << 25)
 #define XHCI_LIMIT_ENDPOINT_INTERVAL_7	(1 << 26)

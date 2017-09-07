@@ -1578,6 +1578,19 @@ int xhci_urb_dequeue(struct usb_hcd *hcd, struct urb *urb, int status)
 		xhci_queue_stop_endpoint(xhci, command, urb->dev->slot_id,
 					 ep_index, 0);
 		xhci_ring_cmd_db(xhci);
+
+		/*
+		 *erratum A-009668: Stop Endpoint Command does not complete.
+		 *Workaround: Instead of issuing a Stop Endpoint Command,
+		 *issue a Disable Slot Command with the corresponding slot ID.
+		 *Alternately, you can issue an Address Device Command with
+		 *BSR=1
+		 */
+		if ((urb->dev->speed <= USB_SPEED_HIGH) &&
+					(xhci->quirks & XHCI_STOP_EP_IN_U1)) {
+			xhci_queue_slot_control(xhci, command, TRB_DISABLE_SLOT,
+			urb->dev->slot_id);
+		}
 	}
 done:
 	spin_unlock_irqrestore(&xhci->lock, flags);

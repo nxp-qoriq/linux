@@ -854,6 +854,7 @@ struct dwc3_scratchpad_array {
  *			provide a free-running PHY clock.
  * @dis_del_phy_power_chg_quirk: set if we disable delay phy power
  *			change quirk.
+ * @quirk_stop_ep_in_u1: replace stop commad with disable slot command
  * @tx_de_emphasis_quirk: set if we enable Tx de-emphasis quirk
  * @tx_de_emphasis: Tx de-emphasis value
  * 	0	- -6dB de-emphasis
@@ -1017,6 +1018,7 @@ struct dwc3 {
 
 	unsigned		tx_de_emphasis_quirk:1;
 	unsigned		tx_de_emphasis:2;
+	unsigned                quirk_stop_ep_in_u1:1;
 	unsigned		disable_devinit_u1u2_quirk:1;
 
 	u16                     imod_interval;

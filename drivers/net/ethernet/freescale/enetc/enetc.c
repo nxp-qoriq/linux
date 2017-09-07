@@ -970,6 +970,25 @@ static int enetc_set_mac_addr(struct net_device *ndev, void *addr)
 	return 0;
 }
 
+static void enetc_set_rx_mode(struct net_device *ndev)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_hw *hw = &priv->si->hw;
+	u32 psipmr = 0;
+
+	if (ndev->flags & IFF_PROMISC) {
+		/* enable promisc mode for SI0 (PF) */
+		psipmr = ENETC_PSIPMR_SET_UP(0) | ENETC_PSIPMR_SET_MP(0);
+	} else if (ndev->flags & IFF_ALLMULTI) {
+		/* enable multi cast promisc mode for SI0 (PF) */
+		psipmr = ENETC_PSIPMR_SET_MP(0);
+	}
+
+	psipmr |= enetc_rd(hw, ENETC_PSIPMR) &
+		  ~(ENETC_PSIPMR_SET_UP(0) | ENETC_PSIPMR_SET_MP(0));
+	enetc_wr(hw, ENETC_PSIPMR, psipmr);
+}
+
 static struct net_device_stats *enetc_get_stats(struct net_device *ndev)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
@@ -1004,6 +1023,7 @@ static const struct net_device_ops enetc_ndev_ops = {
 	.ndo_start_xmit		= enetc_xmit,
 	.ndo_get_stats		= enetc_get_stats,
 	.ndo_set_mac_address	= enetc_set_mac_addr,
+	.ndo_set_rx_mode	= enetc_set_rx_mode,
 };
 
 static void enetc_netdev_setup(struct enetc_si *si, struct net_device *ndev)

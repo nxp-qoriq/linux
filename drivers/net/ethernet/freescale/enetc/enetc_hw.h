@@ -4,6 +4,9 @@
 #define ENETC_SIMR	0
 #define ENETC_SIMR_EN	BIT(31)
 
+#define ENETC_SIPMAR0	0x80
+#define ENETC_SIPMAR1	0x84
+
 #define ENETC_SICAPR0	0x900
 #define ENETC_SICAPR1	0x904
 
@@ -54,6 +57,8 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PMR_EN	GENMASK(17, 16)
 #define ENETC_PSR	0x10004 /* RO */
 #define ENETC_PSIPMR	0x10018
+#define ENETC_PSIPMAR0(n)	(0x10100 + (n) * 0x20) /* n = SI index */
+#define ENETC_PSIPMAR1(n)	(0x10104 + (n) * 0x20)
 #define ENETC_PCAPR0	0x10900
 #define ENETC_PCAPR1	0x10904
 

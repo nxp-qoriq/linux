@@ -782,9 +782,6 @@ static void enetc_configure_port_mac(struct enetc_si *si)
 
 	enetc_wr(&si->hw, ENETC_PM0_CMD_CFG,
 		 ENETC_PM0_TX_EN | ENETC_PM0_RX_EN);
-
-	/* enable promisc for now (FIXME) */
-	enetc_wr(&si->hw, ENETC_PSIPMR, 0x1);
 }
 
 static void enetc_configure_hw_vector(struct enetc_hw *hw, int idx, u16 entry)
@@ -944,14 +941,31 @@ static int enetc_close(struct net_device *ndev)
 	return 0;
 }
 
+static void enetc_set_primary_mac_addr(struct enetc_hw *hw, const u8 *addr)
+{
+	u16 upper = ntohs(*(const u16 *)addr);
+	u32 lower = ntohl(*(const u32 *)(addr + 2));
+
+	enetc_wr(hw, ENETC_PSIPMAR0(0), lower);
+	enetc_wr(hw, ENETC_PSIPMAR1(0), upper << 16);
+}
+
 static int enetc_set_mac_addr(struct net_device *ndev, void *addr)
 {
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	struct sockaddr *saddr = addr;
 
 	if (!is_valid_ether_addr(saddr->sa_data))
 		return -EADDRNOTAVAIL;
 
+	// FIXME: VF must not have access to this, see also ndo_set_vf_mac()
+	if (priv->si->is_vf) {
+		WARN_ON(1);
+		return -EOPNOTSUPP;
+	}
+
 	memcpy(ndev->dev_addr, saddr->sa_data, ndev->addr_len);
+	enetc_set_primary_mac_addr(&priv->si->hw, saddr->sa_data);
 
 	return 0;
 }

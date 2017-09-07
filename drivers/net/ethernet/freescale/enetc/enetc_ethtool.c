@@ -26,6 +26,8 @@ static void enetc_get_regs(struct net_device *ndev, struct ethtool_regs *regs,
 
 	/* SI regs */
 	PR_REG(hw, SIMR);
+	PR_REG(hw, SIPMAR0);
+	PR_REG(hw, SIPMAR1);
 	PR_REG(hw, SICAPR0);
 	PR_REG(hw, SICAPR1);
 
@@ -63,6 +65,8 @@ static void enetc_get_regs(struct net_device *ndev, struct ethtool_regs *regs,
 	PR_REG(hw, PMR);
 	PR_REG(hw, PSR);
 	PR_REG(hw, PSIPMR);
+	PR_REG(hw, PSIPMAR0(0));
+	PR_REG(hw, PSIPMAR1(0));
 	PR_REG(hw, PCAPR0);
 	PR_REG(hw, PCAPR1);
 	PR_REG(hw, PV0CFGR);

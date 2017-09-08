@@ -772,16 +772,16 @@ static void enetc_setup_bdrs(struct enetc_ndev_priv *priv)
 static void enetc_enable_port(struct enetc_si *si)
 {
 	enetc_wr(&si->hw, ENETC_SIMR, ENETC_SIMR_EN);
-	enetc_wr(&si->hw, ENETC_PMR, ENETC_PMR_EN);
+	enetc_port_wr(&si->hw, ENETC_PMR, ENETC_PMR_EN);
 }
 
 static void enetc_configure_port_mac(struct enetc_si *si)
 {
-	enetc_wr(&si->hw, ENETC_PM0_MAXFRM,
-		 ENETC_SET_MAXFRM(ENETC_RX_MAXFRM_SIZE));
+	enetc_port_wr(&si->hw, ENETC_PM0_MAXFRM,
+		      ENETC_SET_MAXFRM(ENETC_RX_MAXFRM_SIZE));
 
-	enetc_wr(&si->hw, ENETC_PM0_CMD_CFG,
-		 ENETC_PM0_TX_EN | ENETC_PM0_RX_EN);
+	enetc_port_wr(&si->hw, ENETC_PM0_CMD_CFG,
+		      ENETC_PM0_TX_EN | ENETC_PM0_RX_EN);
 }
 
 static void enetc_configure_hw_vector(struct enetc_hw *hw, int idx, u16 entry)
@@ -946,8 +946,8 @@ static void enetc_set_primary_mac_addr(struct enetc_hw *hw, const u8 *addr)
 	u16 upper = ntohs(*(const u16 *)addr);
 	u32 lower = ntohl(*(const u32 *)(addr + 2));
 
-	enetc_wr(hw, ENETC_PSIPMAR0(0), lower);
-	enetc_wr(hw, ENETC_PSIPMAR1(0), upper << 16);
+	enetc_port_wr(hw, ENETC_PSIPMAR0(0), lower);
+	enetc_port_wr(hw, ENETC_PSIPMAR1(0), upper << 16);
 }
 
 static int enetc_set_mac_addr(struct net_device *ndev, void *addr)
@@ -978,9 +978,9 @@ static void enetc_set_rx_mode(struct net_device *ndev)
 		psipmr = ENETC_PSIPMR_SET_MP(0);
 	}
 
-	psipmr |= enetc_rd(hw, ENETC_PSIPMR) &
+	psipmr |= enetc_port_rd(hw, ENETC_PSIPMR) &
 		  ~(ENETC_PSIPMR_SET_UP(0) | ENETC_PSIPMR_SET_MP(0));
-	enetc_wr(hw, ENETC_PSIPMR, psipmr);
+	enetc_port_wr(hw, ENETC_PSIPMR, psipmr);
 }
 
 static struct net_device_stats *enetc_get_stats(struct net_device *ndev)
@@ -1045,7 +1045,7 @@ static void enetc_configure_port(struct enetc_ndev_priv *priv)
 
 	val = ENETC_PVCFGR_SET_TXBDR(priv->num_tx_rings);
 	val |= ENETC_PVCFGR_SET_RXBDR(priv->num_rx_rings);
-	enetc_wr(hw, ENETC_PV0CFGR, val);
+	enetc_port_wr(hw, ENETC_PV0CFGR, val);
 
 	enetc_configure_port_mac(priv->si);
 	enetc_enable_port(priv->si);
@@ -1120,6 +1120,7 @@ static int enetc_pci_probe(struct pci_dev *pdev,
 	struct enetc_si *si;
 	struct enetc_hw *hw;
 	int err;
+	int len;
 
 	err = pci_enable_device_mem(pdev);
 	if (err) {
@@ -1155,14 +1156,17 @@ static int enetc_pci_probe(struct pci_dev *pdev,
 	si->pdev = pdev;
 	hw = &si->hw;
 
-	hw->reg = ioremap(pci_resource_start(pdev, 0),
-			  pci_resource_len(pdev, 0));
-
+	len = pci_resource_len(pdev, 0);
+	hw->reg = ioremap(pci_resource_start(pdev, 0), len);
 	if (!hw->reg) {
 		err = -ENXIO;
 		dev_err(&pdev->dev, "ioremap() failed\n");
 		goto err_ioremap;
 	}
+	if (len > ENETC_PORT_BASE)
+		hw->port = hw->reg + ENETC_PORT_BASE;
+	if (len > ENETC_GLOBAL_BASE)
+		hw->global = hw->reg + ENETC_GLOBAL_BASE;
 
 	ndev = alloc_etherdev_mq(sizeof(*priv), ENETC_MAX_NUM_TXQS);
 	if (!ndev) {

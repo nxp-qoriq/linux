@@ -53,35 +53,42 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_TBMR_EN	BIT(31)
 
 /* Port regs, offset: 1_0000h */
-#define ENETC_PMR	0x10000
+#define ENETC_PORT_BASE	0x10000
+#define ENETC_PMR	0x00000
 #define ENETC_PMR_EN	GENMASK(17, 16)
-#define ENETC_PSR	0x10004 /* RO */
-#define ENETC_PSIPMR	0x10018
+#define ENETC_PSR	0x00004 /* RO */
+#define ENETC_PSIPMR	0x00018
 #define ENETC_PSIPMR_SET_UP(n)	(0x1 << (n)) /* n = SI index */
 #define ENETC_PSIPMR_SET_MP(n)	(0x1 << ((n) + 8))
-#define ENETC_PSIPMAR0(n)	(0x10100 + (n) * 0x20) /* n = SI index */
-#define ENETC_PSIPMAR1(n)	(0x10104 + (n) * 0x20)
-#define ENETC_PCAPR0	0x10900
-#define ENETC_PCAPR1	0x10904
+#define ENETC_PSIPMAR0(n)	(0x00100 + (n) * 0x20) /* n = SI index */
+#define ENETC_PSIPMAR1(n)	(0x00104 + (n) * 0x20)
+#define ENETC_PCAPR0	0x00900
+#define ENETC_PCAPR1	0x00904
 
-#define ENETC_PV0CFGR	0x10920
+#define ENETC_PV0CFGR	0x00920
 #define ENETC_PVCFGR_SET_TXBDR(val)	((val) & 0xff)
 #define ENETC_PVCFGR_SET_RXBDR(val)	(((val) & 0xff) << 16)
 
-#define ENETC_PM0_CMD_CFG	0x18008
+#define ENETC_PM0_CMD_CFG	0x08008
 #define ENETC_PM0_TX_EN		BIT(31)
 #define ENETC_PM0_RX_EN		BIT(30)
 
-#define ENETC_PM0_MAXFRM	0x18014
+#define ENETC_PM0_MAXFRM	0x08014
 #define ENETC_SET_MAXFRM(val)	((val) << 16)
 
 /* Global regs, offset: 2_0000h */
-#define ENETC_G_EIPBRR0		0x20bf8
-#define ENETC_G_EIPBRR1		0x20bfc
+#define ENETC_GLOBAL_BASE		0x20000
+#define ENETC_G_EIPBRR0		0x00bf8
+#define ENETC_G_EIPBRR1		0x00bfc
 
 /* PCI device info */
 struct enetc_hw {
+	/* SI registers, used by all PCI functions */
 	void __iomem *reg;
+	/* Port registers, PF only */
+	void __iomem *port;
+	/* IP global registers, PF only */
+	void __iomem *global;
 };
 
 /* general register accessors */
@@ -89,6 +96,12 @@ struct enetc_hw {
 #define enetc_wr_reg(reg, val)	iowrite32((val), (reg))
 #define enetc_rd(hw, off)	enetc_rd_reg((hw)->reg + (off))
 #define enetc_wr(hw, off, val)	enetc_wr_reg((hw)->reg + (off), val)
+/* port register accessors - PF only */
+#define enetc_port_rd(hw, off)		enetc_rd_reg((hw)->port + (off))
+#define enetc_port_wr(hw, off, val)	enetc_wr_reg((hw)->port + (off), val)
+/* global register accessors - PF only */
+#define enetc_global_rd(hw, off)	enetc_rd_reg((hw)->global + (off))
+#define enetc_global_wr(hw, off, val)	enetc_wr_reg((hw)->global + (off), val)
 /* BDR register accessors, see ENETC_BDR() */
 #define enetc_bdr_rd(hw, t, n, off) \
 				enetc_rd(hw, ENETC_BDR(t, n, off))

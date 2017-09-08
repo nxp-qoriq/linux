@@ -5,6 +5,10 @@
 
 #define PR_REG(hw, NAME)	pr_info(PR_REG_FMT_STR(NAME), ENETC_##NAME, \
 					enetc_rd(hw, ENETC_##NAME))
+#define PR_PREG(hw, NAME)	pr_info(PR_REG_FMT_STR(NAME), ENETC_##NAME, \
+					enetc_port_rd(hw, ENETC_##NAME))
+#define PR_GREG(hw, NAME)	pr_info(PR_REG_FMT_STR(NAME), ENETC_##NAME, \
+					enetc_global_rd(hw, ENETC_##NAME))
 #define enetc_rxbdr_off(i, off) ENETC_BDR(RX, i, (off))
 #define enetc_txbdr_off(i, off) ENETC_BDR(TX, i, (off))
 #define PR_BDR_REG(hw, t, i, NAME) \
@@ -61,21 +65,26 @@ static void enetc_get_regs(struct net_device *ndev, struct ethtool_regs *regs,
 		PR_BDR_REG(hw, rx, i, RBICIR0);
 		PR_BDR_REG(hw, rx, i, RBIER);
 	}
-	/* Port regs */
-	PR_REG(hw, PMR);
-	PR_REG(hw, PSR);
-	PR_REG(hw, PSIPMR);
-	PR_REG(hw, PSIPMAR0(0));
-	PR_REG(hw, PSIPMAR1(0));
-	PR_REG(hw, PCAPR0);
-	PR_REG(hw, PCAPR1);
-	PR_REG(hw, PV0CFGR);
-	PR_REG(hw, PM0_CMD_CFG);
-	PR_REG(hw, PM0_MAXFRM);
 
-	/* GLobal regs */
-	PR_REG(hw, G_EIPBRR0);
-	PR_REG(hw, G_EIPBRR1);
+	if (hw->port) {
+		/* Port regs */
+		PR_PREG(hw, PMR);
+		PR_PREG(hw, PSR);
+		PR_PREG(hw, PSIPMR);
+		PR_PREG(hw, PSIPMAR0(0));
+		PR_PREG(hw, PSIPMAR1(0));
+		PR_PREG(hw, PCAPR0);
+		PR_PREG(hw, PCAPR1);
+		PR_PREG(hw, PV0CFGR);
+		PR_PREG(hw, PM0_CMD_CFG);
+		PR_PREG(hw, PM0_MAXFRM);
+	}
+
+	if (hw->global) {
+		/* GLobal regs */
+		PR_GREG(hw, G_EIPBRR0);
+		PR_GREG(hw, G_EIPBRR1);
+	}
 }
 
 const struct ethtool_ops enetc_ethtool_ops = {

@@ -769,12 +769,6 @@ static void enetc_setup_bdrs(struct enetc_ndev_priv *priv)
 		enetc_setup_rxbdr(&priv->si->hw, priv->rx_ring[i]);
 }
 
-static void enetc_enable_port(struct enetc_si *si)
-{
-	enetc_wr(&si->hw, ENETC_SIMR, ENETC_SIMR_EN);
-	enetc_port_wr(&si->hw, ENETC_PMR, ENETC_PMR_EN);
-}
-
 static void enetc_configure_port_mac(struct enetc_si *si)
 {
 	enetc_port_wr(&si->hw, ENETC_PM0_MAXFRM,
@@ -950,6 +944,12 @@ static void enetc_set_primary_mac_addr(struct enetc_hw *hw, const u8 *addr)
 	enetc_port_wr(hw, ENETC_PSIPMAR1(0), upper << 16);
 }
 
+static void enetc_get_primary_mac_addr(struct enetc_hw *hw, u8 *addr)
+{
+	*(u32 *)(addr + 2) = htonl((u32)enetc_rd(hw, ENETC_SIPMAR0));
+	*(u16 *)addr = htons(enetc_rd(hw, ENETC_SIPMAR1) >> 16);
+}
+
 static int enetc_set_mac_addr(struct net_device *ndev, void *addr)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
@@ -1038,6 +1038,20 @@ static void enetc_netdev_setup(struct enetc_si *si, struct net_device *ndev)
 	ndev->features = NETIF_F_HIGHDMA | NETIF_F_SG;
 }
 
+static void enetc_port_setup_primary_mac_address(struct enetc_ndev_priv *priv)
+{
+	unsigned char mac_addr[MAX_ADDR_LEN];
+	struct enetc_hw *hw = &priv->si->hw;
+
+	enetc_get_primary_mac_addr(hw, mac_addr);
+	if (is_zero_ether_addr(mac_addr)) {
+		eth_random_addr(mac_addr);
+		dev_info(priv->dev, "no MAC address specified, using %pM\n",
+			 mac_addr);
+		enetc_set_primary_mac_addr(hw, mac_addr);
+	}
+}
+
 static void enetc_configure_port(struct enetc_ndev_priv *priv)
 {
 	struct enetc_hw *hw = &priv->si->hw;
@@ -1048,7 +1062,21 @@ static void enetc_configure_port(struct enetc_ndev_priv *priv)
 	enetc_port_wr(hw, ENETC_PV0CFGR, val);
 
 	enetc_configure_port_mac(priv->si);
-	enetc_enable_port(priv->si);
+	/* enable port */
+	enetc_port_wr(hw, ENETC_PMR, ENETC_PMR_EN);
+
+	enetc_port_setup_primary_mac_address(priv);
+}
+
+static void enetc_configure_si(struct enetc_ndev_priv *priv)
+{
+	struct enetc_hw *hw = &priv->si->hw;
+
+	/* enable SI */
+	enetc_wr(hw, ENETC_SIMR, ENETC_SIMR_EN);
+
+	/* pick up primary MAC address from SI */
+	enetc_get_primary_mac_addr(hw, priv->ndev->dev_addr);
 }
 
 static int enetc_alloc_msix(struct enetc_ndev_priv *priv)
@@ -1181,6 +1209,7 @@ static int enetc_pci_probe(struct pci_dev *pdev,
 	enetc_sw_init(priv);
 
 	enetc_configure_port(priv);
+	enetc_configure_si(priv);
 
 	err = enetc_alloc_msix(priv);
 	if (err) {

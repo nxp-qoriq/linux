@@ -1,0 +1,52 @@
+&fman1 {
+	compatible = "fsl,fman", "simple-bus";
+
+	/* tx - 1g - 0 */
+	port@a8000 {
+		fsl,qman-channel-id = <0x61>;
+	};
+	/* tx - 1g - 1 */
+	port@a9000 {
+		fsl,qman-channel-id = <0x62>;
+	};
+	/* tx - 1g - 2 */
+	port@aa000 {
+		fsl,qman-channel-id = <0x63>;
+	};
+	/* tx - 1g - 3 */
+	port@ab000 {
+		fsl,qman-channel-id = <0x64>;
+	};
+	/* tx - 1g - 4 */
+	port@ac000 {
+		fsl,qman-channel-id = <0x65>;
+	};
+	/* tx - 10g - 0 */
+	port@b0000 {
+		fsl,qman-channel-id = <0x60>;
+	};
+	/* offline 0 */
+	port@81000 {
+		fsl,qman-channel-id = <0x66>;
+	};
+	/* offline 1 */
+	port@82000 {
+		fsl,qman-channel-id = <0x67>;
+	};
+	/* offline 2 */
+	port@83000 {
+		fsl,qman-channel-id = <0x68>;
+	};
+	/* offline 3 */
+	port@84000 {
+		fsl,qman-channel-id = <0x69>;
+	};
+	/* offline 4 */
+	port@85000 {
+		fsl,qman-channel-id = <0x6a>;
+	};
+	/* offline 5 */
+	port@86000 {
+		fsl,qman-channel-id = <0x6b>;
+	};
+};

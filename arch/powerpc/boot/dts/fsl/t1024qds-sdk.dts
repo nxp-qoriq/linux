@@ -1,0 +1,4 @@
+#include "t1024qds.dts"
+
+/include/ "qoriq-fman3-0-sdk.dtsi"
+/include/ "qoriq-dpaa-eth.dtsi"

@@ -1,0 +1,4 @@
+/include/ "p2041rdb.dts"
+
+/include/ "qoriq-fman-0-sdk.dtsi"
+/include/ "qoriq-dpaa-eth.dtsi"

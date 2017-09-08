@@ -958,12 +958,6 @@ static int enetc_set_mac_addr(struct net_device *ndev, void *addr)
 	if (!is_valid_ether_addr(saddr->sa_data))
 		return -EADDRNOTAVAIL;
 
-	// FIXME: VF must not have access to this, see also ndo_set_vf_mac()
-	if (priv->si->is_vf) {
-		WARN_ON(1);
-		return -EOPNOTSUPP;
-	}
-
 	memcpy(ndev->dev_addr, saddr->sa_data, ndev->addr_len);
 	enetc_set_primary_mac_addr(&priv->si->hw, saddr->sa_data);
 
@@ -1048,9 +1042,6 @@ static void enetc_configure_port(struct enetc_ndev_priv *priv)
 {
 	struct enetc_hw *hw = &priv->si->hw;
 	u32 val;
-
-	if (priv->si->is_vf)
-		return;
 
 	val = ENETC_PVCFGR_SET_TXBDR(priv->num_tx_rings);
 	val |= ENETC_PVCFGR_SET_RXBDR(priv->num_rx_rings);
@@ -1164,17 +1155,8 @@ static int enetc_pci_probe(struct pci_dev *pdev,
 	si->pdev = pdev;
 	hw = &si->hw;
 
-	if(pdev->device == 0xef00) {
-		/* VF fix-ups */
-		/* ENETC regs are in VF BAR4 instead of VF BAR0 */
-		dev_info(&pdev->dev,
-				"VF doesn't have BAR0, map BAR4 instead");
-		hw->reg = pci_iomap(pdev, 4, pci_resource_len(pdev, 4));
-		si->is_vf = 1;
-	} else {
-		hw->reg = ioremap(pci_resource_start(pdev, 0),
-				  pci_resource_len(pdev, 0));
-	}
+	hw->reg = ioremap(pci_resource_start(pdev, 0),
+			  pci_resource_len(pdev, 0));
 
 	if (!hw->reg) {
 		err = -ENXIO;
@@ -1273,7 +1255,6 @@ static int enetc_sriov_configure(struct pci_dev *dev, int num_vfs)
 
 static const struct pci_device_id enetc_id_table[] = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_FREESCALE, 0xe100) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_FREESCALE, 0xef00) },
 	{ 0, } /* End of table. */
 };
 MODULE_DEVICE_TABLE(pci, enetc_id_table);

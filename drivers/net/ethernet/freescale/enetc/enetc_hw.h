@@ -1,5 +1,8 @@
 #include <linux/bitops.h>
 
+/* ENETC register block BAR */
+#define ENETC_BAR_REGS	0
+
 /* SI regs, offset: 0h */
 #define ENETC_SIMR	0
 #define ENETC_SIMR_EN	BIT(31)
@@ -55,7 +58,7 @@ enum enetc_bdr_type {TX, RX};
 /* Port regs, offset: 1_0000h */
 #define ENETC_PORT_BASE	0x10000
 #define ENETC_PMR	0x00000
-#define ENETC_PMR_EN	GENMASK(17, 16)
+#define ENETC_PMR_EN	GENMASK(18, 16)
 #define ENETC_PSR	0x00004 /* RO */
 #define ENETC_PSIPMR	0x00018
 #define ENETC_PSIPMR_SET_UP(n)	(0x1 << (n)) /* n = SI index */
@@ -65,7 +68,7 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PCAPR0	0x00900
 #define ENETC_PCAPR1	0x00904
 
-#define ENETC_PV0CFGR	0x00920
+#define ENETC_PV0CFGR(n)	(0x00920 + (n) * 0x10)  /* n = SI index */
 #define ENETC_PVCFGR_SET_TXBDR(val)	((val) & 0xff)
 #define ENETC_PVCFGR_SET_RXBDR(val)	(((val) & 0xff) << 16)
 

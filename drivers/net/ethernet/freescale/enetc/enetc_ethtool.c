@@ -75,7 +75,7 @@ static void enetc_get_regs(struct net_device *ndev, struct ethtool_regs *regs,
 		PR_PREG(hw, PSIPMAR1(0));
 		PR_PREG(hw, PCAPR0);
 		PR_PREG(hw, PCAPR1);
-		PR_PREG(hw, PV0CFGR);
+		PR_PREG(hw, PV0CFGR(0));
 		PR_PREG(hw, PM0_CMD_CFG);
 		PR_PREG(hw, PM0_MAXFRM);
 	}

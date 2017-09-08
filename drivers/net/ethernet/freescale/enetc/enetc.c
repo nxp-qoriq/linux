@@ -1059,7 +1059,7 @@ static void enetc_configure_port(struct enetc_ndev_priv *priv)
 
 	val = ENETC_PVCFGR_SET_TXBDR(priv->num_tx_rings);
 	val |= ENETC_PVCFGR_SET_RXBDR(priv->num_rx_rings);
-	enetc_port_wr(hw, ENETC_PV0CFGR, val);
+	enetc_port_wr(hw, ENETC_PV0CFGR(0), val);
 
 	enetc_configure_port_mac(priv->si);
 	/* enable port */
@@ -1184,8 +1184,8 @@ static int enetc_pci_probe(struct pci_dev *pdev,
 	si->pdev = pdev;
 	hw = &si->hw;
 
-	len = pci_resource_len(pdev, 0);
-	hw->reg = ioremap(pci_resource_start(pdev, 0), len);
+	len = pci_resource_len(pdev, ENETC_BAR_REGS);
+	hw->reg = ioremap(pci_resource_start(pdev, ENETC_BAR_REGS), len);
 	if (!hw->reg) {
 		err = -ENXIO;
 		dev_err(&pdev->dev, "ioremap() failed\n");

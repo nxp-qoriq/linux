@@ -591,4 +591,11 @@
 		pfe_mac1: ethernet@1 {
 		};
 	};
+
+	firmware {
+		optee {
+			compatible = "linaro,optee-tz";
+			method = "smc";
+		};
+	};
 };

@@ -1437,19 +1437,8 @@ void cnstr_shdsc_rfc4543_encap(u32 * const desc, struct alginfo *cdata,
 			 OP_ALG_ENCRYPT);
 
 	if (is_qi) {
-		u32 *wait_load_cmd;
-
-		/* REG3 = assoclen */
-		// TODO: is this still needed? REG3 is overwritten with seqinlen
-		append_seq_load(desc, 4, LDST_CLASS_DECO |
-				LDST_SRCDST_WORD_DECO_MATH3 |
-				(4 << LDST_OFFSET_SHIFT));
-
-		wait_load_cmd = append_jump(desc, JUMP_JSL | JUMP_TEST_ALL |
-					    JUMP_COND_CALM | JUMP_COND_NCP |
-					    JUMP_COND_NOP | JUMP_COND_NIP |
-					    JUMP_COND_NIFP);
-		set_jump_tgt_here(desc, wait_load_cmd);
+		/* assoclen is not needed, skip it */
+		append_seq_fifo_load(desc, 4, FIFOLD_CLASS_SKIP);
 
 		/* Read salt and IV */
 		append_fifo_load_as_imm(desc, (void *)(cdata->key_virt +
@@ -1533,19 +1522,8 @@ void cnstr_shdsc_rfc4543_decap(u32 * const desc, struct alginfo *cdata,
 			 OP_ALG_DECRYPT | OP_ALG_ICV_ON);
 
 	if (is_qi) {
-		u32 *wait_load_cmd;
-
-		/* REG3 = assoclen */
-		// TODO: is this still needed? REG3 is overwritten with seqinlen
-		append_seq_load(desc, 4, LDST_CLASS_DECO |
-				LDST_SRCDST_WORD_DECO_MATH3 |
-				(4 << LDST_OFFSET_SHIFT));
-
-		wait_load_cmd = append_jump(desc, JUMP_JSL | JUMP_TEST_ALL |
-					    JUMP_COND_CALM | JUMP_COND_NCP |
-					    JUMP_COND_NOP | JUMP_COND_NIP |
-					    JUMP_COND_NIFP);
-		set_jump_tgt_here(desc, wait_load_cmd);
+		/* assoclen is not needed, skip it */
+		append_seq_fifo_load(desc, 4, FIFOLD_CLASS_SKIP);
 
 		/* Read salt and IV */
 		append_fifo_load_as_imm(desc, (void *)(cdata->key_virt +

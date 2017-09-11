@@ -687,8 +687,7 @@ int dpseci_get_api_version(struct fsl_mc_io *mc_io, u32 cmd_flags,
 	int err;
 
 	cmd.header = mc_encode_cmd_header(DPSECI_CMDID_GET_API_VERSION,
-					cmd_flags,
-					0);
+					  cmd_flags, 0);
 	err = mc_send_command(mc_io, &cmd);
 	if (err)
 		return err;

@@ -2761,7 +2761,7 @@ static int __init caam_qi_algapi_init(void)
 		return -ENODEV;
 
 	if (caam_dpaa2) {
-		dev_info(&priv->pdev->dev, "caam/qi frontend driver not suitable for DPAA 2.x, aborting...\n");
+		dev_info(ctrldev, "caam/qi frontend driver not suitable for DPAA 2.x, aborting...\n");
 		return -ENODEV;
 	}
 

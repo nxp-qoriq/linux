@@ -57,6 +57,7 @@
  * @major_ver: DPSECI major version
  * @minor_ver: DPSECI minor version
  * @dpseci_attr: DPSECI attributes
+ * @sec_attr: SEC engine attributes
  * @rx_queue_attr: array of Rx queue attributes
  * @tx_queue_attr: array of Tx queue attributes
  * @cscn_mem: pointer to memory region containing the
@@ -67,6 +68,7 @@
  * @cscn_dma: dma address used by the QMAN to write CSCN messages
  * @dev: device associated with the DPSECI object
  * @mc_io: pointer to MC portal's I/O object
+ * @domain: IOMMU domain
  * @ppriv: per CPU pointers to privata data
  */
 struct dpaa2_caam_priv {
@@ -76,6 +78,7 @@ struct dpaa2_caam_priv {
 	u16 minor_ver;
 
 	struct dpseci_attr dpseci_attr;
+	struct dpseci_sec_attr sec_attr;
 	struct dpseci_rx_queue_attr rx_queue_attr[DPSECI_PRIO_NUM];
 	struct dpseci_tx_queue_attr tx_queue_attr[DPSECI_PRIO_NUM];
 	int num_pairs;
@@ -87,6 +90,7 @@ struct dpaa2_caam_priv {
 
 	struct device *dev;
 	struct fsl_mc_io *mc_io;
+	struct iommu_domain *domain;
 
 	struct dpaa2_caam_priv_per_cpu __percpu *ppriv;
 };
@@ -140,6 +144,9 @@ struct dpaa2_caam_priv_per_cpu {
  */
 #define MAX_SDLEN	((CAAM_DESC_BYTES_MAX - DESC_JOB_IO_LEN) / CAAM_CMD_SZ)
 
+/* Length of a single buffer in the QI driver memory cache */
+#define CAAM_QI_MEMCACHE_SIZE	512
+
 /*
  * aead_edesc - s/w-extended aead descriptor
  * @src_nents: number of segments in input scatterlist
@@ -157,6 +164,9 @@ struct aead_edesc {
 	int qm_sg_bytes;
 	dma_addr_t qm_sg_dma;
 	dma_addr_t assoclen_dma;
+#define CAAM_QI_MAX_AEAD_SG						\
+	((CAAM_QI_MEMCACHE_SIZE - offsetof(struct aead_edesc, sgt)) /	\
+	 sizeof(struct dpaa2_sg_entry))
 	struct dpaa2_sg_entry sgt[0];
 };
 
@@ -197,6 +207,9 @@ struct ablkcipher_edesc {
 	dma_addr_t iv_dma;
 	int qm_sg_bytes;
 	dma_addr_t qm_sg_dma;
+#define CAAM_QI_MAX_ABLKCIPHER_SG					    \
+	((CAAM_QI_MEMCACHE_SIZE - offsetof(struct ablkcipher_edesc, sgt)) / \
+	 sizeof(struct dpaa2_sg_entry))
 	struct dpaa2_sg_entry sgt[0];
 };
 
@@ -204,10 +217,12 @@ struct ablkcipher_edesc {
  * caam_flc - Flow Context (FLC)
  * @flc: Flow Context options
  * @sh_desc: Shared Descriptor
+ * @flc_dma: DMA address of the Flow Context
  */
 struct caam_flc {
 	u32 flc[16];
 	u32 sh_desc[MAX_SDLEN];
+	dma_addr_t flc_dma;
 } ____cacheline_aligned;
 
 enum optype {
@@ -225,7 +240,6 @@ enum optype {
  *          fd_flt[1] - FLE pointing to input buffer
  * @fd_flt_dma: DMA address for the frame list table
  * @flc: Flow Context
- * @flc_dma: DMA address of Flow Context
  * @op_type: operation type
  * @cbk: Callback function to invoke when job is completed
  * @ctx: arbit context attached with request by the application
@@ -235,12 +249,11 @@ struct caam_request {
 	struct dpaa2_fl_entry fd_flt[2];
 	dma_addr_t fd_flt_dma;
 	struct caam_flc *flc;
-	dma_addr_t flc_dma;
 	enum optype op_type;
 	void (*cbk)(void *ctx, u32 err);
 	void *ctx;
 	void *edesc;
-} ____cacheline_aligned;
+};
 
 /**
  * dpaa2_caam_enqueue() - enqueue a crypto request

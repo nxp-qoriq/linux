@@ -1020,7 +1020,15 @@ static const struct net_device_ops enetc_ndev_ops = {
 	.ndo_set_rx_mode	= enetc_set_rx_mode,
 };
 
-static void enetc_netdev_setup(struct enetc_si *si, struct net_device *ndev)
+static const struct net_device_ops enetc_ndev_vf_ops = {
+	.ndo_open		= enetc_open,
+	.ndo_stop		= enetc_close,
+	.ndo_start_xmit		= enetc_xmit,
+	.ndo_get_stats		= enetc_get_stats,
+};
+
+static void enetc_netdev_setup(struct enetc_si *si, struct net_device *ndev,
+			       const struct net_device_ops *ndev_ops)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 
@@ -1031,7 +1039,7 @@ static void enetc_netdev_setup(struct enetc_si *si, struct net_device *ndev)
 	si->ndev = ndev;
 
 	priv->msg_enable = (NETIF_MSG_IFUP << 1) - 1; //TODO: netif_msg_init()
-	ndev->netdev_ops = &enetc_ndev_ops;
+	ndev->netdev_ops = ndev_ops;
 	enetc_set_ethtool_ops(ndev);
 	ndev->watchdog_timeo = 5 * HZ;
 
@@ -1204,11 +1212,18 @@ static int enetc_pci_probe(struct pci_dev *pdev,
 	}
 
 	priv = netdev_priv(ndev);
-	enetc_netdev_setup(si, ndev);
 
-	enetc_sw_init(priv);
+	if (pdev->device == ENETC_DEV_ID_VF) {
+		/* VFs have a different set of ndos and can't touch the port */
+		enetc_netdev_setup(si, ndev, &enetc_ndev_vf_ops);
+		enetc_sw_init(priv);
 
-	enetc_configure_port(priv);
+	} else {
+		enetc_netdev_setup(si, ndev, &enetc_ndev_ops);
+		enetc_sw_init(priv);
+
+		enetc_configure_port(priv);
+	}
 	enetc_configure_si(priv);
 
 	err = enetc_alloc_msix(priv);
@@ -1288,6 +1303,7 @@ static int enetc_sriov_configure(struct pci_dev *dev, int num_vfs)
 
 static const struct pci_device_id enetc_id_table[] = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_FREESCALE, 0xe100) },
+	{ PCI_DEVICE(PCI_VENDOR_ID_FREESCALE, ENETC_DEV_ID_VF) },
 	{ 0, } /* End of table. */
 };
 MODULE_DEVICE_TABLE(pci, enetc_id_table);

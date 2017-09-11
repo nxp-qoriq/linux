@@ -309,6 +309,13 @@ static void dev_watchdog(unsigned long arg)
 					txq->trans_timeout++;
 					break;
 				}
+
+				/* Devices with HW_ACCEL_MQ have multiple txqs
+				 * but update only the first one's transmission
+				 * timestamp so avoid checking the rest.
+				 */
+				if (dev->features & NETIF_F_HW_ACCEL_MQ)
+					break;
 			}
 
 			if (some_queue_timedout) {

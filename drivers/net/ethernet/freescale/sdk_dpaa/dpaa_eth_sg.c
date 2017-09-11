@@ -1136,6 +1136,7 @@ int __hot dpa_tx_extended(struct sk_buff *skb, struct net_device *net_dev,
 	if (unlikely(dpa_xmit(priv, percpu_stats, &fd, egress_fq, conf_fq) < 0))
 		goto xmit_failed;
 
+	net_dev->trans_start = jiffies;
 	return NETDEV_TX_OK;
 
 xmit_failed:

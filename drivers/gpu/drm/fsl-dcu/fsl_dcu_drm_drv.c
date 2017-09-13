@@ -230,15 +230,16 @@ static int fsl_dcu_drm_pm_resume(struct device *dev)
 	if (!fsl_dev)
 		return 0;
 
+	ret = clk_prepare(fsl_dev->clk);
+	if (ret < 0) {
+		dev_err(dev, "failed to prepare dcu clk\n");
+		return ret;
+	}
+
 	ret = clk_enable(fsl_dev->clk);
 	if (ret < 0) {
 		dev_err(dev, "failed to enable dcu clk\n");
 		clk_unprepare(fsl_dev->clk);
-		return ret;
-	}
-	ret = clk_prepare(fsl_dev->clk);
-	if (ret < 0) {
-		dev_err(dev, "failed to prepare dcu clk\n");
 		return ret;
 	}
 

@@ -227,6 +227,9 @@ static int xhci_plat_probe(struct platform_device *pdev)
 			xhci->quirks |= XHCI_DIS_U1U2_WHEN_U3;
 	}
 
+	if (device_property_read_bool(&pdev->dev, "quirk-reverse-in-out"))
+		xhci->quirks |= XHCI_REVERSE_IN_OUT;
+
 	if (device_property_read_bool(&pdev->dev, "quirk-broken-port-ped"))
 		xhci->quirks |= XHCI_BROKEN_PORT_PED;
 

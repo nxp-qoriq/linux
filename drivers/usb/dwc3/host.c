@@ -101,6 +101,9 @@ int dwc3_host_init(struct dwc3 *dwc)
 
 	memset(props, 0, sizeof(struct property_entry) * ARRAY_SIZE(props));
 
+	if (dwc->quirk_reverse_in_out)
+		props[prop_idx++].name = "quirk-reverse-in-out";
+
 	if (dwc->usb3_lpm_capable)
 		props[prop_idx++].name = "usb3-lpm-capable";
 

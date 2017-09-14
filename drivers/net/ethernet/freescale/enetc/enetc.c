@@ -935,13 +935,14 @@ static int enetc_close(struct net_device *ndev)
 	return 0;
 }
 
-static void enetc_set_primary_mac_addr(struct enetc_hw *hw, const u8 *addr)
+static void enetc_set_primary_mac_addr(struct enetc_hw *hw, int si,
+				       const u8 *addr)
 {
 	u16 upper = ntohs(*(const u16 *)addr);
 	u32 lower = ntohl(*(const u32 *)(addr + 2));
 
-	enetc_port_wr(hw, ENETC_PSIPMAR0(0), lower);
-	enetc_port_wr(hw, ENETC_PSIPMAR1(0), upper << 16);
+	enetc_port_wr(hw, ENETC_PSIPMAR0(si), lower);
+	enetc_port_wr(hw, ENETC_PSIPMAR1(si), upper << 16);
 }
 
 static void enetc_get_primary_mac_addr(struct enetc_hw *hw, u8 *addr)
@@ -959,7 +960,7 @@ static int enetc_set_mac_addr(struct net_device *ndev, void *addr)
 		return -EADDRNOTAVAIL;
 
 	memcpy(ndev->dev_addr, saddr->sa_data, ndev->addr_len);
-	enetc_set_primary_mac_addr(&priv->si->hw, saddr->sa_data);
+	enetc_set_primary_mac_addr(&priv->si->hw, 0, saddr->sa_data);
 
 	return 0;
 }
@@ -1011,6 +1012,17 @@ static struct net_device_stats *enetc_get_stats(struct net_device *ndev)
 	return stats;
 }
 
+static int enetc_set_vf_mac(struct net_device *ndev, int vf, u8 *mac)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+
+	if (vf > priv->si->num_vfs)
+		return -EINVAL;
+
+	enetc_set_primary_mac_addr(&priv->si->hw, vf + 1, mac);
+	return 0;
+}
+
 static const struct net_device_ops enetc_ndev_ops = {
 	.ndo_open		= enetc_open,
 	.ndo_stop		= enetc_close,
@@ -1018,6 +1030,7 @@ static const struct net_device_ops enetc_ndev_ops = {
 	.ndo_get_stats		= enetc_get_stats,
 	.ndo_set_mac_address	= enetc_set_mac_addr,
 	.ndo_set_rx_mode	= enetc_set_rx_mode,
+	.ndo_set_vf_mac		= enetc_set_vf_mac,
 };
 
 static const struct net_device_ops enetc_ndev_vf_ops = {
@@ -1056,7 +1069,7 @@ static void enetc_port_setup_primary_mac_address(struct enetc_ndev_priv *priv)
 		eth_random_addr(mac_addr);
 		dev_info(priv->dev, "no MAC address specified, using %pM\n",
 			 mac_addr);
-		enetc_set_primary_mac_addr(hw, mac_addr);
+		enetc_set_primary_mac_addr(hw, 0, mac_addr);
 	}
 }
 
@@ -1281,21 +1294,24 @@ static void enetc_pci_remove(struct pci_dev *pdev)
 }
 
 #ifdef CONFIG_PCI_IOV
-static int enetc_sriov_configure(struct pci_dev *dev, int num_vfs)
+static int enetc_sriov_configure(struct pci_dev *pdev, int num_vfs)
 {
+	struct enetc_si *si = pci_get_drvdata(pdev);
 	int err;
 
 	if (!num_vfs) {
-		dev_info(&dev->dev, "SR-IOV stop\n");
-		pci_disable_sriov(dev);
+		dev_info(&pdev->dev, "SR-IOV stop\n");
+		pci_disable_sriov(pdev);
 	} else {
-		dev_info(&dev->dev, "SR-IOV start, %d VFs\n", num_vfs);
-		err = pci_enable_sriov(dev, num_vfs);
+		dev_info(&pdev->dev, "SR-IOV start, %d VFs\n", num_vfs);
+		err = pci_enable_sriov(pdev, num_vfs);
 		if (err) {
-			dev_err(&dev->dev, "pci_enable_sriov err %d\n", err);
+			dev_err(&pdev->dev, "pci_enable_sriov err %d\n", err);
 			return err;
 		}
 	}
+
+	si->num_vfs = num_vfs;
 
 	return num_vfs;
 }

@@ -82,6 +82,8 @@ struct enetc_si {
 	struct enetc_hw hw;
 
 	struct net_device *ndev; /* back ref. */
+
+	int num_vfs; /* number of active VFs, after sriov_init */
 };
 
 #define ENETC_MAX_NUM_TXQS	8

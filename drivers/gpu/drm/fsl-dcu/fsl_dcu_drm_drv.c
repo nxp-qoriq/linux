@@ -225,7 +225,6 @@ static int fsl_dcu_drm_pm_suspend(struct device *dev)
 	if (!fsl_dev)
 		return 0;
 
-	disable_irq(fsl_dev->irq);
 	drm_kms_helper_poll_disable(fsl_dev->drm);
 
 	console_lock();
@@ -242,6 +241,8 @@ static int fsl_dcu_drm_pm_suspend(struct device *dev)
 		enable_irq(fsl_dev->irq);
 		return PTR_ERR(fsl_dev->state);
 	}
+
+	disable_irq(fsl_dev->irq);
 
 	clk_disable_unprepare(fsl_dev->pix_clk);
 	clk_disable_unprepare(fsl_dev->clk);
@@ -269,6 +270,8 @@ static int fsl_dcu_drm_pm_resume(struct device *dev)
 		return ret;
 	}
 
+	enable_irq(fsl_dev->irq);
+
 	if (fsl_dev->tcon)
 		fsl_tcon_bypass_enable(fsl_dev->tcon);
 	fsl_dcu_drm_init_planes(fsl_dev->drm);
@@ -279,7 +282,6 @@ static int fsl_dcu_drm_pm_resume(struct device *dev)
 	console_unlock();
 
 	drm_kms_helper_poll_enable(fsl_dev->drm);
-	enable_irq(fsl_dev->irq);
 
 	return 0;
 }

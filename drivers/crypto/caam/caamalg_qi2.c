@@ -2279,9 +2279,8 @@ static int caam_cra_init_aead(struct crypto_aead *tfm)
 	return caam_cra_init(crypto_aead_tfm(tfm));
 }
 
-static void caam_exit_common(struct crypto_tfm *tfm)
+static void caam_exit_common(struct caam_ctx *ctx)
 {
-	struct caam_ctx *ctx = crypto_tfm_ctx(tfm);
 	int i;
 
 	for (i = 0; i < NUM_OP; i++) {

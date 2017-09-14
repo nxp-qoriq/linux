@@ -965,6 +965,15 @@ static int enetc_set_mac_addr(struct net_device *ndev, void *addr)
 	return 0;
 }
 
+static void enetc_set_isol_vlan(struct enetc_hw *hw, int si, u16 vlan, u8 qos)
+{
+	u32 val = 0;
+
+	if (vlan)
+		val = ENETC_PSIIVLAN_EN | ENETC_PSIIVLAN_SET_QOS(qos) | vlan;
+	enetc_port_wr(hw, ENETC_PSIIVLANR(si), val);
+}
+
 static void enetc_set_rx_mode(struct net_device *ndev)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
@@ -1023,6 +1032,22 @@ static int enetc_set_vf_mac(struct net_device *ndev, int vf, u8 *mac)
 	return 0;
 }
 
+static int enetc_set_vf_vlan(struct net_device *ndev, int vf, u16 vlan,
+			     u8 qos, __be16 proto)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+
+	if (vf > priv->si->num_vfs)
+		return -EINVAL;
+
+	if (proto != htons(0x8100))
+		/* only C-tags supported for now */
+		return -EPROTONOSUPPORT;
+
+	enetc_set_isol_vlan(&priv->si->hw, vf + 1, vlan, qos);
+	return 0;
+}
+
 static const struct net_device_ops enetc_ndev_ops = {
 	.ndo_open		= enetc_open,
 	.ndo_stop		= enetc_close,
@@ -1031,6 +1056,7 @@ static const struct net_device_ops enetc_ndev_ops = {
 	.ndo_set_mac_address	= enetc_set_mac_addr,
 	.ndo_set_rx_mode	= enetc_set_rx_mode,
 	.ndo_set_vf_mac		= enetc_set_vf_mac,
+	.ndo_set_vf_vlan	= enetc_set_vf_vlan,
 };
 
 static const struct net_device_ops enetc_ndev_vf_ops = {

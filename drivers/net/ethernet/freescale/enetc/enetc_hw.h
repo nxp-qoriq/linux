@@ -68,6 +68,9 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PSIPMR_SET_MP(n)	(0x1 << ((n) + 8))
 #define ENETC_PSIPMAR0(n)	(0x00100 + (n) * 0x20) /* n = SI index */
 #define ENETC_PSIPMAR1(n)	(0x00104 + (n) * 0x20)
+#define ENETC_PSIIVLANR(n)	(0x00210 + (n) * 4) /* n = SI index */
+#define ENETC_PSIIVLAN_EN	BIT(31)
+#define ENETC_PSIIVLAN_SET_QOS(val)	((u32)(val) << 12)
 #define ENETC_PCAPR0	0x00900
 #define ENETC_PCAPR1	0x00904
 

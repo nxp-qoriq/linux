@@ -3822,7 +3822,7 @@ static void dpaa2_caam_process_fd(struct dpaa2_caam_priv *priv,
 	 */
 	req = dpaa2_caam_iova_to_virt(priv, dpaa2_fd_get_addr(fd));
 	dma_unmap_single(priv->dev, req->fd_flt_dma, sizeof(req->fd_flt),
-			 DMA_TO_DEVICE);
+			 DMA_BIDIRECTIONAL);
 	req->cbk(req->ctx, dpaa2_fd_get_frc(fd));
 }
 
@@ -4400,7 +4400,7 @@ int dpaa2_caam_enqueue(struct device *dev, struct caam_request *req)
 
 err_out:
 	dma_unmap_single(dev, req->fd_flt_dma, sizeof(req->fd_flt),
-			 DMA_TO_DEVICE);
+			 DMA_BIDIRECTIONAL);
 	return -EIO;
 }
 EXPORT_SYMBOL(dpaa2_caam_enqueue);

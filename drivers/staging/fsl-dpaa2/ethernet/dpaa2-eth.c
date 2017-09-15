@@ -216,6 +216,21 @@ static struct sk_buff *build_frag_skb(struct dpaa2_eth_priv *priv,
 	return skb;
 }
 
+static void free_bufs(struct dpaa2_eth_priv *priv, u64 *buf_array, int count)
+{
+	struct device *dev = priv->net_dev->dev.parent;
+	void *vaddr;
+	int i;
+
+	for (i = 0; i < count; i++) {
+		/* Same logic as on regular Rx path */
+		vaddr = dpaa2_eth_iova_to_virt(priv->iommu_domain, buf_array[i]);
+		dma_unmap_single(dev, buf_array[i], DPAA2_ETH_RX_BUF_SIZE,
+				 DMA_FROM_DEVICE);
+		put_page(virt_to_head_page(vaddr));
+	}
+}
+
 /* Main Rx frame processing routine */
 static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 			 struct dpaa2_eth_channel *ch,
@@ -883,7 +898,7 @@ static int add_bufs(struct dpaa2_eth_priv *priv, u16 bpid)
 	u64 buf_array[DPAA2_ETH_BUFS_PER_CMD];
 	void *buf;
 	dma_addr_t addr;
-	int i;
+	int i, err;
 
 	for (i = 0; i < DPAA2_ETH_BUFS_PER_CMD; i++) {
 		/* Allocate buffer visible to WRIOP + skb shared info +
@@ -910,22 +925,26 @@ static int add_bufs(struct dpaa2_eth_priv *priv, u16 bpid)
 	}
 
 release_bufs:
-	/* In case the portal is busy, retry until successful.
-	 * The buffer release function would only fail if the QBMan portal
-	 * was busy, which implies portal contention (i.e. more CPUs than
-	 * portals, i.e. GPPs w/o affine DPIOs). For all practical purposes,
-	 * there is little we can realistically do, short of giving up -
-	 * in which case we'd risk depleting the buffer pool and never again
-	 * receiving the Rx interrupt which would kick-start the refill logic.
-	 * So just keep retrying, at the risk of being moved to ksoftirqd.
-	 */
-	while (dpaa2_io_service_release(NULL, bpid, buf_array, i))
+	/* In case the portal is busy, retry until successful */
+	do {
+		err = dpaa2_io_service_release(NULL, bpid, buf_array, i);
 		cpu_relax();
+	} while (err == -EBUSY);
+
+	/* If release command failed, clean up and bail out; not much
+	 * else we can do about it
+	 */
+	if (unlikely(err)) {
+		free_bufs(priv, buf_array, i);
+		return 0;
+	}
+
 	return i;
 
 err_map:
 	put_page(virt_to_head_page(buf));
 err_alloc:
+	/* If we managed to allocate at least some buffers, release them */
 	if (i)
 		goto release_bufs;
 
@@ -968,10 +987,8 @@ static int seed_pool(struct dpaa2_eth_priv *priv, u16 bpid)
  */
 static void drain_bufs(struct dpaa2_eth_priv *priv, int count)
 {
-	struct device *dev = priv->net_dev->dev.parent;
 	u64 buf_array[DPAA2_ETH_BUFS_PER_CMD];
-	void *vaddr;
-	int ret, i;
+	int ret;
 
 	do {
 		ret = dpaa2_io_service_acquire(NULL, priv->bpid,
@@ -980,15 +997,7 @@ static void drain_bufs(struct dpaa2_eth_priv *priv, int count)
 			netdev_err(priv->net_dev, "dpaa2_io_service_acquire() failed\n");
 			return;
 		}
-		for (i = 0; i < ret; i++) {
-			/* Same logic as on regular Rx path */
-			vaddr = dpaa2_eth_iova_to_virt(priv->iommu_domain,
-						       buf_array[i]);
-			dma_unmap_single(dev, buf_array[i],
-					 DPAA2_ETH_RX_BUF_SIZE,
-					 DMA_FROM_DEVICE);
-			put_page(virt_to_head_page(vaddr));
-		}
+		free_bufs(priv, buf_array, ret);
 	} while (ret);
 }
 

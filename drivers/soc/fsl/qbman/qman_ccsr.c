@@ -699,13 +699,12 @@ EXPORT_SYMBOL_GPL(qman_is_probed);
 static int fsl_qman_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct device_node *mem_node, *node = dev->of_node;
+	struct device_node *node = dev->of_node;
 	struct iommu_domain *domain;
 	struct resource *res;
 	int ret, err_irq;
 	u16 id;
 	u8 major, minor;
-	u64 size;
 
 	__qman_probed = -1;
 
@@ -761,63 +760,21 @@ static int fsl_qman_probe(struct platform_device *pdev)
 		 * in order to ensure allocations from the correct regions the
 		 * driver initializes then allocates each piece in order
 		 */
-		ret = of_reserved_mem_device_init_by_idx(dev, dev->of_node, 0);
+		ret = qbman_init_private_mem(dev, 0, &fqd_a, &fqd_sz);
 		if (ret) {
-			dev_err(dev, "of_reserved_mem_device_init_by_idx(0) failed 0x%x\n",
+			dev_err(dev, "qbman_init_private_mem() for FQD failed 0x%x\n",
 				ret);
 			return -ENODEV;
 		}
-		mem_node = of_parse_phandle(dev->of_node, "memory-region", 0);
-		if (mem_node) {
-			ret = of_property_read_u64(mem_node, "size", &size);
-			if (ret) {
-				dev_err(dev, "FQD: of_address_to_resource fails 0x%x\n",
-					ret);
-				return -ENODEV;
-			}
-			fqd_sz = size;
-		} else {
-			dev_err(dev, "No memory-region found for FQD\n");
-			return -ENODEV;
-		}
-		if (!dma_zalloc_coherent(dev, fqd_sz, &fqd_a, 0)) {
-			dev_err(dev, "Alloc FQD memory failed\n");
-			return -ENODEV;
-		}
-
-		/*
-		 * Disassociate the FQD reserved memory area from the device
-		 * because a device can only have one DMA memory area. This
-		 * should be fine since the memory is allocated and initialized
-		 * and only ever accessed by the QMan device from now on
-		 */
-		of_reserved_mem_device_release(dev);
 	}
 	dev_dbg(dev, "Allocated FQD 0x%llx 0x%zx\n", fqd_a, fqd_sz);
 
 	if (!pfdr_a) {
 		/* Setup PFDR memory */
-		ret = of_reserved_mem_device_init_by_idx(dev, dev->of_node, 1);
+		ret = qbman_init_private_mem(dev, 1, &pfdr_a, &pfdr_sz);
 		if (ret) {
-			dev_err(dev, "of_reserved_mem_device_init(1) failed 0x%x\n",
+			dev_err(dev, "qbman_init_private_mem() for PFDR failed 0x%x\n",
 			ret);
-			return -ENODEV;
-		}
-		mem_node = of_parse_phandle(dev->of_node, "memory-region", 1);
-		if (mem_node) {
-			ret = of_property_read_u64(mem_node, "size", &size);
-			if (ret) {
-				dev_err(dev, "PFDR: of_address_to_resource fails 0x%x\n",
-					ret);
-				return -ENODEV;
-			}
-			pfdr_sz = size;
-		} else {
-			dev_err(dev, "No memory-region found for PFDR\n");
-			return -ENODEV;
-		}
-		if (!dma_zalloc_coherent(dev, pfdr_sz, &pfdr_a, 0)) {
-			dev_err(dev, "Alloc PFDR Failed size 0x%zx\n", pfdr_sz);
 			return -ENODEV;
 		}
 	}

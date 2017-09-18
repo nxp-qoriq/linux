@@ -100,6 +100,10 @@ static inline u8 dpaa_cyc_diff(u8 ringsize, u8 first, u8 last)
 /* Offset applied to genalloc pools due to zero being an error return */
 #define DPAA_GENALLOC_OFF	0x80000000
 
+/* Initialize the devices private memory region */
+int qbman_init_private_mem(struct device *dev, int idx, dma_addr_t *addr,
+				size_t *size);
+
 static inline int dpaa_set_portal_irq_affinity(struct device *dev,
 					       int irq, int cpu)
 {

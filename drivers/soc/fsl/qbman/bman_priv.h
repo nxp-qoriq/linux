@@ -33,9 +33,6 @@
 #include "dpaa_sys.h"
 
 #include <soc/fsl/bman.h>
-#include <linux/dma-contiguous.h>
-#include <linux/of_address.h>
-#include <linux/dma-mapping.h>
 
 /* Portal processing (interrupt) sources */
 #define BM_PIRQ_RCRI	0x00000002	/* RCR Ring (below threshold) */

@@ -767,6 +767,7 @@ static ssize_t fsl_qspi_nor_write(struct fsl_qspi *q, struct spi_nor *nor,
 {
 	int ret, i, j;
 	u32 tmp;
+	u8 byts;
 
 	dev_dbg(q->dev, "to 0x%.8x:0x%.8x, len : %d\n",
 		q->chip_base_addr, to, count);
@@ -776,11 +777,13 @@ static ssize_t fsl_qspi_nor_write(struct fsl_qspi *q, struct spi_nor *nor,
 	qspi_writel(q, tmp | QUADSPI_MCR_CLR_TXF_MASK, q->iobase + QUADSPI_MCR);
 
 	/* fill the TX data to the FIFO */
+	byts = count;
 	for (j = 0, i = ((count + 3) / 4); j < i; j++) {
-		u8tou32(&tmp, txbuf, 4);
+		u8tou32(&tmp, txbuf, byts);
 		tmp = fsl_qspi_endian_xchg(q, tmp);
 		qspi_writel(q, tmp, q->iobase + QUADSPI_TBDR);
 		txbuf += 4;
+		byts -= 4;
 	}
 
 	/* fill the TXFIFO upto 16 bytes for i.MX7d */

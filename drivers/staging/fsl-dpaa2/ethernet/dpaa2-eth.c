@@ -3336,10 +3336,6 @@ static int dpaa2_eth_probe(struct fsl_mc_device *dpni_dev)
 	if (err)
 		goto err_bind;
 
-	/* Add a NAPI context for each channel */
-	add_ch_napi(priv);
-	enable_ch_napi(priv);
-
 	/* Percpu statistics */
 	priv->percpu_stats = alloc_percpu(*priv->percpu_stats);
 	if (!priv->percpu_stats) {
@@ -3386,6 +3382,10 @@ static int dpaa2_eth_probe(struct fsl_mc_device *dpni_dev)
 	net_dev->dcbnl_ops = &dpaa2_eth_dcbnl_ops;
 	priv->dcbx_mode = DCB_CAP_DCBX_HOST | DCB_CAP_DCBX_VER_IEEE;
 #endif
+
+	/* Add a NAPI context for each channel */
+	add_ch_napi(priv);
+	enable_ch_napi(priv);
 
 	err = setup_irqs(dpni_dev);
 	if (err) {
@@ -3449,6 +3449,9 @@ static int dpaa2_eth_remove(struct fsl_mc_device *ls_dev)
 #endif
 	dpaa2_eth_sysfs_remove(&net_dev->dev);
 
+	disable_ch_napi(priv);
+	del_ch_napi(priv);
+
 	unregister_netdev(net_dev);
 	dev_info(net_dev->dev.parent, "Removed interface %s\n", net_dev->name);
 
@@ -3460,9 +3463,6 @@ static int dpaa2_eth_remove(struct fsl_mc_device *ls_dev)
 	free_rings(priv);
 	free_percpu(priv->percpu_stats);
 	free_percpu(priv->percpu_extras);
-
-	disable_ch_napi(priv);
-	del_ch_napi(priv);
 	free_dpbp(priv);
 	free_dpio(priv);
 	free_dpni(priv);

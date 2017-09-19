@@ -16,6 +16,9 @@
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
 #include <linux/platform_device.h>
+#include <linux/of.h>
+#include <linux/of_device.h>
+#include <linux/libata.h>
 
 #define FTM_SC			0x00
 #define FTM_SC_CLK_SHIFT	3
@@ -39,6 +42,57 @@ static void __iomem *ftm1_base;
 static void __iomem *rcpm_ftm_addr;
 static u32 alarm_freq;
 static bool big_endian;
+
+enum pmu_endian_type {
+	BIG_ENDIAN,
+	LITTLE_ENDIAN,
+};
+
+struct rcpm_cfg {
+	enum pmu_endian_type big_endian;	/* Big/Little endian of PMU module */
+	u32 flextimer_set_bit;	/* FlexTimer1 is not powerdown during device LPM20 */
+};
+
+static struct rcpm_cfg ls1012a_rcpm_cfg = {
+	.big_endian = BIG_ENDIAN,
+	.flextimer_set_bit = 0x20000,
+};
+
+static struct rcpm_cfg ls1021a_rcpm_cfg = {
+	.big_endian = BIG_ENDIAN,
+	.flextimer_set_bit = 0x20000,
+};
+
+static struct rcpm_cfg ls1043a_rcpm_cfg = {
+	.big_endian = BIG_ENDIAN,
+	.flextimer_set_bit = 0x20000,
+};
+
+static struct rcpm_cfg ls1046a_rcpm_cfg = {
+	.big_endian = BIG_ENDIAN,
+	.flextimer_set_bit = 0x20000,
+};
+
+static struct rcpm_cfg ls1088a_rcpm_cfg = {
+	.big_endian = LITTLE_ENDIAN,
+	.flextimer_set_bit = 0x4000,
+};
+
+static struct rcpm_cfg ls208xa_rcpm_cfg = {
+	.big_endian = LITTLE_ENDIAN,
+	.flextimer_set_bit = 0x4000,
+};
+
+static const struct of_device_id ippdexpcr_of_match[] = {
+	{ .compatible = "fsl,ls1012a-ftm", .data = &ls1012a_rcpm_cfg},
+	{ .compatible = "fsl,ls1021a-ftm", .data = &ls1021a_rcpm_cfg},
+	{ .compatible = "fsl,ls1043a-ftm", .data = &ls1043a_rcpm_cfg},
+	{ .compatible = "fsl,ls1046a-ftm", .data = &ls1046a_rcpm_cfg},
+	{ .compatible = "fsl,ls1088a-ftm", .data = &ls1088a_rcpm_cfg},
+	{ .compatible = "fsl,ls208xa-ftm", .data = &ls208xa_rcpm_cfg},
+	{},
+};
+MODULE_DEVICE_TABLE(of, ippdexpcr_of_match);
 
 static inline u32 ftm_readl(void __iomem *addr)
 {
@@ -214,7 +268,10 @@ static int ftm_alarm_probe(struct platform_device *pdev)
 	struct resource *r;
 	int irq;
 	int ret;
-	u32 ippdexpcr;
+	struct rcpm_cfg *rcpm_cfg;
+	u32 ippdexpcr, flextimer;
+	const struct of_device_id *of_id;
+	enum pmu_endian_type endian;
 
 	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!r)
@@ -224,14 +281,32 @@ static int ftm_alarm_probe(struct platform_device *pdev)
 	if (IS_ERR(ftm1_base))
 		return PTR_ERR(ftm1_base);
 
+	of_id = of_match_node(ippdexpcr_of_match, np);
+	if (!of_id)
+		return -ENODEV;
+
+	rcpm_cfg = devm_kzalloc(&pdev->dev, sizeof(*rcpm_cfg), GFP_KERNEL);
+	if (!rcpm_cfg)
+		return -ENOMEM;
+
+	rcpm_cfg = (struct rcpm_cfg*)of_id->data;
+	endian = rcpm_cfg->big_endian;
+	flextimer = rcpm_cfg->flextimer_set_bit;
+
 	r = platform_get_resource_byname(pdev, IORESOURCE_MEM, "FlexTimer1");
 	if (r) {
 		rcpm_ftm_addr = devm_ioremap_resource(&pdev->dev, r);
 		if (IS_ERR(rcpm_ftm_addr))
 			return PTR_ERR(rcpm_ftm_addr);
-		ippdexpcr = ioread32be(rcpm_ftm_addr);
-		ippdexpcr |= 0x20000;
-		iowrite32be(ippdexpcr, rcpm_ftm_addr);
+		if (endian == BIG_ENDIAN)
+			ippdexpcr = ioread32be(rcpm_ftm_addr);
+		else
+			ippdexpcr = ioread32(rcpm_ftm_addr);
+		ippdexpcr |= flextimer;
+		if (endian == BIG_ENDIAN)
+			iowrite32be(ippdexpcr, rcpm_ftm_addr);
+		else
+			iowrite32(ippdexpcr, rcpm_ftm_addr);
 	}
 
 	irq = irq_of_parse_and_map(np, 0);
@@ -265,7 +340,12 @@ static int ftm_alarm_probe(struct platform_device *pdev)
 }
 
 static const struct of_device_id ftm_alarm_match[] = {
-	{ .compatible = "fsl,ftm-alarm", },
+	{ .compatible = "fsl,ls1012a-ftm", },
+	{ .compatible = "fsl,ls1021a-ftm", },
+	{ .compatible = "fsl,ls1043a-ftm", },
+	{ .compatible = "fsl,ls1046a-ftm", },
+	{ .compatible = "fsl,ls1088a-ftm", },
+	{ .compatible = "fsl,ls208xa-ftm", },
 	{ .compatible = "fsl,ftm-timer", },
 	{ },
 };

@@ -77,7 +77,7 @@ static inline struct dpaa2_io *service_select_by_cpu(struct dpaa2_io *d,
 	if (d)
 		return d;
 
-	if (unlikely(cpu >= num_possible_cpus()))
+	if (unlikely(cpu >= (int)num_possible_cpus()))
 		return NULL;
 
 	/*
@@ -122,7 +122,7 @@ struct dpaa2_io *dpaa2_io_create(const struct dpaa2_io_desc *desc)
 		return NULL;
 
 	/* check if CPU is out of range (-1 means any cpu) */
-	if (desc->cpu >= num_possible_cpus()) {
+	if (desc->cpu >= (int)num_possible_cpus()) {
 		kfree(obj);
 		return NULL;
 	}

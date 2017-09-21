@@ -36,6 +36,8 @@ struct sdhci_esdhc {
 	unsigned int peripheral_clock;
 };
 
+static void esdhc_clock_enable(struct sdhci_host *host, bool enable);
+
 /**
  * esdhc_read*_fixup - Fixup the value read from incompatible eSDHC register
  *		       to make it compatible with SD spec.
@@ -469,8 +471,10 @@ static void esdhc_of_set_clock(struct sdhci_host *host, unsigned int clock)
 
 	host->mmc->actual_clock = 0;
 
-	if (clock == 0)
+	if (clock == 0) {
+		esdhc_clock_enable(host, false);
 		return;
+	}
 
 	/* Workaround to start pre_div at 2 for VNN < VENDOR_V_23 */
 	if (esdhc->vendor_ver < VENDOR_V_23)

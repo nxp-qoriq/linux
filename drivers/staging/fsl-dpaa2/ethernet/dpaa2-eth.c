@@ -281,15 +281,23 @@ static void release_fd_buf(struct dpaa2_eth_priv *priv,
 			   struct dpaa2_eth_channel *ch,
 			   dma_addr_t addr)
 {
-	ch->buf_array[ch->buf_cnt++] = addr;
-	if (likely(ch->buf_cnt < DPAA2_ETH_BUFS_PER_CMD))
+	int err;
+
+	ch->rel_buf_array[ch->rel_buf_cnt++] = addr;
+	if (likely(ch->rel_buf_cnt < DPAA2_ETH_BUFS_PER_CMD))
 		return;
 
-	while (dpaa2_io_service_release(NULL, priv->bpid, ch->buf_array,
-					ch->buf_cnt))
+	do {
+		err = dpaa2_io_service_release(NULL, priv->bpid,
+					       ch->rel_buf_array,
+					       ch->rel_buf_cnt);
 		cpu_relax();
+	} while (err == -EBUSY);
 
-	ch->buf_cnt = 0;
+ 	if (unlikely(err))
+		free_bufs(priv, ch->rel_buf_array, ch->rel_buf_cnt);
+
+	ch->rel_buf_cnt = 0;
 }
 
 static void free_bufs(struct dpaa2_eth_priv *priv, u64 *buf_array, int count)

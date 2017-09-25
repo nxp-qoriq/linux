@@ -354,8 +354,8 @@ struct dpaa2_eth_channel {
 	int buf_count;
 	struct dpaa2_eth_ch_stats stats;
 	struct bpf_prog *xdp_prog;
-	u64 buf_array[DPAA2_ETH_BUFS_PER_CMD];
-	u8 buf_cnt;
+	u64 rel_buf_array[DPAA2_ETH_BUFS_PER_CMD];
+	u8 rel_buf_cnt;
 };
 
 struct dpaa2_eth_cls_rule {

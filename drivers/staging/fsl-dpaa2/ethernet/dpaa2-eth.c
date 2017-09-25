@@ -289,20 +289,21 @@ static void release_fd_buf(struct dpaa2_eth_priv *priv,
 {
 	int err;
 
-	ch->buf_array[ch->buf_cnt++] = addr;
-	if (likely(ch->buf_cnt < DPAA2_ETH_BUFS_PER_CMD))
+	ch->rel_buf_array[ch->rel_buf_cnt++] = addr;
+	if (likely(ch->rel_buf_cnt < DPAA2_ETH_BUFS_PER_CMD))
 		return;
 
 	do {
-		err = dpaa2_io_service_release(NULL, priv->bpid, ch->buf_array,
-					       ch->buf_cnt);
+		err = dpaa2_io_service_release(NULL, priv->bpid,
+					       ch->rel_buf_array,
+					       ch->rel_buf_cnt);
 		cpu_relax();
 	} while (err == -EBUSY);
 
 	if (unlikely(err))
-		free_bufs(priv, ch->buf_array, ch->buf_cnt);
+		free_bufs(priv, ch->rel_buf_array, ch->rel_buf_cnt);
 
-	ch->buf_cnt = 0;
+	ch->rel_buf_cnt = 0;
 }
 
 /* Main Rx frame processing routine */

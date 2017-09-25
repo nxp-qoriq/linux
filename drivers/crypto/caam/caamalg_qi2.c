@@ -117,9 +117,9 @@ void *dpaa2_caam_iova_to_virt(struct dpaa2_caam_priv *priv,
 }
 
 /*
- * qi_cache_alloc - Allocate buffers from CAAM-QI cache
+ * qi_cache_zalloc - Allocate buffers from CAAM-QI cache
  *
- * Allocate data on the hotpath. Instead of using kmalloc, one can use the
+ * Allocate data on the hotpath. Instead of using kzalloc, one can use the
  * services of the CAAM QI memory cache (backed by kmem_cache). The buffers
  * will have a size of CAAM_QI_MEMCACHE_SIZE, which should be sufficient for
  * hosting 16 SG entries.
@@ -128,15 +128,15 @@ void *dpaa2_caam_iova_to_virt(struct dpaa2_caam_priv *priv,
  *
  * Returns a pointer to a retrieved buffer on success or NULL on failure.
  */
-static inline void *qi_cache_alloc(gfp_t flags)
+static inline void *qi_cache_zalloc(gfp_t flags)
 {
-	return kmem_cache_alloc(qi_cache, flags);
+	return kmem_cache_zalloc(qi_cache, flags);
 }
 
 /*
  * qi_cache_free - Frees buffers allocated from CAAM-QI cache
  *
- * @obj - buffer previously allocated by qi_cache_alloc
+ * @obj - buffer previously allocated by qi_cache_zalloc
  *
  * No checking is being done, the call is a passthrough call to
  * kmem_cache_free(...)
@@ -417,7 +417,7 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 	enum optype op_type = encrypt ? ENCRYPT : DECRYPT;
 
 	/* allocate space for base edesc and link tables */
-	edesc = qi_cache_alloc(GFP_DMA | flags);
+	edesc = qi_cache_zalloc(GFP_DMA | flags);
 	if (unlikely(!edesc)) {
 		dev_err(dev, "could not allocate extended descriptor\n");
 		return ERR_PTR(-ENOMEM);
@@ -622,7 +622,7 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req,
 	}
 
 	/* allocate space for base edesc and link tables */
-	edesc = qi_cache_alloc(GFP_DMA | flags);
+	edesc = qi_cache_zalloc(GFP_DMA | flags);
 	if (unlikely(!edesc)) {
 		dev_err(dev, "could not allocate extended descriptor\n");
 		return ERR_PTR(-ENOMEM);
@@ -1478,7 +1478,7 @@ static struct ablkcipher_edesc *ablkcipher_edesc_alloc(struct ablkcipher_request
 	}
 
 	/* allocate space for base edesc and link tables */
-	edesc = qi_cache_alloc(GFP_DMA | flags);
+	edesc = qi_cache_zalloc(GFP_DMA | flags);
 	if (unlikely(!edesc)) {
 		dev_err(dev, "could not allocate extended descriptor\n");
 		caam_unmap(dev, req->src, req->dst, src_nents, dst_nents,
@@ -1633,7 +1633,7 @@ static struct ablkcipher_edesc *ablkcipher_giv_edesc_alloc(
 	}
 
 	/* allocate space for base edesc and link tables */
-	edesc = qi_cache_alloc(GFP_DMA | flags);
+	edesc = qi_cache_zalloc(GFP_DMA | flags);
 	if (!edesc) {
 		dev_err(dev, "could not allocate extended descriptor\n");
 		caam_unmap(dev, req->src, req->dst, src_nents, dst_nents,

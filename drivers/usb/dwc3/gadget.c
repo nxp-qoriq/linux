@@ -2930,6 +2930,7 @@ static irqreturn_t dwc3_interrupt(int irq, void *_evt)
 int dwc3_gadget_init(struct dwc3 *dwc)
 {
 	int ret, irq;
+	u32	reg;
 	struct platform_device *dwc3_pdev = to_platform_device(dwc->dev);
 
 	irq = platform_get_irq_byname(dwc3_pdev, "peripheral");
@@ -3042,6 +3043,12 @@ int dwc3_gadget_init(struct dwc3 *dwc)
 	if (ret) {
 		dev_err(dwc->dev, "failed to register udc\n");
 		goto err5;
+	}
+
+	if (dwc->disable_devinit_u1u2_quirk) {
+		reg = dwc3_readl(dwc->regs, DWC3_DCTL);
+		reg &= ~(DWC3_DCTL_INITU1ENA | DWC3_DCTL_INITU2ENA);
+		dwc3_writel(dwc->regs, DWC3_DCTL, reg);
 	}
 
 	return 0;

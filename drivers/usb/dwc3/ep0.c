@@ -360,9 +360,9 @@ static int dwc3_ep0_handle_status(struct dwc3 *dwc,
 		if ((dwc->speed == DWC3_DSTS_SUPERSPEED) ||
 		    (dwc->speed == DWC3_DSTS_SUPERSPEED_PLUS)) {
 			reg = dwc3_readl(dwc->regs, DWC3_DCTL);
-			if (reg & DWC3_DCTL_INITU1ENA)
+			if ((reg & DWC3_DCTL_INITU1ENA) && !dwc->disable_devinit_u1u2_quirk)
 				usb_status |= 1 << USB_DEV_STAT_U1_ENABLED;
-			if (reg & DWC3_DCTL_INITU2ENA)
+			if ((reg & DWC3_DCTL_INITU2ENA) && !dwc->disable_devinit_u1u2_quirk)
 				usb_status |= 1 << USB_DEV_STAT_U2_ENABLED;
 		}
 

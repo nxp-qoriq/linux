@@ -356,7 +356,7 @@ struct dprc_rsp_get_obj_region {
 	/* response word 0 */
 	__le64 pad0;
 	/* response word 1 */
-	__le32 base_addr;
+	__le32 base_offset;
 	__le32 pad1;
 	/* response word 2 */
 	__le32 size;
@@ -364,6 +364,9 @@ struct dprc_rsp_get_obj_region {
 	u8 pad2[3];
 	/* response word 3 */
 	__le32 flags;
+	__le32 pad3;
+	/* response word 4 */
+	u64 base_addr;
 };
 
 struct dprc_cmd_set_obj_label {

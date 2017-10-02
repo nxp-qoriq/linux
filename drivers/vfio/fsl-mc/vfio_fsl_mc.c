@@ -63,6 +63,10 @@ static int vfio_fsl_mc_regions_init(struct vfio_fsl_mc_device *vdev)
 		if (mc_dev->regions[i].flags & IORESOURCE_CACHEABLE)
 			vdev->regions[i].type |=
 					VFIO_FSL_MC_REGION_TYPE_CACHEABLE;
+		if (mc_dev->regions[i].flags & IORESOURCE_MEM)
+			vdev->regions[i].type |=
+					VFIO_FSL_MC_REGION_TYPE_SHAREABLE;
+
 		vdev->regions[i].flags = VFIO_REGION_INFO_FLAG_MMAP;
 		vdev->regions[i].flags |= VFIO_REGION_INFO_FLAG_READ;
 		if (!(mc_dev->regions[i].flags & IORESOURCE_READONLY))
@@ -181,6 +185,7 @@ static long vfio_fsl_mc_ioctl(void *device_data, unsigned int cmd,
 
 		if (info.index >= vdev->num_regions)
 			return -EINVAL;
+
 
 		/* map offset to the physical address  */
 		info.offset = VFIO_FSL_MC_INDEX_TO_OFFSET(info.index);
@@ -437,14 +442,13 @@ static int vfio_fsl_mc_mmap_mmio(struct vfio_fsl_mc_region region,
 
 	if (region.size < PAGE_SIZE || base + size > region.size)
 		return -EINVAL;
-	/*
-	 * Set the REGION_TYPE_CACHEABLE (QBman CENA regs) to be the
-	 * cache inhibited area of the portal to avoid coherency issues
-	 * if a user migrates to another core.
-	 */
-	if (region.type & VFIO_FSL_MC_REGION_TYPE_CACHEABLE)
-		vma->vm_page_prot = pgprot_cached_ns(vma->vm_page_prot);
-	else
+
+	if (region.type & VFIO_FSL_MC_REGION_TYPE_CACHEABLE) {
+		if (region.type & VFIO_FSL_MC_REGION_TYPE_SHAREABLE)
+			vma->vm_page_prot = pgprot_cached(vma->vm_page_prot);
+		else
+			vma->vm_page_prot = pgprot_cached_ns(vma->vm_page_prot);
+	} else
 		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 
 	vma->vm_pgoff = (region.addr >> PAGE_SHIFT) + pgoff;

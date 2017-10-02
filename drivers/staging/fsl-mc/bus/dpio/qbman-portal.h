@@ -488,4 +488,62 @@ static inline void qbman_inval_prefetch(struct qbman_swp *p, uint32_t offset)
 	prefetch(p->addr_cena + offset);
 }
 
+/* Query APIs */
+struct qbman_fq_query_np_rslt {
+	u8 verb;
+	u8 rslt;
+	u8 st1;
+	u8 st2;
+	u8 reserved[2];
+	u16 od1_sfdr;
+	u16 od2_sfdr;
+	u16 od3_sfdr;
+	u16 ra1_sfdr;
+	u16 ra2_sfdr;
+	u32 pfdr_hptr;
+	u32 pfdr_tptr;
+	u32 frm_cnt;
+	u32 byte_cnt;
+	u16 ics_surp;
+	u8 is;
+	u8 reserved2[29];
+};
+
+int qbman_fq_query_state(struct qbman_swp *s, u32 fqid,
+			 struct qbman_fq_query_np_rslt *r);
+u32 qbman_fq_state_frame_count(const struct qbman_fq_query_np_rslt *r);
+u32 qbman_fq_state_byte_count(const struct qbman_fq_query_np_rslt *r);
+
+struct qbman_bp_query_rslt {
+	u8 verb;
+	u8 rslt;
+	u8 reserved[4];
+	u8 bdi;
+	u8 state;
+	u32 fill;
+	u32 hdotr;
+	u16 swdet;
+	u16 swdxt;
+	u16 hwdet;
+	u16 hwdxt;
+	u16 swset;
+	u16 swsxt;
+	u16 vbpid;
+	u16 icid;
+	u64 bpscn_addr;
+	u64 bpscn_ctx;
+	u16 hw_targ;
+	u8 dbe;
+	u8 reserved2;
+	u8 sdcnt;
+	u8 hdcnt;
+	u8 sscnt;
+	u8 reserved3[9];
+};
+
+int qbman_bp_query(struct qbman_swp *s, u32 bpid,
+		   struct qbman_bp_query_rslt *r);
+
+u32 qbman_bp_info_num_free_bufs(struct qbman_bp_query_rslt *a);
+
 #endif /* __FSL_QBMAN_PORTAL_H */

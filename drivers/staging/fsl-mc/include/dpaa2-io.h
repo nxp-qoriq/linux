@@ -187,4 +187,9 @@ static inline bool dpaa2_cscn_state_congested(struct dpaa2_cscn *cscn)
 	return ((cscn->state & DPAA2_CSCN_STATE_MASK) == DPAA2_CSCN_CONGESTED);
 }
 
+int dpaa2_io_query_fq_count(struct dpaa2_io *d, u32 fqid,
+			    u32 *fcnt, u32 *bcnt);
+int dpaa2_io_query_bp_count(struct dpaa2_io *d, u32 bpid,
+			    u32 *num);
+
 #endif /* __FSL_DPAA2_IO_H */

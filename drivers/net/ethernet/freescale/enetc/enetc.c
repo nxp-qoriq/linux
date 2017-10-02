@@ -514,6 +514,9 @@ static void enetc_sw_init(struct enetc_ndev_priv *priv)
 	/* support queue pairs only for now */
 	priv->num_tx_rings = priv->num_rx_rings;
 	priv->num_int_vectors = priv->num_rx_rings;
+
+	/* si specific */
+	priv->si->cbd_ring.bd_count = 64; //TODO: use defines for defaults
 }
 
 static int enetc_alloc_txbdr(struct enetc_bdr *txr)
@@ -697,6 +700,46 @@ static void enetc_free_rxtx_rings(struct enetc_ndev_priv *priv)
 		enetc_free_tx_ring(priv->tx_ring[i]);
 }
 
+static int enetc_alloc_cbdr(struct device *dev, struct enetc_cbdr *cbdr)
+{
+	int size = cbdr->bd_count * sizeof(struct enetc_cbd);
+
+	cbdr->bd_base = dma_zalloc_coherent(dev, size, &cbdr->bd_dma_base,
+					    GFP_KERNEL);
+	if (!cbdr->bd_base)
+		return -ENOMEM;
+
+	cbdr->next_to_clean = 0;
+	cbdr->next_to_use = 0;
+
+	return 0;
+}
+
+static void enetc_free_cbdr(struct device *dev, struct enetc_cbdr *cbdr)
+{
+	int size = cbdr->bd_count * sizeof(struct enetc_cbd);
+
+	dma_free_coherent(dev, size, cbdr->bd_base, cbdr->bd_dma_base);
+	cbdr->bd_base = NULL;
+}
+
+static int enetc_alloc_si_resources(struct enetc_ndev_priv *priv)
+{
+	struct enetc_si *si = priv->si;
+	int err;
+
+	err = enetc_alloc_cbdr(priv->dev, &si->cbd_ring);
+
+	return err;
+}
+
+static void enetc_free_si_resources(struct enetc_ndev_priv *priv)
+{
+	struct enetc_si *si = priv->si;
+
+	enetc_free_cbdr(priv->dev, &si->cbd_ring);
+}
+
 static void enetc_setup_txbdr(struct enetc_hw *hw, struct enetc_bdr *tx_ring)
 {
 	int idx = tx_ring->index;
@@ -758,6 +801,23 @@ static void enetc_setup_rxbdr(struct enetc_hw *hw, struct enetc_bdr *rx_ring)
 	enetc_refill_rx_ring(rx_ring, enetc_bd_unused(rx_ring));
 }
 
+static void enetc_setup_cbdr(struct enetc_hw *hw, struct enetc_cbdr *cbdr)
+{
+	WARN_ON(lower_32_bits(cbdr->bd_dma_base) & 0x1f);
+
+	enetc_wr(hw, ENETC_SICBDRBAR0, lower_32_bits(cbdr->bd_dma_base));
+	enetc_wr(hw, ENETC_SICBDRBAR1, upper_32_bits(cbdr->bd_dma_base));
+	enetc_wr(hw, ENETC_SICBDRLENR, ENETC_RTBLENR_LEN(cbdr->bd_count));
+
+	/* enable ring */
+	enetc_wr(hw, ENETC_SICBDRMR, BIT(31));
+
+	enetc_wr(hw, ENETC_SICBDRCIR, 0);
+	enetc_wr(hw, ENETC_SICBDRCISR, 0);
+	cbdr->cir = hw->reg + ENETC_SICBDRCIR;
+	cbdr->cisr = hw->reg + ENETC_SICBDRCISR;
+}
+
 static void enetc_setup_bdrs(struct enetc_ndev_priv *priv)
 {
 	int i;
@@ -767,6 +827,8 @@ static void enetc_setup_bdrs(struct enetc_ndev_priv *priv)
 
 	for (i = 0; i < priv->num_rx_rings; i++)
 		enetc_setup_rxbdr(&priv->si->hw, priv->rx_ring[i]);
+
+	enetc_setup_cbdr(&priv->si->hw, &priv->si->cbd_ring);
 }
 
 static void enetc_configure_port_mac(struct enetc_si *si)
@@ -877,6 +939,10 @@ static int enetc_open(struct net_device *ndev)
 	if (err)
 		goto err_alloc_rx;
 
+	err = enetc_alloc_si_resources(priv);
+	if (err)
+		goto err_alloc_si_res;
+
 	enetc_setup_bdrs(priv);
 
 	err = enetc_setup_irqs(priv);
@@ -903,6 +969,8 @@ static int enetc_open(struct net_device *ndev)
 err_set_queues:
 	enetc_free_irqs(priv);
 err_setup_irqs:
+	enetc_free_si_resources(priv);
+err_alloc_si_res:
 	enetc_free_rx_resources(priv);
 err_alloc_rx:
 	enetc_free_tx_resources(priv);
@@ -931,6 +999,7 @@ static int enetc_close(struct net_device *ndev)
 	enetc_free_rxtx_rings(priv);
 	enetc_free_rx_resources(priv);
 	enetc_free_tx_resources(priv);
+	enetc_free_si_resources(priv);
 
 	return 0;
 }
@@ -974,19 +1043,98 @@ static void enetc_set_isol_vlan(struct enetc_hw *hw, int si, u16 vlan, u8 qos)
 	enetc_port_wr(hw, ENETC_PSIIVLANR(si), val);
 }
 
+static int enetc_mac_addr_hash_idx(const u8 *addr)
+{
+	int i, n = 5;
+	int res = 0;
+
+	for (i = 0; i < n; i++)
+		res |= (__sw_hweight8(addr[i]) & 0x1) << (n - i);
+	res |= __sw_hweight8(addr[n]) & 0x1;
+
+	return res;
+}
+
+static void enetc_reset_mac_addr_filter(struct enetc_mac_filter *filter)
+{
+	filter->mac_addr_cnt = 0;
+
+	bitmap_zero(filter->mac_hash_table,
+		    ENETC_MADDR_HASH_TBL_SZ);
+}
+
+static void enetc_add_mac_addr_em_filter(struct enetc_mac_filter *filter,
+					 const unsigned char *addr)
+{
+	/* add exact match addr */
+	ether_addr_copy(filter->mac_addr, addr);
+	filter->mac_addr_cnt++;
+}
+
+static void enetc_add_mac_addr_ht_filter(struct enetc_mac_filter *filter,
+					 const unsigned char *addr)
+{
+	int idx = enetc_mac_addr_hash_idx(addr);
+
+	/* add hash table entry */
+	__set_bit(idx, filter->mac_hash_table);
+	filter->mac_addr_cnt++;
+}
+
 static void enetc_set_rx_mode(struct net_device *ndev)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	struct enetc_hw *hw = &priv->si->hw;
+	bool uprom = false, mprom = false;
+	struct enetc_mac_filter *filter;
+	struct netdev_hw_addr *ha;
 	u32 psipmr = 0;
+	bool em;
 
 	if (ndev->flags & IFF_PROMISC) {
 		/* enable promisc mode for SI0 (PF) */
 		psipmr = ENETC_PSIPMR_SET_UP(0) | ENETC_PSIPMR_SET_MP(0);
+		uprom = true;
+		mprom = true;
 	} else if (ndev->flags & IFF_ALLMULTI) {
 		/* enable multi cast promisc mode for SI0 (PF) */
 		psipmr = ENETC_PSIPMR_SET_MP(0);
+		mprom = true;
 	}
+
+	/* first 2 filter entries belong to PF */
+	if (!uprom) {
+		/* Update unicast filters */
+		filter = &priv->si->mac_filter[UC];
+		enetc_reset_mac_addr_filter(filter);
+
+		em = (netdev_uc_count(ndev) == 1);
+		netdev_for_each_uc_addr(ha, ndev) {
+			if (em)
+				enetc_add_mac_addr_em_filter(filter, ha->addr);
+			else
+				enetc_add_mac_addr_ht_filter(filter, ha->addr);
+		}
+	}
+
+	if (!mprom) {
+		/* Update multicast filters */
+		filter = &priv->si->mac_filter[MC];
+		enetc_reset_mac_addr_filter(filter);
+
+		em = (netdev_mc_count(ndev) == 1);
+		netdev_for_each_mc_addr(ha, ndev) {
+			if (!is_multicast_ether_addr(ha->addr))
+				continue;
+			if (em)
+				enetc_add_mac_addr_em_filter(filter, ha->addr);
+			else
+				enetc_add_mac_addr_ht_filter(filter, ha->addr);
+		}
+	}
+
+	if (!uprom || !mprom)
+		enetc_sync_mac_filters(priv->si, 0); /* update PF entries */
 
 	psipmr |= enetc_port_rd(hw, ENETC_PSIPMR) &
 		  ~(ENETC_PSIPMR_SET_UP(0) | ENETC_PSIPMR_SET_MP(0));
@@ -1083,6 +1231,7 @@ static void enetc_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 	ndev->watchdog_timeo = 5 * HZ;
 
 	ndev->features = NETIF_F_HIGHDMA | NETIF_F_SG;
+	ndev->priv_flags |= IFF_UNICAST_FLT;
 }
 
 static void enetc_port_setup_primary_mac_address(struct enetc_ndev_priv *priv)

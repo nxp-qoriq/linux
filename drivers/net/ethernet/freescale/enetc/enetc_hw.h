@@ -14,6 +14,15 @@
 #define ENETC_SIPMAR0	0x80
 #define ENETC_SIPMAR1	0x84
 
+/* Control BDR regs */
+#define ENETC_SICBDRMR		0x800
+#define ENETC_SICBDRSR		0x804	/* RO */
+#define ENETC_SICBDRBAR0	0x810
+#define ENETC_SICBDRBAR1	0x814
+#define ENETC_SICBDRCIR		0x818
+#define ENETC_SICBDRCISR	0x81c
+#define ENETC_SICBDRLENR	0x820
+
 #define ENETC_SICAPR0	0x900
 #define ENETC_SICAPR1	0x904
 
@@ -161,3 +170,28 @@ union enetc_rx_bd {
 #define ENETC_RXBD_LSTATUS_F	BIT(31)
 #define ENETC_RXBD_ERR_MASK	0xff
 #define ENETC_RXBD_LSTATUS(flags)	((flags) << 16)
+
+#define ENETC_MAC_ADDR_FILT_CNT	8 /* # of supported entries per port */
+#define ENETC_MAX_NUM_VFS	2
+#define ENETC_MAC_FILT_PER_SI	(ENETC_MAC_ADDR_FILT_CNT / \
+				(ENETC_MAX_NUM_VFS + 1))
+
+struct enetc_cbd {
+	union {
+		struct {
+			__le32 addr[2];
+			__le32 opt[4];
+		};
+		__le32 data[6];
+	};
+	__le16 index;
+	__le16 length;
+	u8 cmd;
+	u8 cls;
+	u8 _res;
+	u8 status_flags;
+};
+
+#define ENETC_CBD_FLAGS_SF	BIT(7) /* short format */
+#define ENETC_CBD_FLAGS_IE	BIT(6) /* interrupt enable */
+#define ENETC_CBD_STATUS_MASK	0xf

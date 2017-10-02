@@ -73,8 +73,31 @@ static inline int enetc_bd_unused(struct enetc_bdr *bdr)
 	return bdr->bd_count + bdr->next_to_clean - bdr->next_to_use - 1;
 }
 
+/* Control BD ring */
+struct enetc_cbdr {
+	void *bd_base; /* points to Rx or Tx BD ring */
+	void __iomem *cir;
+	void __iomem *cisr;
+
+	int bd_count; /* # of BDs */
+	int next_to_use;
+	int next_to_clean;
+
+	dma_addr_t bd_dma_base;
+};
+
 #define ENETC_TXBD(BDR, i) (&(((struct enetc_tx_bd *)((BDR).bd_base))[i]))
 #define ENETC_RXBD(BDR, i) (&(((union enetc_rx_bd *)((BDR).bd_base))[i]))
+
+#define ENETC_MADDR_HASH_TBL_SZ	64
+enum enetc_mac_addr_type {UC, MC, MADDR_TYPE};
+struct enetc_mac_filter {
+	union {
+		char mac_addr[ETH_ALEN];
+		DECLARE_BITMAP(mac_hash_table, ENETC_MADDR_HASH_TBL_SZ);
+	};
+	int mac_addr_cnt;
+};
 
 /* PCI IEP device data */
 struct enetc_si {
@@ -84,6 +107,9 @@ struct enetc_si {
 	struct net_device *ndev; /* back ref. */
 
 	int num_vfs; /* number of active VFs, after sriov_init */
+	struct enetc_mac_filter mac_filter[ENETC_MAC_ADDR_FILT_CNT];
+
+	struct enetc_cbdr cbd_ring;
 };
 
 #define ENETC_MAX_NUM_TXQS	8
@@ -114,3 +140,5 @@ struct enetc_ndev_priv {
 };
 
 void enetc_set_ethtool_ops(struct net_device *ndev);
+
+void enetc_sync_mac_filters(struct enetc_si *si, int si_idx);

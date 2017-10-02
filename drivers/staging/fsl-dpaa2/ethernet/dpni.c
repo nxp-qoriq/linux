@@ -1671,7 +1671,10 @@ int dpni_set_congestion_notification(struct fsl_mc_io *mc_io,
  * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
  * @token:	Token of DPNI object
  * @qtype:	Type of queue - Rx, Tx and Tx confirm types are supported
- * @tc_id:	Traffic class selection (0-7)
+ * @tc_id:	bits 7-4 contain ceetm channel index (valid only for TX);
+ *		bits 3-0 contain traffic class.
+ *		Use macro DPNI_BUILD_CH_TC() to build correct value for
+ *		tc_id parameter.
  * @cfg:	congestion notification configuration
  *
  * Return:	'0' on Success; error code otherwise.
@@ -1905,7 +1908,10 @@ int dpni_reset_statistics(struct fsl_mc_io *mc_io,
  * @cg_point:	Congestion point
  * @q_type:	Queue type on which the taildrop is configured.
  *		Only Rx queues are supported for now
- * @tc:		Traffic class to apply this taildrop to
+ * @tc:		bits 7-4 contain ceetm channel index (valid only for TX);
+ *		bits 3-0 contain traffic class.
+ *		Use macro DPNI_BUILD_CH_TC() to build correct value for
+ *		tc parameter.
  * @q_index:	Index of the queue if the DPNI supports multiple queues for
  *		traffic distribution. Ignored if CONGESTION_POINT is not 0.
  * @taildrop:	Taildrop structure
@@ -1949,7 +1955,10 @@ int dpni_set_taildrop(struct fsl_mc_io *mc_io,
  * @cg_point:	Congestion point
  * @q_type:	Queue type on which the taildrop is configured.
  *		Only Rx queues are supported for now
- * @tc:		Traffic class to apply this taildrop to
+ * @tc:		bits 7-4 contain ceetm channel index (valid only for TX);
+ *		bits 3-0 contain traffic class.
+ *		Use macro DPNI_BUILD_CH_TC() to build correct value for
+ *		tc parameter.
  * @q_index:	Index of the queue if the DPNI supports multiple queues for
  *		traffic distribution. Ignored if CONGESTION_POINT is not 0.
  * @taildrop:	Taildrop structure

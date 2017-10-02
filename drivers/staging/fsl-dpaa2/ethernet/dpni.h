@@ -981,7 +981,14 @@ struct dpni_congestion_notification_cfg {
 	u16 notification_mode;
 };
 
-int dpni_set_congestion_notification(struct fsl_mc_io *mc_io,
+/** Compose TC parameter for function dpni_set_congestion_notification()
+ * and dpni_get_congestion_notification().
+ */
+#define DPNI_BUILD_CH_TC(ceetm_ch_idx, tc) \
+	((((ceetm_ch_idx) & 0x0F) << 4) | ((tc) & 0x0F))
+
+int dpni_set_congestion_notification(
+			struct fsl_mc_io *mc_io,
 			u32 cmd_flags,
 			u16 token,
 			enum dpni_queue_type qtype,

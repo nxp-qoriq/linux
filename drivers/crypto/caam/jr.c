@@ -23,6 +23,14 @@ struct jr_driver_data {
 
 static struct jr_driver_data driver_data;
 
+static int jr_driver_probed;
+
+int caam_jr_driver_probed(void)
+{
+	return jr_driver_probed;
+}
+EXPORT_SYMBOL(caam_jr_driver_probed);
+
 static int caam_reset_hw_jr(struct device *dev)
 {
 	struct caam_drv_private_jr *jrp = dev_get_drvdata(dev);
@@ -118,6 +126,8 @@ static int caam_jr_remove(struct platform_device *pdev)
 	if (ret)
 		dev_err(jrdev, "Failed to shut down job ring\n");
 	irq_dispose_mapping(jrpriv->irq);
+
+	jr_driver_probed--;
 
 	return ret;
 }
@@ -279,6 +289,36 @@ struct device *caam_jr_alloc(void)
 	return dev;
 }
 EXPORT_SYMBOL(caam_jr_alloc);
+
+/**
+ * caam_jridx_alloc() - Alloc a specific job ring based on its index.
+ *
+ * returns :  pointer to the newly allocated physical
+ *	      JobR dev can be written to if successful.
+ **/
+struct device *caam_jridx_alloc(int idx)
+{
+	struct caam_drv_private_jr *jrpriv;
+	struct device *dev = ERR_PTR(-ENODEV);
+
+	spin_lock(&driver_data.jr_alloc_lock);
+
+	if (list_empty(&driver_data.jr_list))
+		goto end;
+
+	list_for_each_entry(jrpriv, &driver_data.jr_list, list_node) {
+		if (jrpriv->ridx == idx) {
+			atomic_inc(&jrpriv->tfm_count);
+			dev = jrpriv->dev;
+			break;
+		}
+	}
+
+end:
+	spin_unlock(&driver_data.jr_alloc_lock);
+	return dev;
+}
+EXPORT_SYMBOL(caam_jridx_alloc);
 
 /**
  * caam_jr_free() - Free the Job Ring
@@ -537,6 +577,8 @@ static int caam_jr_probe(struct platform_device *pdev)
 	spin_unlock(&driver_data.jr_alloc_lock);
 
 	atomic_set(&jrpriv->tfm_count, 0);
+
+	jr_driver_probed++;
 
 	return 0;
 }

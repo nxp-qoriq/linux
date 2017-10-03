@@ -6,6 +6,7 @@ Copyright (C) 2008-2011 Freescale Semiconductor Inc.
    -Overview
    -SEC 4 Node
    -Job Ring Node
+   -CAAM DMA Node
    -Run Time Integrity Check (RTIC) Node
    -Run Time Integrity Check (RTIC) Memory Node
    -Secure Non-Volatile Storage (SNVS) Node
@@ -215,6 +216,26 @@ EXAMPLE
 		interrupts = <88 2>;
 	};
 
+=====================================================================
+CAAM DMA Node
+
+    Child node of the crypto node that enables the use of the DMA capabilities
+    of the CAAM by a stand-alone driver. The only required property is the
+    "compatible" property. All the other properties are determined from
+    the job rings on which the CAAM DMA driver depends (ex: the number of
+    dma-channels is equal to the number of defined job rings).
+
+  - compatible
+      Usage: required
+      Value type: <string>
+      Definition: Must include "fsl,sec-v4.0-dma"
+
+EXAMPLE
+  caam-dma {
+    compatible = "fsl,sec-v5.4-dma",
+                 "fsl,sec-v5.0-dma",
+                 "fsl,sec-v4.0-dma";
+  }
 
 =====================================================================
 Run Time Integrity Check (RTIC) Node

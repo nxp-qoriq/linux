@@ -578,6 +578,23 @@ config ZX_DMA
 	help
 	  Support the DMA engine for ZTE ZX296702 platform devices.
 
+config CRYPTO_DEV_FSL_CAAM_DMA
+	tristate "CAAM DMA engine support"
+	depends on CRYPTO_DEV_FSL_CAAM_JR
+	default y
+	select DMA_ENGINE
+	select ASYNC_CORE
+	select ASYNC_TX_ENABLE_CHANNEL_SWITCH
+	help
+	  Selecting this will offload the DMA operations for users of
+	  the scatter gather memcopy API to the CAAM via job rings. The
+	  CAAM is a hardware module that provides hardware acceleration to
+	  cryptographic operations. It has a built-in DMA controller that can
+	  be programmed to read/write cryptographic data. This module defines
+	  a DMA driver that uses the DMA capabilities of the CAAM.
+
+	  To compile this as a module, choose M here: the module
+	  will be called caam_dma.
 
 # driver files
 source "drivers/dma/bestcomm/Kconfig"

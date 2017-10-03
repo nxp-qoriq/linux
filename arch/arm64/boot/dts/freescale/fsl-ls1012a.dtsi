@@ -190,6 +190,12 @@
 				interrupts = <GIC_SPI 74 IRQ_TYPE_LEVEL_HIGH>;
 			};
 
+			caam-dma {
+				compatible = "fsl,sec-v5.4-dma",
+					     "fsl,sec-v5.0-dma",
+					     "fsl,sec-v4.0-dma";
+			};
+
 			rtic@60000 {
 				compatible = "fsl,sec-v5.4-rtic",
 					     "fsl,sec-v5.0-rtic",

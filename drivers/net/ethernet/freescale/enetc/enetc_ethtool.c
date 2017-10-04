@@ -31,6 +31,16 @@ static void enetc_get_regs(struct net_device *ndev, struct ethtool_regs *regs,
 	/* SI regs */
 	PR_REG(hw, SIMR);
 	PR_REG(hw, SIPMAR0);
+
+	/** Control ring regs */
+	PR_REG(hw, SICBDRMR);
+	PR_REG(hw, SICBDRSR);
+	PR_REG(hw, SICBDRBAR0);
+	PR_REG(hw, SICBDRBAR1);
+	PR_REG(hw, SICBDRCIR);
+	PR_REG(hw, SICBDRCISR);
+	PR_REG(hw, SICBDRLENR);
+
 	PR_REG(hw, SIPMAR1);
 	PR_REG(hw, SICAPR0);
 	PR_REG(hw, SICAPR1);

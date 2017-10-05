@@ -1252,17 +1252,22 @@ static int enetc_pci_probe(struct pci_dev *pdev,
 
 	priv = netdev_priv(ndev);
 
-	if (pdev->device == ENETC_DEV_ID_VF) {
+	if (pdev->device == ENETC_DEV_ID_PF) {
+		enetc_netdev_setup(si, ndev, &enetc_ndev_ops);
+		enetc_sw_init(priv);
+
+		enetc_configure_port(priv);
+
+	} else if (pdev->device == ENETC_DEV_ID_VF) {
 		/* VFs have a different set of ndos and can't touch the port */
 		enetc_netdev_setup(si, ndev, &enetc_ndev_vf_ops);
 		enetc_sw_init(priv);
 
 	} else {
-		enetc_netdev_setup(si, ndev, &enetc_ndev_ops);
-		enetc_sw_init(priv);
-
-		enetc_configure_port(priv);
+		WARN_ON(1);
+		goto err_si_config;
 	}
+
 	enetc_configure_si(priv);
 
 	err = enetc_alloc_msix(priv);
@@ -1285,6 +1290,7 @@ static int enetc_pci_probe(struct pci_dev *pdev,
 err_reg_netdev:
 	enetc_free_msix(priv);
 err_alloc_msix:
+err_si_config:
 	si->ndev = NULL;
 	free_netdev(ndev);
 err_alloc_netdev:
@@ -1344,7 +1350,7 @@ static int enetc_sriov_configure(struct pci_dev *pdev, int num_vfs)
 #endif
 
 static const struct pci_device_id enetc_id_table[] = {
-	{ PCI_DEVICE(PCI_VENDOR_ID_FREESCALE, 0xe100) },
+	{ PCI_DEVICE(PCI_VENDOR_ID_FREESCALE, ENETC_DEV_ID_PF) },
 	{ PCI_DEVICE(PCI_VENDOR_ID_FREESCALE, ENETC_DEV_ID_VF) },
 	{ 0, } /* End of table. */
 };

@@ -4566,6 +4566,55 @@ err_dev_get:
 	return -1;
 }
 EXPORT_SYMBOL(fec_enet_avb_unregister);
+
+int fec_enet_get_tx_queue_properties(int ifindex, struct tx_queue_properties *prop)
+{
+	struct net_device *ndev;
+	struct fec_enet_private *fep;
+
+	ndev = dev_get_by_index(&init_net, ifindex);
+	if (!ndev)
+		goto err_dev_get;
+
+	fep = netdev_priv(ndev);
+
+	if (fep->num_tx_queues >= TX_QUEUE_PROP_MAX)
+		goto err_queues;
+
+	if (fep->quirks & FEC_QUIRK_HAS_AVB) {
+		prop->num_queues = fep->num_tx_queues;
+		prop->queue[0].priority = 0;
+		prop->queue[0].flags = TX_QUEUE_FLAGS_STRICT_PRIORITY;
+		prop->queue[1].priority = 2;
+		prop->queue[1].flags = TX_QUEUE_FLAGS_CREDIT_SHAPER;
+		prop->queue[2].priority = 1;
+		prop->queue[2].flags = TX_QUEUE_FLAGS_CREDIT_SHAPER;
+	} else {
+		/*
+		 * For now, there is no MAC non-AVB capable
+		 * with more than 1 queue.
+		 */
+		if (fep->num_tx_queues == 1) {
+			prop->num_queues = fep->num_tx_queues;
+			prop->queue[0].priority = 0;
+			prop->queue[0].flags = TX_QUEUE_FLAGS_STRICT_PRIORITY;
+		} else {
+			pr_err("%s invalid/unknown TX queues configuration\n", __func__);
+			goto err_queues;
+		}
+	}
+
+	dev_put(ndev);
+
+	return 0;
+
+err_queues:
+	dev_put(ndev);
+
+err_dev_get:
+	return -1;
+}
+EXPORT_SYMBOL(fec_enet_get_tx_queue_properties);
 #endif
 
  /*

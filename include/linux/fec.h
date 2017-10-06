@@ -108,6 +108,22 @@ struct avb_ops {
 	struct module *owner;
 };
 
+#define TX_QUEUE_FLAGS_STRICT_PRIORITY	BIT(0)
+#define TX_QUEUE_FLAGS_CREDIT_SHAPER	BIT(1)
+
+#define TX_QUEUE_PROP_MAX		8
+
+struct tx_queue_property {
+	unsigned int priority;
+	unsigned int flags;
+};
+
+struct tx_queue_properties {
+	int num_queues;
+	struct tx_queue_property queue[TX_QUEUE_PROP_MAX];
+};
+
+int fec_enet_get_tx_queue_properties(int ifindex, struct tx_queue_properties *prop);
 int fec_enet_avb_register(const char *ifname, const struct avb_ops *avb, void *data);
 struct device *fec_enet_avb_get_device(const char *ifname);
 int fec_enet_avb_unregister(int ifindex, const struct avb_ops *avb);

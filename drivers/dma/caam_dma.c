@@ -25,6 +25,14 @@
 #define DESC_DMA_MEMCPY_LEN	((CAAM_DESC_BYTES_MAX - DESC_JOB_IO_LEN) / \
 				 CAAM_CMD_SZ)
 
+/* This is max chunk size of a DMA transfer. If a buffer is larger than this
+ * value it is internally broken into chunks of max CAAM_DMA_CHUNK_SIZE bytes
+ * and for each chunk a DMA transfer request is issued.
+ * This value is the largest number on 16 bits that is a multiple of 256 bytes
+ * (the largest configurable CAAM DMA burst size).
+ */
+#define CAAM_DMA_CHUNK_SIZE	65280
+
 struct caam_dma_sh_desc {
 	u32 desc[DESC_DMA_MEMCPY_LEN] ____cacheline_aligned;
 	dma_addr_t desc_dma;
@@ -345,8 +353,11 @@ static void set_caam_dma_desc(u32 *desc)
 	/* dma shared descriptor */
 	init_sh_desc(desc, HDR_SHARE_NEVER | (1 << HDR_START_IDX_SHIFT));
 
-	/* REG0 = SEQINLEN - 65472 */
-	append_math_sub_imm_u32(desc, REG0, SEQINLEN, IMM, 65472);
+	/* REG1 = CAAM_DMA_CHUNK_SIZE */
+	append_math_add_imm_u32(desc, REG1, ZERO, IMM, CAAM_DMA_CHUNK_SIZE);
+
+	/* REG0 = SEQINLEN - CAAM_DMA_CHUNK_SIZE */
+	append_math_sub_imm_u32(desc, REG0, SEQINLEN, IMM, CAAM_DMA_CHUNK_SIZE);
 
 	/* if (REG0 > 0)
 	 *	jmp to LABEL1
@@ -354,17 +365,17 @@ static void set_caam_dma_desc(u32 *desc)
 	jmp_cmd = append_jump(desc, JUMP_TEST_INVALL | JUMP_COND_MATH_N |
 			      JUMP_COND_MATH_Z);
 
-	/* REG0 = SEQINLEN */
-	append_math_sub(desc, REG0, SEQINLEN, ZERO, CAAM_CMD_SZ);
+	/* REG1 = SEQINLEN */
+	append_math_sub(desc, REG1, SEQINLEN, ZERO, CAAM_CMD_SZ);
 
 	/* LABEL1 */
 	set_jump_tgt_here(desc, jmp_cmd);
 
-	/* VARSEQINLEN = REG0 */
-	append_math_add(desc, VARSEQINLEN, REG0, ZERO, CAAM_CMD_SZ);
+	/* VARSEQINLEN = REG1 */
+	append_math_add(desc, VARSEQINLEN, REG1, ZERO, CAAM_CMD_SZ);
 
-	/* VARSEQOUTLEN = REG0 */
-	append_math_add(desc, VARSEQOUTLEN, REG0, ZERO, CAAM_CMD_SZ);
+	/* VARSEQOUTLEN = REG1 */
+	append_math_add(desc, VARSEQOUTLEN, REG1, ZERO, CAAM_CMD_SZ);
 
 	/* do FIFO STORE */
 	append_seq_fifo_store(desc, 0, FIFOST_TYPE_METADATA | LDST_VLF);

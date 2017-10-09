@@ -1262,6 +1262,8 @@ static void enetc_configure_port(struct enetc_ndev_priv *priv)
 	enetc_port_wr(hw, ENETC_PMR, ENETC_PMR_EN);
 
 	enetc_port_setup_primary_mac_address(priv);
+	/* reset promiscuity to default values, except VLAN promisc for SI0 */
+	enetc_port_wr(hw, ENETC_PSIPMR, ENETC_PSIPMR_SET_VP(0));
 }
 
 static void enetc_configure_si(struct enetc_ndev_priv *priv)

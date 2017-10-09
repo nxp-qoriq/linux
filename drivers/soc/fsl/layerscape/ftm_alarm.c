@@ -19,6 +19,7 @@
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/libata.h>
+#include <linux/module.h>
 
 #define FTM_SC			0x00
 #define FTM_SC_CLK_SHIFT	3

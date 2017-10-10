@@ -560,7 +560,7 @@ static int pfe_eth_set_settings(struct net_device *ndev,
 	if (!phydev)
 		return -ENODEV;
 
-	return phy_ethtool_ksettings_set(phydev, cmd);
+	return phy_ethtool_sset(phydev, cmd);
 }
 
 /*
@@ -577,7 +577,7 @@ static int pfe_eth_get_settings(struct net_device *ndev,
 	if (!phydev)
 		return -ENODEV;
 
-	return phy_ethtool_ksettings_get(phydev, cmd);
+	return phy_ethtool_gset(phydev, cmd);
 }
 
 /*
@@ -752,8 +752,8 @@ const struct ethtool_ops pfe_ethtool_ops = {
 	.set_msglevel = pfe_eth_set_msglevel,
 	.set_coalesce = pfe_eth_set_coalesce,
 	.get_coalesce = pfe_eth_get_coalesce,
-	.get_link_ksettings = pfe_eth_get_settings,
-	.set_link_ksettings = pfe_eth_set_settings,
+	.get_settings = pfe_eth_get_settings,
+	.set_settings = pfe_eth_set_settings,
 };
 
 /* pfe_eth_mdio_reset
@@ -1523,7 +1523,7 @@ static int pfe_eth_get_queuenum(struct pfe_eth_priv_s *priv, struct sk_buff
 	 * then fallback to default
 	 */
 #if defined(CONFIG_IP_NF_CONNTRACK_MARK) || defined(CONFIG_NF_CONNTRACK_MARK)
-	if (skb->_nfct) {
+	if (skb->nfct) {
 		enum ip_conntrack_info cinfo;
 		struct nf_conn *ct;
 

@@ -1523,7 +1523,7 @@ static int pfe_eth_get_queuenum(struct pfe_eth_priv_s *priv, struct sk_buff
 	 * then fallback to default
 	 */
 #if defined(CONFIG_IP_NF_CONNTRACK_MARK) || defined(CONFIG_NF_CONNTRACK_MARK)
-	if (skb->_nfct) {
+	if (skb->nfct) {
 		enum ip_conntrack_info cinfo;
 		struct nf_conn *ct;
 

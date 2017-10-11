@@ -610,6 +610,11 @@ struct dpni_rsp_get_taildrop {
 	__le32 threshold;
 };
 
+struct dpni_rsp_get_api_version {
+	u16 major;
+	u16 minor;
+};
+
 #define DPNI_DEST_TYPE_SHIFT		0
 #define DPNI_DEST_TYPE_SIZE		4
 #define DPNI_CONG_UNITS_SHIFT		4

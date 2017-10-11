@@ -978,6 +978,11 @@ struct dpni_rule_cfg {
 	u8	key_size;
 };
 
+int dpni_get_api_version(struct fsl_mc_io *mc_io,
+			 u32 cmd_flags,
+			 u16 *major_ver,
+			 u16 *minor_ver);
+
 int dpni_add_qos_entry(struct fsl_mc_io *mc_io,
 		       u32 cmd_flags,
 		       u16 token,

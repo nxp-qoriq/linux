@@ -1219,7 +1219,23 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 	int sec4_sg_index, sec4_sg_len, sec4_sg_bytes;
 	unsigned int authsize = ctx->authsize;
 
-	if (unlikely(req->dst != req->src)) {
+	if (req->src == req->dst) {
+		src_nents = sg_nents_for_len(req->src, req->assoclen +
+					     req->cryptlen +
+					     (encrypt ? authsize : 0));
+		if (unlikely(src_nents < 0)) {
+			dev_err(jrdev, "Insufficient bytes (%d) in src S/G\n",
+				req->assoclen + req->cryptlen +
+				(encrypt ? authsize : 0));
+			return ERR_PTR(src_nents);
+		}
+		mapped_src_nents = dma_map_sg(jrdev, req->src, src_nents,
+					      DMA_BIDIRECTIONAL);
+		if (unlikely(!mapped_src_nents)) {
+			dev_err(jrdev, "unable to map source\n");
+			return ERR_PTR(-ENOMEM);
+		}
+	} else {
 		src_nents = sg_nents_for_len(req->src, req->assoclen +
 					     req->cryptlen);
 		if (unlikely(src_nents < 0)) {
@@ -1238,26 +1254,6 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 				(encrypt ? authsize : (-authsize)));
 			return ERR_PTR(dst_nents);
 		}
-	} else {
-		src_nents = sg_nents_for_len(req->src, req->assoclen +
-					     req->cryptlen +
-					     (encrypt ? authsize : 0));
-		if (unlikely(src_nents < 0)) {
-			dev_err(jrdev, "Insufficient bytes (%d) in src S/G\n",
-				req->assoclen + req->cryptlen +
-				(encrypt ? authsize : 0));
-			return ERR_PTR(src_nents);
-		}
-	}
-
-	if (likely(req->src == req->dst)) {
-		mapped_src_nents = dma_map_sg(jrdev, req->src, src_nents,
-					      DMA_BIDIRECTIONAL);
-		if (unlikely(!mapped_src_nents)) {
-			dev_err(jrdev, "unable to map source\n");
-			return ERR_PTR(-ENOMEM);
-		}
-	} else {
 		/* Cover also the case of null (zero length) input data */
 		if (src_nents) {
 			mapped_src_nents = dma_map_sg(jrdev, req->src,

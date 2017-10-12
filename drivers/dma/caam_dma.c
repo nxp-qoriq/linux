@@ -214,7 +214,7 @@ static void caam_dma_done(struct device *dev, u32 *hwdesc, u32 err,
 		callback(callback_param);
 }
 
-void init_dma_job(struct caam_dma_edesc *edesc)
+static void init_dma_job(struct caam_dma_edesc *edesc)
 {
 	u32 *jd = edesc->jd;
 	u32 *sh_desc = dma_sh_desc->desc;

@@ -214,13 +214,14 @@ static void caam_dma_done(struct device *dev, u32 *hwdesc, u32 err,
 		callback(callback_param);
 }
 
-void init_dma_job(dma_addr_t sh_desc_dma, struct caam_dma_edesc *edesc)
+void init_dma_job(struct caam_dma_edesc *edesc)
 {
 	u32 *jd = edesc->jd;
 	u32 *sh_desc = dma_sh_desc->desc;
+	dma_addr_t desc_dma = dma_sh_desc->desc_dma;
 
 	/* init the job descriptor */
-	init_job_desc_shared(jd, sh_desc_dma, desc_len(sh_desc), HDR_REVERSE);
+	init_job_desc_shared(jd, desc_dma, desc_len(sh_desc), HDR_REVERSE);
 
 	/* set SEQIN PTR */
 	append_seq_in_ptr(jd, edesc->sec4_sg_dma, edesc->src_len, LDST_SGF);
@@ -250,7 +251,7 @@ caam_jr_prep_dma_sg(struct dma_chan *chan, struct scatterlist *dst_sg,
 		return ERR_CAST(edesc);
 
 	/* Initialize job descriptor */
-	init_dma_job(dma_sh_desc->desc_dma, edesc);
+	init_dma_job(edesc);
 
 	return &edesc->async_tx;
 }

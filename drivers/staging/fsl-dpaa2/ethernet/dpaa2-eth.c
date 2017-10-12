@@ -2120,9 +2120,6 @@ static int setup_dpni(struct fsl_mc_device *ls_dev)
 		dev_warn(dev, "Tx data offset (%d) not a multiple of 64B",
 			 priv->tx_data_offset);
 
-	/* Accommodate software annotation space (SWA) */
-	priv->tx_data_offset += DPAA2_ETH_SWA_SIZE;
-
 	/* Enable congestion notifications for Tx queues */
 	err = setup_tx_congestion(priv);
 	if (err)

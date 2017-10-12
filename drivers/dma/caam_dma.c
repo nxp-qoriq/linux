@@ -45,7 +45,6 @@ struct caam_dma_edesc {
 	struct caam_dma_ctx *ctx;
 	dma_addr_t sec4_sg_dma;
 	dma_addr_t sec4_sg_dma_dst;
-	size_t sec4_sg_bytes;
 	unsigned int src_len;
 	unsigned int dst_len;
 	struct sec4_sg_entry *sec4_sg;

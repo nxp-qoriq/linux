@@ -293,12 +293,10 @@ static void release_fd_buf(struct dpaa2_eth_priv *priv,
 	if (likely(ch->rel_buf_cnt < DPAA2_ETH_BUFS_PER_CMD))
 		return;
 
-	do {
-		err = dpaa2_io_service_release(NULL, priv->bpid,
+	while ((err = dpaa2_io_service_release(NULL, priv->bpid,
 					       ch->rel_buf_array,
-					       ch->rel_buf_cnt);
+					       ch->rel_buf_cnt)) == -EBUSY)
 		cpu_relax();
-	} while (err == -EBUSY);
 
 	if (unlikely(err))
 		free_bufs(priv, ch->rel_buf_array, ch->rel_buf_cnt);
@@ -1033,10 +1031,9 @@ static int add_bufs(struct dpaa2_eth_priv *priv, u16 bpid)
 
 release_bufs:
 	/* In case the portal is busy, retry until successful */
-	do {
-		err = dpaa2_io_service_release(NULL, bpid, buf_array, i);
+	while ((err = dpaa2_io_service_release(NULL, bpid,
+					       buf_array, i)) == -EBUSY)
 		cpu_relax();
-	} while (err == -EBUSY);
 
 	/* If release command failed, clean up and bail out; not much
 	 * else we can do about it

@@ -115,16 +115,18 @@
 /* PTP nominal frequency 1GHz */
 #define DPAA2_PTP_NOMINAL_FREQ_PERIOD_NS 1
 
-/* Leave enough extra space in the headroom to make sure the skb is
- * not realloc'd in forwarding scenarios.
- */
-#define DPAA2_ETH_RX_HEAD_ROOM		192
-
 /* We are accommodating a skb backpointer and some S/G info
  * in the frame's software annotation. The hardware
  * options are either 0 or 64, so we choose the latter.
  */
 #define DPAA2_ETH_SWA_SIZE		64
+
+/* Extra headroom space requested to hardware, in order to make sure there's
+ * no realloc'ing in forwarding scenarios
+ */
+#define DPAA2_ETH_RX_HEAD_ROOM \
+	(DPAA2_ETH_TX_HWA_SIZE - DPAA2_ETH_RX_HWA_SIZE + \
+	 DPAA2_ETH_TX_BUF_ALIGN + HH_DATA_MOD)
 
 /* Must keep this struct smaller than DPAA2_ETH_SWA_SIZE */
 struct dpaa2_eth_swa {

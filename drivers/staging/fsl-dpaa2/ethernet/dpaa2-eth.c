@@ -230,10 +230,10 @@ err_build:
 	return NULL;
 }
 
-static int dpaa2_eth_xdp_xmit(struct dpaa2_eth_priv *priv,
-			      const struct dpaa2_fd *fd,
-			      void *buf_start,
-			      u16 queue_id)
+static int dpaa2_eth_xdp_tx(struct dpaa2_eth_priv *priv,
+			    const struct dpaa2_fd *fd,
+			    void *buf_start,
+			    u16 queue_id)
 {
 	struct dpaa2_eth_fq *fq;
 	struct rtnl_link_stats64 *percpu_stats;
@@ -380,8 +380,8 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 				release_fd_buf(priv, ch, addr);
 				goto drop_cnt;
 			case XDP_TX:
-				if (dpaa2_eth_xdp_xmit(priv, fd, vaddr,
-						       queue_id)) {
+				if (dpaa2_eth_xdp_tx(priv, fd, vaddr,
+						     queue_id)) {
 					dma_unmap_single(dev, addr,
 							 DPAA2_ETH_RX_BUF_SIZE,
 							 DMA_BIDIRECTIONAL);

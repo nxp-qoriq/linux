@@ -2879,7 +2879,7 @@ static int netdev_init(struct net_device *net_dev)
 	 * significant performance impact.
 	 */
 	req_headroom = LL_RESERVED_SPACE(net_dev) - ETH_HLEN;
-	rx_headroom = ALIGN(DPAA2_ETH_HWA_SIZE + DPAA2_ETH_SWA_SIZE +
+	rx_headroom = ALIGN(DPAA2_ETH_RX_HWA_SIZE + DPAA2_ETH_SWA_SIZE +
 			    DPAA2_ETH_RX_HEAD_ROOM, priv->rx_buf_align);
 	if (req_headroom > rx_headroom)
 		dev_info_once(dev, "Required headroom (%d) greater than available (%d)\n",

@@ -103,7 +103,7 @@
 #define DPAA2_ETH_RX_BUF_ALIGN		64
 
 #define DPAA2_ETH_NEEDED_HEADROOM(p_priv) \
-	((p_priv)->tx_data_offset + DPAA2_ETH_TX_BUF_ALIGN)
+	((p_priv)->tx_data_offset + DPAA2_ETH_TX_BUF_ALIGN - HH_DATA_MOD)
 
 /* Hardware only sees DPAA2_ETH_RX_BUF_SIZE, but the skb built around
  * the buffer also needs space for its shared info struct, and we need
@@ -133,7 +133,7 @@
  */
 #define DPAA2_ETH_RX_HEAD_ROOM \
 	(DPAA2_ETH_TX_HWA_SIZE - DPAA2_ETH_RX_HWA_SIZE + \
-	 DPAA2_ETH_TX_BUF_ALIGN + HH_DATA_MOD)
+	 DPAA2_ETH_TX_BUF_ALIGN)
 
 /* Must keep this struct smaller than DPAA2_ETH_SWA_SIZE */
 struct dpaa2_eth_swa {

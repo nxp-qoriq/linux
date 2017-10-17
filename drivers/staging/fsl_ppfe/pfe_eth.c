@@ -946,7 +946,7 @@ static int pfe_eth_mdio_init(struct pfe_eth_priv_s *priv,
 	if (!priv->mdc_div)
 		priv->mdc_div = 64;
 
-	bus->irq[0] = minfo->irq[0];
+	bus->irq = minfo->irq;
 
 	bus->parent = priv->pfe->dev;
 

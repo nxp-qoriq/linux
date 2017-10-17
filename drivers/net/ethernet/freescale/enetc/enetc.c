@@ -1229,6 +1229,8 @@ static void enetc_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 	ndev->netdev_ops = ndev_ops;
 	enetc_set_ethtool_ops(ndev);
 	ndev->watchdog_timeo = 5 * HZ;
+	ndev->min_mtu = ETH_MIN_MTU;
+	ndev->max_mtu = ENETC_MAX_MTU;
 
 	ndev->features = NETIF_F_HIGHDMA | NETIF_F_SG;
 	ndev->priv_flags |= IFF_UNICAST_FLT;

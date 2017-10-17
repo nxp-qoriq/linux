@@ -5,8 +5,13 @@
 #include <linux/dma-mapping.h>
 #include <linux/skbuff.h>
 #include <linux/ethtool.h>
+#include <linux/if_vlan.h>
 
 #include "enetc_hw.h"
+
+#define ENETC_MAC_MAXFRM_SIZE	9600
+#define ENETC_MAX_MTU		(ENETC_MAC_MAXFRM_SIZE - \
+				(ETH_FCS_LEN + ETH_HLEN + VLAN_HLEN))
 
 struct enetc_tx_swbd {
 	struct sk_buff *skb;
@@ -16,7 +21,7 @@ struct enetc_tx_swbd {
 	u16 is_dma_page;
 };
 
-#define ENETC_RX_MAXFRM_SIZE	9600
+#define ENETC_RX_MAXFRM_SIZE	ENETC_MAC_MAXFRM_SIZE
 #define ENETC_RXB_TRUESIZE	2048 // PAGE_SIZE >> 1
 #define ENETC_RXB_PAD		NET_SKB_PAD // TODO: extra space? IP_ALIGN?
 #define ENETC_RXB_DMA_SIZE	\

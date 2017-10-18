@@ -14,6 +14,16 @@
 #define ENETC_SIPMAR0	0x80
 #define ENETC_SIPMAR1	0x84
 
+/* SI statistics */
+#define ENETC_SIROCT	0x300
+#define ENETC_SIRFRM	0x308
+#define ENETC_SIRUCA	0x310
+#define ENETC_SIRMCA	0x318
+#define ENETC_SITOCT	0x320
+#define ENETC_SITFRM	0x328
+#define ENETC_SITUCA	0x330
+#define ENETC_SITMCA	0x338
+
 /* Control BDR regs */
 #define ENETC_SICBDRMR		0x800
 #define ENETC_SICBDRSR		0x804	/* RO */
@@ -116,6 +126,10 @@ struct enetc_hw {
 #define enetc_wr_reg(reg, val)	iowrite32((val), (reg))
 #define enetc_rd(hw, off)	enetc_rd_reg((hw)->reg + (off))
 #define enetc_wr(hw, off, val)	enetc_wr_reg((hw)->reg + (off), val)
+#define enetc_rd_reg64(reg)		ioread64((reg))
+#define enetc_wr_reg64(reg)		iowrite64((val), (reg))
+#define enetc_rd64(hw, off)		enetc_rd_reg64((hw)->reg + (off))
+#define enetc_wr64(hw, off, val)	enetc_wr_reg64((hw)->reg + (off), val)
 /* port register accessors - PF only */
 #define enetc_port_rd(hw, off)		enetc_rd_reg((hw)->port + (off))
 #define enetc_port_wr(hw, off, val)	enetc_wr_reg((hw)->port + (off), val)

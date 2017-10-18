@@ -97,9 +97,62 @@ static void enetc_get_regs(struct net_device *ndev, struct ethtool_regs *regs,
 	}
 }
 
+static struct {
+	int reg;
+	char name[ETH_GSTRING_LEN];
+} enetc_si_counters[] =  {
+	{ ENETC_SIROCT, "SI received octets" },
+	{ ENETC_SIRFRM, "SI received frames" },
+	{ ENETC_SIRUCA, "SI received unicast frames" },
+	{ ENETC_SIRMCA, "SI received multicast frames" },
+	{ ENETC_SITOCT, "SI transmit octets" },
+	{ ENETC_SITFRM, "SI transmit frames" },
+	{ ENETC_SITUCA, "SI transmit unicast frames" },
+	{ ENETC_SITMCA, "SI transmit multicast frames" },
+};
+
+static int enetc_get_sset_count(struct net_device *ndev, int sset)
+{
+	switch (sset) {
+	case ETH_SS_STATS:
+		return ARRAY_SIZE(enetc_si_counters);
+	default:
+		return -EOPNOTSUPP;
+	}
+}
+
+static void enetc_get_strings(struct net_device *ndev, u32 stringset, u8 *data)
+{
+	u8 *p = data;
+	int i;
+
+	switch (stringset) {
+	case ETH_SS_STATS:
+		for (i = 0; i < ARRAY_SIZE(enetc_si_counters); i++) {
+			strlcpy(p, enetc_si_counters[i].name, ETH_GSTRING_LEN);
+			p += ETH_GSTRING_LEN;
+		}
+		break;
+	}
+}
+
+static void enetc_get_ethtool_stats(struct net_device *ndev,
+				    struct ethtool_stats *stats, u64 *data)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_hw *hw = &priv->si->hw;
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(enetc_si_counters); i++)
+		data[i] = enetc_rd64(hw, enetc_si_counters[i].reg);
+}
+
 const struct ethtool_ops enetc_ethtool_ops = {
 	.get_regs_len = enetc_get_reglen,
 	.get_regs = enetc_get_regs,
+	.get_sset_count = enetc_get_sset_count,
+	.get_strings = enetc_get_strings,
+	.get_ethtool_stats = enetc_get_ethtool_stats,
 };
 
 void enetc_set_ethtool_ops(struct net_device *ndev)

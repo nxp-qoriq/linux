@@ -505,14 +505,41 @@ static void enetc_process_skb(struct enetc_bdr *rx_ring,
 
 /* Probing and Init */
 
+static void enetc_get_primary_mac_addr(struct enetc_hw *hw, u8 *addr)
+{
+	*(u32 *)(addr + 2) = htonl((u32)enetc_rd(hw, ENETC_SIPMAR0));
+	*(u16 *)addr = htons(enetc_rd(hw, ENETC_SIPMAR1) >> 16);
+}
+
+static void enetc_get_si_caps(struct enetc_ndev_priv *priv)
+{
+	struct enetc_hw *hw = &priv->si->hw;
+	u32 val;
+
+	/* pick up primary MAC address from SI */
+	enetc_get_primary_mac_addr(hw, priv->ndev->dev_addr);
+
+	/* find out how many of various resources we have to work with */
+	val = enetc_rd(hw, ENETC_SICAPR0);
+	/* we expect to have the same number of Rx and Tx rings, but in case
+	 * that's not true use the min value
+	 */
+	priv->si->num_rx_rings = (val >> 16) & 0xff;
+	priv->si->num_tx_rings = val & 0xff;
+}
+
 static void enetc_sw_init(struct enetc_ndev_priv *priv)
 {
+	enetc_get_si_caps(priv);
+
 	priv->tx_bd_count = 1024; //TODO: use defines for defaults
 	priv->rx_bd_count = 1024;
 
-	priv->num_rx_rings = num_online_cpus();
-	/* support queue pairs only for now */
-	priv->num_tx_rings = priv->num_rx_rings;
+	/* we only use one ring per CPU for now */
+	priv->num_rx_rings = min_t(u16, num_online_cpus(),
+				   priv->si->num_rx_rings);
+	priv->num_tx_rings = min_t(u16, num_online_cpus(),
+				   priv->si->num_tx_rings);
 	priv->num_int_vectors = priv->num_rx_rings;
 
 	/* si specific */
@@ -1014,12 +1041,6 @@ static void enetc_set_primary_mac_addr(struct enetc_hw *hw, int si,
 	enetc_port_wr(hw, ENETC_PSIPMAR1(si), upper << 16);
 }
 
-static void enetc_get_primary_mac_addr(struct enetc_hw *hw, u8 *addr)
-{
-	*(u32 *)(addr + 2) = htonl((u32)enetc_rd(hw, ENETC_SIPMAR0));
-	*(u16 *)addr = htons(enetc_rd(hw, ENETC_SIPMAR1) >> 16);
-}
-
 static int enetc_set_mac_addr(struct net_device *ndev, void *addr)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
@@ -1236,36 +1257,52 @@ static void enetc_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 	ndev->priv_flags |= IFF_UNICAST_FLT;
 }
 
-static void enetc_port_setup_primary_mac_address(struct enetc_ndev_priv *priv)
+static void enetc_port_setup_primary_mac_address(struct enetc_si *si)
 {
 	unsigned char mac_addr[MAX_ADDR_LEN];
-	struct enetc_hw *hw = &priv->si->hw;
+	struct enetc_hw *hw = &si->hw;
 
 	enetc_get_primary_mac_addr(hw, mac_addr);
 	if (is_zero_ether_addr(mac_addr)) {
 		eth_random_addr(mac_addr);
-		dev_info(priv->dev, "no MAC address specified, using %pM\n",
+		dev_info(&si->pdev->dev, "no MAC address specified, using %pM\n",
 			 mac_addr);
 		enetc_set_primary_mac_addr(hw, 0, mac_addr);
 	}
 }
 
-static void enetc_configure_port(struct enetc_ndev_priv *priv)
+static void enetc_port_alloc_rings(struct enetc_si *si)
 {
-	struct enetc_hw *hw = &priv->si->hw;
+	struct enetc_hw *hw = &si->hw;
+	int num_rings, i;
 	u32 val;
 
-	val = ENETC_PVCFGR_SET_TXBDR(priv->num_tx_rings);
-	val |= ENETC_PVCFGR_SET_RXBDR(priv->num_rx_rings);
-	enetc_port_wr(hw, ENETC_PV0CFGR(0), val);
+	val = enetc_port_rd(hw, ENETC_PCAPR0);
+	num_rings = min(val >> 24, (val >> 16) & 0xff);
 
-	enetc_configure_port_mac(priv->si);
-	/* enable port */
-	enetc_port_wr(hw, ENETC_PMR, ENETC_PMR_EN);
+	val = ENETC_PVCFGR_SET_TXBDR(num_rings);
+	val |= ENETC_PVCFGR_SET_RXBDR(num_rings);
+	for (i = 0; i < si->total_vfs + 1; i++)
+		enetc_port_wr(hw, ENETC_PV0CFGR(i), val);
+}
 
-	enetc_port_setup_primary_mac_address(priv);
+static void enetc_configure_port(struct enetc_si *si)
+{
+	struct enetc_hw *hw = &si->hw;
+
+	enetc_configure_port_mac(si);
+
+	/* split up rings between functions */
+	enetc_port_alloc_rings(si);
+
+	/* fix-up primary MAC addresses, if not set already */
+	enetc_port_setup_primary_mac_address(si);
+
 	/* reset promiscuity to default values, except VLAN promisc for SI0 */
 	enetc_port_wr(hw, ENETC_PSIPMR, ENETC_PSIPMR_SET_VP(0));
+
+	/* enable port */
+	enetc_port_wr(hw, ENETC_PMR, ENETC_PMR_EN);
 }
 
 static void enetc_configure_si(struct enetc_ndev_priv *priv)
@@ -1274,9 +1311,6 @@ static void enetc_configure_si(struct enetc_ndev_priv *priv)
 
 	/* enable SI */
 	enetc_wr(hw, ENETC_SIMR, ENETC_SIMR_EN);
-
-	/* pick up primary MAC address from SI */
-	enetc_get_primary_mac_addr(hw, priv->ndev->dev_addr);
 }
 
 static int enetc_alloc_msix(struct enetc_ndev_priv *priv)
@@ -1406,21 +1440,20 @@ static int enetc_pci_probe(struct pci_dev *pdev,
 	priv = netdev_priv(ndev);
 
 	if (pdev->device == ENETC_DEV_ID_PF) {
+		si->total_vfs = pci_sriov_get_totalvfs(pdev);
+		enetc_configure_port(si);
+
 		enetc_netdev_setup(si, ndev, &enetc_ndev_ops);
-		enetc_sw_init(priv);
-
-		enetc_configure_port(priv);
-
 	} else if (pdev->device == ENETC_DEV_ID_VF) {
 		/* VFs have a different set of ndos and can't touch the port */
 		enetc_netdev_setup(si, ndev, &enetc_ndev_vf_ops);
-		enetc_sw_init(priv);
 
 	} else {
 		WARN_ON(1);
 		goto err_si_config;
 	}
 
+	enetc_sw_init(priv);
 	enetc_configure_si(priv);
 
 	err = enetc_alloc_msix(priv);

@@ -112,9 +112,13 @@ struct enetc_si {
 	struct net_device *ndev; /* back ref. */
 
 	int num_vfs; /* number of active VFs, after sriov_init */
+	int total_vfs; /* max number of VFs, set for PF at probe */
 	struct enetc_mac_filter mac_filter[ENETC_MAC_ADDR_FILT_CNT];
 
 	struct enetc_cbdr cbd_ring;
+
+	int num_rx_rings; /* how many rings are available in the SI */
+	int num_tx_rings;
 };
 
 #define ENETC_MAX_NUM_TXQS	8

@@ -119,6 +119,7 @@ struct enetc_si {
 
 	int num_rx_rings; /* how many rings are available in the SI */
 	int num_tx_rings;
+	int num_fs_entries;
 };
 
 #define ENETC_MAX_NUM_TXQS	8
@@ -129,6 +130,11 @@ struct enetc_int_vector {
 
 	struct enetc_bdr tx_ring ____cacheline_aligned_in_smp;
 	struct enetc_bdr rx_ring;
+};
+
+struct enetc_cls_rule {
+	struct ethtool_rx_flow_spec fs;
+	bool used;
 };
 
 struct enetc_ndev_priv {
@@ -146,8 +152,12 @@ struct enetc_ndev_priv {
 
 	struct enetc_bdr *tx_ring[16];
 	struct enetc_bdr *rx_ring[16];
+
+	struct enetc_cls_rule *cls_rules;
 };
 
 void enetc_set_ethtool_ops(struct net_device *ndev);
 
 void enetc_sync_mac_filters(struct enetc_si *si, int si_idx);
+int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
+		       int index);

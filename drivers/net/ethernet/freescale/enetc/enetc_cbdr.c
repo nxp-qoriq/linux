@@ -130,3 +130,40 @@ void enetc_sync_mac_filters(struct enetc_si *si, int si_idx)
 		}
 	}
 }
+
+/* Set entry in RFS table */
+int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
+		       int index)
+{
+	struct enetc_cbd cbd = {.cmd = 0};
+	bool async = false;
+	dma_addr_t dma;
+	int err;
+
+	/* fill up the "set" descriptor */
+	cbd.cmd = 0;
+	cbd.cls = 4;
+	cbd.index = cpu_to_le16(index);
+	cbd.length = cpu_to_le16(sizeof(*rfse));
+	cbd.opt[3] = cpu_to_le32(0); /* SI */
+
+	dma = dma_map_single(&si->pdev->dev, rfse, cbd.length,
+			     DMA_TO_DEVICE);
+	if (dma_mapping_error(&si->pdev->dev, dma)) {
+		netdev_err(si->ndev, "DMA mapping of RFS entry failed!\n");
+		return -ENOMEM;
+	}
+
+	cbd.addr[0] = (u32)dma;
+	cbd.addr[1] = (u32)(dma >> 32);
+
+	if (async)
+		cbd.status_flags |= ENETC_CBD_FLAGS_IE;
+
+	err = enetc_send_cmd(si, &cbd, async);
+	if (err)
+		netdev_err(si->ndev, "FS entry add failed (%d)!", err);
+	dma_unmap_single(&si->pdev->dev, dma, cbd.length, DMA_TO_DEVICE);
+
+	return err;
+}

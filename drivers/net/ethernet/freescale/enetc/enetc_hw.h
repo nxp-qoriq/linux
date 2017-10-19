@@ -39,7 +39,7 @@
 #define ENETC_SIMSITRV(n) (0xB00 + (n) * 0x4)
 #define ENETC_SIMSIRRV(n) (0xB80 + (n) * 0x4)
 
-#define ENETC_SICCAPR	0x1200
+#define ENETC_SIRFSCAPR	0x1200
 
 /** SI BDR sub-blocks, n = 0..7 */
 enum enetc_bdr_type {TX, RX};
@@ -98,6 +98,11 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PV0CFGR(n)	(0x00920 + (n) * 0x10)  /* n = SI index */
 #define ENETC_PVCFGR_SET_TXBDR(val)	((val) & 0xff)
 #define ENETC_PVCFGR_SET_RXBDR(val)	(((val) & 0xff) << 16)
+
+#define ENETC_PRFSMR		0x01800
+#define ENETC_PRFSMR_RFSE	BIT(31)
+#define ENETC_PRFSCAPR		0x01804
+#define ENETC_PSIRFSCFGR(n)	(0x01814 + (n) * 4) /* n = SI index */
 
 #define ENETC_PM0_CMD_CFG	0x08008
 #define ENETC_PM0_TX_EN		BIT(31)
@@ -210,3 +215,27 @@ struct enetc_cbd {
 #define ENETC_CBD_FLAGS_SF	BIT(7) /* short format */
 #define ENETC_CBD_FLAGS_IE	BIT(6) /* interrupt enable */
 #define ENETC_CBD_STATUS_MASK	0xf
+
+struct enetc_cmd_rfse {
+	u8 smac_h[6];
+	u8 smac_m[6];
+	u8 dmac_h[6];
+	u8 dmac_m[6];
+	u32 sip_h[4];
+	u32 sip_m[4];
+	u32 dip_h[4];
+	u32 dip_m[4];
+	u16 ethtype_h;
+	u16 ethtype_m;
+	u16 sport_h;
+	u16 sport_m;
+	u16 dport_h;
+	u16 dport_m;
+	u16 vlan_h;
+	u16 vlan_m;
+	u16 result;
+	u16 mode;
+};
+
+#define ENETC_RFSE_EN	BIT(15)
+#define ENETC_RFSE_MODE_BD	2

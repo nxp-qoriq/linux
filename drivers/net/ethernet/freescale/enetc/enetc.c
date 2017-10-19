@@ -526,10 +526,13 @@ static void enetc_get_si_caps(struct enetc_ndev_priv *priv)
 	 */
 	priv->si->num_rx_rings = (val >> 16) & 0xff;
 	priv->si->num_tx_rings = val & 0xff;
+	priv->si->num_fs_entries = enetc_rd(hw, ENETC_SIRFSCAPR) & 0x7f;
 }
 
 static void enetc_sw_init(struct enetc_ndev_priv *priv)
 {
+	struct enetc_si *si = priv->si;
+
 	enetc_get_si_caps(priv);
 
 	priv->tx_bd_count = 1024; //TODO: use defines for defaults
@@ -542,8 +545,11 @@ static void enetc_sw_init(struct enetc_ndev_priv *priv)
 				   priv->si->num_tx_rings);
 	priv->num_int_vectors = priv->num_rx_rings;
 
+	priv->cls_rules = kcalloc(si->num_fs_entries, sizeof(*priv->cls_rules),
+				  GFP_KERNEL);
+
 	/* si specific */
-	priv->si->cbd_ring.bd_count = 64; //TODO: use defines for defaults
+	si->cbd_ring.bd_count = 64; //TODO: use defines for defaults
 }
 
 static int enetc_alloc_txbdr(struct enetc_bdr *txr)
@@ -1271,6 +1277,25 @@ static void enetc_port_setup_primary_mac_address(struct enetc_si *si)
 	}
 }
 
+static void enetc_port_alloc_rfs(struct enetc_si *si)
+{
+	struct enetc_hw *hw = &si->hw;
+	int num_entries, vf_entries, i;
+
+	/* split RFS entries between functions */
+	num_entries = enetc_port_rd(hw, ENETC_PRFSCAPR) & 0xf;
+	num_entries = 32 * (1 << num_entries);
+	vf_entries = num_entries / (si->total_vfs + 1);
+
+	for (i = 0; i < si->total_vfs; i++)
+		enetc_port_wr(hw, ENETC_PSIRFSCFGR(i + 1), vf_entries);
+	enetc_port_wr(hw, ENETC_PSIRFSCFGR(0),
+		      num_entries - vf_entries * si->total_vfs);
+
+	/* enable RFS on port */
+	enetc_port_wr(hw, ENETC_PRFSMR, ENETC_PRFSMR_RFSE);
+}
+
 static void enetc_port_alloc_rings(struct enetc_si *si)
 {
 	struct enetc_hw *hw = &si->hw;
@@ -1294,6 +1319,9 @@ static void enetc_configure_port(struct enetc_si *si)
 
 	/* split up rings between functions */
 	enetc_port_alloc_rings(si);
+
+	/* split up RFS entries */
+	enetc_port_alloc_rfs(si);
 
 	/* fix-up primary MAC addresses, if not set already */
 	enetc_port_setup_primary_mac_address(si);
@@ -1495,12 +1523,14 @@ err_dma:
 static void enetc_pci_remove(struct pci_dev *pdev)
 {
 	struct enetc_si *si = pci_get_drvdata(pdev);
+	struct enetc_ndev_priv *priv = netdev_priv(si->ndev);
 	struct enetc_hw *hw = &si->hw;
 
 	dev_info(&pdev->dev, "enetc_pci_remove()\n");
 
 	unregister_netdev(si->ndev);
 
+	kfree(priv->cls_rules);
 	enetc_free_msix(netdev_priv(si->ndev));
 
 	free_netdev(si->ndev);

@@ -299,7 +299,7 @@ static void dpaa2_eth_get_ethtool_stats(struct net_device *net_dev,
 	/* Print standard counters, from DPNI statistics */
 	for (j = 0; j <= 2; j++) {
 		err = dpni_get_statistics(priv->mc_io, 0, priv->mc_token,
-					  j, &dpni_stats);
+					  j, 0, &dpni_stats);
 		if (err != 0)
 			netdev_warn(net_dev, "Err %d getting DPNI stats page %d",
 				    err, j);

@@ -486,6 +486,24 @@ union dpni_statistics {
 		u64 egress_confirmed_frames;
 	} page_2;
 	/**
+	 * struct page_3 - Page_3 statistics structure with values for the
+	 *		   selected TC
+	 * @ceetm_dequeue_bytes: Cumulative count of the number of bytes
+	 *			 dequeued
+	 * @ceetm_dequeue_frames: Cumulative count of the number of frames
+	 *			  dequeued
+	 * @ceetm_reject_bytes: Cumulative count of the number of bytes in all
+	 *			frames whose enqueue was rejected
+	 * @ceetm_reject_frames: Cumulative count of all frame enqueues
+	 *			 rejected
+	 */
+	struct {
+		u64 ceetm_dequeue_bytes;
+		u64 ceetm_dequeue_frames;
+		u64 ceetm_reject_bytes;
+		u64 ceetm_reject_frames;
+	} page_3;
+	/**
 	 * struct raw - raw statistics structure
 	 */
 	struct {
@@ -497,6 +515,7 @@ int dpni_get_statistics(struct fsl_mc_io	*mc_io,
 			u32			cmd_flags,
 			u16			token,
 			u8			page,
+			u8			param,
 			union dpni_statistics	*stat);
 
 int dpni_reset_statistics(struct fsl_mc_io *mc_io,

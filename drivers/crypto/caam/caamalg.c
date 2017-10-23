@@ -55,6 +55,7 @@
 #include "sg_sw_sec4.h"
 #include "key_gen.h"
 #include "caamalg_desc.h"
+#include "crypto/chacha20.h"
 
 /*
  * crypto alg
@@ -70,6 +71,9 @@
 					 CAAM_CMD_SZ * 4)
 #define AUTHENC_DESC_JOB_IO_LEN		(AEAD_DESC_JOB_IO_LEN + \
 					 CAAM_CMD_SZ * 5)
+
+#define CHAPOLY_EN_JDESC_LEN		(CAAM_CMD_SZ * 36)
+#define CHAPOLY_DE_JDESC_LEN		(CAAM_CMD_SZ * 36)
 
 #define DESC_MAX_USED_BYTES		(CAAM_DESC_BYTES_MAX - DESC_JOB_IO_LEN)
 #define DESC_MAX_USED_LEN		(DESC_MAX_USED_BYTES / CAAM_CMD_SZ)
@@ -373,6 +377,17 @@ static int gcm_set_sh_desc(struct crypto_aead *aead)
 	return 0;
 }
 
+static int chapoly_setauthsize(struct crypto_aead *authenc, unsigned int authsize)
+{
+	struct caam_ctx *ctx = crypto_aead_ctx(authenc);
+
+	if (authsize != POLY1305_DIGEST_SIZE)
+		return -EINVAL;
+
+	ctx->authsize = authsize;
+	return 0;
+}
+
 static int gcm_setauthsize(struct crypto_aead *authenc, unsigned int authsize)
 {
 	struct caam_ctx *ctx = crypto_aead_ctx(authenc);
@@ -505,6 +520,24 @@ static int rfc4543_setauthsize(struct crypto_aead *authenc,
 
 	ctx->authsize = authsize;
 	rfc4543_set_sh_desc(authenc);
+
+	return 0;
+}
+
+static int chapoly_setkey(struct crypto_aead *aead, const u8 *key,
+			     unsigned int keylen)
+{
+	struct caam_ctx *ctx = crypto_aead_ctx(aead);
+	unsigned int ivsize = crypto_aead_ivsize(aead);
+	unsigned int saltlen = CHACHAPOLY_IV_SIZE - ivsize;
+
+	if (keylen != saltlen + CHACHA20_KEY_SIZE) {
+		crypto_aead_set_flags(aead, CRYPTO_TFM_RES_BAD_KEY_LEN);
+		return -EINVAL;
+	}
+
+	memcpy(ctx->key, key, keylen);
+	ctx->cdata.keylen = keylen - saltlen;
 
 	return 0;
 }
@@ -1046,6 +1079,273 @@ static void init_gcm_job(struct aead_request *req,
 	/* End of blank commands */
 }
 
+static void init_chapoly_enc_job(struct aead_request *req,
+			 struct aead_edesc *edesc, bool all_contig)
+{
+	struct crypto_aead *aead = crypto_aead_reqtfm(req);
+	struct caam_ctx *ctx = crypto_aead_ctx(aead);
+	unsigned int ivsize = crypto_aead_ivsize(aead);
+	unsigned int saltlen = CHACHAPOLY_IV_SIZE - ivsize;
+	unsigned int assoclen = req->assoclen;
+	u32 *desc = edesc->hw_desc;
+	u32 *jump_cmd;
+	dma_addr_t dst_dma, src_dma;
+	u32 out_options, in_options;
+	u32 nfifo;
+	u32 ctx_reg_offset;
+	int sec4_sg_index = 0;
+
+	init_job_desc(desc, 0);
+
+	if (all_contig) {
+		src_dma = edesc->src_nents ? sg_dma_address(req->src) : 0;
+		in_options = 0;
+	} else {
+		src_dma = edesc->sec4_sg_dma;
+		sec4_sg_index += edesc->src_nents;
+		in_options = LDST_SGF;
+	}
+
+	append_seq_in_ptr(desc, src_dma,
+			req->assoclen + req->cryptlen, in_options);
+
+	if (req->src == req->dst) {
+		dst_dma = src_dma;
+		out_options = in_options;
+	} else {
+		if (edesc->dst_nents == 1) {
+			dst_dma = sg_dma_address(req->dst);
+		} else {
+			dst_dma = edesc->sec4_sg_dma +
+				  sec4_sg_index *
+				  sizeof(struct sec4_sg_entry);
+			out_options = LDST_SGF;
+		}
+	}
+
+	append_seq_out_ptr(desc, dst_dma,
+			   req->assoclen + req->cryptlen + ctx->authsize,
+			   out_options);
+	append_key_as_imm(desc, ctx->key, ctx->cdata.keylen,
+			ctx->cdata.keylen, CLASS_1 | KEY_DEST_CLASS_REG);
+
+	/*
+	 * Rationale: 16 bytes alignment when loading the 12 bytes nonce.
+	 * We can write a 16 bytes nonce with first four bytes zero or we can
+	 * write the 12 bytes nonce at offset 4. We do the latter
+	 */
+	ctx_reg_offset = 4;
+
+	/* For IPsec first load the salt from keymat in the context register */
+	if (ivsize == 8) {
+		append_load_as_imm(desc, ctx->key + ctx->cdata.keylen, saltlen,
+				LDST_CLASS_1_CCB | LDST_SRCDST_BYTE_CONTEXT |
+				ctx_reg_offset << LDST_OFFSET_SHIFT);
+		ctx_reg_offset += saltlen;
+
+		/*
+		 * The associated data comes already with the IV but we need
+		 * to skip it when we authenticate or encrypt...
+		 */
+		assoclen -= ivsize;
+	}
+
+	/*
+	 * Then, for IPsec, load the IV further in the same register.
+	 * For RFC7539 simply load the 12 bytes nonce in a single operation
+	 */
+	append_load_as_imm(desc, req->iv, ivsize,
+			LDST_CLASS_1_CCB | LDST_SRCDST_BYTE_CONTEXT |
+			ctx_reg_offset << LDST_OFFSET_SHIFT);
+
+	/* Class 2 and 1 operations: Poly & ChaCha*/
+	append_operation(desc, ctx->adata.algtype | OP_ALG_AS_INITFINAL |
+			OP_ALG_ENCRYPT);
+	append_operation(desc, ctx->cdata.algtype | OP_ALG_AS_INITFINAL |
+			OP_ALG_ENCRYPT);
+
+	/*
+	 * MAGIC with NFIFO
+	 * Read assoclen bytes from the input and send them to class1 and class2
+	 * alignment blocks. From class1 send data to output fifo and then
+	 * write it to memory since we don't need to encrypt assoc data
+	 */
+	nfifo = NFIFOENTRY_DEST_BOTH | NFIFOENTRY_FC1 | NFIFOENTRY_FC2 |
+			NFIFOENTRY_DTYPE_POLY | NFIFOENTRY_BND | assoclen;
+	append_load_imm_u32(desc, nfifo,
+		LDST_CLASS_IND_CCB | LDST_SRCDST_WORD_INFO_FIFO_SL);
+
+	append_seq_fifo_load(desc, assoclen,
+			FIFOLD_TYPE_NOINFOFIFO | FIFOLD_CLASS_CLASS1);
+
+	append_move(desc, MOVE_AUX_LS | MOVE_SRC_AUX_ABLK | MOVE_DEST_OUTFIFO |
+			(assoclen << MOVE_LEN_SHIFT));
+
+	append_seq_fifo_store(desc, assoclen, FIFOST_TYPE_MESSAGE_DATA);
+
+	/*
+	 * ... but we still have to write it at the output. We just don't copy
+	 * it from input, but write it from the context register since it is
+	 * already there
+	 */
+	if (ivsize == 8) {
+		/*
+		 * Write IV to memory from the context register instead of
+		 * copying it from the input - one less DMA access
+		 */
+		append_seq_store(desc, ivsize,
+			LDST_SRCDST_BYTE_CONTEXT | LDST_CLASS_1_CCB |
+			ctx_reg_offset << LDST_OFFSET_SHIFT);
+		/*
+		 * And skip reading past the IV in the input since we don't
+		 * need it for processing. (IV is not even authenticated?)
+		 */
+		append_seq_fifo_load(desc, ivsize, FIFOLD_CLASS_SKIP);
+	}
+
+	jump_cmd = append_jump(desc, JUMP_JSL | JUMP_TYPE_LOCAL |
+			JUMP_COND_NOP | JUMP_TEST_ALL);
+	set_jump_tgt_here(desc, jump_cmd);
+
+	append_seq_fifo_load(desc, req->cryptlen,
+			FIFOLD_TYPE_MSG1OUT2 | FIFOLD_TYPE_LAST1 |
+			FIFOLD_TYPE_LAST2 | FIFOLD_CLASS_BOTH);
+	append_seq_fifo_store(desc, req->cryptlen,
+			FIFOST_TYPE_MESSAGE_DATA);
+	append_seq_store(desc, ctx->authsize, LDST_CLASS_2_CCB |
+			LDST_SRCDST_BYTE_CONTEXT);
+}
+
+static void init_chapoly_dec_job(struct aead_request *req,
+			 struct aead_edesc *edesc, bool all_contig)
+{
+	struct crypto_aead *aead = crypto_aead_reqtfm(req);
+	struct caam_ctx *ctx = crypto_aead_ctx(aead);
+	unsigned int ivsize = crypto_aead_ivsize(aead);
+	unsigned int saltlen = CHACHAPOLY_IV_SIZE - ivsize;
+	u32 *desc = edesc->hw_desc;
+	unsigned int assoclen = req->assoclen;
+	u32 *jump_cmd;
+	dma_addr_t dst_dma, src_dma;
+	u32 out_options, in_options;
+	int sec4_sg_index = 0;
+	u32 nfifo;
+	u32 ctx_reg_offset;
+
+	init_job_desc(desc, 0);
+
+	if (all_contig) {
+		src_dma = edesc->src_nents ? sg_dma_address(req->src) : 0;
+		in_options = 0;
+	} else {
+		src_dma = edesc->sec4_sg_dma;
+		sec4_sg_index += edesc->src_nents;
+		in_options = LDST_SGF;
+	}
+
+	append_seq_in_ptr(desc, src_dma,
+			req->assoclen + req->cryptlen, in_options);
+
+	if (req->src == req->dst) {
+		dst_dma = src_dma;
+		out_options = in_options;
+	} else {
+		if (edesc->dst_nents == 1) {
+			dst_dma = sg_dma_address(req->dst);
+		} else {
+			dst_dma = edesc->sec4_sg_dma +
+				  sec4_sg_index *
+				  sizeof(struct sec4_sg_entry);
+			out_options = LDST_SGF;
+		}
+	}
+
+	append_seq_out_ptr(desc, dst_dma,
+			req->assoclen + req->cryptlen - ctx->authsize,
+			out_options);
+	append_key_as_imm(desc, ctx->key, ctx->cdata.keylen,
+			ctx->cdata.keylen, CLASS_1 | KEY_DEST_CLASS_REG);
+
+	/*
+	 * Rationale: 16 bytes alignment when loading the 12 bytes nonce.
+	 * We can write a 16 bytes nonce with first four bytes zero or we can
+	 * write the 12 bytes nonce at offset 4. We do the latter
+	 */
+	ctx_reg_offset = 4;
+
+	/* For IPsec first load the salt from keymat in the context register */
+	if (ivsize == 8) {
+		append_load_as_imm(desc, ctx->key + ctx->cdata.keylen, saltlen,
+				LDST_CLASS_1_CCB | LDST_SRCDST_BYTE_CONTEXT |
+				ctx_reg_offset << LDST_OFFSET_SHIFT);
+		ctx_reg_offset += saltlen;
+
+		/*
+		 * The associated data comes already with the IV but we need
+		 * to skip it when we authenticate or encrypt...
+		 */
+		assoclen -= ivsize;
+	}
+
+	/*
+	 * Then, for IPsec, load the IV further in the same register.
+	 * For RFC7539 simply load the 12 bytes nonce in a single operation
+	 */
+	append_load_as_imm(desc, req->iv, ivsize,
+			LDST_CLASS_1_CCB | LDST_SRCDST_BYTE_CONTEXT |
+			ctx_reg_offset << LDST_OFFSET_SHIFT);
+
+	/* Class 2 and 1 operations */
+	append_operation(desc, ctx->adata.algtype | OP_ALG_AS_INITFINAL |
+			OP_ALG_DECRYPT | OP_ALG_ICV_ON);
+	append_operation(desc, ctx->cdata.algtype | OP_ALG_AS_INITFINAL |
+			OP_ALG_DECRYPT);
+
+	/* More MAGIC with NFIFO */
+	nfifo = NFIFOENTRY_DEST_BOTH | NFIFOENTRY_FC1 | NFIFOENTRY_FC2 |
+			NFIFOENTRY_DTYPE_POLY | NFIFOENTRY_BND | assoclen;
+	append_load_imm_u32(desc, nfifo,
+		LDST_CLASS_IND_CCB | LDST_SRCDST_WORD_INFO_FIFO_SL);
+
+	append_seq_fifo_load(desc, assoclen,
+			FIFOLD_TYPE_NOINFOFIFO | FIFOLD_CLASS_CLASS1);
+
+	append_move(desc, MOVE_AUX_LS | MOVE_SRC_AUX_ABLK | MOVE_DEST_OUTFIFO |
+			assoclen << MOVE_LEN_SHIFT);
+
+	append_seq_fifo_store(desc, assoclen, FIFOST_TYPE_MESSAGE_DATA);
+
+	/* IPsec */
+	if (ivsize == 8) {
+		/*
+		 * Write IV to memory from the context register instead of
+		 * copying it from the input - one less DMA access
+		 */
+		append_seq_store(desc, ivsize,
+			LDST_SRCDST_BYTE_CONTEXT | LDST_CLASS_1_CCB |
+			ctx_reg_offset << LDST_OFFSET_SHIFT);
+		/*
+		 * And skip reading past the IV in the input since we don't
+		 * need it for processing. (IV is not even authenticated?)
+		 */
+		append_seq_fifo_load(desc, ivsize, FIFOLD_CLASS_SKIP);
+	}
+
+	jump_cmd = append_jump(desc, JUMP_JSL | JUMP_TYPE_LOCAL |
+			JUMP_COND_NOP | JUMP_TEST_ALL);
+	set_jump_tgt_here(desc, jump_cmd);
+
+	append_seq_fifo_store(desc, req->cryptlen - ctx->authsize,
+			FIFOST_TYPE_MESSAGE_DATA);
+
+	append_seq_fifo_load(desc, req->cryptlen - ctx->authsize,
+		FIFOLD_TYPE_MSG | FIFOLD_TYPE_LAST1 | FIFOLD_CLASS_BOTH);
+
+	/* Load ICV for verification */
+	append_seq_fifo_load(desc, ctx->authsize, FIFOLD_CLASS_CLASS2 |
+			FIFOLD_TYPE_LAST2 | FIFOLD_TYPE_ICV);
+}
+
 static void init_authenc_job(struct aead_request *req,
 			     struct aead_edesc *edesc,
 			     bool all_contig, bool encrypt)
@@ -1347,6 +1647,70 @@ static int gcm_encrypt(struct aead_request *req)
 
 	desc = edesc->hw_desc;
 	ret = caam_jr_enqueue(jrdev, desc, aead_encrypt_done, req);
+	if (!ret) {
+		ret = -EINPROGRESS;
+	} else {
+		aead_unmap(jrdev, edesc, req);
+		kfree(edesc);
+	}
+
+	return ret;
+}
+
+static int chapoly_encrypt(struct aead_request *req)
+{
+	struct aead_edesc *edesc;
+	struct crypto_aead *aead = crypto_aead_reqtfm(req);
+	struct caam_ctx *ctx = crypto_aead_ctx(aead);
+	struct device *jrdev = ctx->jrdev;
+	bool all_contig;
+	u32 *desc;
+	int ret;
+
+	edesc = aead_edesc_alloc(req, CHAPOLY_EN_JDESC_LEN, &all_contig, true);
+	if (IS_ERR(edesc))
+		return PTR_ERR(edesc);
+
+	desc = edesc->hw_desc;
+	init_chapoly_enc_job(req, edesc, all_contig);
+
+	print_hex_dump_debug("chapoly jobdesc@"__stringify(__LINE__)": ",
+		       DUMP_PREFIX_ADDRESS, 16, 4, desc,
+		       desc_bytes(desc), 1);
+
+	ret = caam_jr_enqueue(jrdev, desc, aead_encrypt_done, req);
+	if (!ret) {
+		ret = -EINPROGRESS;
+	} else {
+		aead_unmap(jrdev, edesc, req);
+		kfree(edesc);
+	}
+
+	return ret;
+}
+
+static int chapoly_decrypt(struct aead_request *req)
+{
+	struct aead_edesc *edesc;
+	struct crypto_aead *aead = crypto_aead_reqtfm(req);
+	struct caam_ctx *ctx = crypto_aead_ctx(aead);
+	struct device *jrdev = ctx->jrdev;
+	bool all_contig;
+	u32 *desc;
+	int ret;
+
+	edesc = aead_edesc_alloc(req, CHAPOLY_DE_JDESC_LEN, &all_contig, false);
+	if (IS_ERR(edesc))
+		return PTR_ERR(edesc);
+
+	desc = edesc->hw_desc;
+	init_chapoly_dec_job(req, edesc, all_contig);
+
+	print_hex_dump_debug("chapoly jobdesc@"__stringify(__LINE__)": ",
+		       DUMP_PREFIX_ADDRESS, 16, 4, edesc->hw_desc,
+		       desc_bytes(desc), 1);
+
+	ret = caam_jr_enqueue(jrdev, desc, aead_decrypt_done, req);
 	if (!ret) {
 		ret = -EINPROGRESS;
 	} else {
@@ -3259,6 +3623,48 @@ static struct caam_aead_alg driver_aeads[] = {
 			.geniv = true,
 		},
 	},
+	{
+		.aead = {
+			.base = {
+				.cra_name = "rfc7539(chacha20,poly1305)",
+				.cra_driver_name = "rfc7539-chacha20-poly1305-caam",
+				.cra_blocksize = 1,
+			},
+			.setkey = chapoly_setkey,
+			.setauthsize = chapoly_setauthsize,
+			.encrypt = chapoly_encrypt,
+			.decrypt = chapoly_decrypt,
+			.ivsize = CHACHAPOLY_IV_SIZE,
+			.maxauthsize = POLY1305_DIGEST_SIZE,
+		},
+		.caam = {
+			.class1_alg_type = OP_ALG_ALGSEL_CHACHA20 |
+					   OP_ALG_AAI_AEAD,
+			.class2_alg_type = OP_ALG_ALGSEL_POLY1305 |
+					   OP_ALG_AAI_AEAD,
+		},
+	},
+	{
+		.aead = {
+			.base = {
+				.cra_name = "rfc7539esp(chacha20,poly1305)",
+				.cra_driver_name = "rfc7539esp-chacha20-poly1305-caam",
+				.cra_blocksize = 1,
+			},
+			.setkey = chapoly_setkey,
+			.setauthsize = chapoly_setauthsize,
+			.encrypt = chapoly_encrypt,
+			.decrypt = chapoly_decrypt,
+			.ivsize = 8,
+			.maxauthsize = POLY1305_DIGEST_SIZE,
+		},
+		.caam = {
+			.class1_alg_type = OP_ALG_ALGSEL_CHACHA20 |
+					   OP_ALG_AAI_AEAD,
+			.class2_alg_type = OP_ALG_ALGSEL_POLY1305 |
+					   OP_ALG_AAI_AEAD,
+		},
+	},
 };
 
 struct caam_crypto_alg {
@@ -3425,7 +3831,7 @@ static int __init caam_algapi_init(void)
 	struct device *ctrldev;
 	struct caam_drv_private *priv;
 	int i = 0, err = 0;
-	u32 aes_vid, aes_inst, des_inst, md_vid, md_inst;
+	u32 aes_vid, aes_inst, des_inst, md_vid, md_inst, ccha_inst;
 	unsigned int md_limit = SHA512_DIGEST_SIZE;
 	bool registered = false;
 
@@ -3472,6 +3878,7 @@ static int __init caam_algapi_init(void)
 			   CHA_ID_LS_DES_SHIFT;
 		aes_inst = cha_inst & CHA_ID_LS_AES_MASK;
 		md_inst = (cha_inst & CHA_ID_LS_MD_MASK) >> CHA_ID_LS_MD_SHIFT;
+		ccha_inst = 0;
 	} else {
 		u32 aesa, mdha;
 
@@ -3484,6 +3891,7 @@ static int __init caam_algapi_init(void)
 		des_inst = rd_reg32(&priv->ctrl->vreg.desa) & CHA_VER_NUM_MASK;
 		aes_inst = aesa & CHA_VER_NUM_MASK;
 		md_inst = mdha & CHA_VER_NUM_MASK;
+		ccha_inst = rd_reg32(&priv->ctrl->vreg.ccha) & CHA_VER_NUM_MASK;
 	}
 
 	/* If MD is present, limit digest size based on LP256 */
@@ -3546,6 +3954,10 @@ static int __init caam_algapi_init(void)
 		/* Skip AES algorithms if not supported by device */
 		if (!aes_inst && (c1_alg_sel == OP_ALG_ALGSEL_AES))
 				continue;
+
+		/* Skip CHACHA-POLY algorithm if not supported by device */
+		if ((c1_alg_sel == OP_ALG_ALGSEL_CHACHA20) && (ccha_inst == 0))
+			continue;
 
 		/*
 		 * Check support for AES algorithms not available

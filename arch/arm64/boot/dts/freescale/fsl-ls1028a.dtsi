@@ -53,6 +53,10 @@
 	#address-cells = <2>;
 	#size-cells = <2>;
 
+	aliases {
+		rcie_enetc = &rcie_enetc;
+	};
+
 	cpus {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -472,7 +476,7 @@
 			status = "disabled";
 		};
 
-		pcie@1F0000000 { /* rcie_enetc */
+		rcie_enetc: pcie@1F0000000 { /* rcie_enetc */
 			compatible = "pci-host-ecam-generic";
 			reg = <0x01 0xF0000000 0x0 0x100000>;
 			#address-cells = <3>;
@@ -481,6 +485,7 @@
 			msi-parent = <&its>;
 			device_type = "pci";
 			bus-range = <0x0 0x0>;
+			iommu-map = <0 &smmu 23 3>;
 			ranges = <0x82000000 0x0 0x00000000  0x1 0xf8000000  0x0 0x0C0000     /* PF0-2, BAR0 - non-prefetchable memory */
 				  0x82000000 0x0 0x00000000  0x1 0xf8100000  0x0 0x060000     /* PF3-5, BAR0 - non-prefetchable memory */
 				  0xc2000000 0x0 0x00000000  0x1 0xf8160000  0x0 0x050000     /* PF0-5, BAR2 - prefetchable memory */

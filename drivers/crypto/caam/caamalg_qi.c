@@ -3229,6 +3229,11 @@ int caam_qi_algapi_init(struct device *ctrldev)
 	unsigned int md_limit = SHA512_DIGEST_SIZE;
 	bool registered = false;
 
+	if (caam_dpaa2) {
+		dev_info(ctrldev, "caam/qi frontend driver not suitable for DPAA 2.x, aborting...\n");
+		return -ENODEV;
+	}
+
 	INIT_LIST_HEAD(&alg_list);
 
 	/*

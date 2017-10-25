@@ -251,6 +251,9 @@ static int enetc_get_rxnfc(struct net_device *ndev, struct ethtool_rxnfc *rxnfc,
 				rxnfc->rule_cnt++;
 		break;
 	case ETHTOOL_GRXCLSRULE:
+		if (rxnfc->fs.location >= priv->si->num_fs_entries)
+			return -EINVAL;
+
 		/* get entry x */
 		rxnfc->fs = priv->cls_rules[rxnfc->fs.location].fs;
 		break;
@@ -283,6 +286,13 @@ static int enetc_set_rxnfc(struct net_device *ndev, struct ethtool_rxnfc *rxnfc)
 
 	switch (rxnfc->cmd) {
 	case ETHTOOL_SRXCLSRLINS:
+		if (rxnfc->fs.location >= priv->si->num_fs_entries)
+			return -EINVAL;
+
+		if (rxnfc->fs.ring_cookie >= priv->num_rx_rings &&
+		    rxnfc->fs.ring_cookie != RX_CLS_FLOW_DISC)
+			return -EINVAL;
+
 		err = enetc_set_cls_entry(priv->si, &rxnfc->fs, true);
 		if (err)
 			return err;
@@ -290,6 +300,9 @@ static int enetc_set_rxnfc(struct net_device *ndev, struct ethtool_rxnfc *rxnfc)
 		priv->cls_rules[rxnfc->fs.location].used = 1;
 		break;
 	case ETHTOOL_SRXCLSRLDEL:
+		if (rxnfc->fs.location >= priv->si->num_fs_entries)
+			return -EINVAL;
+
 		err = enetc_set_cls_entry(priv->si, &rxnfc->fs, false);
 		if (err)
 			return err;

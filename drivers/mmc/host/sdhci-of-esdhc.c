@@ -483,6 +483,12 @@ static void esdhc_of_set_clock(struct sdhci_host *host, unsigned int clock)
 			clock -= 5000000;
 	}
 
+	/* Workaround to reduce the clock frequency for ls1021a esdhc */
+	if (of_find_compatible_node(NULL, NULL, "fsl,ls1021a-esdhc")) {
+		if (clock == 50000000)
+			clock = 46500000;
+	}
+
 	temp = sdhci_readl(host, ESDHC_SYSTEM_CONTROL);
 	temp &= ~(ESDHC_CLOCK_SDCLKEN | ESDHC_CLOCK_IPGEN | ESDHC_CLOCK_HCKEN |
 		  ESDHC_CLOCK_PEREN | ESDHC_CLOCK_MASK);

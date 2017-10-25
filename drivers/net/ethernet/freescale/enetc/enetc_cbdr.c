@@ -41,6 +41,9 @@ static int enetc_send_cmd(struct enetc_si *si, struct enetc_cbd *cbd,
 	struct enetc_cbd *dest_cbd;
 	int i;
 
+	if (!ring->bd_base)
+		return -EIO;
+
 	if (async && !ENETC_RING_UNUSED(ring)) {
 		// TODO: support true async mode, with interrupts
 		// and separate cleanup task
@@ -163,6 +166,39 @@ int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 	err = enetc_send_cmd(si, &cbd, async);
 	if (err)
 		netdev_err(si->ndev, "FS entry add failed (%d)!", err);
+	dma_unmap_single(&si->pdev->dev, dma, cbd.length, DMA_TO_DEVICE);
+
+	return err;
+}
+
+/* Set RSS table */
+int enetc_set_rss_table(struct enetc_si *si, u16 *table, int len)
+{
+	struct enetc_cbd cbd = {.cmd = 0};
+	dma_addr_t dma;
+	int err;
+
+	if (len < 0x80)
+		/* HW only takes in a full 64 entry/128B table */
+		return -EINVAL;
+
+	/* fill up the "set" descriptor */
+	cbd.cmd = 1;
+	cbd.cls = 3;
+	cbd.length = len;
+
+	dma = dma_map_single(&si->pdev->dev, table, len, DMA_TO_DEVICE);
+	if (dma_mapping_error(&si->pdev->dev, dma)) {
+		netdev_err(si->ndev, "DMA mapping of RSS table failed!\n");
+		return -ENOMEM;
+	}
+
+	cbd.addr[0] = (u32)dma;
+	cbd.addr[1] = (u32)(dma >> 32);
+
+	err = enetc_send_cmd(si, &cbd, false);
+	if (err)
+		netdev_err(si->ndev, "RSS table update failed (%d)!", err);
 	dma_unmap_single(&si->pdev->dev, dma, cbd.length, DMA_TO_DEVICE);
 
 	return err;

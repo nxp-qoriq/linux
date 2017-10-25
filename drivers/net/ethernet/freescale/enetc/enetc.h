@@ -161,6 +161,7 @@ struct enetc_ndev_priv {
 	struct enetc_bdr *rx_ring[16];
 
 	struct enetc_cls_rule *cls_rules;
+	u16 rss_table[64]; /* < TODO: remove and use HW results */
 };
 
 void enetc_set_ethtool_ops(struct net_device *ndev);
@@ -168,3 +169,4 @@ void enetc_set_ethtool_ops(struct net_device *ndev);
 void enetc_sync_mac_filters(struct enetc_si *si, int si_idx);
 int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 		       int index);
+int enetc_set_rss_table(struct enetc_si *si, u16 *table, int len);

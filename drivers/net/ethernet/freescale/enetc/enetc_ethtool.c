@@ -345,6 +345,69 @@ static int enetc_set_rxnfc(struct net_device *ndev, struct ethtool_rxnfc *rxnfc)
 	return 0;
 }
 
+static u32 enetc_get_rxfh_key_size(struct net_device *ndev)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+
+	/* return the size of the RX flow hash key.  PF only */
+	return (priv->si->hw.port) ? ENETC_RSSHASH_KEY_SIZE : 0;
+}
+
+static u32 enetc_get_rxfh_indir_size(struct net_device *ndev)
+{
+	/* return the size of the RX flow hash indirection table */
+
+	return 64; /* TODO: use capabilities after moved to SI */
+}
+
+static int enetc_get_rxfh(struct net_device *ndev, u32 *indir, u8 *key,
+			  u8 *hfunc)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_hw *hw = &priv->si->hw;
+	int i;
+
+	/* return hash function */
+	if (hfunc)
+		*hfunc = ETH_RSS_HASH_TOP;
+
+	/* return RSS table */
+	if (indir)
+		for (i = 0; i < ARRAY_SIZE(priv->rss_table); i++)
+			indir[i] = priv->rss_table[i];
+
+	/* return hash key */
+	if (key && hw->port)
+		for (i = 0; i < ENETC_RSSHASH_KEY_SIZE / 4; i++)
+			((u32 *)key)[i] = enetc_port_rd(hw, ENETC_PRSSK(i));
+
+	return 0;
+}
+
+static int enetc_set_rxfh(struct net_device *ndev, const u32 *indir,
+			  const u8 *key, const u8 hfunc)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_hw *hw = &priv->si->hw;
+	int err = 0;
+	int i;
+
+	/* set hash key, if PF */
+	if (key && hw->port)
+		for (i = 0; i < ENETC_RSSHASH_KEY_SIZE / 4; i++)
+			enetc_port_wr(hw, ENETC_PRSSK(i), ((u32 *)key)[i]);
+
+	/* set RSS table */
+	if (indir) {
+		for (i = 0; i < 64; i++)
+			priv->rss_table[i] = (u16)indir[i];
+		err = enetc_set_rss_table(priv->si, priv->rss_table,
+					  sizeof(priv->rss_table));
+	}
+
+	return err;
+}
+
 const struct ethtool_ops enetc_ethtool_ops = {
 	.get_regs_len = enetc_get_reglen,
 	.get_regs = enetc_get_regs,
@@ -353,6 +416,10 @@ const struct ethtool_ops enetc_ethtool_ops = {
 	.get_ethtool_stats = enetc_get_ethtool_stats,
 	.get_rxnfc = enetc_get_rxnfc,
 	.set_rxnfc = enetc_set_rxnfc,
+	.get_rxfh_key_size = enetc_get_rxfh_key_size,
+	.get_rxfh_indir_size = enetc_get_rxfh_indir_size,
+	.get_rxfh = enetc_get_rxfh,
+	.set_rxfh = enetc_set_rxfh,
 };
 
 void enetc_set_ethtool_ops(struct net_device *ndev)

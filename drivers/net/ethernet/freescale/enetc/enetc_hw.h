@@ -102,6 +102,9 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PVCFGR_SET_TXBDR(val)	((val) & 0xff)
 #define ENETC_PVCFGR_SET_RXBDR(val)	(((val) & 0xff) << 16)
 
+#define ENETC_RSSHASH_KEY_SIZE	40
+#define ENETC_PRSSK(n)		(0x01410 + (n) * 4) /* n = [0..9] */
+
 #define ENETC_PRFSMR		0x01800
 #define ENETC_PRFSMR_RFSE	BIT(31)
 #define ENETC_PRFSCAPR		0x01804

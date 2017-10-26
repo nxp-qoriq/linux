@@ -547,7 +547,7 @@ static int build_sg_fd(struct dpaa2_eth_priv *priv,
 	dpaa2_fd_set_addr(fd, addr);
 	dpaa2_fd_set_len(fd, skb->len);
 
-	fd->simple.ctrl = DPAA2_FD_CTRL_ASAL | FD_CTRL_PTA | FD_CTRL_PTV1;
+	fd->simple.ctrl = DPAA2_FD_CTRL_ASAL | FD_CTRL_PTA;
 
 	if (priv->ts_tx_en && skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)
 		enable_tx_tstamp(fd, sgt_buf);
@@ -604,7 +604,7 @@ static int build_single_fd(struct dpaa2_eth_priv *priv,
 	dpaa2_fd_set_len(fd, skb->len);
 	dpaa2_fd_set_format(fd, dpaa2_fd_single);
 
-	fd->simple.ctrl = DPAA2_FD_CTRL_ASAL | FD_CTRL_PTA | FD_CTRL_PTV1;
+	fd->simple.ctrl = DPAA2_FD_CTRL_ASAL | FD_CTRL_PTA;
 
 	if (priv->ts_tx_en && skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)
 		enable_tx_tstamp(fd, buffer_start);

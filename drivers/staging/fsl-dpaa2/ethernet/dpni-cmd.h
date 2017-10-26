@@ -519,45 +519,45 @@ struct dpni_cmd_set_queue {
 #define DPNI_DISCARD_ON_MISS_SIZE	1
 
 struct dpni_cmd_set_qos_table {
-	u32 pad;
+	__le32 pad;
 	u8 default_tc;
 	/* only the LSB */
 	u8 discard_on_miss;
-	u16 pad1[21];
-	u64 key_cfg_iova;
+	__le16 pad1[21];
+	__le64 key_cfg_iova;
 };
 
 struct dpni_cmd_add_qos_entry {
-	u16 pad;
+	__le16 pad;
 	u8 tc_id;
 	u8 key_size;
-	u16 index;
-	u16 pad2;
-	u64 key_iova;
-	u64 mask_iova;
+	__le16 index;
+	__le16 pad2;
+	__le64 key_iova;
+	__le64 mask_iova;
 };
 
 struct dpni_cmd_remove_qos_entry {
 	u8 pad1[3];
 	u8 key_size;
-	u32 pad2;
-	u64 key_iova;
-	u64 mask_iova;
+	__le32 pad2;
+	__le64 key_iova;
+	__le64 mask_iova;
 };
 
 struct dpni_cmd_add_fs_entry {
 	/* cmd word 0 */
-	u16 options;
+	__le16 options;
 	u8 tc_id;
 	u8 key_size;
-	u16 index;
-	u16 flow_id;
+	__le16 index;
+	__le16 flow_id;
 	/* cmd word 1 */
-	u64 key_iova;
+	__le64 key_iova;
 	/* cmd word 2 */
-	u64 mask_iova;
+	__le64 mask_iova;
 	/* cmd word 3 */
-	u64 flc;
+	__le64 flc;
 };
 
 struct dpni_cmd_remove_fs_entry {
@@ -567,9 +567,9 @@ struct dpni_cmd_remove_fs_entry {
 	u8 key_size;
 	__le32 pad1;
 	/* cmd word 1 */
-	u64 key_iova;
+	__le64 key_iova;
 	/* cmd word 2 */
-	u64 mask_iova;
+	__le64 mask_iova;
 };
 
 struct dpni_cmd_set_taildrop {
@@ -618,18 +618,18 @@ struct dpni_cmd_set_congestion_notification {
 	u8 tc;
 	u8 pad[6];
 	/* cmd word 1 */
-	u32 dest_id;
-	u16 notification_mode;
+	__le32 dest_id;
+	__le16 notification_mode;
 	u8 dest_priority;
 	/* from LSB: dest_type: 4 units:2 */
 	u8 type_units;
 	/* cmd word 2 */
-	u64 message_iova;
+	__le64 message_iova;
 	/* cmd word 3 */
-	u64 message_ctx;
+	__le64 message_ctx;
 	/* cmd word 4 */
-	u32 threshold_entry;
-	u32 threshold_exit;
+	__le32 threshold_entry;
+	__le32 threshold_exit;
 };
 
 struct dpni_cmd_get_congestion_notification {
@@ -640,19 +640,19 @@ struct dpni_cmd_get_congestion_notification {
 
 struct dpni_rsp_get_congestion_notification {
 	/* cmd word 0 */
-	u64 pad;
+	__le64 pad;
 	/* cmd word 1 */
-	u32 dest_id;
-	u16 notification_mode;
+	__le32 dest_id;
+	__le16 notification_mode;
 	u8 dest_priority;
 	/* from LSB: dest_type: 4 units:2 */
 	u8 type_units;
 	/* cmd word 2 */
-	u64 message_iova;
+	__le64 message_iova;
 	/* cmd word 3 */
-	u64 message_ctx;
+	__le64 message_ctx;
 	/* cmd word 4 */
-	u32 threshold_entry;
-	u32 threshold_exit;
+	__le32 threshold_entry;
+	__le32 threshold_exit;
 };
 #endif /* _FSL_DPNI_CMD_H */

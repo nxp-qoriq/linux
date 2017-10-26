@@ -183,7 +183,6 @@ struct dpaa2_eth_swa {
 /* Annotation bits in FD CTRL */
 #define DPAA2_FD_CTRL_ASAL		0x00020000	/* ASAL = 128 */
 #define DPAA2_FD_CTRL_PTA		0x00800000
-#define DPAA2_FD_CTRL_PTV1		0x00400000
 
 /* Frame annotation status */
 struct dpaa2_fas {

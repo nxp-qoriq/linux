@@ -860,8 +860,6 @@ static void enetc_setup_bdrs(struct enetc_ndev_priv *priv)
 
 	for (i = 0; i < priv->num_rx_rings; i++)
 		enetc_setup_rxbdr(&priv->si->hw, priv->rx_ring[i]);
-
-	enetc_setup_cbdr(&priv->si->hw, &priv->si->cbd_ring);
 }
 
 static void enetc_configure_port_mac(struct enetc_si *si)
@@ -972,10 +970,6 @@ static int enetc_open(struct net_device *ndev)
 	if (err)
 		goto err_alloc_rx;
 
-	err = enetc_alloc_si_resources(priv);
-	if (err)
-		goto err_alloc_si_res;
-
 	enetc_setup_bdrs(priv);
 
 	err = enetc_setup_irqs(priv);
@@ -1002,8 +996,6 @@ static int enetc_open(struct net_device *ndev)
 err_set_queues:
 	enetc_free_irqs(priv);
 err_setup_irqs:
-	enetc_free_si_resources(priv);
-err_alloc_si_res:
 	enetc_free_rx_resources(priv);
 err_alloc_rx:
 	enetc_free_tx_resources(priv);
@@ -1032,7 +1024,6 @@ static int enetc_close(struct net_device *ndev)
 	enetc_free_rxtx_rings(priv);
 	enetc_free_rx_resources(priv);
 	enetc_free_tx_resources(priv);
-	enetc_free_si_resources(priv);
 
 	return 0;
 }
@@ -1337,6 +1328,8 @@ static void enetc_configure_si(struct enetc_ndev_priv *priv)
 {
 	struct enetc_hw *hw = &priv->si->hw;
 
+	enetc_setup_cbdr(hw, &priv->si->cbd_ring);
+
 	/* enable SI */
 	enetc_wr(hw, ENETC_SIMR, ENETC_SIMR_EN);
 }
@@ -1472,6 +1465,7 @@ static int enetc_pci_probe(struct pci_dev *pdev,
 		enetc_configure_port(si);
 
 		enetc_netdev_setup(si, ndev, &enetc_ndev_ops);
+
 	} else if (pdev->device == ENETC_DEV_ID_VF) {
 		/* VFs have a different set of ndos and can't touch the port */
 		enetc_netdev_setup(si, ndev, &enetc_ndev_vf_ops);
@@ -1482,6 +1476,11 @@ static int enetc_pci_probe(struct pci_dev *pdev,
 	}
 
 	enetc_sw_init(priv);
+
+	err = enetc_alloc_si_resources(priv);
+	if (err)
+		goto err_alloc_si_res;
+
 	enetc_configure_si(priv);
 
 	err = enetc_alloc_msix(priv);
@@ -1505,6 +1504,8 @@ err_reg_netdev:
 	enetc_free_msix(priv);
 err_alloc_msix:
 err_si_config:
+	enetc_free_si_resources(priv);
+err_alloc_si_res:
 	si->ndev = NULL;
 	free_netdev(ndev);
 err_alloc_netdev:
@@ -1523,15 +1524,17 @@ err_dma:
 static void enetc_pci_remove(struct pci_dev *pdev)
 {
 	struct enetc_si *si = pci_get_drvdata(pdev);
-	struct enetc_ndev_priv *priv = netdev_priv(si->ndev);
 	struct enetc_hw *hw = &si->hw;
+	struct enetc_ndev_priv *priv;
 
 	dev_info(&pdev->dev, "enetc_pci_remove()\n");
 
+	priv = netdev_priv(si->ndev);
 	unregister_netdev(si->ndev);
 
 	kfree(priv->cls_rules);
-	enetc_free_msix(netdev_priv(si->ndev));
+	enetc_free_msix(priv);
+	enetc_free_si_resources(priv);
 
 	free_netdev(si->ndev);
 

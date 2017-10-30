@@ -20,3 +20,5 @@
 /include/ "qoriq-fman-0-sdk.dtsi"
 /include/ "qoriq-fman-1-sdk.dtsi"
 /include/ "qoriq-dpaa-eth.dtsi"
+/include/ "qoriq-bman-portals-sdk.dtsi"
+/include/ "qoriq-qman-portals-sdk.dtsi"

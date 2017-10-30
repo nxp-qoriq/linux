@@ -60,27 +60,3 @@
 		};
 	};
 };
-
-&bportals {
-	compatible = "fsl,bpid-range";
-	fsl,bpid-range = <32 32>;
-};
-
-&qportals {
-	qman-fqids@0 {
-		compatible = "fsl,fqid-range";
-		fsl,fqid-range = <256 256>;
-	};
-	qman-fqids@1 {
-		compatible = "fsl,fqid-range";
-		fsl,fqid-range = <32768 32768>;
-	};
-	qman-pools@0 {
-		compatible = "fsl,pool-channel-range";
-		fsl,pool-channel-range = <0x21 0xf>;
-	};
-	qman-cgrids@0 {
-		compatible = "fsl,cgrid-range";
-		fsl,cgrid-range = <0 256>;
-	};
-};

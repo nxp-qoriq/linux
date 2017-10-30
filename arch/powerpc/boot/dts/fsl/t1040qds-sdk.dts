@@ -1,4 +1,5 @@
 #include "t1040qds.dts"
 
 /include/ "qoriq-fman3-0-sdk.dtsi"
-/include/ "qoriq-dpaa-eth.dtsi"
+/include/ "qoriq-bman-portals-sdk.dtsi"
+/include/ "qoriq-qman-portals-sdk.dtsi"

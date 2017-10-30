@@ -1288,6 +1288,21 @@ static int enetc_set_vf_vlan(struct net_device *ndev, int vf, u16 vlan,
 	return 0;
 }
 
+static int enetc_set_vf_spoofchk(struct net_device *ndev, int vf, bool setting)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	u32 cfgr;
+
+	if (vf > priv->si->num_vfs)
+		return -EINVAL;
+
+	cfgr = enetc_port_rd(&priv->si->hw, ENETC_PV0CFGR(vf + 1));
+	cfgr = (cfgr & ~ENETC_PVCFGR_ASE) | (setting ? ENETC_PVCFGR_ASE : 0);
+	enetc_port_wr(&priv->si->hw, ENETC_PV0CFGR(vf + 1), cfgr);
+
+	return 0;
+}
+
 static const struct net_device_ops enetc_ndev_ops = {
 	.ndo_open		= enetc_open,
 	.ndo_stop		= enetc_close,
@@ -1297,6 +1312,7 @@ static const struct net_device_ops enetc_ndev_ops = {
 	.ndo_set_rx_mode	= enetc_set_rx_mode,
 	.ndo_set_vf_mac		= enetc_set_vf_mac,
 	.ndo_set_vf_vlan	= enetc_set_vf_vlan,
+	.ndo_set_vf_spoofchk	= enetc_set_vf_spoofchk,
 };
 
 static const struct net_device_ops enetc_ndev_vf_ops = {

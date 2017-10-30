@@ -105,11 +105,12 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PSIRFSCFGR(n)	(0x01814 + (n) * 4) /* n = SI index */
 
 #define ENETC_PM0_CMD_CFG	0x08008
-#define ENETC_PM0_TX_EN		BIT(31)
-#define ENETC_PM0_RX_EN		BIT(30)
+#define ENETC_PM0_TX_EN		BIT(0)
+#define ENETC_PM0_RX_EN		BIT(1)
 
 #define ENETC_PM0_MAXFRM	0x08014
-#define ENETC_SET_MAXFRM(val)	((val) << 16)
+#define ENETC_SET_TX_MTU(val)	((val) << 16)
+#define ENETC_SET_MAXFRM(val)	((val) & 0xffff)
 
 /* Global regs, offset: 2_0000h */
 #define ENETC_GLOBAL_BASE		0x20000

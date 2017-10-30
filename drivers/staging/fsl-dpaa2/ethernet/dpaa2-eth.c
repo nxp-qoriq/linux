@@ -231,24 +231,20 @@ err_build:
 }
 
 static int dpaa2_eth_xdp_tx(struct dpaa2_eth_priv *priv,
-			    const struct dpaa2_fd *fd,
+			    struct dpaa2_fd *fd,
 			    void *buf_start,
 			    u16 queue_id)
 {
 	struct dpaa2_eth_fq *fq;
 	struct rtnl_link_stats64 *percpu_stats;
 	struct dpaa2_eth_drv_stats *percpu_extras;
-	struct dpaa2_fd tx_fd;
 	struct dpaa2_faead *faead;
 	u32 ctrl, frc;
 	int i, err;
 
-	/* Clone the FD, as we need to make changes to it */
-	memcpy(&tx_fd, fd, sizeof(tx_fd));
-
 	/* Mark the egress frame annotation area as valid */
-	frc = dpaa2_fd_get_frc(&tx_fd);
-	dpaa2_fd_set_frc(&tx_fd, frc | DPAA2_FD_FRC_FAEADV);
+	frc = dpaa2_fd_get_frc(fd);
+	dpaa2_fd_set_frc(fd, frc | DPAA2_FD_FRC_FAEADV);
 
 	ctrl = DPAA2_FAEAD_A4V | DPAA2_FAEAD_A2V | DPAA2_FAEAD_EBDDV;
 	faead = dpaa2_eth_get_faead(buf_start);
@@ -261,7 +257,7 @@ static int dpaa2_eth_xdp_tx(struct dpaa2_eth_priv *priv,
 	fq = &priv->fq[queue_id];
 	for (i = 0; i < DPAA2_ETH_ENQUEUE_RETRIES; i++) {
 		err = dpaa2_io_service_enqueue_qd(NULL, priv->tx_qdid, 0,
-						  fq->tx_qdbin, &tx_fd);
+						  fq->tx_qdbin, fd);
 		if (err != -EBUSY)
 			break;
 	}

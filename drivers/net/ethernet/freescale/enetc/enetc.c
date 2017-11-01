@@ -319,6 +319,18 @@ static int enetc_refill_rx_ring(struct enetc_bdr *rx_ring, const int buff_cnt)
 	return j;
 }
 
+static void enetc_get_offloads(struct enetc_bdr *rx_ring,
+			       union enetc_rx_bd *rxbd, struct sk_buff *skb)
+{
+	// TODO: checksum, tstamp, VLAN, hash
+	if (rx_ring->ndev->features & NETIF_F_RXCSUM) {
+		u16 inet_csum = le16_to_cpu(rxbd->r.inet_csum);
+
+		skb->csum = csum_unfold((__force __sum16)~htons(inet_csum));
+		skb->ip_summed = CHECKSUM_COMPLETE;
+	}
+}
+
 #define ENETC_RXBD_BUNDLE 16 /* recommended # of BDs to update at once */
 
 static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
@@ -355,6 +367,8 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 			// TODO: increase alloc error counter
 			break;
 		}
+
+		enetc_get_offloads(rx_ring, rxbd, skb);
 
 		cleaned_cnt++;
 		rxbd++;
@@ -497,8 +511,6 @@ static void enetc_add_rx_buff_to_skb(struct enetc_bdr *rx_ring, int i,
 static void enetc_process_skb(struct enetc_bdr *rx_ring,
 			      struct sk_buff *skb)
 {
-	// TODO: checksum, tstamp, VLAN, hash
-
 	skb_record_rx_queue(skb, 0); // TODO: use queue_idx for multi-queue
 	skb->protocol = eth_type_trans(skb, rx_ring->ndev);
 }
@@ -1250,7 +1262,8 @@ static void enetc_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 	ndev->min_mtu = ETH_MIN_MTU;
 	ndev->max_mtu = ENETC_MAX_MTU;
 
-	ndev->features = NETIF_F_HIGHDMA | NETIF_F_SG;
+	ndev->hw_features = NETIF_F_RXCSUM;
+	ndev->features = NETIF_F_RXCSUM | NETIF_F_HIGHDMA | NETIF_F_SG;
 	ndev->priv_flags |= IFF_UNICAST_FLT;
 }
 

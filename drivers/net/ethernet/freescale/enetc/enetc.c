@@ -511,7 +511,7 @@ static void enetc_add_rx_buff_to_skb(struct enetc_bdr *rx_ring, int i,
 static void enetc_process_skb(struct enetc_bdr *rx_ring,
 			      struct sk_buff *skb)
 {
-	skb_record_rx_queue(skb, 0); // TODO: use queue_idx for multi-queue
+	skb_record_rx_queue(skb, rx_ring->index);
 	skb->protocol = eth_type_trans(skb, rx_ring->ndev);
 }
 

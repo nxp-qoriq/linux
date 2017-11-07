@@ -77,12 +77,12 @@ void cnstr_shdsc_aead_givencap(u32 * const desc, struct alginfo *cdata,
 void cnstr_shdsc_tls_encap(u32 *const desc, struct alginfo *cdata,
 			   struct alginfo *adata, unsigned int assoclen,
 			   unsigned int ivsize, unsigned int authsize,
-			   unsigned int blocksize);
+			   unsigned int blocksize, int era);
 
 void cnstr_shdsc_tls_decap(u32 *const desc, struct alginfo *cdata,
 			   struct alginfo *adata, unsigned int assoclen,
 			   unsigned int ivsize, unsigned int authsize,
-			   unsigned int blocksize);
+			   unsigned int blocksize, int era);
 
 void cnstr_shdsc_gcm_encap(u32 * const desc, struct alginfo *cdata,
 			   unsigned int ivsize, unsigned int icvsize,

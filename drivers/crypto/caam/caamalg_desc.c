@@ -626,19 +626,20 @@ EXPORT_SYMBOL(cnstr_shdsc_aead_givencap);
  * @cdata: pointer to block cipher transform definitions
  *         Valid algorithm values - one of OP_ALG_ALGSEL_AES ANDed
  *         with OP_ALG_AAI_CBC
- * @adata: pointer to authentication transform definitions. Note that since a
- *         split key is to be used, the size of the split key itself is
- *         specified. Valid algorithm values OP_ALG_ALGSEL_SHA1 ANDed with
- *         OP_ALG_AAI_HMAC_PRECOMP.
+ * @adata: pointer to authentication transform definitions.
+ *         A split key is required for SEC Era < 6; the size of the split key
+ *         is specified in this case. Valid algorithm values OP_ALG_ALGSEL_SHA1
+ *         ANDed with OP_ALG_AAI_HMAC_PRECOMP.
  * @assoclen: associated data length
  * @ivsize: initialization vector size
  * @authsize: authentication data size
  * @blocksize: block cipher size
+ * @era: SEC Era
  */
 void cnstr_shdsc_tls_encap(u32 * const desc, struct alginfo *cdata,
 			   struct alginfo *adata, unsigned int assoclen,
 			   unsigned int ivsize, unsigned int authsize,
-			   unsigned int blocksize)
+			   unsigned int blocksize, int era)
 {
 	u32 *key_jump_cmd, *zero_payload_jump_cmd;
 	u32 genpad, idx_ld_datasz, idx_ld_pad, stidx;
@@ -666,13 +667,18 @@ void cnstr_shdsc_tls_encap(u32 * const desc, struct alginfo *cdata,
 	key_jump_cmd = append_jump(desc, JUMP_JSL | JUMP_TEST_ALL |
 				   JUMP_COND_SHRD);
 
-	if (adata->key_inline)
-		append_key_as_imm(desc, adata->key_virt, adata->keylen_pad,
-				  adata->keylen, CLASS_2 | KEY_DEST_MDHA_SPLIT |
-				  KEY_ENC);
-	else
-		append_key(desc, adata->key_dma, adata->keylen, CLASS_2 |
-			   KEY_DEST_MDHA_SPLIT | KEY_ENC);
+	if (era < 6) {
+		if (adata->key_inline)
+			append_key_as_imm(desc, adata->key_virt,
+					  adata->keylen_pad, adata->keylen,
+					  CLASS_2 | KEY_DEST_MDHA_SPLIT |
+					  KEY_ENC);
+		else
+			append_key(desc, adata->key_dma, adata->keylen,
+				   CLASS_2 | KEY_DEST_MDHA_SPLIT | KEY_ENC);
+	} else {
+		append_proto_dkp(desc, adata);
+	}
 
 	if (cdata->key_inline)
 		append_key_as_imm(desc, cdata->key_virt, cdata->keylen,
@@ -779,19 +785,20 @@ EXPORT_SYMBOL(cnstr_shdsc_tls_encap);
  * @cdata: pointer to block cipher transform definitions
  *         Valid algorithm values - one of OP_ALG_ALGSEL_AES ANDed
  *         with OP_ALG_AAI_CBC
- * @adata: pointer to authentication transform definitions. Note that since a
- *         split key is to be used, the size of the split key itself is
- *         specified. Valid algorithm values OP_ALG_ALGSEL_ SHA1 ANDed with
- *         OP_ALG_AAI_HMAC_PRECOMP.
+ * @adata: pointer to authentication transform definitions.
+ *         A split key is required for SEC Era < 6; the size of the split key
+ *         is specified in this case. Valid algorithm values OP_ALG_ALGSEL_SHA1
+ *         ANDed with OP_ALG_AAI_HMAC_PRECOMP.
  * @assoclen: associated data length
  * @ivsize: initialization vector size
  * @authsize: authentication data size
  * @blocksize: block cipher size
+ * @era: SEC Era
  */
 void cnstr_shdsc_tls_decap(u32 * const desc, struct alginfo *cdata,
 			   struct alginfo *adata, unsigned int assoclen,
 			   unsigned int ivsize, unsigned int authsize,
-			   unsigned int blocksize)
+			   unsigned int blocksize, int era)
 {
 	u32 stidx, jumpback;
 	u32 *key_jump_cmd, *zero_payload_jump_cmd, *skip_zero_jump_cmd;
@@ -809,8 +816,11 @@ void cnstr_shdsc_tls_decap(u32 * const desc, struct alginfo *cdata,
 	key_jump_cmd = append_jump(desc, JUMP_JSL | JUMP_TEST_ALL |
 				   JUMP_COND_SHRD);
 
-	append_key(desc, adata->key_dma, adata->keylen, CLASS_2 |
-		   KEY_DEST_MDHA_SPLIT | KEY_ENC);
+	if (era < 6)
+		append_key(desc, adata->key_dma, adata->keylen, CLASS_2 |
+			   KEY_DEST_MDHA_SPLIT | KEY_ENC);
+	else
+		append_proto_dkp(desc, adata);
 
 	append_key(desc, cdata->key_dma, cdata->keylen, CLASS_1 |
 		   KEY_DEST_CLASS_REG);

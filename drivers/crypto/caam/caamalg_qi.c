@@ -291,6 +291,7 @@ static int tls_set_sh_desc(struct crypto_aead *tls)
 	unsigned int assoclen = 13; /* always 13 bytes for TLS */
 	unsigned int data_len[2];
 	u32 inl_mask;
+	struct caam_drv_private *ctrlpriv = dev_get_drvdata(ctx->jrdev->parent);
 
 	if (!ctx->cdata.keylen || !ctx->authsize)
 		return 0;
@@ -321,17 +322,20 @@ static int tls_set_sh_desc(struct crypto_aead *tls)
 	ctx->cdata.key_inline = !!(inl_mask & 2);
 
 	cnstr_shdsc_tls_encap(ctx->sh_desc_enc, &ctx->cdata, &ctx->adata,
-			      assoclen, ivsize, ctx->authsize, blocksize);
+			      assoclen, ivsize, ctx->authsize, blocksize,
+			      ctrlpriv->era);
 
 	/*
 	 * TLS 1.0 decrypt shared descriptor
 	 * Keys do not fit inline, regardless of algorithms used
 	 */
+	ctx->adata.key_inline = false;
 	ctx->adata.key_dma = ctx->key_dma;
 	ctx->cdata.key_dma = ctx->key_dma + ctx->adata.keylen_pad;
 
 	cnstr_shdsc_tls_decap(ctx->sh_desc_dec, &ctx->cdata, &ctx->adata,
-			      assoclen, ivsize, ctx->authsize, blocksize);
+			      assoclen, ivsize, ctx->authsize, blocksize,
+			      ctrlpriv->era);
 
 	return 0;
 }
@@ -351,6 +355,7 @@ static int tls_setkey(struct crypto_aead *tls, const u8 *key,
 {
 	struct caam_ctx *ctx = crypto_aead_ctx(tls);
 	struct device *jrdev = ctx->jrdev;
+	struct caam_drv_private *ctrlpriv = dev_get_drvdata(jrdev->parent);
 	struct crypto_authenc_keys keys;
 	int ret = 0;
 
@@ -364,6 +369,27 @@ static int tls_setkey(struct crypto_aead *tls, const u8 *key,
 	print_hex_dump(KERN_ERR, "key in @" __stringify(__LINE__)": ",
 		       DUMP_PREFIX_ADDRESS, 16, 4, key, keylen, 1);
 #endif
+
+	/*
+	 * If DKP is supported, use it in the shared descriptor to generate
+	 * the split key.
+	 */
+	if (ctrlpriv->era >= 6) {
+		ctx->adata.keylen = keys.authkeylen;
+		ctx->adata.keylen_pad = split_key_len(ctx->adata.algtype &
+						      OP_ALG_ALGSEL_MASK);
+
+		if (ctx->adata.keylen_pad + keys.enckeylen > CAAM_MAX_KEY_SIZE)
+			goto badkey;
+
+		memcpy(ctx->key, keys.authkey, keys.authkeylen);
+		memcpy(ctx->key + ctx->adata.keylen_pad, keys.enckey,
+		       keys.enckeylen);
+		dma_sync_single_for_device(jrdev, ctx->key_dma,
+					   ctx->adata.keylen_pad +
+					   keys.enckeylen, DMA_TO_DEVICE);
+		goto skip_split_key;
+	}
 
 	ret = gen_split_key(jrdev, ctx->key, &ctx->adata, keys.authkey,
 			    keys.authkeylen, CAAM_MAX_KEY_SIZE -
@@ -384,6 +410,7 @@ static int tls_setkey(struct crypto_aead *tls, const u8 *key,
 		       ctx->adata.keylen_pad + keys.enckeylen, 1);
 #endif
 
+skip_split_key:
 	ctx->cdata.keylen = keys.enckeylen;
 
 	ret = tls_set_sh_desc(tls);

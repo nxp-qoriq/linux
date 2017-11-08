@@ -189,6 +189,7 @@ static int aead_set_sh_desc(struct crypto_aead *aead)
 	struct caam_ctx *ctx = crypto_aead_ctx(aead);
 	unsigned int ivsize = crypto_aead_ivsize(aead);
 	struct device *dev = ctx->dev;
+	struct dpaa2_caam_priv *priv = dev_get_drvdata(dev);
 	struct caam_flc *flc;
 	u32 *desc;
 	u32 ctx1_iv_off = 0;
@@ -250,11 +251,12 @@ static int aead_set_sh_desc(struct crypto_aead *aead)
 	if (alg->caam.geniv)
 		cnstr_shdsc_aead_givencap(desc, &ctx->cdata, &ctx->adata,
 					  ivsize, ctx->authsize, is_rfc3686,
-					  nonce, ctx1_iv_off, true);
+					  nonce, ctx1_iv_off, true,
+					  priv->sec_attr.era);
 	else
 		cnstr_shdsc_aead_encap(desc, &ctx->cdata, &ctx->adata,
 				       ivsize, ctx->authsize, is_rfc3686, nonce,
-				       ctx1_iv_off, true);
+				       ctx1_iv_off, true, priv->sec_attr.era);
 
 	flc->flc[1] = desc_len(desc); /* SDL */
 	flc->flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) +
@@ -289,7 +291,8 @@ static int aead_set_sh_desc(struct crypto_aead *aead)
 
 	cnstr_shdsc_aead_decap(desc, &ctx->cdata, &ctx->adata,
 			       ivsize, ctx->authsize, alg->caam.geniv,
-			       is_rfc3686, nonce, ctx1_iv_off, true);
+			       is_rfc3686, nonce, ctx1_iv_off, true,
+			       priv->sec_attr.era);
 
 	flc->flc[1] = desc_len(desc); /* SDL */
 	flc->flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) +
@@ -333,130 +336,6 @@ static void split_key_sh_done(void *cbk_ctx, u32 err)
 	complete(&res->completion);
 }
 
-static int gen_split_key_sh(struct device *dev, u8 *key_out,
-			    struct alginfo * const adata, const u8 *key_in,
-			    u32 keylen)
-{
-	struct caam_request *req_ctx;
-	u32 *desc;
-	struct split_key_sh_result result;
-	dma_addr_t dma_addr_in, dma_addr_out;
-	struct caam_flc *flc;
-	struct dpaa2_fl_entry *in_fle, *out_fle;
-	int ret = -ENOMEM;
-
-	req_ctx = kzalloc(sizeof(*req_ctx), GFP_KERNEL | GFP_DMA);
-	if (!req_ctx)
-		return -ENOMEM;
-
-	in_fle = &req_ctx->fd_flt[1];
-	out_fle = &req_ctx->fd_flt[0];
-
-	flc = kzalloc(sizeof(*flc), GFP_KERNEL | GFP_DMA);
-	if (!flc)
-		goto err_flc;
-
-	dma_addr_in = dma_map_single(dev, (void *)key_in, keylen,
-				     DMA_TO_DEVICE);
-	if (dma_mapping_error(dev, dma_addr_in)) {
-		dev_err(dev, "unable to map key input memory\n");
-		goto err_dma_addr_in;
-	}
-
-	dma_addr_out = dma_map_single(dev, key_out, adata->keylen_pad,
-				      DMA_FROM_DEVICE);
-	if (dma_mapping_error(dev, dma_addr_out)) {
-		dev_err(dev, "unable to map key output memory\n");
-		goto err_dma_addr_out;
-	}
-
-	desc = flc->sh_desc;
-
-	init_sh_desc(desc, 0);
-	append_key(desc, dma_addr_in, keylen, CLASS_2 | KEY_DEST_CLASS_REG);
-
-	/* Sets MDHA up into an HMAC-INIT */
-	append_operation(desc, (adata->algtype & OP_ALG_ALGSEL_MASK) |
-			 OP_ALG_AAI_HMAC | OP_TYPE_CLASS2_ALG | OP_ALG_DECRYPT |
-			 OP_ALG_AS_INIT);
-
-	/*
-	 * do a FIFO_LOAD of zero, this will trigger the internal key expansion
-	 * into both pads inside MDHA
-	 */
-	append_fifo_load_as_imm(desc, NULL, 0, LDST_CLASS_2_CCB |
-				FIFOLD_TYPE_MSG | FIFOLD_TYPE_LAST2);
-
-	/*
-	 * FIFO_STORE with the explicit split-key content store
-	 * (0x26 output type)
-	 */
-	append_fifo_store(desc, dma_addr_out, adata->keylen,
-			  LDST_CLASS_2_CCB | FIFOST_TYPE_SPLIT_KEK);
-
-	flc->flc[1] = desc_len(desc); /* SDL */
-	flc->flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) +
-				      desc_bytes(desc), DMA_TO_DEVICE);
-	if (dma_mapping_error(dev, flc->flc_dma)) {
-		dev_err(dev, "unable to map shared descriptor\n");
-		goto err_flc_dma;
-	}
-
-	dpaa2_fl_set_final(in_fle, true);
-	dpaa2_fl_set_format(in_fle, dpaa2_fl_single);
-	dpaa2_fl_set_addr(in_fle, dma_addr_in);
-	dpaa2_fl_set_len(in_fle, keylen);
-	dpaa2_fl_set_format(out_fle, dpaa2_fl_single);
-	dpaa2_fl_set_addr(out_fle, dma_addr_out);
-	dpaa2_fl_set_len(out_fle, adata->keylen_pad);
-
-#ifdef DEBUG
-	print_hex_dump(KERN_ERR, "ctx.key@" __stringify(__LINE__)": ",
-		       DUMP_PREFIX_ADDRESS, 16, 4, key_in, keylen, 1);
-	print_hex_dump(KERN_ERR, "desc@" __stringify(__LINE__)": ",
-		       DUMP_PREFIX_ADDRESS, 16, 4, desc, desc_bytes(desc), 1);
-#endif
-
-	result.err = 0;
-	init_completion(&result.completion);
-	result.dev = dev;
-
-	req_ctx->flc = flc;
-	req_ctx->cbk = split_key_sh_done;
-	req_ctx->ctx = &result;
-
-	ret = dpaa2_caam_enqueue(dev, req_ctx);
-	if (ret == -EINPROGRESS) {
-		/* in progress */
-		wait_for_completion(&result.completion);
-		ret = result.err;
-#ifdef DEBUG
-		print_hex_dump(KERN_ERR, "ctx.key@" __stringify(__LINE__)": ",
-			       DUMP_PREFIX_ADDRESS, 16, 4, key_out,
-			       adata->keylen_pad, 1);
-#endif
-	}
-
-	dma_unmap_single(dev, flc->flc_dma, sizeof(flc->flc) + desc_bytes(desc),
-			 DMA_TO_DEVICE);
-err_flc_dma:
-	dma_unmap_single(dev, dma_addr_out, adata->keylen_pad, DMA_FROM_DEVICE);
-err_dma_addr_out:
-	dma_unmap_single(dev, dma_addr_in, keylen, DMA_TO_DEVICE);
-err_dma_addr_in:
-	kfree(flc);
-err_flc:
-	kfree(req_ctx);
-	return ret;
-}
-
-static int gen_split_aead_key(struct caam_ctx *ctx, const u8 *key_in,
-			      u32 authkeylen)
-{
-	return gen_split_key_sh(ctx->dev, ctx->key, &ctx->adata, key_in,
-				authkeylen);
-}
-
 static int aead_setkey(struct crypto_aead *aead, const u8 *key,
 		       unsigned int keylen)
 {
@@ -476,26 +355,14 @@ static int aead_setkey(struct crypto_aead *aead, const u8 *key,
 		       DUMP_PREFIX_ADDRESS, 16, 4, key, keylen, 1);
 #endif
 
-	ctx->adata.keylen = split_key_len(ctx->adata.algtype &
-					  OP_ALG_ALGSEL_MASK);
-	ctx->adata.keylen_pad = split_key_pad_len(ctx->adata.algtype &
-						  OP_ALG_ALGSEL_MASK);
-
-#ifdef DEBUG
-	dev_err(dev, "split keylen %d split keylen padded %d\n",
-		ctx->adata.keylen, ctx->adata.keylen_pad);
-	print_hex_dump(KERN_ERR, "ctx.key@" __stringify(__LINE__)": ",
-		       DUMP_PREFIX_ADDRESS, 16, 4, keys.authkey, keylen, 1);
-#endif
+	ctx->adata.keylen = keys.authkeylen;
+	ctx->adata.keylen_pad = split_key_len(ctx->adata.algtype &
+					      OP_ALG_ALGSEL_MASK);
 
 	if (ctx->adata.keylen_pad + keys.enckeylen > CAAM_MAX_KEY_SIZE)
 		goto badkey;
 
-	ret = gen_split_aead_key(ctx, keys.authkey, keys.authkeylen);
-	if (ret)
-		goto badkey;
-
-	/* postpend encryption key to auth split key */
+	memcpy(ctx->key, keys.authkey, keys.authkeylen);
 	memcpy(ctx->key + ctx->adata.keylen_pad, keys.enckey, keys.enckeylen);
 
 	ctx->key_dma = dma_map_single(dev, ctx->key, ctx->adata.keylen_pad +

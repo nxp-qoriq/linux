@@ -771,6 +771,7 @@ static int tls_set_sh_desc(struct crypto_aead *tls)
 	unsigned int ivsize = crypto_aead_ivsize(tls);
 	unsigned int blocksize = crypto_aead_blocksize(tls);
 	struct device *dev = ctx->dev;
+	struct dpaa2_caam_priv *priv = dev_get_drvdata(dev);
 	struct caam_flc *flc;
 	u32 *desc;
 	unsigned int assoclen = 13; /* always 13 bytes for TLS */
@@ -809,7 +810,8 @@ static int tls_set_sh_desc(struct crypto_aead *tls)
 	desc = flc->sh_desc;
 
 	cnstr_shdsc_tls_encap(desc, &ctx->cdata, &ctx->adata,
-			      assoclen, ivsize, ctx->authsize, blocksize);
+			      assoclen, ivsize, ctx->authsize, blocksize,
+			      priv->sec_attr.era);
 
 	flc->flc[1] = desc_len(desc);
 	flc->flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) +
@@ -824,6 +826,7 @@ static int tls_set_sh_desc(struct crypto_aead *tls)
 	 * TLS 1.0 decrypt shared descriptor
 	 * Keys do not fit inline, regardless of algorithms used
 	 */
+	ctx->adata.key_inline = false;
 	ctx->adata.key_dma = ctx->key_dma;
 	ctx->cdata.key_dma = ctx->key_dma + ctx->adata.keylen_pad;
 
@@ -831,7 +834,7 @@ static int tls_set_sh_desc(struct crypto_aead *tls)
 	desc = flc->sh_desc;
 
 	cnstr_shdsc_tls_decap(desc, &ctx->cdata, &ctx->adata, assoclen, ivsize,
-			      ctx->authsize, blocksize);
+			      ctx->authsize, blocksize, priv->sec_attr.era);
 
 	flc->flc[1] = desc_len(desc); /* SDL */
 	flc->flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) +
@@ -863,27 +866,14 @@ static int tls_setkey(struct crypto_aead *tls, const u8 *key,
 		       DUMP_PREFIX_ADDRESS, 16, 4, key, keylen, 1);
 #endif
 
-	ctx->adata.keylen = split_key_len(ctx->adata.algtype &
-					  OP_ALG_ALGSEL_MASK);
-	ctx->adata.keylen_pad = split_key_pad_len(ctx->adata.algtype &
-						  OP_ALG_ALGSEL_MASK);
-
-#ifdef DEBUG
-	dev_err(dev, "split keylen %d split keylen padded %d\n",
-		ctx->adata.keylen, ctx->adata.keylen_pad);
-	print_hex_dump(KERN_ERR, "ctx.key@" __stringify(__LINE__)": ",
-		       DUMP_PREFIX_ADDRESS, 16, 4, keys.authkey,
-		       keys.authkeylen + keys.enckeylen, 1);
-#endif
+	ctx->adata.keylen = keys.authkeylen;
+	ctx->adata.keylen_pad = split_key_len(ctx->adata.algtype &
+					      OP_ALG_ALGSEL_MASK);
 
 	if (ctx->adata.keylen_pad + keys.enckeylen > CAAM_MAX_KEY_SIZE)
 		goto badkey;
 
-	ret = gen_split_aead_key(ctx, keys.authkey, keys.authkeylen);
-	if (ret)
-		goto badkey;
-
-	/* postpend encryption key to auth split key */
+	memcpy(ctx->key, keys.authkey, keys.authkeylen);
 	memcpy(ctx->key + ctx->adata.keylen_pad, keys.enckey, keys.enckeylen);
 
 	ctx->key_dma = dma_map_single(dev, ctx->key, ctx->adata.keylen_pad +

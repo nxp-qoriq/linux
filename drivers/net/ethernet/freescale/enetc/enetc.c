@@ -1408,6 +1408,32 @@ static void enetc_free_msix(struct enetc_ndev_priv *priv)
 	kfree(priv->msix_entries);
 }
 
+#ifdef CONFIG_PCI_IOV
+static int enetc_sriov_configure(struct pci_dev *pdev, int num_vfs)
+{
+	struct enetc_si *si = pci_get_drvdata(pdev);
+	int err;
+
+	if (!num_vfs) {
+		dev_info(&pdev->dev, "SR-IOV stop\n");
+		pci_disable_sriov(pdev);
+	} else {
+		dev_info(&pdev->dev, "SR-IOV start, %d VFs\n", num_vfs);
+		err = pci_enable_sriov(pdev, num_vfs);
+		if (err) {
+			dev_err(&pdev->dev, "pci_enable_sriov err %d\n", err);
+			return err;
+		}
+	}
+
+	si->num_vfs = num_vfs;
+
+	return num_vfs;
+}
+#else
+#define enetc_sriov_configure(pdev, num_vfs)	(void)0
+#endif
+
 static int enetc_pci_probe(struct pci_dev *pdev,
 			   const struct pci_device_id *ent)
 {
@@ -1542,6 +1568,9 @@ static void enetc_pci_remove(struct pci_dev *pdev)
 
 	dev_info(&pdev->dev, "enetc_pci_remove()\n");
 
+	if (si->num_vfs)
+		enetc_sriov_configure(pdev, 0);
+
 	priv = netdev_priv(si->ndev);
 	unregister_netdev(si->ndev);
 
@@ -1556,30 +1585,6 @@ static void enetc_pci_remove(struct pci_dev *pdev)
 	pci_release_mem_regions(pdev);
 	pci_disable_device(pdev);
 }
-
-#ifdef CONFIG_PCI_IOV
-static int enetc_sriov_configure(struct pci_dev *pdev, int num_vfs)
-{
-	struct enetc_si *si = pci_get_drvdata(pdev);
-	int err;
-
-	if (!num_vfs) {
-		dev_info(&pdev->dev, "SR-IOV stop\n");
-		pci_disable_sriov(pdev);
-	} else {
-		dev_info(&pdev->dev, "SR-IOV start, %d VFs\n", num_vfs);
-		err = pci_enable_sriov(pdev, num_vfs);
-		if (err) {
-			dev_err(&pdev->dev, "pci_enable_sriov err %d\n", err);
-			return err;
-		}
-	}
-
-	si->num_vfs = num_vfs;
-
-	return num_vfs;
-}
-#endif
 
 static const struct pci_device_id enetc_id_table[] = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_FREESCALE, ENETC_DEV_ID_PF) },

@@ -451,18 +451,20 @@ static inline unsigned int dpaa2_eth_buf_raw_size(struct dpaa2_eth_priv *priv)
 	return DPAA2_ETH_SKB_SIZE + priv->rx_buf_align;
 }
 
-static inline
-unsigned int dpaa2_eth_needed_headroom(struct dpaa2_eth_priv *priv)
+/* Total headroom needed by the hardware in Tx frame buffers */
+static inline unsigned int dpaa2_eth_tx_headroom(struct dpaa2_eth_priv *priv)
 {
-	return priv->tx_data_offset + DPAA2_ETH_TX_BUF_ALIGN - HH_DATA_MOD;
+	return priv->tx_data_offset + DPAA2_ETH_TX_BUF_ALIGN;
 }
 
 /* Extra headroom space requested to hardware, in order to make sure there's
- * no realloc'ing in forwarding scenarios
+ * no realloc'ing in forwarding scenarios. We need to reserve enough space
+ * such that we can accommodate the required Tx offset and alignment in the
+ * ingress frame buffer
  */
-static inline unsigned int dpaa2_eth_rx_head_room(struct dpaa2_eth_priv *priv)
+static inline unsigned int dpaa2_eth_rx_headroom(struct dpaa2_eth_priv *priv)
 {
-	return dpaa2_eth_needed_headroom(priv) -
+	return dpaa2_eth_tx_headroom(priv) -
 	       (DPAA2_ETH_SWA_SIZE + DPAA2_ETH_RX_HWA_SIZE);
 }
 

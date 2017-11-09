@@ -675,8 +675,7 @@ static int build_single_fd(struct dpaa2_eth_priv *priv,
 	struct dpaa2_eth_swa *swa;
 	dma_addr_t addr;
 
-	buffer_start = PTR_ALIGN(skb->data - priv->tx_data_offset -
-				 DPAA2_ETH_TX_BUF_ALIGN,
+	buffer_start = PTR_ALIGN(skb->data - dpaa2_eth_tx_headroom(priv),
 				 DPAA2_ETH_TX_BUF_ALIGN);
 
 	/* PTA from egress side is passed as is to the confirmation side so
@@ -827,10 +826,10 @@ static netdev_tx_t dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 	percpu_stats = this_cpu_ptr(priv->percpu_stats);
 	percpu_extras = this_cpu_ptr(priv->percpu_extras);
 
-	if (unlikely(skb_headroom(skb) < dpaa2_eth_needed_headroom(priv))) {
+	if (skb_headroom(skb) < dpaa2_eth_tx_headroom(priv)) {
 		struct sk_buff *ns;
 
-		ns = skb_realloc_headroom(skb, dpaa2_eth_needed_headroom(priv));
+		ns = skb_realloc_headroom(skb, dpaa2_eth_tx_headroom(priv));
 		if (unlikely(!ns)) {
 			percpu_stats->tx_dropped++;
 			goto err_alloc_headroom;
@@ -2202,7 +2201,7 @@ static int set_buffer_layout(struct dpaa2_eth_priv *priv)
 	/* rx buffer */
 	buf_layout.pass_parser_result = true;
 	buf_layout.data_align = priv->rx_buf_align;
-	buf_layout.data_head_room = dpaa2_eth_rx_head_room(priv);
+	buf_layout.data_head_room = dpaa2_eth_rx_headroom(priv);
 	buf_layout.options = DPNI_BUF_LAYOUT_OPT_PARSER_RESULT |
 			     DPNI_BUF_LAYOUT_OPT_FRAME_STATUS |
 			     DPNI_BUF_LAYOUT_OPT_PRIVATE_DATA_SIZE |
@@ -2846,7 +2845,6 @@ static int netdev_init(struct net_device *net_dev)
 {
 	struct device *dev = net_dev->dev.parent;
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
-	u16 rx_headroom, req_headroom;
 	u8 bcast_addr[ETH_ALEN];
 	u8 num_queues;
 	int err;
@@ -2864,24 +2862,6 @@ static int netdev_init(struct net_device *net_dev)
 		dev_err(dev, "dpni_add_mac_addr() failed\n");
 		return err;
 	}
-
-	/* Reserve enough space to align buffer as per hardware requirement;
-	 * NOTE: priv->tx_data_offset MUST be initialized at this point.
-	 */
-	net_dev->needed_headroom = dpaa2_eth_needed_headroom(priv);
-
-	/* If headroom guaranteed by hardware in the Rx frame buffer is
-	 * smaller than the Tx headroom required by the stack, issue a
-	 * one time warning. This will most likely mean skbs forwarded to
-	 * another DPAA2 network interface will get reallocated, with a
-	 * significant performance impact.
-	 */
-	req_headroom = LL_RESERVED_SPACE(net_dev) - ETH_HLEN;
-	rx_headroom = ALIGN(DPAA2_ETH_RX_HWA_SIZE + DPAA2_ETH_SWA_SIZE +
-			    dpaa2_eth_rx_head_room(priv), priv->rx_buf_align);
-	if (req_headroom > rx_headroom)
-		dev_info_once(dev, "Required headroom (%d) greater than available (%d)\n",
-			      req_headroom, rx_headroom);
 
 	/* Set MTU limits */
 	net_dev->min_mtu = 68;

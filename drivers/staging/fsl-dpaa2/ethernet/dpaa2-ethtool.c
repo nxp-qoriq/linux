@@ -63,6 +63,7 @@ static char dpaa2_ethtool_extras[][ETH_GSTRING_LEN] = {
 	"tx conf bytes",
 	"tx sg frames",
 	"tx sg bytes",
+	"tx realloc frames",
 	"rx sg frames",
 	"rx sg bytes",
 	/* how many times we had to retry the enqueue command */

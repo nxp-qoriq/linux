@@ -45,7 +45,8 @@ static void enetc_get_regs(struct net_device *ndev, struct ethtool_regs *regs,
 	PR_REG(hw, SICAPR0);
 	PR_REG(hw, SICAPR1);
 
-	for (i = 0; i < priv->num_int_vectors; i++) {
+	PR_REG(hw, SIMSIVR);
+	for (i = 0; i < priv->bdr_int_num; i++) {
 		PR_REG(hw, SIMSITRV(i));
 		PR_REG(hw, SIMSIRRV(i));
 	}

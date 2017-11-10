@@ -36,6 +36,8 @@
 #define ENETC_SICAPR0	0x900
 #define ENETC_SICAPR1	0x904
 
+#define ENETC_SIMSIVR	0xa20
+
 #define ENETC_SIMSITRV(n) (0xB00 + (n) * 0x4)
 #define ENETC_SIMSIRRV(n) (0xB80 + (n) * 0x4)
 

@@ -569,7 +569,7 @@ static void enetc_sw_init(struct enetc_ndev_priv *priv)
 				   priv->si->num_rx_rings);
 	priv->num_tx_rings = min_t(u16, num_online_cpus(),
 				   priv->si->num_tx_rings);
-	priv->num_int_vectors = priv->num_rx_rings;
+	priv->bdr_int_num = priv->num_rx_rings; /* int for each Tx/Rx pairs */
 
 	priv->cls_rules = kcalloc(si->num_fs_entries, sizeof(*priv->cls_rules),
 				  GFP_KERNEL);
@@ -897,63 +897,59 @@ static void enetc_configure_port_mac(struct enetc_si *si)
 		      ENETC_PM0_TX_EN | ENETC_PM0_RX_EN);
 }
 
-static void enetc_configure_hw_vector(struct enetc_hw *hw, int idx, u16 entry)
+static void enetc_configure_hw_vector(struct enetc_hw *hw,
+				      enum enetc_msix_type type, int idx,
+				      u16 entry)
 {
-	/* TODO: Only queue pairs supported for now */
-	enetc_wr(hw, ENETC_SIMSITRV(idx), entry);
-	enetc_wr(hw, ENETC_SIMSIRRV(idx), entry);
+	switch (type) {
+	case ENETC_MSIX_SI_INT:
+		enetc_wr(hw, ENETC_SIMSIVR, entry);
+		break;
+	case ENETC_MSIX_SI_BDR_INT:
+		/* TODO: Only queue pairs supported for now */
+		enetc_wr(hw, ENETC_SIMSITRV(idx), entry);
+		enetc_wr(hw, ENETC_SIMSIRRV(idx), entry);
+		break;
+	}
 }
 
 static int enetc_setup_irqs(struct enetc_ndev_priv *priv)
 {
-	int vectors = priv->num_int_vectors;
-	int i, n, err;
+	struct pci_dev *pdev = priv->si->pdev;
+	int i, err;
 
-	n = pci_enable_msix_range(priv->si->pdev, priv->msix_entries,
-				  vectors, vectors);
-	if (n < 0)
-		return n;
-
-	if (n != vectors)
-		return -EPERM;
-
-	for (i = 0; i < vectors; i++) {
+	for (i = 0; i < priv->bdr_int_num; i++) {
+		int irq = pci_irq_vector(pdev, ENETC_BDR_INT_BASE_IDX + i);
 		struct enetc_int_vector *v = &priv->int_vector[i];
 
 		sprintf(v->name, "%s-rxtx%d", priv->ndev->name, i);
-
-		err = request_irq(priv->msix_entries[i].vector, enetc_msix, 0,
-				  v->name, &v->napi);
+		err = request_irq(irq, enetc_msix, 0, v->name, &v->napi);
 		if (err) {
 			dev_err(priv->dev, "request_irq() failed!\n");
 			goto irq_err;
 		}
-
-		enetc_configure_hw_vector(&priv->si->hw, i,
-					  priv->msix_entries[i].entry);
+		enetc_configure_hw_vector(&priv->si->hw, ENETC_MSIX_SI_BDR_INT,
+					  i, ENETC_BDR_INT_BASE_IDX + i);
 	}
 
 	return 0;
 
 irq_err:
 	while (i-- > 0)
-		free_irq(priv->msix_entries[i].vector,
+		free_irq(pci_irq_vector(pdev, ENETC_BDR_INT_BASE_IDX + i),
 			 &priv->int_vector[i].napi);
-
-	pci_disable_msix(priv->si->pdev);
 
 	return err;
 }
 
 static void enetc_free_irqs(struct enetc_ndev_priv *priv)
 {
+	struct pci_dev *pdev = priv->si->pdev;
 	int i;
 
-	for (i = 0; i < priv->num_int_vectors; i++)
-		free_irq(priv->msix_entries[i].vector,
+	for (i = 0; i < priv->bdr_int_num; i++)
+		free_irq(pci_irq_vector(pdev, ENETC_BDR_INT_BASE_IDX + i),
 			 &priv->int_vector[i].napi);
-
-	pci_disable_msix(priv->si->pdev);
 }
 
 static void enetc_enable_interrupts(struct enetc_ndev_priv *priv)
@@ -961,7 +957,7 @@ static void enetc_enable_interrupts(struct enetc_ndev_priv *priv)
 	int i;
 
 	/* enable Tx & Rx event indication */
-	for (i = 0; i < priv->num_int_vectors; i++) {
+	for (i = 0; i < priv->bdr_int_num; i++) {
 		enetc_txbdr_wr(&priv->si->hw, i,
 			       ENETC_TBIER, ENETC_TBIER_TXFIE);
 		enetc_rxbdr_wr(&priv->si->hw, i,
@@ -971,13 +967,16 @@ static void enetc_enable_interrupts(struct enetc_ndev_priv *priv)
 
 static void enetc_disable_interrupts(struct enetc_ndev_priv *priv)
 {
+	struct pci_dev *pdev = priv->si->pdev;
 	int i;
 
-	for (i = 0; i < priv->num_int_vectors; i++) {
+	for (i = 0; i < priv->bdr_int_num; i++) {
+		int irq = pci_irq_vector(pdev, ENETC_BDR_INT_BASE_IDX + i);
+
 		enetc_txbdr_wr(&priv->si->hw, i, ENETC_TBIER, 0);
 		enetc_rxbdr_wr(&priv->si->hw, i, ENETC_RBIER, 0);
 
-		synchronize_irq(priv->msix_entries[i].vector);
+		synchronize_irq(irq);
 	}
 }
 
@@ -998,9 +997,6 @@ static int enetc_open(struct net_device *ndev)
 
 	enetc_setup_bdrs(priv);
 
-	err = enetc_setup_irqs(priv);
-	if (err)
-		goto err_setup_irqs;
 
 	err = netif_set_real_num_tx_queues(ndev, priv->num_tx_rings);
 	if (err)
@@ -1010,7 +1006,7 @@ static int enetc_open(struct net_device *ndev)
 	if (err)
 		goto err_set_queues;
 
-	for (i = 0; i < priv->num_int_vectors; i++)
+	for (i = 0; i < priv->bdr_int_num; i++)
 		napi_enable(&priv->int_vector[i].napi);
 
 	enetc_enable_interrupts(priv);
@@ -1020,8 +1016,6 @@ static int enetc_open(struct net_device *ndev)
 	return 0;
 
 err_set_queues:
-	enetc_free_irqs(priv);
-err_setup_irqs:
 	enetc_free_rx_resources(priv);
 err_alloc_rx:
 	enetc_free_tx_resources(priv);
@@ -1040,12 +1034,10 @@ static int enetc_close(struct net_device *ndev)
 
 	enetc_disable_interrupts(priv);
 
-	for (i = 0; i < priv->num_int_vectors; i++) {
+	for (i = 0; i < priv->bdr_int_num; i++) {
 		napi_synchronize(&priv->int_vector[i].napi);
 		napi_disable(&priv->int_vector[i].napi);
 	}
-
-	enetc_free_irqs(priv);
 
 	enetc_free_rxtx_rings(priv);
 	enetc_free_rx_resources(priv);
@@ -1363,26 +1355,25 @@ static void enetc_configure_si(struct enetc_ndev_priv *priv)
 
 static int enetc_alloc_msix(struct enetc_ndev_priv *priv)
 {
-	int vectors = priv->num_int_vectors;
-	int i;
+	struct pci_dev *pdev = priv->si->pdev;
+	int i, n, nvec;
 
-	priv->msix_entries = kcalloc(vectors, sizeof(struct msix_entry),
-				     GFP_KERNEL);
-	if (!priv->msix_entries)
+	nvec = ENETC_SI_INT_NUM + priv->bdr_int_num;
+	/* allocate MSIX for both messaging and Rx/Tx interrupts */
+	n = pci_alloc_irq_vectors(pdev, nvec, nvec, PCI_IRQ_MSIX);
+
+	if (n < 0)
+		return n;
+
+	if (n != nvec)
+		return -EPERM;
+
+	priv->int_vector = kcalloc(priv->bdr_int_num,
+				   sizeof(struct enetc_int_vector), GFP_KERNEL);
+	if (!priv->int_vector)
 		return -ENOMEM;
 
-	for (i = 0; i < vectors; i++)
-		priv->msix_entries[i].entry = i;
-
-	priv->int_vector = kcalloc(vectors, sizeof(struct enetc_int_vector),
-				   GFP_KERNEL);
-	if (!priv->int_vector) {
-		kfree(priv->msix_entries);
-		priv->msix_entries = NULL;
-		return -ENOMEM;
-	}
-
-	for (i = 0; i < vectors; i++) {
+	for (i = 0; i < priv->bdr_int_num; i++) {
 		struct enetc_int_vector *v = &priv->int_vector[i];
 		struct enetc_bdr *bdr;
 
@@ -1410,7 +1401,7 @@ static void enetc_free_msix(struct enetc_ndev_priv *priv)
 {
 	int i;
 
-	for (i = 0; i < priv->num_int_vectors; i++) {
+	for (i = 0; i < priv->bdr_int_num; i++) {
 		struct enetc_int_vector *v = &priv->int_vector[i];
 
 		priv->tx_ring[v->tx_ring.index] = NULL;
@@ -1419,7 +1410,9 @@ static void enetc_free_msix(struct enetc_ndev_priv *priv)
 	}
 
 	kfree(priv->int_vector);
-	kfree(priv->msix_entries);
+
+	/* disable all MSIX for this device */
+	pci_free_irq_vectors(priv->si->pdev);
 }
 
 #ifdef CONFIG_PCI_IOV
@@ -1542,6 +1535,10 @@ static int enetc_pci_probe(struct pci_dev *pdev,
 		goto err_alloc_msix;
 	}
 
+	err = enetc_setup_irqs(priv);
+	if (err)
+		goto err_setup_irq;
+
 	err = register_netdev(ndev);
 	if (err)
 		goto err_reg_netdev;
@@ -1554,11 +1551,13 @@ static int enetc_pci_probe(struct pci_dev *pdev,
 	return 0;
 
 err_reg_netdev:
+	enetc_free_irqs(priv);
+err_setup_irq:
 	enetc_free_msix(priv);
 err_alloc_msix:
-err_si_config:
 	enetc_free_si_resources(priv);
 err_alloc_si_res:
+err_si_config:
 	si->ndev = NULL;
 	free_netdev(ndev);
 err_alloc_netdev:
@@ -1589,7 +1588,10 @@ static void enetc_pci_remove(struct pci_dev *pdev)
 	unregister_netdev(si->ndev);
 
 	kfree(priv->cls_rules);
+
+	enetc_free_irqs(priv);
 	enetc_free_msix(priv);
+
 	enetc_free_si_resources(priv);
 
 	free_netdev(si->ndev);

@@ -380,8 +380,22 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 
 		if (unlikely(bd_status &
 			     ENETC_RXBD_LSTATUS(ENETC_RXBD_ERR_MASK))) {
-			// TODO: rx error statistics
 			dev_kfree_skb(skb);
+			while (!(bd_status & ENETC_RXBD_LSTATUS_F)) {
+				dma_rmb();
+				bd_status = le32_to_cpu(rxbd->r.lstatus);
+				rxbd++;
+				i++;
+				if (unlikely(i == rx_ring->bd_count)) {
+					i = 0;
+					rxbd = ENETC_RXBD(*rx_ring, 0);
+				}
+			}
+
+			// FIXME: driver ethtool stats instead?
+			rx_ring->ndev->stats.rx_dropped++;
+			rx_ring->ndev->stats.rx_errors++;
+
 			break;
 		}
 

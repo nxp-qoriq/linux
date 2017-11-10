@@ -738,6 +738,7 @@ static int dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 			percpu_stats->tx_dropped++;
 			goto err_alloc_headroom;
 		}
+		percpu_extras->tx_reallocs++;
 		dev_kfree_skb(skb);
 		skb = ns;
 	}

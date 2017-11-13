@@ -44,6 +44,13 @@ config FSL_DPAA2_ETH_DCB
           (PFC) in the driver.
 
           If unsure, say N.
+
+config FSL_DPAA2_ETH_CEETM
+	depends on NET_SCHED
+	bool "DPAA2 Ethernet CEETM QoS"
+	default n
+	---help---
+	  Enable QoS offloading support through the CEETM hardware block.
 endif
 
 source "drivers/staging/fsl-dpaa2/mac/Kconfig"

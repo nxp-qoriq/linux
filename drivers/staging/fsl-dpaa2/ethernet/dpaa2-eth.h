@@ -437,6 +437,8 @@ struct dpaa2_eth_priv {
 	struct ieee_pfc pfc;
 	bool vlan_clsf_set;
 	bool tx_pause_frames;
+
+	bool ceetm_en;
 };
 
 #define dpaa2_eth_hash_enabled(priv)	\
@@ -535,6 +537,11 @@ dpaa2_eth_get_td_type(struct dpaa2_eth_priv *priv)
 		return DPAA2_ETH_TD_NONE;
 	else
 		return DPAA2_ETH_TD_QUEUE;
+}
+
+static inline int dpaa2_eth_ch_count(struct dpaa2_eth_priv *priv)
+{
+	return 1;
 }
 
 void check_cls_support(struct dpaa2_eth_priv *priv);

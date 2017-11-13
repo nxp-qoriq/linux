@@ -2849,7 +2849,7 @@ static ssize_t dpaa2_eth_write_tx_shaping(struct device *dev,
 {
 	int err, items;
 	struct dpaa2_eth_priv *priv = netdev_priv(to_net_dev(dev));
-	struct dpni_tx_shaping_cfg scfg;
+	struct dpni_tx_shaping_cfg scfg, ercfg = { 0 };
 
 	items = sscanf(buf, "%u %hu", &scfg.rate_limit, &scfg.max_burst_size);
 	if (items != 2) {
@@ -2863,7 +2863,8 @@ static ssize_t dpaa2_eth_write_tx_shaping(struct device *dev,
 		return -EINVAL;
 	}
 
-	err = dpni_set_tx_shaping(priv->mc_io, 0, priv->mc_token, &scfg);
+	err = dpni_set_tx_shaping(priv->mc_io, 0, priv->mc_token, &scfg,
+				  &ercfg, 0);
 	if (err) {
 		dev_err(dev, "dpni_set_tx_shaping() failed\n");
 		return -EPERM;

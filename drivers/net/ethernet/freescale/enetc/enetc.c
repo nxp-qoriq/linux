@@ -1477,8 +1477,10 @@ static int enetc_alloc_msix(struct enetc_ndev_priv *priv)
 
 	priv->int_vector = kcalloc(priv->bdr_int_num,
 				   sizeof(struct enetc_int_vector), GFP_KERNEL);
-	if (!priv->int_vector)
+	if (!priv->int_vector) {
+		pci_free_irq_vectors(pdev);
 		return -ENOMEM;
+	}
 
 	for (i = 0; i < priv->bdr_int_num; i++) {
 		struct enetc_int_vector *v = &priv->int_vector[i];
@@ -1638,17 +1640,17 @@ static int enetc_pci_probe(struct pci_dev *pdev,
 
 	err = enetc_alloc_msix(priv);
 	if (err) {
-		netif_err(priv, probe, ndev, "MSIX allocation failed\n");
+		dev_err(&pdev->dev, "MSIX allocation failed\n");
 		goto err_alloc_msix;
 	}
-
-	err = enetc_setup_irqs(priv);
-	if (err)
-		goto err_setup_irq;
 
 	err = register_netdev(ndev);
 	if (err)
 		goto err_reg_netdev;
+
+	err = enetc_setup_irqs(priv);
+	if (err)
+		goto err_setup_irq;
 
 	netif_carrier_off(ndev);
 
@@ -1657,9 +1659,9 @@ static int enetc_pci_probe(struct pci_dev *pdev,
 
 	return 0;
 
-err_reg_netdev:
-	enetc_free_irqs(priv);
 err_setup_irq:
+	unregister_netdev(ndev);
+err_reg_netdev:
 	enetc_free_msix(priv);
 err_alloc_msix:
 	enetc_free_si_resources(priv);

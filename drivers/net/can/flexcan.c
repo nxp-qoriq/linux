@@ -184,6 +184,7 @@
  *   MX53  FlexCAN2  03.00.00.00    yes        no         no        no
  *   MX6s  FlexCAN3  10.00.12.00    yes       yes         no       yes
  *   VF610 FlexCAN3  ?               no       yes        yes       yes?
+ * LS1021A FlexCAN2  03.00.04.00     no       yes         no       yes
  *
  * Some SOCs do not have the RX_WARN & TX_WARN interrupt line connected.
  */
@@ -277,6 +278,10 @@ static struct flexcan_devtype_data fsl_imx6q_devtype_data = {
 };
 
 static struct flexcan_devtype_data fsl_vf610_devtype_data = {
+	.quirks = FLEXCAN_QUIRK_DISABLE_RXFG | FLEXCAN_QUIRK_DISABLE_MECR,
+};
+
+static const struct flexcan_devtype_data fsl_ls1021a_r2_devtype_data = {
 	.quirks = FLEXCAN_QUIRK_DISABLE_RXFG | FLEXCAN_QUIRK_DISABLE_MECR,
 };
 
@@ -1150,6 +1155,7 @@ static const struct of_device_id flexcan_of_match[] = {
 	{ .compatible = "fsl,imx25-flexcan", .data = &fsl_p1010_devtype_data, },
 	{ .compatible = "fsl,p1010-flexcan", .data = &fsl_p1010_devtype_data, },
 	{ .compatible = "fsl,vf610-flexcan", .data = &fsl_vf610_devtype_data, },
+	{ .compatible = "fsl,ls1021ar2-flexcan", .data = &fsl_ls1021a_r2_devtype_data, },
 	{ /* sentinel */ },
 };
 MODULE_DEVICE_TABLE(of, flexcan_of_match);

@@ -161,12 +161,16 @@ struct enetc_tx_bd {
 	__le64 addr;
 	__le16 buf_len;
 	__le16 frm_len;
-	__le16 err_csum;
-	__le16 flags;
+	union {
+		struct {
+			u8 reserved[3];
+			u8 flags;
+		}; /* default layout */
+	};
 };
 
-#define ENETC_TXBD_FLAGS_IE	BIT(13)
-#define ENETC_TXBD_FLAGS_F	BIT(15)
+#define ENETC_TXBD_FLAGS_IE	BIT(5)
+#define ENETC_TXBD_FLAGS_F	BIT(7)
 
 union enetc_rx_bd {
 	struct {

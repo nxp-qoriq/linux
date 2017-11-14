@@ -129,23 +129,25 @@ static void enetc_update_txbdr(struct enetc_bdr *tx_ring, int count, u16 len)
 {
 	struct enetc_tx_swbd *tx_swbd;
 	struct enetc_tx_bd *txbd;
+	u8 flags;
 	int i;
 
 	i = tx_ring->next_to_use;
 	txbd = ENETC_TXBD(*tx_ring, i);
 	tx_swbd = &tx_ring->tx_swbd[i];
 
+	flags = ENETC_TXBD_FLAGS_IE;
+
 	/* first BD needs frm_len set */
 	txbd->frm_len = cpu_to_le16(len);
-	txbd->flags = cpu_to_le16(ENETC_TXBD_FLAGS_IE);
 
 	while (count--) {
 		txbd->addr = cpu_to_le64(tx_swbd->dma);
 		txbd->buf_len = cpu_to_le16(tx_swbd->len);
 
 		/* last BD needs 'F' bit set */
-		if (!count)
-			txbd->flags = cpu_to_le16(ENETC_TXBD_FLAGS_F);
+		txbd->flags = count ? flags : flags | ENETC_TXBD_FLAGS_F;
+		flags = 0;
 
 		tx_swbd++;
 		txbd++;

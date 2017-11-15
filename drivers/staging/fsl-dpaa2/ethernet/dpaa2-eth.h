@@ -232,11 +232,6 @@ struct dpaa2_faead {
 					 (DPAA2_FAS_BLE)	| \
 					 (DPAA2_FAS_L3CE)	| \
 					 (DPAA2_FAS_L4CE))
-/* Tx errors */
-#define DPAA2_FAS_TX_ERR_MASK	((DPAA2_FAS_KSE)		| \
-				 (DPAA2_FAS_EOFHE)	| \
-				 (DPAA2_FAS_MNLE)		| \
-				 (DPAA2_FAS_TIDE))
 
 /* Time in milliseconds between link state updates */
 #define DPAA2_ETH_LINK_STATE_REFRESH	1000

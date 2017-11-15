@@ -469,7 +469,6 @@ static int build_sg_fd(struct dpaa2_eth_priv *priv,
 	struct scatterlist *scl, *crt_scl;
 	int num_sg;
 	int num_dma_bufs;
-	struct dpaa2_fas *fas;
 	struct dpaa2_eth_swa *swa;
 
 	/* Create and map scatterlist.
@@ -501,15 +500,6 @@ static int build_sg_fd(struct dpaa2_eth_priv *priv,
 		goto sgt_buf_alloc_failed;
 	}
 	sgt_buf = PTR_ALIGN(sgt_buf, DPAA2_ETH_TX_BUF_ALIGN);
-
-	/* PTA from egress side is passed as is to the confirmation side so
-	 * we need to clear some fields here in order to find consistent values
-	 * on TX confirmation. We are clearing FAS (Frame Annotation Status)
-	 * field from the hardware annotation area
-	 */
-	fas = dpaa2_eth_get_fas(sgt_buf);
-	memset(fas, 0, DPAA2_FAS_SIZE);
-
 	sgt = (struct dpaa2_sg_entry *)(sgt_buf + priv->tx_data_offset);
 
 	/* Fill in the HW SGT structure.
@@ -547,7 +537,7 @@ static int build_sg_fd(struct dpaa2_eth_priv *priv,
 	dpaa2_fd_set_addr(fd, addr);
 	dpaa2_fd_set_len(fd, skb->len);
 
-	fd->simple.ctrl = DPAA2_FD_CTRL_ASAL | FD_CTRL_PTA;
+	fd->simple.ctrl = FD_CTRL_PTA;
 
 	if (priv->ts_tx_en && skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)
 		enable_tx_tstamp(fd, sgt_buf);
@@ -572,18 +562,9 @@ static int build_single_fd(struct dpaa2_eth_priv *priv,
 	u8 *buffer_start;
 	struct sk_buff **skbh;
 	dma_addr_t addr;
-	struct dpaa2_fas *fas;
 
 	buffer_start = PTR_ALIGN(skb->data - dpaa2_eth_tx_headroom(priv),
 				 DPAA2_ETH_TX_BUF_ALIGN);
-
-	/* PTA from egress side is passed as is to the confirmation side so
-	 * we need to clear some fields here in order to find consistent values
-	 * on TX confirmation. We are clearing FAS (Frame Annotation Status)
-	 * field from the hardware annotation area
-	 */
-	fas = dpaa2_eth_get_fas(buffer_start);
-	memset(fas, 0, DPAA2_FAS_SIZE);
 
 	/* Store a backpointer to the skb at the beginning of the buffer
 	 * (in the private data area) such that we can release it
@@ -603,7 +584,7 @@ static int build_single_fd(struct dpaa2_eth_priv *priv,
 	dpaa2_fd_set_len(fd, skb->len);
 	dpaa2_fd_set_format(fd, dpaa2_fd_single);
 
-	fd->simple.ctrl = DPAA2_FD_CTRL_ASAL | FD_CTRL_PTA;
+	fd->simple.ctrl = FD_CTRL_PTA;
 
 	if (priv->ts_tx_en && skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)
 		enable_tx_tstamp(fd, buffer_start);
@@ -622,7 +603,7 @@ static int build_single_fd(struct dpaa2_eth_priv *priv,
  */
 static void free_tx_fd(const struct dpaa2_eth_priv *priv,
 		       const struct dpaa2_fd *fd,
-		       u32 *status, bool in_napi)
+		       bool in_napi)
 {
 	struct device *dev = priv->net_dev->dev.parent;
 	dma_addr_t fd_addr;
@@ -633,14 +614,9 @@ static void free_tx_fd(const struct dpaa2_eth_priv *priv,
 	int num_sg, num_dma_bufs;
 	struct dpaa2_eth_swa *swa;
 	u8 fd_format = dpaa2_fd_get_format(fd);
-	struct dpaa2_fas *fas;
 
 	fd_addr = dpaa2_fd_get_addr(fd);
 	skbh = dpaa2_eth_iova_to_virt(priv->iommu_domain, fd_addr);
-
-	/* HWA - FAS, timestamp (for Tx confirmation frames) */
-	fas = dpaa2_eth_get_fas(skbh);
-	prefetch(fas);
 
 	switch (fd_format) {
 	case dpaa2_fd_single:
@@ -670,9 +646,6 @@ static void free_tx_fd(const struct dpaa2_eth_priv *priv,
 		dma_unmap_single(dev, fd_addr, unmap_size, DMA_BIDIRECTIONAL);
 		break;
 	default:
-		/* Unsupported format, mark it as errored and give up */
-		if (status)
-			*status = ~0;
 		return;
 	}
 
@@ -688,13 +661,6 @@ static void free_tx_fd(const struct dpaa2_eth_priv *priv,
 		shhwtstamps.hwtstamp = ns_to_ktime(*ns);
 		skb_tstamp_tx(skb, &shhwtstamps);
 	}
-
-	/* Read the status from the Frame Annotation after we unmap the first
-	 * buffer but before we free it. The caller function is responsible
-	 * for checking the status value.
-	 */
-	if (status)
-		*status = le32_to_cpu(fas->status);
 
 	/* Free SGT buffer kmalloc'ed on tx */
 	if (fd_format != dpaa2_fd_single)
@@ -788,7 +754,7 @@ static int dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 	if (unlikely(err < 0)) {
 		percpu_stats->tx_errors++;
 		/* Clean up everything, including freeing the skb */
-		free_tx_fd(priv, &fd, NULL, false);
+		free_tx_fd(priv, &fd, false);
 	} else {
 		percpu_stats->tx_packets++;
 		percpu_stats->tx_bytes += dpaa2_fd_get_len(&fd);
@@ -813,9 +779,7 @@ static void dpaa2_eth_tx_conf(struct dpaa2_eth_priv *priv,
 	struct device *dev = priv->net_dev->dev.parent;
 	struct rtnl_link_stats64 *percpu_stats;
 	struct dpaa2_eth_drv_stats *percpu_extras;
-	u32 status = 0;
-	bool errors = !!(fd->simple.ctrl & DPAA2_FD_TX_ERR_MASK);
-	bool check_fas_errors = false;
+	u32 fd_errors;
 
 	/* Tracing point */
 	trace_dpaa2_tx_conf_fd(priv->net_dev, fd);
@@ -832,28 +796,22 @@ static void dpaa2_eth_tx_conf(struct dpaa2_eth_priv *priv,
 			netif_tx_wake_all_queues(priv->net_dev);
 	}
 
-	/* check frame errors in the FD field */
-	if (unlikely(errors)) {
-		check_fas_errors = !!(fd->simple.ctrl & FD_CTRL_FAERR) &&
-			!!(dpaa2_fd_get_frc(fd) & DPAA2_FD_FRC_FASV);
-		if (net_ratelimit())
-			netdev_dbg(priv->net_dev, "Tx frame FD err: %x08\n",
-				   fd->simple.ctrl & DPAA2_FD_TX_ERR_MASK);
-	}
+	/* Check frame errors in the FD field */
+	fd_errors = dpaa2_fd_get_ctrl(fd) & DPAA2_FD_TX_ERR_MASK;
 
-	free_tx_fd(priv, fd, check_fas_errors ? &status : NULL, true);
+	free_tx_fd(priv, fd, true);
 
 	/* if there are no errors, we're done */
-	if (likely(!errors))
+	if (likely(!fd_errors))
 		return;
+
+	if (net_ratelimit())
+		netdev_dbg(priv->net_dev, "Tx frame FD error: 0x%08x\n",
+			   fd_errors);
 
 	percpu_stats = this_cpu_ptr(priv->percpu_stats);
 	/* Tx-conf logically pertains to the egress path. */
 	percpu_stats->tx_errors++;
-
-	if (net_ratelimit())
-		netdev_dbg(priv->net_dev, "Tx frame FAS err: %x08\n",
-			   status & DPAA2_FAS_TX_ERR_MASK);
 }
 
 static int set_rx_csum(struct dpaa2_eth_priv *priv, bool enable)
@@ -2068,11 +2026,9 @@ static int setup_dpni(struct fsl_mc_device *ls_dev)
 
 	/* Configure buffer layouts */
 	/* tx buffer */
-	buf_layout.pass_frame_status = true;
 	buf_layout.pass_timestamp = true;
 	buf_layout.private_data_size = DPAA2_ETH_SWA_SIZE;
-	buf_layout.options = DPNI_BUF_LAYOUT_OPT_FRAME_STATUS |
-			     DPNI_BUF_LAYOUT_OPT_TIMESTAMP |
+	buf_layout.options = DPNI_BUF_LAYOUT_OPT_TIMESTAMP |
 			     DPNI_BUF_LAYOUT_OPT_PRIVATE_DATA_SIZE;
 	err = dpni_set_buffer_layout(priv->mc_io, 0, priv->mc_token,
 				     DPNI_QUEUE_TX, &buf_layout);
@@ -2083,8 +2039,7 @@ static int setup_dpni(struct fsl_mc_device *ls_dev)
 	}
 
 	/* tx-confirm buffer */
-	buf_layout.options = DPNI_BUF_LAYOUT_OPT_FRAME_STATUS |
-			     DPNI_BUF_LAYOUT_OPT_TIMESTAMP;
+	buf_layout.options = DPNI_BUF_LAYOUT_OPT_TIMESTAMP;
 	err = dpni_set_buffer_layout(priv->mc_io, 0, priv->mc_token,
 				     DPNI_QUEUE_TX_CONFIRM, &buf_layout);
 	if (err) {
@@ -2107,6 +2062,7 @@ static int setup_dpni(struct fsl_mc_device *ls_dev)
 			 priv->tx_data_offset);
 
 	/* rx buffer */
+	buf_layout.pass_frame_status = true;
 	buf_layout.pass_parser_result = true;
 	buf_layout.data_align = priv->rx_buf_align;
 	buf_layout.data_head_room = dpaa2_eth_rx_headroom(priv);

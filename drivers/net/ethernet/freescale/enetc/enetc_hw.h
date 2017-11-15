@@ -163,14 +163,43 @@ struct enetc_tx_bd {
 	__le16 frm_len;
 	union {
 		struct {
-			u8 reserved[3];
+			__le16 l3_csoff;
+			u8 l4_csoff;
 			u8 flags;
 		}; /* default layout */
 	};
 };
 
+#define ENETC_TXBD_FLAGS_L4CS	BIT(0)
+#define ENETC_TXBD_FLAGS_CSUM	BIT(3)
+#define ENETC_TXBD_FLAGS_TSTMP	BIT(4)
 #define ENETC_TXBD_FLAGS_IE	BIT(5)
 #define ENETC_TXBD_FLAGS_F	BIT(7)
+
+/* L3 csum flags */
+#define ENETC_TXBD_L3_IPCS	BIT(7)
+#define ENETC_TXBD_L3_IPV6	BIT(15)
+
+#define ENETC_TXBD_L3_START_MASK	GENMASK(6, 0)
+#define ENETC_TXBD_L3_SET_HSIZE(val)	((((val) >> 2) & 0xef) << 8)
+#define ENETC_TXBD_L3_HSIZE_MASK	GENMASK(14, 8)
+
+static inline __le16 enetc_txbd_l3_csoff(int start, int hdr_sz, u16 l3_flags)
+{
+	return cpu_to_le16(l3_flags | ENETC_TXBD_L3_SET_HSIZE(hdr_sz) |
+			   (start & ENETC_TXBD_L3_START_MASK));
+}
+
+/* L4 csum flags */
+#define ENETC_TXBD_L4_UDP	BIT(5)
+#define ENETC_TXBD_L4_TCP	BIT(6)
+
+#define ENETC_TXBD_L4_SET_HSIZE(val)	(((val) >> 2) & 0x1f)
+
+static inline u8 enetc_txbd_l4_csoff(int hdr_sz, u8 l4_flags)
+{
+	return l4_flags | ENETC_TXBD_L4_SET_HSIZE(hdr_sz);
+}
 
 union enetc_rx_bd {
 	struct {

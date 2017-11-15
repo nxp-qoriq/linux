@@ -1,6 +1,8 @@
 #include <linux/module.h>
 
 #include "enetc.h"
+#include <linux/tcp.h>
+#include <linux/udp.h>
 
 #define ENETC_DRV_VER_MAJ 0
 #define ENETC_DRV_VER_MIN 4
@@ -13,7 +15,8 @@ static const char enetc_drv_name[] = "ENETC driver";
 static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb);
 static void enetc_unmap_tx_buff(struct enetc_bdr *tx_ring,
 				struct enetc_tx_swbd *tx_swbd);
-static void enetc_update_txbdr(struct enetc_bdr *tx_ring, int count, u16 len);
+static void enetc_update_txbdr(struct enetc_bdr *tx_ring, struct sk_buff *skb,
+			       int count);
 static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring);
 
 static struct sk_buff *enetc_map_rx_buff_to_skb(struct enetc_bdr *rx_ring,
@@ -54,7 +57,7 @@ static netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
 	count = enetc_map_tx_buffs(tx_ring, skb);
 
 	if (likely(count)) {
-		enetc_update_txbdr(tx_ring, count, skb->len);
+		enetc_update_txbdr(tx_ring, skb, count);
 
 		if (enetc_bd_unused(tx_ring) < ENETC_FREE_TXBD_NEEDED)
 			// TODO: check h/w index (CISR) for more acurate status
@@ -125,10 +128,50 @@ dma_err:
 	return 0;
 }
 
-static void enetc_update_txbdr(struct enetc_bdr *tx_ring, int count, u16 len)
+static bool enetc_tx_csum(struct sk_buff *skb, struct enetc_tx_bd *txbd)
+{
+	int l3_start, l3_hsize, l4_hsize;
+	u16 l3_flags, l4_flags;
+
+	if (skb->ip_summed != CHECKSUM_PARTIAL)
+		return false;
+
+	switch (skb->csum_offset) {
+	case offsetof(struct tcphdr, check):
+		l4_hsize = sizeof(struct tcphdr);
+		l4_flags = ENETC_TXBD_L4_TCP;
+		break;
+	case offsetof(struct udphdr, check):
+		l4_hsize = sizeof(struct udphdr);
+		l4_flags = ENETC_TXBD_L4_UDP;
+		break;
+	default:
+		skb_checksum_help(skb);
+		return false;
+	}
+
+	l3_start = skb_network_offset(skb);
+	l3_hsize = skb_network_header_len(skb);
+
+	l3_flags = 0;
+	if (skb->protocol == htons(ETH_P_IPV6))
+		l3_flags = ENETC_TXBD_L3_IPV6;
+	else if (skb->protocol != htons(ETH_P_IP))
+		WARN_ON(1); //FIXME: Debug only (remove from final code)
+
+	/* write BD fields */
+	txbd->l3_csoff = enetc_txbd_l3_csoff(l3_start, l3_hsize, l3_flags);
+	txbd->l4_csoff = enetc_txbd_l4_csoff(l4_hsize, l4_flags);
+
+	return true;
+}
+
+static void enetc_update_txbdr(struct enetc_bdr *tx_ring, struct sk_buff *skb,
+			       int count)
 {
 	struct enetc_tx_swbd *tx_swbd;
 	struct enetc_tx_bd *txbd;
+	bool do_csum;
 	u8 flags;
 	int i;
 
@@ -136,10 +179,14 @@ static void enetc_update_txbdr(struct enetc_bdr *tx_ring, int count, u16 len)
 	txbd = ENETC_TXBD(*tx_ring, i);
 	tx_swbd = &tx_ring->tx_swbd[i];
 
+	do_csum = enetc_tx_csum(skb, txbd);
+
 	flags = ENETC_TXBD_FLAGS_IE;
+	if (do_csum)
+		flags |= ENETC_TXBD_FLAGS_CSUM | ENETC_TXBD_FLAGS_L4CS;
 
 	/* first BD needs frm_len set */
-	txbd->frm_len = cpu_to_le16(len);
+	txbd->frm_len = cpu_to_le16(skb->len);
 
 	while (count--) {
 		txbd->addr = cpu_to_le64(tx_swbd->dma);
@@ -1270,8 +1317,8 @@ static void enetc_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 	ndev->min_mtu = ETH_MIN_MTU;
 	ndev->max_mtu = ENETC_MAX_MTU;
 
-	ndev->hw_features = NETIF_F_RXCSUM;
-	ndev->features = NETIF_F_RXCSUM | NETIF_F_HIGHDMA | NETIF_F_SG;
+	ndev->hw_features = NETIF_F_RXCSUM | NETIF_F_HW_CSUM;
+	ndev->features = ndev->hw_features | NETIF_F_HIGHDMA | NETIF_F_SG;
 	ndev->priv_flags |= IFF_UNICAST_FLT;
 }
 

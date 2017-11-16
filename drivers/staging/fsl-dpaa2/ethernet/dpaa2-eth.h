@@ -98,6 +98,7 @@
 
 /* Hardware requires alignment for ingress/egress buffer addresses */
 #define DPAA2_ETH_TX_BUF_ALIGN		64
+
 /* Due to a limitation in WRIOP 1.0.0, the RX buffer data must be aligned
  * to 256B. For newer revisions, the requirement is only for 64B alignment
  */
@@ -111,8 +112,9 @@
 /* PTP nominal frequency 1GHz */
 #define DPAA2_PTP_NOMINAL_FREQ_PERIOD_NS 1
 
-/* Hardware annotation area in RX buffers */
+/* Hardware annotation area in RX/TX buffers */
 #define DPAA2_ETH_RX_HWA_SIZE		64
+#define DPAA2_ETH_TX_HWA_SIZE		128
 
 /* We are accommodating a skb backpointer and some S/G info
  * in the frame's software annotation. The hardware
@@ -463,19 +465,38 @@ static inline unsigned int dpaa2_eth_buf_raw_size(struct dpaa2_eth_priv *priv)
 }
 
 /* Total headroom needed by the hardware in Tx frame buffers */
-static inline unsigned int dpaa2_eth_tx_headroom(struct dpaa2_eth_priv *priv)
+static inline unsigned int
+dpaa2_eth_needed_headroom(struct dpaa2_eth_priv *priv, struct sk_buff *skb)
 {
-	return priv->tx_data_offset + DPAA2_ETH_TX_BUF_ALIGN;
+	unsigned int headroom = DPAA2_ETH_SWA_SIZE + DPAA2_ETH_TX_BUF_ALIGN;
+
+	/* If we don't have an skb (e.g. XDP buffer), we only need space for
+	 * the software annotation area
+	 */
+	if (!skb)
+		return headroom;
+
+	/* For non-linear skbs we have no headroom requirement, as we build a
+	 * SG frame with a newly allocated SGT buffer
+	 */
+	if (skb_is_nonlinear(skb))
+		return 0;
+
+	/* If we have Tx timestamping, need 128B hardware annotation */
+	if (priv->ts_tx_en && skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)
+		headroom += DPAA2_ETH_TX_HWA_SIZE;
+
+	return headroom;
 }
 
 /* Extra headroom space requested to hardware, in order to make sure there's
  * no realloc'ing in forwarding scenarios. We need to reserve enough space
- * such that we can accommodate the required Tx offset and alignment in the
- * ingress frame buffer
+ * such that we can accommodate the maximum required Tx offset and alignment
+ * in the ingress frame buffer
  */
 static inline unsigned int dpaa2_eth_rx_headroom(struct dpaa2_eth_priv *priv)
 {
-	return dpaa2_eth_tx_headroom(priv) -
+	return priv->tx_data_offset + DPAA2_ETH_TX_BUF_ALIGN -
 	       (DPAA2_ETH_SWA_SIZE + DPAA2_ETH_RX_HWA_SIZE);
 }
 

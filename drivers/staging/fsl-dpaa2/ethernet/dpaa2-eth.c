@@ -664,7 +664,8 @@ static int build_single_fd(struct dpaa2_eth_priv *priv,
 	struct dpaa2_eth_swa *swa;
 	dma_addr_t addr;
 
-	buffer_start = PTR_ALIGN(skb->data - dpaa2_eth_tx_headroom(priv),
+	buffer_start = PTR_ALIGN(skb->data -
+				 dpaa2_eth_needed_headroom(priv, skb),
 				 DPAA2_ETH_TX_BUF_ALIGN);
 
 	/* Store a backpointer to the skb at the beginning of the buffer
@@ -772,6 +773,7 @@ static netdev_tx_t dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 	struct dpaa2_fd fd;
 	struct rtnl_link_stats64 *percpu_stats;
 	struct dpaa2_eth_drv_stats *percpu_extras;
+	unsigned int needed_headroom;
 	struct dpaa2_eth_fq *fq;
 	u16 queue_mapping;
 	int err, i;
@@ -793,11 +795,11 @@ static netdev_tx_t dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 	percpu_extras = this_cpu_ptr(priv->percpu_extras);
 
 	/* For non-linear skb we don't need a minimum headroom */
-	if (skb_headroom(skb) < dpaa2_eth_tx_headroom(priv) &&
-	    !skb_is_nonlinear(skb)) {
+	needed_headroom = dpaa2_eth_needed_headroom(priv, skb);
+	if (skb_headroom(skb) < needed_headroom) {
 		struct sk_buff *ns;
 
-		ns = skb_realloc_headroom(skb, dpaa2_eth_tx_headroom(priv));
+		ns = skb_realloc_headroom(skb, needed_headroom);
 		if (unlikely(!ns)) {
 			percpu_stats->tx_dropped++;
 			goto err_alloc_headroom;

@@ -33,6 +33,8 @@
 
 /* PEX Internal Configuration Registers */
 #define PCIE_STRFMR1		0x71c /* Symbol Timer & Filter Mask Register1 */
+#define PCIE_ABSERR		0x8d0 /* Bridge Slave Error Response Register */
+#define PCIE_ABSERR_SETTING	0x9401 /* Forward error of non-posted request */
 #define PCIE_DBI_RO_WR_EN	0x8bc /* DBI Read-Only Write Enable Register */
 
 #define PCIE_IATU_NUM		6
@@ -154,6 +156,12 @@ static int ls_pcie_link_up(struct pcie_port *pp)
 	return 1;
 }
 
+/* Forward error response of outbound non-posted requests */
+static void ls_pcie_fix_error_response(struct ls_pcie *pcie)
+{
+	iowrite32(PCIE_ABSERR_SETTING, pcie->dbi + PCIE_ABSERR);
+}
+
 static void ls_pcie_host_init(struct pcie_port *pp)
 {
 	struct ls_pcie *pcie = to_ls_pcie(pp);
@@ -165,6 +173,7 @@ static void ls_pcie_host_init(struct pcie_port *pp)
 	iowrite32(0, pcie->dbi + PCIE_DBI_RO_WR_EN);
 
 	ls_pcie_disable_outbound_atus(pcie);
+	ls_pcie_fix_error_response(pcie);
 	dw_pcie_setup_rc(pp);
 }
 

@@ -2110,7 +2110,7 @@ static int setup_dpni(struct fsl_mc_device *ls_dev)
 
 	/* Enable flow control */
 	cfg.options = DPNI_LINK_OPT_AUTONEG | DPNI_LINK_OPT_PAUSE;
-	priv->tx_pause_frames = true;
+	priv->tx_pause_frames = 1;
 
 	err = dpni_set_link_cfg(priv->mc_io, 0, priv->mc_token, &cfg);
 	if (err) {
@@ -2222,7 +2222,7 @@ int set_rx_taildrop(struct dpaa2_eth_priv *priv)
 	case DPAA2_ETH_TD_NONE:
 		memset(&td_queue, 0, sizeof(struct dpni_taildrop));
 		memset(&td_group, 0, sizeof(struct dpni_taildrop));
-		priv->max_bufs_per_ch = DPAA2_ETH_NUM_BUFS_FC /
+		priv->num_bufs = DPAA2_ETH_NUM_BUFS_FC /
 					priv->num_channels;
 		break;
 	case DPAA2_ETH_TD_QUEUE:
@@ -2231,7 +2231,7 @@ int set_rx_taildrop(struct dpaa2_eth_priv *priv)
 		td_queue.units = DPNI_CONGESTION_UNIT_BYTES;
 		td_queue.threshold = DPAA2_ETH_TAILDROP_THRESH /
 				     dpaa2_eth_tc_count(priv);
-		priv->max_bufs_per_ch = DPAA2_ETH_NUM_BUFS_PER_CH;
+		priv->num_bufs = DPAA2_ETH_NUM_BUFS_TD;
 		break;
 	case DPAA2_ETH_TD_GROUP:
 		memset(&td_queue, 0, sizeof(struct dpni_taildrop));
@@ -2239,7 +2239,7 @@ int set_rx_taildrop(struct dpaa2_eth_priv *priv)
 		td_group.units = DPNI_CONGESTION_UNIT_FRAMES;
 		td_group.threshold = NAPI_POLL_WEIGHT *
 				     dpaa2_eth_queue_count(priv);
-		priv->max_bufs_per_ch = NAPI_POLL_WEIGHT *
+		priv->num_bufs = NAPI_POLL_WEIGHT *
 					dpaa2_eth_tc_count(priv);
 		break;
 	default:
@@ -2254,7 +2254,7 @@ int set_rx_taildrop(struct dpaa2_eth_priv *priv)
 	if (err)
 		return err;
 
-	priv->refill_thresh = DPAA2_ETH_REFILL_THRESH(priv);
+	priv->refill_thresh = priv->num_bufs - DPAA2_ETH_BUFS_PER_CMD;
 
 	return 0;
 }

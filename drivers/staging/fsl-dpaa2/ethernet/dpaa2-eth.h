@@ -436,7 +436,6 @@ struct dpaa2_eth_priv {
 	u8 dcbx_mode;
 	struct ieee_pfc pfc;
 	bool vlan_clsf_set;
-	bool tx_pause_frames;
 };
 
 #define dpaa2_eth_hash_enabled(priv)	\

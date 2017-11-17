@@ -10,6 +10,7 @@
 /* SI regs, offset: 0h */
 #define ENETC_SIMR	0
 #define ENETC_SIMR_EN	BIT(31)
+#define ENETC_SIMR_RSSE	BIT(0)
 
 #define ENETC_SIPMAR0	0x80
 #define ENETC_SIPMAR1	0x84

@@ -148,6 +148,33 @@ static void enetc_get_ethtool_stats(struct net_device *ndev,
 		data[i] = enetc_rd64(hw, enetc_si_counters[i].reg);
 }
 
+#define ENETC_RSSHASH_L3 (RXH_L2DA | RXH_VLAN | RXH_L3_PROTO | RXH_IP_SRC | \
+			  RXH_IP_DST)
+#define ENETC_RSSHASH_L4 (ENETC_RSSHASH_L3 | RXH_L4_B_0_1 | RXH_L4_B_2_3)
+static int enetc_get_rsshash(struct ethtool_rxnfc *rxnfc)
+{
+	static const u32 rsshash[] = {
+			[TCP_V4_FLOW]    = ENETC_RSSHASH_L4,
+			[UDP_V4_FLOW]    = ENETC_RSSHASH_L4,
+			[SCTP_V4_FLOW]   = ENETC_RSSHASH_L4,
+			[AH_ESP_V4_FLOW] = ENETC_RSSHASH_L3,
+			[IPV4_FLOW]      = ENETC_RSSHASH_L3,
+			[TCP_V6_FLOW]    = ENETC_RSSHASH_L4,
+			[UDP_V6_FLOW]    = ENETC_RSSHASH_L4,
+			[SCTP_V6_FLOW]   = ENETC_RSSHASH_L4,
+			[AH_ESP_V6_FLOW] = ENETC_RSSHASH_L3,
+			[IPV6_FLOW]      = ENETC_RSSHASH_L3,
+			[ETHER_FLOW]     = 0,
+	};
+
+	if (rxnfc->flow_type >= ARRAY_SIZE(rsshash))
+		return -EINVAL;
+
+	rxnfc->data = rsshash[rxnfc->flow_type];
+
+	return 0;
+}
+
 /* current HW spec does byte reversal on everything including MAC addresses */
 static void ether_addr_copy_swap(u8 *dst, const u8 *src)
 {
@@ -241,6 +268,9 @@ static int enetc_get_rxnfc(struct net_device *ndev, struct ethtool_rxnfc *rxnfc,
 	case ETHTOOL_GRXRINGS:
 		rxnfc->data = priv->num_rx_rings;
 		break;
+	case ETHTOOL_GRXFH:
+		/* get RSS hash config */
+		return enetc_get_rsshash(rxnfc);
 	case ETHTOOL_GRXCLSRLCNT:
 		/* total number of entries */
 		rxnfc->data = priv->si->num_fs_entries;

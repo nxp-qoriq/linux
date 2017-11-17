@@ -1398,8 +1398,8 @@ static void enetc_configure_si(struct enetc_ndev_priv *priv)
 
 	enetc_setup_cbdr(hw, &priv->si->cbd_ring);
 
-	/* enable SI */
-	enetc_wr(hw, ENETC_SIMR, ENETC_SIMR_EN);
+	/* enable SI, start RSS by default */
+	enetc_wr(hw, ENETC_SIMR, ENETC_SIMR_EN | ENETC_SIMR_RSSE);
 }
 
 static int enetc_alloc_msix(struct enetc_ndev_priv *priv)

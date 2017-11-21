@@ -157,8 +157,8 @@ int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 		return -ENOMEM;
 	}
 
-	cbd.addr[0] = (u32)dma;
-	cbd.addr[1] = (u32)(dma >> 32);
+	cbd.addr[0] = lower_32_bits(dma);
+	cbd.addr[1] = upper_32_bits(dma);
 
 	if (async)
 		cbd.status_flags |= ENETC_CBD_FLAGS_IE;
@@ -193,8 +193,8 @@ int enetc_set_rss_table(struct enetc_si *si, u16 *table, int len)
 		return -ENOMEM;
 	}
 
-	cbd.addr[0] = (u32)dma;
-	cbd.addr[1] = (u32)(dma >> 32);
+	cbd.addr[0] = lower_32_bits(dma);
+	cbd.addr[1] = upper_32_bits(dma);
 
 	err = enetc_send_cmd(si, &cbd, false);
 	if (err)

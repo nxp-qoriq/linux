@@ -230,6 +230,7 @@ union enetc_rx_bd {
 #define ENETC_RXBD_LSTATUS_F	BIT(31)
 #define ENETC_RXBD_ERR_MASK	0xff
 #define ENETC_RXBD_LSTATUS(flags)	((flags) << 16)
+#define ENETC_RXBD_FLAG_VLAN	BIT(9)
 
 #define ENETC_MAC_ADDR_FILT_CNT	8 /* # of supported entries per port */
 #define ENETC_MAX_NUM_VFS	2

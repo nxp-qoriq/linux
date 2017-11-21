@@ -378,6 +378,13 @@ static void enetc_get_offloads(struct enetc_bdr *rx_ring,
 		skb->csum = csum_unfold((__force __sum16)~htons(inet_csum));
 		skb->ip_summed = CHECKSUM_COMPLETE;
 	}
+
+	/* copy VLAN to skb, if one is extracted, for now we assume it's a
+	 * standard TPID, but HW also supports custom values
+	 */
+	if (rxbd->r.flags & ENETC_RXBD_FLAG_VLAN)
+		__vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q),
+				       rxbd->r.vlan_opt);
 }
 
 #define ENETC_RXBD_BUNDLE 16 /* recommended # of BDs to update at once */
@@ -1318,7 +1325,9 @@ static void enetc_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 	ndev->max_mtu = ENETC_MAX_MTU;
 
 	ndev->hw_features = NETIF_F_RXCSUM | NETIF_F_HW_CSUM;
-	ndev->features = ndev->hw_features | NETIF_F_HIGHDMA | NETIF_F_SG;
+	ndev->features = ndev->hw_features | NETIF_F_HIGHDMA | NETIF_F_SG |
+			 NETIF_F_HW_VLAN_CTAG_RX; /* < has to stay on for now */
+
 	ndev->priv_flags |= IFF_UNICAST_FLT;
 }
 

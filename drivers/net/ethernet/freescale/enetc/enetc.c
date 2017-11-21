@@ -1233,6 +1233,25 @@ static void enetc_set_rx_mode(struct net_device *ndev)
 	enetc_port_wr(hw, ENETC_PSIPMR, psipmr);
 }
 
+static void enetc_set_loopback(struct net_device *ndev, bool en)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_hw *hw = &priv->si->hw;
+	u32 reg;
+
+	reg = enetc_port_rd(hw, ENETC_PM0_IF_MODE);
+	if (reg & ENETC_PMO_IFM_RG) {
+		/* RGMII mode */
+		reg = en ? reg | ENETC_PM0_IFM_RLP : reg & ~ENETC_PM0_IFM_RLP;
+		enetc_port_wr(hw, ENETC_PM0_IF_MODE, reg);
+	} else {
+		/* assume SGMII mode */
+		reg = enetc_port_rd(hw, ENETC_PM0_CMD_CFG);
+		reg = en ? reg | ENETC_PM0_CMD_XGLP : reg & ~ENETC_PM0_CMD_XGLP;
+		enetc_port_wr(hw, ENETC_PM0_CMD_CFG, reg);
+	}
+}
+
 static struct net_device_stats *enetc_get_stats(struct net_device *ndev)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
@@ -1303,6 +1322,17 @@ static int enetc_set_vf_spoofchk(struct net_device *ndev, int vf, bool setting)
 	return 0;
 }
 
+static int enetc_set_features(struct net_device *ndev,
+			      netdev_features_t features)
+{
+	netdev_features_t changed = ndev->features ^ features;
+
+	if (changed & NETIF_F_LOOPBACK)
+		enetc_set_loopback(ndev, !!(features & NETIF_F_LOOPBACK));
+
+	return 0;
+}
+
 static const struct net_device_ops enetc_ndev_ops = {
 	.ndo_open		= enetc_open,
 	.ndo_stop		= enetc_close,
@@ -1313,6 +1343,7 @@ static const struct net_device_ops enetc_ndev_ops = {
 	.ndo_set_vf_mac		= enetc_set_vf_mac,
 	.ndo_set_vf_vlan	= enetc_set_vf_vlan,
 	.ndo_set_vf_spoofchk	= enetc_set_vf_spoofchk,
+	.ndo_set_features	= enetc_set_features,
 };
 
 static const struct net_device_ops enetc_ndev_vf_ops = {
@@ -1340,8 +1371,10 @@ static void enetc_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 	ndev->min_mtu = ETH_MIN_MTU;
 	ndev->max_mtu = ENETC_MAX_MTU;
 
-	ndev->hw_features = NETIF_F_RXCSUM | NETIF_F_HW_CSUM;
-	ndev->features = ndev->hw_features | NETIF_F_HIGHDMA | NETIF_F_SG |
+	ndev->hw_features = NETIF_F_RXCSUM | NETIF_F_HW_CSUM |
+			    NETIF_F_LOOPBACK;
+	ndev->features = NETIF_F_HIGHDMA | NETIF_F_SG |
+			 NETIF_F_RXCSUM | NETIF_F_HW_CSUM |
 			 NETIF_F_HW_VLAN_CTAG_RX; /* < has to stay on for now */
 
 	ndev->priv_flags |= IFF_UNICAST_FLT;

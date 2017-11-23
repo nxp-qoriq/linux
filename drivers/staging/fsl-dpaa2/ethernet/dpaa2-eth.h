@@ -487,7 +487,7 @@ dpaa2_eth_needed_headroom(struct dpaa2_eth_priv *priv, struct sk_buff *skb)
 static inline unsigned int dpaa2_eth_rx_headroom(struct dpaa2_eth_priv *priv)
 {
 	return priv->tx_data_offset + DPAA2_ETH_TX_BUF_ALIGN -
-	       (DPAA2_ETH_SWA_SIZE + DPAA2_ETH_RX_HWA_SIZE);
+	       DPAA2_ETH_RX_HWA_SIZE;
 }
 
 static inline int dpaa2_eth_queue_count(struct dpaa2_eth_priv *priv)

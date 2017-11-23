@@ -245,6 +245,7 @@ static int dpaa2_eth_xdp_tx(struct dpaa2_eth_priv *priv,
 	/* Mark the egress frame annotation area as valid */
 	frc = dpaa2_fd_get_frc(fd);
 	dpaa2_fd_set_frc(fd, frc | DPAA2_FD_FRC_FAEADV);
+	dpaa2_fd_set_ctrl(fd, FD_CTRL_PTA | DPAA2_FD_CTRL_ASAL);
 
 	ctrl = DPAA2_FAEAD_A4V | DPAA2_FAEAD_A2V | DPAA2_FAEAD_EBDDV;
 	faead = dpaa2_eth_get_faead(buf_start);

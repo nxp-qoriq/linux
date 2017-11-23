@@ -167,7 +167,8 @@ static int dpaa2_dpio_probe(struct fsl_mc_device *dpio_dev)
 	}
 	desc.cpu = next_cpu;
 
-	if (dpio_dev->obj_desc.region_count < 3) {
+	if (dpio_dev->obj_desc.region_count < 3 
+	    || IS_ENABLED(CONFIG_FSL_MC_QMAN_NOT_SHARABLE_MEMORY_CACHE)) {
 		/* No support for DDR backed portals, use classic mapping */
 		desc.regs_cena = qbman_cena_ioremap(dpio_dev->regions[0].start,
 					resource_size(&dpio_dev->regions[0]));

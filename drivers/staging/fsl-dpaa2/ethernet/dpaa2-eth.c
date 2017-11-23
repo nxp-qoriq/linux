@@ -267,7 +267,7 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 	dma_unmap_single(dev, addr, DPAA2_ETH_RX_BUF_SIZE, DMA_FROM_DEVICE);
 
 	/* HWA - FAS, timestamp */
-	fas = dpaa2_eth_get_fas(vaddr);
+	fas = dpaa2_eth_get_fas(vaddr, true);
 	prefetch(fas);
 	/* data / SG table */
 	buf_data = vaddr + dpaa2_fd_get_offset(fd);
@@ -299,7 +299,7 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 	/* Get the timestamp value */
 	if (priv->ts_rx_en) {
 		struct skb_shared_hwtstamps *shhwtstamps = skb_hwtstamps(skb);
-		u64 *ns = (u64 *)dpaa2_eth_get_ts(vaddr);
+		u64 *ns = dpaa2_eth_get_ts(vaddr, true);
 
 		*ns = DPAA2_PTP_NOMINAL_FREQ_PERIOD_NS * le64_to_cpup(ns);
 		memset(shhwtstamps, 0, sizeof(*shhwtstamps));
@@ -365,7 +365,7 @@ static void dpaa2_eth_rx_err(struct dpaa2_eth_priv *priv,
 
 	/* check frame errors in the FAS field */
 	if (check_fas_errors) {
-		fas = dpaa2_eth_get_fas(vaddr);
+		fas = dpaa2_eth_get_fas(vaddr, true);
 		status = le32_to_cpu(fas->status);
 		if (net_ratelimit())
 			netdev_dbg(priv->net_dev, "Rx frame FAS err: 0x%08x\n",
@@ -450,7 +450,7 @@ static void enable_tx_tstamp(struct dpaa2_fd *fd, void *buf_start)
 	 * hardware frame annotation area
 	 */
 	ctrl = DPAA2_FAEAD_A2V | DPAA2_FAEAD_UPDV | DPAA2_FAEAD_UPD;
-	faead = dpaa2_eth_get_faead(buf_start);
+	faead = dpaa2_eth_get_faead(buf_start, true);
 	faead->ctrl = cpu_to_le32(ctrl);
 }
 
@@ -663,7 +663,7 @@ static void free_tx_fd(const struct dpaa2_eth_priv *priv,
 
 		memset(&shhwtstamps, 0, sizeof(shhwtstamps));
 
-		ns = (u64 *)dpaa2_eth_get_ts(skbh);
+		ns = dpaa2_eth_get_ts(skbh, true);
 		*ns = DPAA2_PTP_NOMINAL_FREQ_PERIOD_NS * le64_to_cpup(ns);
 		shhwtstamps.hwtstamp = ns_to_ktime(*ns);
 		skb_tstamp_tx(skb, &shhwtstamps);

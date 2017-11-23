@@ -174,17 +174,25 @@ struct dpaa2_faead {
 #define DPAA2_FAEAD_UPD			0x00000010
 
 /* accessors for the hardware annotation fields that we use */
-#define dpaa2_eth_get_hwa(buf_addr) \
-	((void *)(buf_addr) + DPAA2_ETH_SWA_SIZE)
+static inline void *dpaa2_eth_get_hwa(void *buf_addr, bool swa)
+{
+	return buf_addr + (swa ? DPAA2_ETH_SWA_SIZE : 0);
+}
 
-#define dpaa2_eth_get_fas(buf_addr) \
-	(struct dpaa2_fas *)(dpaa2_eth_get_hwa(buf_addr) + DPAA2_FAS_OFFSET)
+static inline struct dpaa2_fas *dpaa2_eth_get_fas(void *buf_addr, bool swa)
+{
+	return dpaa2_eth_get_hwa(buf_addr, swa) + DPAA2_FAS_OFFSET;
+}
 
-#define dpaa2_eth_get_ts(buf_addr) \
-	(u64 *)(dpaa2_eth_get_hwa(buf_addr) + DPAA2_TS_OFFSET)
+static inline u64 *dpaa2_eth_get_ts(void *buf_addr, bool swa)
+{
+	return dpaa2_eth_get_hwa(buf_addr, swa) + DPAA2_TS_OFFSET;
+}
 
-#define dpaa2_eth_get_faead(buf_addr) \
-	(struct dpaa2_faead *)(dpaa2_eth_get_hwa(buf_addr) + DPAA2_FAEAD_OFFSET)
+static inline struct dpaa2_faead *dpaa2_eth_get_faead(void *buf_addr, bool swa)
+{
+	return dpaa2_eth_get_hwa(buf_addr, swa) + DPAA2_FAEAD_OFFSET;
+}
 
 /* Error and status bits in the frame annotation status word */
 /* Debug frame, otherwise supposed to be discarded */

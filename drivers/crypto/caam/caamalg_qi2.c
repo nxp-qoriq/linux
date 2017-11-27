@@ -89,6 +89,7 @@ struct caam_aead_alg {
  * caam_ctx - per-session context
  * @flc: Flow Contexts array
  * @key:  virtual address of the key(s): [authentication key], encryption key
+ * @flc_dma: I/O virtual addresses of the Flow Contexts
  * @key_dma: I/O virtual address of the key
  * @dev: dpseci device
  * @adata: authentication algorithm details
@@ -98,6 +99,7 @@ struct caam_aead_alg {
 struct caam_ctx {
 	struct caam_flc flc[NUM_OP];
 	u8 key[CAAM_MAX_KEY_SIZE];
+	dma_addr_t flc_dma[NUM_OP];
 	dma_addr_t key_dma;
 	struct device *dev;
 	struct alginfo adata;
@@ -194,6 +196,7 @@ static int aead_set_sh_desc(struct crypto_aead *aead)
 	struct device *dev = ctx->dev;
 	struct dpaa2_caam_priv *priv = dev_get_drvdata(dev);
 	struct caam_flc *flc;
+	dma_addr_t *flc_dma;
 	u32 *desc;
 	u32 ctx1_iv_off = 0;
 	u32 *nonce = NULL;
@@ -249,6 +252,7 @@ static int aead_set_sh_desc(struct crypto_aead *aead)
 	ctx->cdata.key_inline = !!(inl_mask & 2);
 
 	flc = &ctx->flc[ENCRYPT];
+	flc_dma = &ctx->flc_dma[ENCRYPT];
 	desc = flc->sh_desc;
 
 	if (alg->caam.geniv)
@@ -262,9 +266,9 @@ static int aead_set_sh_desc(struct crypto_aead *aead)
 				       ctx1_iv_off, true, priv->sec_attr.era);
 
 	flc->flc[1] = desc_len(desc); /* SDL */
-	flc->flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) +
-				      desc_bytes(desc), DMA_TO_DEVICE);
-	if (dma_mapping_error(dev, flc->flc_dma)) {
+	*flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) + desc_bytes(desc),
+				  DMA_TO_DEVICE);
+	if (dma_mapping_error(dev, *flc_dma)) {
 		dev_err(dev, "unable to map shared descriptor\n");
 		return -ENOMEM;
 	}
@@ -290,6 +294,7 @@ static int aead_set_sh_desc(struct crypto_aead *aead)
 	ctx->cdata.key_inline = !!(inl_mask & 2);
 
 	flc = &ctx->flc[DECRYPT];
+	flc_dma = &ctx->flc_dma[DECRYPT];
 	desc = flc->sh_desc;
 
 	cnstr_shdsc_aead_decap(desc, &ctx->cdata, &ctx->adata,
@@ -298,9 +303,9 @@ static int aead_set_sh_desc(struct crypto_aead *aead)
 			       priv->sec_attr.era);
 
 	flc->flc[1] = desc_len(desc); /* SDL */
-	flc->flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) +
-				      desc_bytes(desc), DMA_TO_DEVICE);
-	if (dma_mapping_error(dev, flc->flc_dma)) {
+	*flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) + desc_bytes(desc),
+				  DMA_TO_DEVICE);
+	if (dma_mapping_error(dev, *flc_dma)) {
 		dev_err(dev, "unable to map shared descriptor\n");
 		return -ENOMEM;
 	}
@@ -773,6 +778,7 @@ static int tls_set_sh_desc(struct crypto_aead *tls)
 	struct device *dev = ctx->dev;
 	struct dpaa2_caam_priv *priv = dev_get_drvdata(dev);
 	struct caam_flc *flc;
+	dma_addr_t *flc_dma;
 	u32 *desc;
 	unsigned int assoclen = 13; /* always 13 bytes for TLS */
 	unsigned int data_len[2];
@@ -807,6 +813,7 @@ static int tls_set_sh_desc(struct crypto_aead *tls)
 	ctx->cdata.key_inline = !!(inl_mask & 2);
 
 	flc = &ctx->flc[ENCRYPT];
+	flc_dma = &ctx->flc_dma[ENCRYPT];
 	desc = flc->sh_desc;
 
 	cnstr_shdsc_tls_encap(desc, &ctx->cdata, &ctx->adata,
@@ -814,10 +821,9 @@ static int tls_set_sh_desc(struct crypto_aead *tls)
 			      priv->sec_attr.era);
 
 	flc->flc[1] = desc_len(desc);
-	flc->flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) +
-				      desc_bytes(desc), DMA_TO_DEVICE);
-
-	if (dma_mapping_error(dev, flc->flc_dma)) {
+	*flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) + desc_bytes(desc),
+				  DMA_TO_DEVICE);
+	if (dma_mapping_error(dev, *flc_dma)) {
 		dev_err(dev, "unable to map shared descriptor\n");
 		return -ENOMEM;
 	}
@@ -831,15 +837,16 @@ static int tls_set_sh_desc(struct crypto_aead *tls)
 	ctx->cdata.key_dma = ctx->key_dma + ctx->adata.keylen_pad;
 
 	flc = &ctx->flc[DECRYPT];
+	flc_dma = &ctx->flc_dma[DECRYPT];
 	desc = flc->sh_desc;
 
 	cnstr_shdsc_tls_decap(desc, &ctx->cdata, &ctx->adata, assoclen, ivsize,
 			      ctx->authsize, blocksize, priv->sec_attr.era);
 
 	flc->flc[1] = desc_len(desc); /* SDL */
-	flc->flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) +
-				      desc_bytes(desc), DMA_TO_DEVICE);
-	if (dma_mapping_error(dev, flc->flc_dma)) {
+	*flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) + desc_bytes(desc),
+				  DMA_TO_DEVICE);
+	if (dma_mapping_error(dev, *flc_dma)) {
 		dev_err(dev, "unable to map shared descriptor\n");
 		return -ENOMEM;
 	}
@@ -917,6 +924,7 @@ static int gcm_set_sh_desc(struct crypto_aead *aead)
 	struct device *dev = ctx->dev;
 	unsigned int ivsize = crypto_aead_ivsize(aead);
 	struct caam_flc *flc;
+	dma_addr_t *flc_dma;
 	u32 *desc;
 	int rem_bytes = CAAM_DESC_BYTES_MAX - DESC_JOB_IO_LEN -
 			ctx->cdata.keylen;
@@ -938,13 +946,14 @@ static int gcm_set_sh_desc(struct crypto_aead *aead)
 	}
 
 	flc = &ctx->flc[ENCRYPT];
+	flc_dma = &ctx->flc_dma[ENCRYPT];
 	desc = flc->sh_desc;
 	cnstr_shdsc_gcm_encap(desc, &ctx->cdata, ivsize, ctx->authsize, true);
 
 	flc->flc[1] = desc_len(desc); /* SDL */
-	flc->flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) +
-				      desc_bytes(desc), DMA_TO_DEVICE);
-	if (dma_mapping_error(dev, flc->flc_dma)) {
+	*flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) + desc_bytes(desc),
+				  DMA_TO_DEVICE);
+	if (dma_mapping_error(dev, *flc_dma)) {
 		dev_err(dev, "unable to map shared descriptor\n");
 		return -ENOMEM;
 	}
@@ -962,13 +971,14 @@ static int gcm_set_sh_desc(struct crypto_aead *aead)
 	}
 
 	flc = &ctx->flc[DECRYPT];
+	flc_dma = &ctx->flc_dma[DECRYPT];
 	desc = flc->sh_desc;
 	cnstr_shdsc_gcm_decap(desc, &ctx->cdata, ivsize, ctx->authsize, true);
 
 	flc->flc[1] = desc_len(desc); /* SDL */
-	flc->flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) +
-				      desc_bytes(desc), DMA_TO_DEVICE);
-	if (dma_mapping_error(dev, flc->flc_dma)) {
+	*flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) + desc_bytes(desc),
+				  DMA_TO_DEVICE);
+	if (dma_mapping_error(dev, *flc_dma)) {
 		dev_err(dev, "unable to map shared descriptor\n");
 		return -ENOMEM;
 	}
@@ -1020,6 +1030,7 @@ static int rfc4106_set_sh_desc(struct crypto_aead *aead)
 	struct device *dev = ctx->dev;
 	unsigned int ivsize = crypto_aead_ivsize(aead);
 	struct caam_flc *flc;
+	dma_addr_t *flc_dma;
 	u32 *desc;
 	int rem_bytes = CAAM_DESC_BYTES_MAX - DESC_JOB_IO_LEN -
 			ctx->cdata.keylen;
@@ -1042,14 +1053,15 @@ static int rfc4106_set_sh_desc(struct crypto_aead *aead)
 	}
 
 	flc = &ctx->flc[ENCRYPT];
+	flc_dma = &ctx->flc_dma[ENCRYPT];
 	desc = flc->sh_desc;
 	cnstr_shdsc_rfc4106_encap(desc, &ctx->cdata, ivsize, ctx->authsize,
 				  true);
 
 	flc->flc[1] = desc_len(desc); /* SDL */
-	flc->flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) +
-				      desc_bytes(desc), DMA_TO_DEVICE);
-	if (dma_mapping_error(dev, flc->flc_dma)) {
+	*flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) + desc_bytes(desc),
+				  DMA_TO_DEVICE);
+	if (dma_mapping_error(dev, *flc_dma)) {
 		dev_err(dev, "unable to map shared descriptor\n");
 		return -ENOMEM;
 	}
@@ -1066,14 +1078,15 @@ static int rfc4106_set_sh_desc(struct crypto_aead *aead)
 	}
 
 	flc = &ctx->flc[DECRYPT];
+	flc_dma = &ctx->flc_dma[DECRYPT];
 	desc = flc->sh_desc;
 	cnstr_shdsc_rfc4106_decap(desc, &ctx->cdata, ivsize, ctx->authsize,
 				  true);
 
 	flc->flc[1] = desc_len(desc); /* SDL */
-	flc->flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) +
-				      desc_bytes(desc), DMA_TO_DEVICE);
-	if (dma_mapping_error(dev, flc->flc_dma)) {
+	*flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) + desc_bytes(desc),
+				  DMA_TO_DEVICE);
+	if (dma_mapping_error(dev, *flc_dma)) {
 		dev_err(dev, "unable to map shared descriptor\n");
 		return -ENOMEM;
 	}
@@ -1134,6 +1147,7 @@ static int rfc4543_set_sh_desc(struct crypto_aead *aead)
 	struct device *dev = ctx->dev;
 	unsigned int ivsize = crypto_aead_ivsize(aead);
 	struct caam_flc *flc;
+	dma_addr_t *flc_dma;
 	u32 *desc;
 	int rem_bytes = CAAM_DESC_BYTES_MAX - DESC_JOB_IO_LEN -
 			ctx->cdata.keylen;
@@ -1156,14 +1170,15 @@ static int rfc4543_set_sh_desc(struct crypto_aead *aead)
 	}
 
 	flc = &ctx->flc[ENCRYPT];
+	flc_dma = &ctx->flc_dma[ENCRYPT];
 	desc = flc->sh_desc;
 	cnstr_shdsc_rfc4543_encap(desc, &ctx->cdata, ivsize, ctx->authsize,
 				  true);
 
 	flc->flc[1] = desc_len(desc); /* SDL */
-	flc->flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) +
-				      desc_bytes(desc), DMA_TO_DEVICE);
-	if (dma_mapping_error(dev, flc->flc_dma)) {
+	*flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) + desc_bytes(desc),
+				  DMA_TO_DEVICE);
+	if (dma_mapping_error(dev, *flc_dma)) {
 		dev_err(dev, "unable to map shared descriptor\n");
 		return -ENOMEM;
 	}
@@ -1180,14 +1195,15 @@ static int rfc4543_set_sh_desc(struct crypto_aead *aead)
 	}
 
 	flc = &ctx->flc[DECRYPT];
+	flc_dma = &ctx->flc_dma[DECRYPT];
 	desc = flc->sh_desc;
 	cnstr_shdsc_rfc4543_decap(desc, &ctx->cdata, ivsize, ctx->authsize,
 				  true);
 
 	flc->flc[1] = desc_len(desc); /* SDL */
-	flc->flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) +
-				      desc_bytes(desc), DMA_TO_DEVICE);
-	if (dma_mapping_error(dev, flc->flc_dma)) {
+	*flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) + desc_bytes(desc),
+				  DMA_TO_DEVICE);
+	if (dma_mapping_error(dev, *flc_dma)) {
 		dev_err(dev, "unable to map shared descriptor\n");
 		return -ENOMEM;
 	}
@@ -1250,6 +1266,7 @@ static int ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 	const char *alg_name = crypto_tfm_alg_name(tfm);
 	struct device *dev = ctx->dev;
 	struct caam_flc *flc;
+	dma_addr_t *flc_dma;
 	unsigned int ivsize = crypto_ablkcipher_ivsize(ablkcipher);
 	u32 *desc;
 	u32 ctx1_iv_off = 0;
@@ -1285,45 +1302,48 @@ static int ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 
 	/* ablkcipher_encrypt shared descriptor */
 	flc = &ctx->flc[ENCRYPT];
+	flc_dma = &ctx->flc_dma[ENCRYPT];
 	desc = flc->sh_desc;
 
 	cnstr_shdsc_ablkcipher_encap(desc, &ctx->cdata, ivsize,
 				     is_rfc3686, ctx1_iv_off);
 
 	flc->flc[1] = desc_len(desc); /* SDL */
-	flc->flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) +
-				      desc_bytes(desc), DMA_TO_DEVICE);
-	if (dma_mapping_error(dev, flc->flc_dma)) {
+	*flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) + desc_bytes(desc),
+				  DMA_TO_DEVICE);
+	if (dma_mapping_error(dev, *flc_dma)) {
 		dev_err(dev, "unable to map shared descriptor\n");
 		return -ENOMEM;
 	}
 
 	/* ablkcipher_decrypt shared descriptor */
 	flc = &ctx->flc[DECRYPT];
+	flc_dma = &ctx->flc_dma[DECRYPT];
 	desc = flc->sh_desc;
 
 	cnstr_shdsc_ablkcipher_decap(desc, &ctx->cdata, ivsize,
 				     is_rfc3686, ctx1_iv_off);
 
 	flc->flc[1] = desc_len(desc); /* SDL */
-	flc->flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) +
-				      desc_bytes(desc), DMA_TO_DEVICE);
-	if (dma_mapping_error(dev, flc->flc_dma)) {
+	*flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) + desc_bytes(desc),
+				  DMA_TO_DEVICE);
+	if (dma_mapping_error(dev, *flc_dma)) {
 		dev_err(dev, "unable to map shared descriptor\n");
 		return -ENOMEM;
 	}
 
 	/* ablkcipher_givencrypt shared descriptor */
 	flc = &ctx->flc[GIVENCRYPT];
+	flc_dma = &ctx->flc_dma[GIVENCRYPT];
 	desc = flc->sh_desc;
 
 	cnstr_shdsc_ablkcipher_givencap(desc, &ctx->cdata,
 					ivsize, is_rfc3686, ctx1_iv_off);
 
 	flc->flc[1] = desc_len(desc); /* SDL */
-	flc->flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) +
-				      desc_bytes(desc), DMA_TO_DEVICE);
-	if (dma_mapping_error(dev, flc->flc_dma)) {
+	*flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) + desc_bytes(desc),
+				  DMA_TO_DEVICE);
+	if (dma_mapping_error(dev, *flc_dma)) {
 		dev_err(dev, "unable to map shared descriptor\n");
 		return -ENOMEM;
 	}
@@ -1337,6 +1357,7 @@ static int xts_ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 	struct caam_ctx *ctx = crypto_ablkcipher_ctx(ablkcipher);
 	struct device *dev = ctx->dev;
 	struct caam_flc *flc;
+	dma_addr_t *flc_dma;
 	u32 *desc;
 
 	if (keylen != 2 * AES_MIN_KEY_SIZE  && keylen != 2 * AES_MAX_KEY_SIZE) {
@@ -1352,27 +1373,29 @@ static int xts_ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 
 	/* xts_ablkcipher_encrypt shared descriptor */
 	flc = &ctx->flc[ENCRYPT];
+	flc_dma = &ctx->flc_dma[ENCRYPT];
 	desc = flc->sh_desc;
 	cnstr_shdsc_xts_ablkcipher_encap(desc, &ctx->cdata);
 
 	flc->flc[1] = desc_len(desc); /* SDL */
-	flc->flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) +
-				      desc_bytes(desc), DMA_TO_DEVICE);
-	if (dma_mapping_error(dev, flc->flc_dma)) {
+	*flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) + desc_bytes(desc),
+				  DMA_TO_DEVICE);
+	if (dma_mapping_error(dev, *flc_dma)) {
 		dev_err(dev, "unable to map shared descriptor\n");
 		return -ENOMEM;
 	}
 
 	/* xts_ablkcipher_decrypt shared descriptor */
 	flc = &ctx->flc[DECRYPT];
+	flc_dma = &ctx->flc_dma[DECRYPT];
 	desc = flc->sh_desc;
 
 	cnstr_shdsc_xts_ablkcipher_decap(desc, &ctx->cdata);
 
 	flc->flc[1] = desc_len(desc); /* SDL */
-	flc->flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) +
-				      desc_bytes(desc), DMA_TO_DEVICE);
-	if (dma_mapping_error(dev, flc->flc_dma)) {
+	*flc_dma = dma_map_single(dev, flc, sizeof(flc->flc) + desc_bytes(desc),
+				  DMA_TO_DEVICE);
+	if (dma_mapping_error(dev, *flc_dma)) {
 		dev_err(dev, "unable to map shared descriptor\n");
 		return -ENOMEM;
 	}
@@ -1788,6 +1811,7 @@ static int aead_encrypt(struct aead_request *req)
 		return PTR_ERR(edesc);
 
 	caam_req->flc = &ctx->flc[ENCRYPT];
+	caam_req->flc_dma = ctx->flc_dma[ENCRYPT];
 	caam_req->op_type = ENCRYPT;
 	caam_req->cbk = aead_encrypt_done;
 	caam_req->ctx = &req->base;
@@ -1816,6 +1840,7 @@ static int aead_decrypt(struct aead_request *req)
 		return PTR_ERR(edesc);
 
 	caam_req->flc = &ctx->flc[DECRYPT];
+	caam_req->flc_dma = ctx->flc_dma[DECRYPT];
 	caam_req->op_type = DECRYPT;
 	caam_req->cbk = aead_decrypt_done;
 	caam_req->ctx = &req->base;
@@ -1901,6 +1926,7 @@ static int tls_encrypt(struct aead_request *req)
 		return PTR_ERR(edesc);
 
 	caam_req->flc = &ctx->flc[ENCRYPT];
+	caam_req->flc_dma = ctx->flc_dma[ENCRYPT];
 	caam_req->op_type = ENCRYPT;
 	caam_req->cbk = tls_encrypt_done;
 	caam_req->ctx = &req->base;
@@ -1929,6 +1955,7 @@ static int tls_decrypt(struct aead_request *req)
 		return PTR_ERR(edesc);
 
 	caam_req->flc = &ctx->flc[DECRYPT];
+	caam_req->flc_dma = ctx->flc_dma[DECRYPT];
 	caam_req->op_type = DECRYPT;
 	caam_req->cbk = tls_decrypt_done;
 	caam_req->ctx = &req->base;
@@ -2015,6 +2042,7 @@ static int ablkcipher_encrypt(struct ablkcipher_request *req)
 		return PTR_ERR(edesc);
 
 	caam_req->flc = &ctx->flc[ENCRYPT];
+	caam_req->flc_dma = ctx->flc_dma[ENCRYPT];
 	caam_req->op_type = ENCRYPT;
 	caam_req->cbk = ablkcipher_done;
 	caam_req->ctx = &req->base;
@@ -2044,6 +2072,7 @@ static int ablkcipher_givencrypt(struct skcipher_givcrypt_request *greq)
 		return PTR_ERR(edesc);
 
 	caam_req->flc = &ctx->flc[GIVENCRYPT];
+	caam_req->flc_dma = ctx->flc_dma[GIVENCRYPT];
 	caam_req->op_type = GIVENCRYPT;
 	caam_req->cbk = ablkcipher_done;
 	caam_req->ctx = &req->base;
@@ -2072,6 +2101,7 @@ static int ablkcipher_decrypt(struct ablkcipher_request *req)
 		return PTR_ERR(edesc);
 
 	caam_req->flc = &ctx->flc[DECRYPT];
+	caam_req->flc_dma = ctx->flc_dma[DECRYPT];
 	caam_req->op_type = DECRYPT;
 	caam_req->cbk = ablkcipher_done;
 	caam_req->ctx = &req->base;
@@ -2130,9 +2160,9 @@ static void caam_exit_common(struct caam_ctx *ctx)
 	int i;
 
 	for (i = 0; i < NUM_OP; i++) {
-		if (!ctx->flc[i].flc_dma)
+		if (!ctx->flc_dma[i])
 			continue;
-		dma_unmap_single(ctx->dev, ctx->flc[i].flc_dma,
+		dma_unmap_single(ctx->dev, ctx->flc_dma[i],
 				 sizeof(ctx->flc[i].flc) +
 					desc_bytes(ctx->flc[i].sh_desc),
 				 DMA_TO_DEVICE);
@@ -3535,6 +3565,7 @@ enum hash_optype {
 /**
  * caam_hash_ctx - ahash per-session context
  * @flc: Flow Contexts array
+ * @flc_dma: I/O virtual addresses of the Flow Contexts
  * @key:  virtual address of the authentication key
  * @dev: dpseci device
  * @ctx_len: size of Context Register
@@ -3542,6 +3573,7 @@ enum hash_optype {
  */
 struct caam_hash_ctx {
 	struct caam_flc flc[HASH_NUM_OP];
+	dma_addr_t flc_dma[HASH_NUM_OP];
 	u8 key[CAAM_MAX_HASH_KEY_SIZE];
 	struct device *dev;
 	int ctx_len;
@@ -3655,8 +3687,8 @@ static int ahash_set_sh_desc(struct crypto_ahash *ahash)
 	cnstr_shdsc_ahash(desc, &ctx->adata, OP_ALG_AS_UPDATE, ctx->ctx_len,
 			  ctx->ctx_len, true, priv->sec_attr.era);
 	flc->flc[1] = desc_len(desc); /* SDL */
-	dma_sync_single_for_device(ctx->dev, flc->flc_dma, desc_bytes(desc),
-				   DMA_TO_DEVICE);
+	dma_sync_single_for_device(ctx->dev, ctx->flc_dma[UPDATE],
+				   desc_bytes(desc), DMA_TO_DEVICE);
 #ifdef DEBUG
 	print_hex_dump(KERN_ERR,
 		       "ahash update shdesc@" __stringify(__LINE__)": ",
@@ -3669,8 +3701,8 @@ static int ahash_set_sh_desc(struct crypto_ahash *ahash)
 	cnstr_shdsc_ahash(desc, &ctx->adata, OP_ALG_AS_INIT, ctx->ctx_len,
 			  ctx->ctx_len, false, priv->sec_attr.era);
 	flc->flc[1] = desc_len(desc); /* SDL */
-	dma_sync_single_for_device(ctx->dev, flc->flc_dma, desc_bytes(desc),
-				   DMA_TO_DEVICE);
+	dma_sync_single_for_device(ctx->dev, ctx->flc_dma[UPDATE_FIRST],
+				   desc_bytes(desc), DMA_TO_DEVICE);
 #ifdef DEBUG
 	print_hex_dump(KERN_ERR,
 		       "ahash update first shdesc@" __stringify(__LINE__)": ",
@@ -3683,8 +3715,8 @@ static int ahash_set_sh_desc(struct crypto_ahash *ahash)
 	cnstr_shdsc_ahash(desc, &ctx->adata, OP_ALG_AS_FINALIZE, digestsize,
 			  ctx->ctx_len, true, priv->sec_attr.era);
 	flc->flc[1] = desc_len(desc); /* SDL */
-	dma_sync_single_for_device(ctx->dev, flc->flc_dma, desc_bytes(desc),
-				   DMA_TO_DEVICE);
+	dma_sync_single_for_device(ctx->dev, ctx->flc_dma[FINALIZE],
+				   desc_bytes(desc), DMA_TO_DEVICE);
 #ifdef DEBUG
 	print_hex_dump(KERN_ERR,
 		       "ahash final shdesc@" __stringify(__LINE__)": ",
@@ -3697,8 +3729,8 @@ static int ahash_set_sh_desc(struct crypto_ahash *ahash)
 	cnstr_shdsc_ahash(desc, &ctx->adata, OP_ALG_AS_INITFINAL, digestsize,
 			  ctx->ctx_len, false, priv->sec_attr.era);
 	flc->flc[1] = desc_len(desc); /* SDL */
-	dma_sync_single_for_device(ctx->dev, flc->flc_dma, desc_bytes(desc),
-				   DMA_TO_DEVICE);
+	dma_sync_single_for_device(ctx->dev, ctx->flc_dma[DIGEST],
+				   desc_bytes(desc), DMA_TO_DEVICE);
 #ifdef DEBUG
 	print_hex_dump(KERN_ERR,
 		       "ahash digest shdesc@" __stringify(__LINE__)": ",
@@ -3717,6 +3749,7 @@ static int hash_digest_key(struct caam_hash_ctx *ctx, const u8 *key_in,
 	struct split_key_sh_result result;
 	dma_addr_t src_dma, dst_dma;
 	struct caam_flc *flc;
+	dma_addr_t flc_dma;
 	int ret = -ENOMEM;
 	struct dpaa2_fl_entry *in_fle, *out_fle;
 
@@ -3757,9 +3790,9 @@ static int hash_digest_key(struct caam_hash_ctx *ctx, const u8 *key_in,
 			 LDST_SRCDST_BYTE_CONTEXT);
 
 	flc->flc[1] = desc_len(desc); /* SDL */
-	flc->flc_dma = dma_map_single(ctx->dev, flc, sizeof(flc->flc) +
-				      desc_bytes(desc), DMA_TO_DEVICE);
-	if (dma_mapping_error(ctx->dev, flc->flc_dma)) {
+	flc_dma = dma_map_single(ctx->dev, flc, sizeof(flc->flc) +
+				 desc_bytes(desc), DMA_TO_DEVICE);
+	if (dma_mapping_error(ctx->dev, flc_dma)) {
 		dev_err(ctx->dev, "unable to map shared descriptor\n");
 		goto err_flc_dma;
 	}
@@ -3784,6 +3817,7 @@ static int hash_digest_key(struct caam_hash_ctx *ctx, const u8 *key_in,
 	result.dev = ctx->dev;
 
 	req_ctx->flc = flc;
+	req_ctx->flc_dma = flc_dma;
 	req_ctx->cbk = split_key_sh_done;
 	req_ctx->ctx = &result;
 
@@ -3800,8 +3834,8 @@ static int hash_digest_key(struct caam_hash_ctx *ctx, const u8 *key_in,
 #endif
 	}
 
-	dma_unmap_single(ctx->dev, flc->flc_dma, sizeof(flc->flc) +
-			 desc_bytes(desc), DMA_TO_DEVICE);
+	dma_unmap_single(ctx->dev, flc_dma, sizeof(flc->flc) + desc_bytes(desc),
+			 DMA_TO_DEVICE);
 err_flc_dma:
 	dma_unmap_single(ctx->dev, dst_dma, digestsize, DMA_FROM_DEVICE);
 err_dst_dma:
@@ -4138,6 +4172,7 @@ static int ahash_update_ctx(struct ahash_request *req)
 		dpaa2_fl_set_len(out_fle, ctx->ctx_len);
 
 		req_ctx->flc = &ctx->flc[UPDATE];
+		req_ctx->flc_dma = ctx->flc_dma[UPDATE];
 		req_ctx->cbk = ahash_done_bi;
 		req_ctx->ctx = &req->base;
 		req_ctx->edesc = edesc;
@@ -4233,6 +4268,7 @@ static int ahash_final_ctx(struct ahash_request *req)
 	dpaa2_fl_set_len(out_fle, digestsize);
 
 	req_ctx->flc = &ctx->flc[FINALIZE];
+	req_ctx->flc_dma = ctx->flc_dma[FINALIZE];
 	req_ctx->cbk = ahash_done_ctx_src;
 	req_ctx->ctx = &req->base;
 	req_ctx->edesc = edesc;
@@ -4334,6 +4370,7 @@ static int ahash_finup_ctx(struct ahash_request *req)
 	dpaa2_fl_set_len(out_fle, digestsize);
 
 	req_ctx->flc = &ctx->flc[FINALIZE];
+	req_ctx->flc_dma = ctx->flc_dma[FINALIZE];
 	req_ctx->cbk = ahash_done_ctx_src;
 	req_ctx->ctx = &req->base;
 	req_ctx->edesc = edesc;
@@ -4428,6 +4465,7 @@ static int ahash_digest(struct ahash_request *req)
 	dpaa2_fl_set_len(out_fle, digestsize);
 
 	req_ctx->flc = &ctx->flc[DIGEST];
+	req_ctx->flc_dma = ctx->flc_dma[DIGEST];
 	req_ctx->cbk = ahash_done;
 	req_ctx->ctx = &req->base;
 	req_ctx->edesc = edesc;
@@ -4487,6 +4525,7 @@ static int ahash_final_no_ctx(struct ahash_request *req)
 	dpaa2_fl_set_len(out_fle, digestsize);
 
 	req_ctx->flc = &ctx->flc[DIGEST];
+	req_ctx->flc_dma = ctx->flc_dma[DIGEST];
 	req_ctx->cbk = ahash_done;
 	req_ctx->ctx = &req->base;
 	req_ctx->edesc = edesc;
@@ -4596,6 +4635,7 @@ static int ahash_update_no_ctx(struct ahash_request *req)
 		dpaa2_fl_set_len(out_fle, ctx->ctx_len);
 
 		req_ctx->flc = &ctx->flc[UPDATE_FIRST];
+		req_ctx->flc_dma = ctx->flc_dma[UPDATE_FIRST];
 		req_ctx->cbk = ahash_done_ctx_dst;
 		req_ctx->ctx = &req->base;
 		req_ctx->edesc = edesc;
@@ -4709,6 +4749,7 @@ static int ahash_finup_no_ctx(struct ahash_request *req)
 	dpaa2_fl_set_len(out_fle, digestsize);
 
 	req_ctx->flc = &ctx->flc[DIGEST];
+	req_ctx->flc_dma = ctx->flc_dma[DIGEST];
 	req_ctx->cbk = ahash_done;
 	req_ctx->ctx = &req->base;
 	req_ctx->edesc = edesc;
@@ -4820,6 +4861,7 @@ static int ahash_update_first(struct ahash_request *req)
 		dpaa2_fl_set_len(out_fle, ctx->ctx_len);
 
 		req_ctx->flc = &ctx->flc[UPDATE_FIRST];
+		req_ctx->flc_dma = ctx->flc_dma[UPDATE_FIRST];
 		req_ctx->cbk = ahash_done_ctx_dst;
 		req_ctx->ctx = &req->base;
 		req_ctx->edesc = edesc;
@@ -5116,7 +5158,7 @@ static int caam_hash_cra_init(struct crypto_tfm *tfm)
 	}
 
 	for (i = 0; i < HASH_NUM_OP; i++)
-		ctx->flc[i].flc_dma = dma_addr + i * sizeof(ctx->flc[i]);
+		ctx->flc_dma[i] = dma_addr + i * sizeof(ctx->flc[i]);
 
 	/* copy descriptor header template value */
 	ctx->adata.algtype = OP_TYPE_CLASS2_ALG | caam_hash->alg_type;
@@ -5135,7 +5177,7 @@ static void caam_hash_cra_exit(struct crypto_tfm *tfm)
 {
 	struct caam_hash_ctx *ctx = crypto_tfm_ctx(tfm);
 
-	dma_unmap_single_attrs(ctx->dev, ctx->flc[0].flc_dma, sizeof(ctx->flc),
+	dma_unmap_single_attrs(ctx->dev, ctx->flc_dma[0], sizeof(ctx->flc),
 			       DMA_TO_DEVICE, DMA_ATTR_SKIP_CPU_SYNC);
 }
 
@@ -5944,7 +5986,7 @@ int dpaa2_caam_enqueue(struct device *dev, struct caam_request *req)
 		}
 	}
 
-	dpaa2_fl_set_flc(&req->fd_flt[1], req->flc->flc_dma);
+	dpaa2_fl_set_flc(&req->fd_flt[1], req->flc_dma);
 
 	req->fd_flt_dma = dma_map_single(dev, req->fd_flt, sizeof(req->fd_flt),
 					 DMA_BIDIRECTIONAL);
@@ -5957,7 +5999,7 @@ int dpaa2_caam_enqueue(struct device *dev, struct caam_request *req)
 	dpaa2_fd_set_format(&fd, dpaa2_fd_list);
 	dpaa2_fd_set_addr(&fd, req->fd_flt_dma);
 	dpaa2_fd_set_len(&fd, req->fd_flt[1].len);
-	dpaa2_fd_set_flc(&fd, req->flc->flc_dma);
+	dpaa2_fd_set_flc(&fd, req->flc_dma);
 
 	/*
 	 * There is no guarantee that preemption is disabled here,

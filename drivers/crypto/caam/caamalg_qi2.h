@@ -233,12 +233,10 @@ struct ahash_edesc {
  * caam_flc - Flow Context (FLC)
  * @flc: Flow Context options
  * @sh_desc: Shared Descriptor
- * @flc_dma: DMA address of the Flow Context
  */
 struct caam_flc {
 	u32 flc[16];
 	u32 sh_desc[MAX_SDLEN];
-	dma_addr_t flc_dma;
 } ____cacheline_aligned;
 
 enum optype {
@@ -256,6 +254,7 @@ enum optype {
  *          fd_flt[1] - FLE pointing to input buffer
  * @fd_flt_dma: DMA address for the frame list table
  * @flc: Flow Context
+ * @flc_dma: I/O virtual address of Flow Context
  * @op_type: operation type
  * @cbk: Callback function to invoke when job is completed
  * @ctx: arbit context attached with request by the application
@@ -265,6 +264,7 @@ struct caam_request {
 	struct dpaa2_fl_entry fd_flt[2];
 	dma_addr_t fd_flt_dma;
 	struct caam_flc *flc;
+	dma_addr_t flc_dma;
 	enum optype op_type;
 	void (*cbk)(void *ctx, u32 err);
 	void *ctx;

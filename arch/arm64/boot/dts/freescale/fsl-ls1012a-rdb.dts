@@ -55,6 +55,10 @@
 	};
 };
 
+&pcie {
+	status = "okay";
+};
+
 &duart0 {
 	status = "okay";
 };

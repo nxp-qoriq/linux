@@ -3106,12 +3106,26 @@ static int set_vlan_qos(struct dpaa2_eth_priv *priv)
 					 &key_params, i, j++);
 		if (err) {
 			dev_err(dev, "dpni_add_qos_entry failed: %d\n", err);
-			goto out_cleanup;
+			goto out_remove;
 		}
 	}
 
 	priv->vlan_clsf_set = true;
 	dev_dbg(dev, "Vlan PCP QoS classification set\n");
+	goto out_cleanup;
+
+out_remove:
+	for (j = 0; j < i; j++) {
+		*key = cpu_to_be16(j << VLAN_PRIO_SHIFT);
+
+		dma_sync_single_for_device(dev, key_params.key_iova, key_size,
+					   DMA_TO_DEVICE);
+
+		err = dpni_remove_qos_entry(priv->mc_io, 0, priv->mc_token,
+					    &key_params);
+		if (err)
+			dev_err(dev, "dpni_remove_qos_entry failed: %d\n", err);
+	}
 
 out_cleanup:
 	dma_unmap_single(dev, key_params.key_iova, key_size, DMA_TO_DEVICE);

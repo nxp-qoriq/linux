@@ -3020,8 +3020,9 @@ static int set_vlan_qos(struct dpaa2_eth_priv *priv)
 	struct dpkg_profile_cfg kg_cfg = {0};
 	struct dpni_qos_tbl_cfg qos_cfg = {0};
 	struct dpni_rule_cfg key_params;
-	u8 *params_iova;
-	__be16 key, mask = cpu_to_be16(VLAN_PRIO_MASK);
+	u8 *params_iova, *key, *mask = NULL;
+	/* We only need the trailing 16 bits, without the TPID */
+	u8 key_size = VLAN_HLEN / 2;
 	int err = 0, i, j = 0;
 
 	if (priv->vlan_clsf_set)
@@ -3063,49 +3064,65 @@ static int set_vlan_qos(struct dpaa2_eth_priv *priv)
 		goto out_free;
 	}
 
-	key_params.key_size = sizeof(key);
+	key_params.key_size = key_size;
 
 	if (dpaa2_eth_fs_mask_enabled(priv)) {
-		key_params.mask_iova = dma_map_single(dev, &mask, sizeof(mask),
+		mask = kzalloc(key_size, GFP_KERNEL);
+		if (!mask)
+			goto out_free;
+
+		*mask = cpu_to_be16(VLAN_PRIO_MASK);
+
+		key_params.mask_iova = dma_map_single(dev, mask, key_size,
 						      DMA_TO_DEVICE);
 		if (dma_mapping_error(dev, key_params.mask_iova)) {
 			dev_err(dev, "DMA mapping failed %s\n", __func__);
 			err = -ENOMEM;
-			goto out_free;
+			goto out_free_mask;
 		}
 	} else {
 		key_params.mask_iova = 0;
 	}
 
-	key_params.key_iova = dma_map_single(dev, &key, sizeof(key),
+	key = kzalloc(key_size, GFP_KERNEL);
+	if (!key)
+		goto out_cleanup_mask;
+
+	key_params.key_iova = dma_map_single(dev, key, key_size,
 					     DMA_TO_DEVICE);
 	if (dma_mapping_error(dev, key_params.key_iova)) {
 		dev_err(dev, "%s: DMA mapping failed\n", __func__);
 		err = -ENOMEM;
-		goto out_unmap_mask;
+		goto out_free_key;
 	}
 
 	for (i = 0; i < dpaa2_eth_tc_count(priv); i++) {
-		key = cpu_to_be16(i << VLAN_PRIO_SHIFT);
+		*key = cpu_to_be16(i << VLAN_PRIO_SHIFT);
+
 		dma_sync_single_for_device(dev, key_params.key_iova,
-					   sizeof(key), DMA_TO_DEVICE);
+					   key_size, DMA_TO_DEVICE);
 
 		err = dpni_add_qos_entry(priv->mc_io, 0, priv->mc_token,
 					 &key_params, i, j++);
 		if (err) {
 			dev_err(dev, "dpni_add_qos_entry failed: %d\n", err);
-			goto out_unmap;
+			goto out_cleanup;
 		}
 	}
 
 	priv->vlan_clsf_set = true;
+	dev_dbg(dev, "Vlan PCP QoS classification set\n");
 
-out_unmap:
-	dma_unmap_single(dev, key_params.key_iova, sizeof(key), DMA_TO_DEVICE);
-out_unmap_mask:
+out_cleanup:
+	dma_unmap_single(dev, key_params.key_iova, key_size, DMA_TO_DEVICE);
+out_free_key:
+	kfree(key);
+out_cleanup_mask:
 	if (key_params.mask_iova)
-		dma_unmap_single(dev, key_params.mask_iova, sizeof(mask),
+		dma_unmap_single(dev, key_params.mask_iova, key_size,
 				 DMA_TO_DEVICE);
+out_free_mask:
+	kfree(mask);
 out_free:
 	kfree(params_iova);
 	return err;

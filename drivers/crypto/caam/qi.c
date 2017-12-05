@@ -109,7 +109,7 @@ int caam_qi_enqueue(struct device *qidev, struct caam_drv_req *req)
 
 	fd.cmd = 0;
 	fd.format = qm_fd_compound;
-	fd.cong_weight = req->fd_sgt[1].length;
+	fd.cong_weight = caam32_to_cpu(req->fd_sgt[1].length);
 	fd.addr = dma_map_single(qidev, req->fd_sgt, sizeof(req->fd_sgt),
 			      DMA_BIDIRECTIONAL);
 	if (dma_mapping_error(qidev, fd.addr)) {

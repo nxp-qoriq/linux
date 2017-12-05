@@ -1454,6 +1454,36 @@ int dpni_add_qos_entry(struct fsl_mc_io *mc_io,
 }
 
 /**
+ * dpni_remove_qos_entry() - Remove QoS mapping entry
+ * @mc_io:	Pointer to MC portal's I/O object
+ * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
+ * @token:	Token of DPNI object
+ * @cfg:	QoS rule to remove
+ *
+ * Return:	'0' on Success; Error code otherwise.
+ */
+int dpni_remove_qos_entry(struct fsl_mc_io *mc_io,
+			  u32 cmd_flags,
+			  u16 token,
+			  const struct dpni_rule_cfg *cfg)
+{
+	struct dpni_cmd_remove_qos_entry *cmd_params;
+	struct mc_command cmd = { 0 };
+
+	/* prepare command */
+	cmd.header = mc_encode_cmd_header(DPNI_CMDID_REMOVE_QOS_ENT,
+					  cmd_flags,
+					  token);
+	cmd_params = (struct dpni_cmd_remove_qos_entry *)cmd.params;
+	cmd_params->key_size = cfg->key_size;
+	cmd_params->key_iova = cpu_to_le64(cfg->key_iova);
+	cmd_params->mask_iova = cpu_to_le64(cfg->mask_iova);
+
+	/* send command to mc*/
+	return mc_send_command(mc_io, &cmd);
+}
+
+/**
  * dpni_add_fs_entry() - Add Flow Steering entry for a specific traffic class
  *			(to select a flow ID)
  * @mc_io:	Pointer to MC portal's I/O object

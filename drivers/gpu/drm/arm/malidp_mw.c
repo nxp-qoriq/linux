@@ -148,7 +148,9 @@ malidp_mw_encoder_atomic_check(struct drm_encoder *encoder,
 	n_planes = drm_format_num_planes(fb->format->format);
 	for (i = 0; i < n_planes; i++) {
 		struct drm_gem_cma_object *obj = drm_fb_cma_get_gem_obj(fb, i);
-		if (!malidp_hw_pitch_valid(malidp->dev, fb->pitches[i])) {
+		/* memory write buffers are never rotated */
+		u8 alignment = malidp_hw_get_pitch_align(malidp->dev, 0);
+		if (fb->pitches[i] & (alignment - 1)) {
 			DRM_DEBUG_KMS("Invalid pitch %u for plane %d\n",
 				      fb->pitches[i], i);
 			return -EINVAL;

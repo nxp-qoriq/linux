@@ -3151,6 +3151,11 @@ static int dpaa2_eth_dcbnl_ieee_setpfc(struct net_device *net_dev,
 	struct dpni_link_cfg cfg = {0};
 	int err = 0, i;
 
+	if (dpaa2_eth_tc_count(priv) == 1) {
+		netdev_dbg(net_dev, "DPNI has 1 TC, PFC configuration N/A\n");
+		return 0;
+	}
+
 	if (priv->pfc.pfc_en == pfc->pfc_en)
 		/* Same enabled mask, nothing to be done */
 		return 0;

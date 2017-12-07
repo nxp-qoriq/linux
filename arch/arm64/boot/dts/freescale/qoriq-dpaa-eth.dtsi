@@ -37,30 +37,37 @@ fsldpaa: fsl,dpaa {
 	ethernet@0 {
 		compatible = "fsl,dpa-ethernet";
 		fsl,fman-mac = <&enet0>;
+		dma-coherent;
 	};
 	ethernet@1 {
 		compatible = "fsl,dpa-ethernet";
 		fsl,fman-mac = <&enet1>;
+		dma-coherent;
 	};
 	ethernet@2 {
 		compatible = "fsl,dpa-ethernet";
 		fsl,fman-mac = <&enet2>;
+		dma-coherent;
 	};
 	ethernet@3 {
 		compatible = "fsl,dpa-ethernet";
 		fsl,fman-mac = <&enet3>;
+		dma-coherent;
 	};
 	ethernet@4 {
 		compatible = "fsl,dpa-ethernet";
 		fsl,fman-mac = <&enet4>;
+		dma-coherent;
 	};
 	ethernet@5 {
 		compatible = "fsl,dpa-ethernet";
 		fsl,fman-mac = <&enet5>;
+		dma-coherent;
 	};
 	ethernet@8 {
 		compatible = "fsl,dpa-ethernet";
 		fsl,fman-mac = <&enet6>;
+		dma-coherent;
 	};
 };
 

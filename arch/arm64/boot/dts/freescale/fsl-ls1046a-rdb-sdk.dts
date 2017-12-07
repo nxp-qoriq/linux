@@ -65,6 +65,12 @@
 };
 
 &fsldpaa {
+	ethernet@0 {
+		status = "disabled";
+	};
+	ethernet@1 {
+		status = "disabled";
+	};
 	ethernet@9 {
 		compatible = "fsl,dpa-ethernet";
 		fsl,fman-mac = <&enet7>;

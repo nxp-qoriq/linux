@@ -37,11 +37,6 @@
 #include <linux/fsl_devices.h>
 #include <linux/of_platform.h>
 
-#ifdef CONFIG_PPC
-#include <asm/fsl_pm.h>
-#include <linux/suspend.h>
-#endif
-
 #include "ehci.h"
 #include "ehci-fsl.h"
 

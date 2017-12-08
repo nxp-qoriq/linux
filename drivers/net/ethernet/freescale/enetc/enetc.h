@@ -153,8 +153,6 @@ struct enetc_si {
 
 	struct net_device *ndev; /* back ref. */
 
-	int num_vfs; /* number of active VFs, after sriov_init */
-	int total_vfs; /* max number of VFs, set for PF at probe */
 	struct enetc_mac_filter mac_filter[ENETC_MAC_ADDR_FILT_CNT];
 
 	struct enetc_cbdr cbd_ring;
@@ -162,7 +160,20 @@ struct enetc_si {
 	int num_rx_rings; /* how many rings are available in the SI */
 	int num_tx_rings;
 	int num_fs_entries;
+	unsigned short pad;
 };
+
+#define ENETC_SI_ALIGN	32
+
+static inline void *enetc_si_priv(const struct enetc_si *si)
+{
+	return (char *)si + ALIGN(sizeof(struct enetc_si), ENETC_SI_ALIGN);
+}
+
+static inline bool enetc_si_is_pf(struct enetc_si *si)
+{
+	return !!(si->hw.port);
+}
 
 #define ENETC_MAX_NUM_TXQS	8
 
@@ -198,8 +209,26 @@ struct enetc_ndev_priv {
 	u16 rss_table[64]; /* < TODO: remove and use HW results */
 };
 
+/* SI common */
+int enetc_pci_probe(struct pci_dev *pdev, const char *name, int sizeof_priv);
+void enetc_pci_remove(struct pci_dev *pdev);
+int enetc_alloc_msix(struct enetc_ndev_priv *priv);
+void enetc_free_msix(struct enetc_ndev_priv *priv);
+int enetc_setup_irqs(struct enetc_ndev_priv *priv);
+void enetc_free_irqs(struct enetc_ndev_priv *priv);
+void enetc_get_si_caps(struct enetc_si *si);
+int enetc_alloc_si_resources(struct enetc_ndev_priv *priv);
+void enetc_free_si_resources(struct enetc_ndev_priv *priv);
+
+int enetc_open(struct net_device *ndev);
+int enetc_close(struct net_device *ndev);
+netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev);
+struct net_device_stats *enetc_get_stats(struct net_device *ndev);
+
+/* ethtool */
 void enetc_set_ethtool_ops(struct net_device *ndev);
 
+/* control buffer descriptor ring (CBDR) */
 void enetc_sync_mac_filters(struct enetc_si *si, int si_idx);
 int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 		       int index);

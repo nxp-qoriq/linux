@@ -442,7 +442,7 @@ static int enetc_set_rxfh(struct net_device *ndev, const u32 *indir,
 	return err;
 }
 
-const struct ethtool_ops enetc_ethtool_ops = {
+const struct ethtool_ops enetc_pf_ethtool_ops = {
 	.get_regs_len = enetc_get_reglen,
 	.get_regs = enetc_get_regs,
 	.get_sset_count = enetc_get_sset_count,
@@ -456,7 +456,20 @@ const struct ethtool_ops enetc_ethtool_ops = {
 	.set_rxfh = enetc_set_rxfh,
 };
 
+const struct ethtool_ops enetc_vf_ethtool_ops = {
+	.get_regs_len = enetc_get_reglen,
+	.get_regs = enetc_get_regs,
+	.get_sset_count = enetc_get_sset_count,
+	.get_strings = enetc_get_strings,
+	.get_ethtool_stats = enetc_get_ethtool_stats,
+};
+
 void enetc_set_ethtool_ops(struct net_device *ndev)
 {
-	ndev->ethtool_ops = &enetc_ethtool_ops;
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+
+	if (enetc_si_is_pf(priv->si))
+		ndev->ethtool_ops = &enetc_pf_ethtool_ops;
+	else
+		ndev->ethtool_ops = &enetc_vf_ethtool_ops;
 }

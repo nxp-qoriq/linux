@@ -1779,6 +1779,7 @@ static int init_phy(struct net_device *dev)
 		priv->device_flags & FSL_GIANFAR_DEV_HAS_GIGABIT ?
 		GFAR_SUPPORTED_GBIT : 0;
 	phy_interface_t interface;
+	struct ethtool_eee edata;
 
 	priv->oldlink = 0;
 	priv->oldspeed = 0;
@@ -1802,6 +1803,10 @@ static int init_phy(struct net_device *dev)
 
 	/* Add support for flow control, but don't advertise it by default */
 	priv->phydev->supported |= (SUPPORTED_Pause | SUPPORTED_Asym_Pause);
+
+	/* disable EEE autoneg, EEE not supported by eTSEC */
+	memset(&edata, 0, sizeof(struct ethtool_eee));
+	phy_ethtool_set_eee(priv->phydev, &edata);
 
 	return 0;
 }

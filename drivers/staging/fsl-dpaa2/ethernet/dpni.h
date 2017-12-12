@@ -52,6 +52,14 @@ struct fsl_mc_io;
  * Maximum number of buffer pools per DPNI
  */
 #define DPNI_MAX_DPBP				8
+/**
+ * Maximum number of senders
+ */
+#define DPNI_MAX_SENDERS			8
+/**
+ * Maximum distribution size
+ */
+#define DPNI_MAX_DIST_SIZE			8
 
 /**
  * All traffic classes considered; see dpni_set_queue()
@@ -123,13 +131,15 @@ struct dpni_pools_cfg {
 	/**
 	 * struct pools - Buffer pools parameters
 	 * @dpbp_id: DPBP object ID
+	 * @priority_mask: priorities served by DPBP
 	 * @buffer_size: Buffer size
 	 * @backup_pool: Backup pool
 	 */
 	struct {
-		int	dpbp_id;
+		u16	dpbp_id;
+		u8	priority_mask;
 		u16	buffer_size;
-		int	backup_pool;
+		u8	backup_pool;
 	} pools[DPNI_MAX_DPBP];
 };
 
@@ -509,6 +519,10 @@ int dpni_reset_statistics(struct fsl_mc_io *mc_io,
  * Enable a-symmetric pause frames
  */
 #define DPNI_LINK_OPT_ASYM_PAUSE	0x0000000000000008ULL
+/**
+ * Enable priority flow control pause frames
+ */
+#define DPNI_LINK_OPT_PFC_PAUSE		0x0000000000000010ULL
 
 /**
  * struct - Structure representing DPNI link configuration
@@ -656,6 +670,26 @@ struct dpni_fs_tbl_cfg {
 
 int dpni_prepare_key_cfg(const struct dpkg_profile_cfg *cfg,
 			 u8 *key_cfg_buf);
+
+/**
+ * struct dpni_qos_tbl_cfg - Structure representing QOS table configuration
+ * @key_cfg_iova: I/O virtual address of 256 bytes DMA-able memory filled with
+ *		key extractions to be used as the QoS criteria by calling
+ *		dpkg_prepare_key_cfg()
+ * @discard_on_miss: Set to '1' to discard frames in case of no match (miss);
+ *		'0' to use the 'default_tc' in such cases
+ * @default_tc: Used in case of no-match and 'discard_on_miss'= 0
+ */
+struct dpni_qos_tbl_cfg {
+	u64 key_cfg_iova;
+	int discard_on_miss;
+	u8 default_tc;
+};
+
+int dpni_set_qos_table(struct fsl_mc_io *mc_io,
+		       u32 cmd_flags,
+		       u16 token,
+		       const struct dpni_qos_tbl_cfg *cfg);
 
 /**
  * struct dpni_rx_tc_dist_cfg - Rx traffic class distribution configuration
@@ -850,6 +884,12 @@ struct dpni_dest_cfg {
  * sw-portal's DQRR, the DQRI interrupt is asserted immediately (if enabled)
  */
 #define DPNI_CONG_OPT_INTR_COALESCING_DISABLED	0x00000020
+/**
+ * This congestion will trigger flow control or priority flow control.
+ * This will have effect only if flow control is enabled with
+ * dpni_set_link_cfg().
+ */
+#define DPNI_CONG_OPT_FLOW_CONTROL	0x00000040
 
 /**
  * struct dpni_congestion_notification_cfg - congestion notification
@@ -882,6 +922,14 @@ int dpni_set_congestion_notification(struct fsl_mc_io *mc_io,
 			enum dpni_queue_type qtype,
 			u8 tc_id,
 			const struct dpni_congestion_notification_cfg *cfg);
+
+int dpni_get_congestion_notification(
+			struct fsl_mc_io *mc_io,
+			u32 cmd_flags,
+			u16 token,
+			enum dpni_queue_type qtype,
+			u8 tc_id,
+			struct dpni_congestion_notification_cfg *cfg);
 
 /**
  * struct dpni_taildrop - Structure representing the taildrop
@@ -928,6 +976,22 @@ struct dpni_rule_cfg {
 	u64	mask_iova;
 	u8	key_size;
 };
+
+int dpni_add_qos_entry(struct fsl_mc_io *mc_io,
+		       u32 cmd_flags,
+		       u16 token,
+		       const struct dpni_rule_cfg *cfg,
+		       u8 tc_id,
+		       u16 index);
+
+int dpni_remove_qos_entry(struct fsl_mc_io *mc_io,
+			  u32 cmd_flags,
+			  u16 token,
+			  const struct dpni_rule_cfg *cfg);
+
+int dpni_clear_qos_table(struct fsl_mc_io *mc_io,
+			 u32 cmd_flags,
+			 u16 token);
 
 /**
  * Discard matching traffic.  If set, this takes precedence over any other

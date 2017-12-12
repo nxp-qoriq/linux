@@ -33,6 +33,7 @@
 #define __DPAA2_ETH_H
 
 #include <linux/atomic.h>
+#include <linux/dcbnl.h>
 #include <linux/netdevice.h>
 #include <linux/if_vlan.h>
 #include "../../fsl-mc/include/dpaa2-io.h"
@@ -96,7 +97,7 @@
 #define DPAA2_ETH_RX_BUF_ALIGN		64
 #define DPAA2_ETH_RX_BUF_ALIGN_V1	256
 #define DPAA2_ETH_NEEDED_HEADROOM(p_priv) \
-	((p_priv)->tx_data_offset + DPAA2_ETH_TX_BUF_ALIGN)
+	((p_priv)->tx_data_offset + DPAA2_ETH_TX_BUF_ALIGN - HH_DATA_MOD)
 
 /* rx_extra_head prevents reallocations in L3 processing. */
 #define DPAA2_ETH_SKB_SIZE \
@@ -114,16 +115,18 @@
 /* PTP nominal frequency 1GHz */
 #define DPAA2_PTP_NOMINAL_FREQ_PERIOD_NS 1
 
-/* Leave enough extra space in the headroom to make sure the skb is
- * not realloc'd in forwarding scenarios.
- */
-#define DPAA2_ETH_RX_HEAD_ROOM		192
-
 /* We are accommodating a skb backpointer and some S/G info
  * in the frame's software annotation. The hardware
  * options are either 0 or 64, so we choose the latter.
  */
 #define DPAA2_ETH_SWA_SIZE		64
+
+/* Extra headroom space requested to hardware, in order to make sure there's
+ * no realloc'ing in forwarding scenarios
+ */
+#define DPAA2_ETH_RX_HEAD_ROOM \
+	(DPAA2_ETH_TX_HWA_SIZE - DPAA2_ETH_RX_HWA_SIZE + \
+	 DPAA2_ETH_TX_BUF_ALIGN)
 
 /* Must keep this struct smaller than DPAA2_ETH_SWA_SIZE */
 struct dpaa2_eth_swa {
@@ -301,15 +304,16 @@ struct dpaa2_eth_ch_stats {
 	__u64 pull_err;
 };
 
+#define DPAA2_ETH_MAX_DPCONS		NR_CPUS
+#define DPAA2_ETH_MAX_TCS		8
+
 /* Maximum number of queues associated with a DPNI */
-#define DPAA2_ETH_MAX_RX_QUEUES		16
-#define DPAA2_ETH_MAX_TX_QUEUES		NR_CPUS
+#define DPAA2_ETH_MAX_RX_QUEUES		(DPNI_MAX_DIST_SIZE * DPAA2_ETH_MAX_TCS)
+#define DPAA2_ETH_MAX_TX_QUEUES		DPNI_MAX_SENDERS
 #define DPAA2_ETH_MAX_RX_ERR_QUEUES	1
 #define DPAA2_ETH_MAX_QUEUES		(DPAA2_ETH_MAX_RX_QUEUES + \
 					DPAA2_ETH_MAX_TX_QUEUES + \
 					DPAA2_ETH_MAX_RX_ERR_QUEUES)
-
-#define DPAA2_ETH_MAX_DPCONS		NR_CPUS
 
 enum dpaa2_eth_fq_type {
 	DPAA2_RX_FQ = 0,
@@ -323,6 +327,7 @@ struct dpaa2_eth_fq {
 	u32 fqid;
 	u32 tx_qdbin;
 	u16 flowid;
+	u8 tc;
 	int target_cpu;
 	struct dpaa2_eth_channel *channel;
 	enum dpaa2_eth_fq_type type;
@@ -429,6 +434,10 @@ struct dpaa2_eth_priv {
 	struct dpaa2_eth_cls_rule *cls_rule;
 
 	struct dpni_tx_shaping_cfg shaping_cfg;
+
+	u8 dcbx_mode;
+	struct ieee_pfc pfc;
+	bool vlan_clsf_set;
 };
 
 #define dpaa2_eth_hash_enabled(priv)	\
@@ -454,7 +463,37 @@ static inline int dpaa2_eth_queue_count(struct dpaa2_eth_priv *priv)
 	return priv->dpni_attrs.num_queues;
 }
 
+static inline int dpaa2_eth_tc_count(struct dpaa2_eth_priv *priv)
+{
+	return priv->dpni_attrs.num_tcs;
+}
+
+static inline bool dpaa2_eth_is_pfc_enabled(struct dpaa2_eth_priv *priv,
+					    int traffic_class)
+{
+	return priv->pfc.pfc_en & (1 << traffic_class);
+}
+
+enum dpaa2_eth_td_cfg {
+	DPAA2_ETH_TD_NONE,
+	DPAA2_ETH_TD_QUEUE,
+	DPAA2_ETH_TD_GROUP
+};
+
+static inline enum dpaa2_eth_td_cfg
+dpaa2_eth_get_td_type(struct dpaa2_eth_priv *priv)
+{
+	bool pfc_enabled = !!(priv->pfc.pfc_en);
+
+	if (pfc_enabled)
+		return DPAA2_ETH_TD_GROUP;
+	else if (priv->tx_pause_frames)
+		return DPAA2_ETH_TD_NONE;
+	else
+		return DPAA2_ETH_TD_QUEUE;
+}
+
 void check_cls_support(struct dpaa2_eth_priv *priv);
 
-int setup_fqs_taildrop(struct dpaa2_eth_priv *priv, bool enable);
+int set_rx_taildrop(struct dpaa2_eth_priv *priv);
 #endif	/* __DPAA2_H */

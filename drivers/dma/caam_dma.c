@@ -43,9 +43,8 @@ struct caam_dma_edesc {
 	struct dma_async_tx_descriptor async_tx;
 	struct list_head node;
 	struct caam_dma_ctx *ctx;
-	dma_addr_t sec4_sg_dma;
-	dma_addr_t sec4_sg_dma_dst;
-	size_t sec4_sg_bytes;
+	dma_addr_t src_dma;
+	dma_addr_t dst_dma;
 	unsigned int src_len;
 	unsigned int dst_len;
 	struct sec4_sg_entry *sec4_sg;
@@ -74,7 +73,7 @@ static struct dma_device *dma_dev;
 static struct caam_dma_sh_desc *dma_sh_desc;
 static LIST_HEAD(dma_ctx_list);
 
-static dma_cookie_t caam_jr_tx_submit(struct dma_async_tx_descriptor *tx)
+static dma_cookie_t caam_dma_tx_submit(struct dma_async_tx_descriptor *tx)
 {
 	struct caam_dma_edesc *edesc = NULL;
 	struct caam_dma_ctx *ctx = NULL;
@@ -104,12 +103,11 @@ static unsigned int caam_dma_sg_dma_len(struct scatterlist *sg,
 	return len;
 }
 
-static struct caam_dma_edesc *caam_dma_edesc_alloc(struct dma_chan *chan,
-						   unsigned long flags,
-						   struct scatterlist *dst_sg,
-						   unsigned int dst_nents,
-						   struct scatterlist *src_sg,
-						   unsigned int src_nents)
+static struct caam_dma_edesc *
+caam_dma_sg_edesc_alloc(struct dma_chan *chan,
+			struct scatterlist *dst_sg, unsigned int dst_nents,
+			struct scatterlist *src_sg, unsigned int src_nents,
+			unsigned long flags)
 {
 	struct caam_dma_ctx *ctx = container_of(chan, struct caam_dma_ctx,
 						chan);
@@ -139,7 +137,7 @@ static struct caam_dma_edesc *caam_dma_edesc_alloc(struct dma_chan *chan,
 	}
 
 	dma_async_tx_descriptor_init(&edesc->async_tx, chan);
-	edesc->async_tx.tx_submit = caam_jr_tx_submit;
+	edesc->async_tx.tx_submit = caam_dma_tx_submit;
 	edesc->async_tx.flags = flags;
 	edesc->async_tx.cookie = -EBUSY;
 
@@ -161,9 +159,8 @@ static struct caam_dma_edesc *caam_dma_edesc_alloc(struct dma_chan *chan,
 		return ERR_PTR(-ENOMEM);
 	}
 
-	edesc->sec4_sg_dma = sec4_sg_dma_src;
-	edesc->sec4_sg_dma_dst = sec4_sg_dma_src +
-				 src_nents * sizeof(*sec4_sg);
+	edesc->src_dma = sec4_sg_dma_src;
+	edesc->dst_dma = sec4_sg_dma_src + src_nents * sizeof(*sec4_sg);
 	edesc->ctx = ctx;
 
 	return edesc;
@@ -215,20 +212,20 @@ static void caam_dma_done(struct device *dev, u32 *hwdesc, u32 err,
 		callback(callback_param);
 }
 
-void init_dma_job(dma_addr_t sh_desc_dma, struct caam_dma_edesc *edesc)
+static void caam_dma_sg_init_job_desc(struct caam_dma_edesc *edesc)
 {
 	u32 *jd = edesc->jd;
 	u32 *sh_desc = dma_sh_desc->desc;
+	dma_addr_t desc_dma = dma_sh_desc->desc_dma;
 
 	/* init the job descriptor */
-	init_job_desc_shared(jd, sh_desc_dma, desc_len(sh_desc), HDR_REVERSE);
+	init_job_desc_shared(jd, desc_dma, desc_len(sh_desc), HDR_REVERSE);
 
 	/* set SEQIN PTR */
-	append_seq_in_ptr(jd, edesc->sec4_sg_dma, edesc->src_len, LDST_SGF);
+	append_seq_in_ptr(jd, edesc->src_dma, edesc->src_len, LDST_SGF);
 
 	/* set SEQOUT PTR */
-	append_seq_out_ptr(jd, edesc->sec4_sg_dma_dst, edesc->dst_len,
-			   LDST_SGF);
+	append_seq_out_ptr(jd, edesc->dst_dma, edesc->dst_len, LDST_SGF);
 
 #ifdef DEBUG
 	print_hex_dump(KERN_ERR, "caam dma desc@" __stringify(__LINE__) ": ",
@@ -238,26 +235,75 @@ void init_dma_job(dma_addr_t sh_desc_dma, struct caam_dma_edesc *edesc)
 
 /* This function can be called from an interrupt context */
 static struct dma_async_tx_descriptor *
-caam_jr_prep_dma_sg(struct dma_chan *chan, struct scatterlist *dst_sg,
-		    unsigned int dst_nents, struct scatterlist *src_sg,
-		    unsigned int src_nents, unsigned long flags)
+caam_dma_prep_sg(struct dma_chan *chan, struct scatterlist *dst_sg,
+		 unsigned int dst_nents, struct scatterlist *src_sg,
+		 unsigned int src_nents, unsigned long flags)
 {
 	struct caam_dma_edesc *edesc;
 
 	/* allocate extended descriptor */
-	edesc = caam_dma_edesc_alloc(chan, flags, dst_sg, dst_nents, src_sg,
-				     src_nents);
+	edesc = caam_dma_sg_edesc_alloc(chan, dst_sg, dst_nents, src_sg,
+					src_nents, flags);
 	if (IS_ERR_OR_NULL(edesc))
 		return ERR_CAST(edesc);
 
 	/* Initialize job descriptor */
-	init_dma_job(dma_sh_desc->desc_dma, edesc);
+	caam_dma_sg_init_job_desc(edesc);
+
+	return &edesc->async_tx;
+}
+
+static void caam_dma_memcpy_init_job_desc(struct caam_dma_edesc *edesc)
+{
+	u32 *jd = edesc->jd;
+	u32 *sh_desc = dma_sh_desc->desc;
+	dma_addr_t desc_dma = dma_sh_desc->desc_dma;
+
+	/* init the job descriptor */
+	init_job_desc_shared(jd, desc_dma, desc_len(sh_desc), HDR_REVERSE);
+
+	/* set SEQIN PTR */
+	append_seq_in_ptr(jd, edesc->src_dma, edesc->src_len, 0);
+
+	/* set SEQOUT PTR */
+	append_seq_out_ptr(jd, edesc->dst_dma, edesc->dst_len, 0);
+
+#ifdef DEBUG
+	print_hex_dump(KERN_ERR, "caam dma desc@" __stringify(__LINE__) ": ",
+		       DUMP_PREFIX_ADDRESS, 16, 4, jd, desc_bytes(jd), 1);
+#endif
+}
+
+static struct dma_async_tx_descriptor *
+caam_dma_prep_memcpy(struct dma_chan *chan, dma_addr_t dst, dma_addr_t src,
+		     size_t len, unsigned long flags)
+{
+	struct caam_dma_edesc *edesc;
+	struct caam_dma_ctx *ctx = container_of(chan, struct caam_dma_ctx,
+						chan);
+
+	edesc = kzalloc(sizeof(*edesc) + DESC_JOB_IO_LEN, GFP_DMA | GFP_NOWAIT);
+	if (!edesc)
+		return ERR_PTR(-ENOMEM);
+
+	dma_async_tx_descriptor_init(&edesc->async_tx, chan);
+	edesc->async_tx.tx_submit = caam_dma_tx_submit;
+	edesc->async_tx.flags = flags;
+	edesc->async_tx.cookie = -EBUSY;
+
+	edesc->src_dma = src;
+	edesc->src_len = len;
+	edesc->dst_dma = dst;
+	edesc->dst_len = len;
+	edesc->ctx = ctx;
+
+	caam_dma_memcpy_init_job_desc(edesc);
 
 	return &edesc->async_tx;
 }
 
 /* This function can be called in an interrupt context */
-static void caam_jr_issue_pending(struct dma_chan *chan)
+static void caam_dma_issue_pending(struct dma_chan *chan)
 {
 	struct caam_dma_ctx *ctx = container_of(chan, struct caam_dma_ctx,
 						chan);
@@ -273,7 +319,7 @@ static void caam_jr_issue_pending(struct dma_chan *chan)
 	spin_unlock_bh(&ctx->edesc_lock);
 }
 
-static void caam_jr_free_chan_resources(struct dma_chan *chan)
+static void caam_dma_free_chan_resources(struct dma_chan *chan)
 {
 	struct caam_dma_ctx *ctx = container_of(chan, struct caam_dma_ctx,
 						chan);
@@ -439,11 +485,13 @@ static int __init caam_dma_probe(struct platform_device *pdev)
 	dma_dev->dev = dev;
 	dma_dev->residue_granularity = DMA_RESIDUE_GRANULARITY_DESCRIPTOR;
 	dma_cap_set(DMA_SG, dma_dev->cap_mask);
+	dma_cap_set(DMA_MEMCPY, dma_dev->cap_mask);
 	dma_cap_set(DMA_PRIVATE, dma_dev->cap_mask);
 	dma_dev->device_tx_status = dma_cookie_status;
-	dma_dev->device_issue_pending = caam_jr_issue_pending;
-	dma_dev->device_prep_dma_sg = caam_jr_prep_dma_sg;
-	dma_dev->device_free_chan_resources = caam_jr_free_chan_resources;
+	dma_dev->device_issue_pending = caam_dma_issue_pending;
+	dma_dev->device_prep_dma_sg = caam_dma_prep_sg;
+	dma_dev->device_prep_dma_memcpy = caam_dma_prep_memcpy;
+	dma_dev->device_free_chan_resources = caam_dma_free_chan_resources;
 
 	err = dma_async_device_register(dma_dev);
 	if (err) {

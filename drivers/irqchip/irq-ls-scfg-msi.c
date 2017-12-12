@@ -319,6 +319,7 @@ static struct ls_scfg_msi_cfg ls1043_v1_1_msi_cfg = {
 };
 
 static const struct of_device_id ls_scfg_msi_id[] = {
+	{ .compatible = "fsl,ls1012a-msi", .data = &ls1021_msi_cfg },
 	{ .compatible = "fsl,ls1021a-msi", .data = &ls1021_msi_cfg },
 	{ .compatible = "fsl,ls1043a-msi", .data = &ls1021_msi_cfg },
 	{ .compatible = "fsl,ls1043a-v1.1-msi", .data = &ls1043_v1_1_msi_cfg },

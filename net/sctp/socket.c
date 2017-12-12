@@ -239,7 +239,7 @@ static struct sctp_transport *sctp_addr_id2transport(struct sock *sk,
 	union sctp_addr *laddr = (union sctp_addr *)addr;
 	struct sctp_transport *transport;
 
-	if (sctp_verify_addr(sk, laddr, af->sockaddr_len))
+	if (!af || sctp_verify_addr(sk, laddr, af->sockaddr_len))
 		return NULL;
 
 	addr_asoc = sctp_endpoint_lookup_assoc(sctp_sk(sk)->ep,
@@ -4373,8 +4373,7 @@ int sctp_get_sctp_info(struct sock *sk, struct sctp_association *asoc,
 	info->sctpi_ictrlchunks = asoc->stats.ictrlchunks;
 
 	prim = asoc->peer.primary_path;
-	memcpy(&info->sctpi_p_address, &prim->ipaddr,
-	       sizeof(struct sockaddr_storage));
+	memcpy(&info->sctpi_p_address, &prim->ipaddr, sizeof(prim->ipaddr));
 	info->sctpi_p_state = prim->state;
 	info->sctpi_p_cwnd = prim->cwnd;
 	info->sctpi_p_srtt = prim->srtt;
@@ -4460,13 +4459,13 @@ int sctp_for_each_endpoint(int (*cb)(struct sctp_endpoint *, void *),
 
 	for (head = sctp_ep_hashtable; hash < sctp_ep_hashsize;
 	     hash++, head++) {
-		read_lock(&head->lock);
+		read_lock_bh(&head->lock);
 		sctp_for_each_hentry(epb, &head->chain) {
 			err = cb(sctp_ep(epb), p);
 			if (err)
 				break;
 		}
-		read_unlock(&head->lock);
+		read_unlock_bh(&head->lock);
 	}
 
 	return err;
@@ -4506,9 +4505,8 @@ int sctp_for_each_transport(int (*cb)(struct sctp_transport *, void *),
 	if (err)
 		return err;
 
-	sctp_transport_get_idx(net, &hti, pos);
-	obj = sctp_transport_get_next(net, &hti);
-	for (; obj && !IS_ERR(obj); obj = sctp_transport_get_next(net, &hti)) {
+	obj = sctp_transport_get_idx(net, &hti, pos + 1);
+	for (; !IS_ERR_OR_NULL(obj); obj = sctp_transport_get_next(net, &hti)) {
 		struct sctp_transport *transport = obj;
 
 		if (!sctp_transport_hold(transport))

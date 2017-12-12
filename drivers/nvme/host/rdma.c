@@ -88,7 +88,7 @@ enum nvme_rdma_queue_flags {
 
 struct nvme_rdma_queue {
 	struct nvme_rdma_qe	*rsp_ring;
-	u8			sig_count;
+	atomic_t		sig_count;
 	int			queue_size;
 	size_t			cmnd_capsule_len;
 	struct nvme_rdma_ctrl	*ctrl;
@@ -337,8 +337,6 @@ static int __nvme_rdma_init_request(struct nvme_rdma_ctrl *ctrl,
 	struct ib_device *ibdev = dev->dev;
 	int ret;
 
-	BUG_ON(queue_idx >= ctrl->queue_count);
-
 	ret = nvme_rdma_alloc_qe(ibdev, &req->sqe, sizeof(struct nvme_command),
 			DMA_TO_DEVICE);
 	if (ret)
@@ -555,6 +553,7 @@ static int nvme_rdma_init_queue(struct nvme_rdma_ctrl *ctrl,
 		queue->cmnd_capsule_len = sizeof(struct nvme_command);
 
 	queue->queue_size = queue_size;
+	atomic_set(&queue->sig_count, 0);
 
 	queue->cm_id = rdma_create_id(&init_net, nvme_rdma_cm_handler, queue,
 			RDMA_PS_TCP, IB_QPT_RC);
@@ -642,7 +641,21 @@ out_free_queues:
 
 static int nvme_rdma_init_io_queues(struct nvme_rdma_ctrl *ctrl)
 {
+	struct nvmf_ctrl_options *opts = ctrl->ctrl.opts;
+	unsigned int nr_io_queues;
 	int i, ret;
+
+	nr_io_queues = min(opts->nr_io_queues, num_online_cpus());
+	ret = nvme_set_queue_count(&ctrl->ctrl, &nr_io_queues);
+	if (ret)
+		return ret;
+
+	ctrl->queue_count = nr_io_queues + 1;
+	if (ctrl->queue_count < 2)
+		return 0;
+
+	dev_info(ctrl->ctrl.device,
+		"creating %d I/O queues.\n", nr_io_queues);
 
 	for (i = 1; i < ctrl->queue_count; i++) {
 		ret = nvme_rdma_init_queue(ctrl, i,
@@ -1011,17 +1024,16 @@ static void nvme_rdma_send_done(struct ib_cq *cq, struct ib_wc *wc)
 		nvme_rdma_wr_error(cq, wc, "SEND");
 }
 
-static inline int nvme_rdma_queue_sig_limit(struct nvme_rdma_queue *queue)
+/*
+ * We want to signal completion at least every queue depth/2.  This returns the
+ * largest power of two that is not above half of (queue size + 1) to optimize
+ * (avoid divisions).
+ */
+static inline bool nvme_rdma_queue_sig_limit(struct nvme_rdma_queue *queue)
 {
-	int sig_limit;
+	int limit = 1 << ilog2((queue->queue_size + 1) / 2);
 
-	/*
-	 * We signal completion every queue depth/2 and also handle the
-	 * degenerated case of a  device with queue_depth=1, where we
-	 * would need to signal every message.
-	 */
-	sig_limit = max(queue->queue_size / 2, 1);
-	return (++queue->sig_count % sig_limit) == 0;
+	return (atomic_inc_return(&queue->sig_count) & (limit - 1)) == 0;
 }
 
 static int nvme_rdma_post_send(struct nvme_rdma_queue *queue,
@@ -1795,19 +1807,7 @@ static const struct nvme_ctrl_ops nvme_rdma_ctrl_ops = {
 
 static int nvme_rdma_create_io_queues(struct nvme_rdma_ctrl *ctrl)
 {
-	struct nvmf_ctrl_options *opts = ctrl->ctrl.opts;
 	int ret;
-
-	ret = nvme_set_queue_count(&ctrl->ctrl, &opts->nr_io_queues);
-	if (ret)
-		return ret;
-
-	ctrl->queue_count = opts->nr_io_queues + 1;
-	if (ctrl->queue_count < 2)
-		return 0;
-
-	dev_info(ctrl->ctrl.device,
-		"creating %d I/O queues.\n", opts->nr_io_queues);
 
 	ret = nvme_rdma_init_io_queues(ctrl);
 	if (ret)

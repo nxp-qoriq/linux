@@ -1,5 +1,11 @@
 config FSL_ENETC
-	tristate "ENETC driver"
+	tristate "ENETC PF driver"
+	depends on PCI
+	---help---
+	  TBD
+
+config FSL_ENETC_VF
+	tristate "ENETC VF driver"
 	depends on PCI
 	---help---
 	  TBD

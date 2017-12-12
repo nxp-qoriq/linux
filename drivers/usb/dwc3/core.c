@@ -1115,6 +1115,8 @@ static void dwc3_get_properties(struct dwc3 *dwc)
 
 	dwc->tx_de_emphasis_quirk = device_property_read_bool(dev,
 				"snps,tx_de_emphasis_quirk");
+	dwc->disable_devinit_u1u2_quirk = device_property_read_bool(dev,
+				"snps,disable_devinit_u1u2");
 	device_property_read_u8(dev, "snps,tx_de_emphasis",
 				&tx_de_emphasis);
 	device_property_read_string(dev, "snps,hsphy_interface",

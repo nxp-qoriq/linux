@@ -502,6 +502,12 @@ static void esdhc_of_set_clock(struct sdhci_host *host, unsigned int clock)
 			clock -= 5000000;
 	}
 
+	/* Workaround to reduce the clock frequency for ls1021a esdhc */
+	if (of_find_compatible_node(NULL, NULL, "fsl,ls1021a-esdhc")) {
+		if (clock == 50000000)
+			clock = 46500000;
+	}
+
 	temp = sdhci_readl(host, ESDHC_SYSTEM_CONTROL);
 	temp &= ~(ESDHC_CLOCK_SDCLKEN | ESDHC_CLOCK_IPGEN | ESDHC_CLOCK_HCKEN |
 		  ESDHC_CLOCK_PEREN | ESDHC_CLOCK_MASK);
@@ -591,10 +597,18 @@ static void esdhc_clock_enable(struct sdhci_host *host, bool enable)
 
 static void esdhc_reset(struct sdhci_host *host, u8 mask)
 {
+	u32 val;
+
 	sdhci_reset(host, mask);
 
 	sdhci_writel(host, host->ier, SDHCI_INT_ENABLE);
 	sdhci_writel(host, host->ier, SDHCI_SIGNAL_ENABLE);
+
+	if (mask & SDHCI_RESET_ALL) {
+		val = sdhci_readl(host, ESDHC_TBCTL);
+		val &= ~ESDHC_TB_EN;
+		sdhci_writel(host, val, ESDHC_TBCTL);
+	}
 }
 
 /* The SCFG, Supplemental Configuration Unit, provides SoC specific

@@ -278,6 +278,8 @@ static int ehci_bus_suspend (struct usb_hcd *hcd)
 		else if ((t1 & PORT_PE) && !(t1 & PORT_SUSPEND)) {
 			t2 |= PORT_SUSPEND;
 			set_bit(port, &ehci->bus_suspended);
+			if (ehci_has_fsl_susp_errata(ehci))
+				usleep_range(10000, 20000);
 		}
 
 		/* enable remote wakeup on all ports, if told to do so */

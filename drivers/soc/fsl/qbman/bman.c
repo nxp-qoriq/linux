@@ -35,6 +35,27 @@
 
 /* Portal register assists */
 
+#if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
+/* Cache-inhibited register offsets */
+#define BM_REG_RCR_PI_CINH	0x3000
+#define BM_REG_RCR_CI_CINH	0x3100
+#define BM_REG_RCR_ITR		0x3200
+#define BM_REG_CFG		0x3300
+#define BM_REG_SCN(n)		(0x3400 + ((n) << 6))
+#define BM_REG_ISR		0x3e00
+#define BM_REG_IER		0x3e40
+#define BM_REG_ISDR		0x3e80
+#define BM_REG_IIR		0x3ec0
+
+/* Cache-enabled register offsets */
+#define BM_CL_CR		0x0000
+#define BM_CL_RR0		0x0100
+#define BM_CL_RR1		0x0140
+#define BM_CL_RCR		0x1000
+#define BM_CL_RCR_PI_CENA	0x3000
+#define BM_CL_RCR_CI_CENA	0x3100
+
+#else
 /* Cache-inhibited register offsets */
 #define BM_REG_RCR_PI_CINH	0x0000
 #define BM_REG_RCR_CI_CINH	0x0004
@@ -53,6 +74,7 @@
 #define BM_CL_RCR		0x1000
 #define BM_CL_RCR_PI_CENA	0x3000
 #define BM_CL_RCR_CI_CENA	0x3100
+#endif
 
 /*
  * Portal modes.
@@ -167,12 +189,12 @@ struct bm_portal {
 /* Cache-inhibited register access. */
 static inline u32 bm_in(struct bm_portal *p, u32 offset)
 {
-	return __raw_readl(p->addr.ci + offset);
+	return be32_to_cpu(__raw_readl(p->addr.ci + offset));
 }
 
 static inline void bm_out(struct bm_portal *p, u32 offset, u32 val)
 {
-	__raw_writel(val, p->addr.ci + offset);
+	__raw_writel(cpu_to_be32(val), p->addr.ci + offset);
 }
 
 /* Cache Enabled Portal Access */
@@ -188,7 +210,7 @@ static inline void bm_cl_touch_ro(struct bm_portal *p, u32 offset)
 
 static inline u32 bm_ce_in(struct bm_portal *p, u32 offset)
 {
-	return __raw_readl(p->addr.ce + offset);
+	return be32_to_cpu(__raw_readl(p->addr.ce + offset));
 }
 
 struct bman_portal {
@@ -391,7 +413,7 @@ static void bm_rcr_finish(struct bm_portal *portal)
 
 	i = bm_in(portal, BM_REG_RCR_PI_CINH) & (BM_RCR_SIZE - 1);
 	if (i != rcr_ptr2idx(rcr->cursor))
-		pr_crit("losing uncommited RCR entries\n");
+		pr_crit("losing uncommitted RCR entries\n");
 
 	i = bm_in(portal, BM_REG_RCR_CI_CINH) & (BM_RCR_SIZE - 1);
 	if (i != rcr->ci)
@@ -607,7 +629,7 @@ int bman_p_irqsource_add(struct bman_portal *p, u32 bits)
 	unsigned long irqflags;
 
 	local_irq_save(irqflags);
-	set_bits(bits & BM_PIRQ_VISIBLE, &p->irq_sources);
+	p->irq_sources |= bits & BM_PIRQ_VISIBLE;
 	bm_out(&p->p, BM_REG_IER, p->irq_sources);
 	local_irq_restore(irqflags);
 	return 0;

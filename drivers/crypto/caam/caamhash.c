@@ -62,6 +62,7 @@
 #include "error.h"
 #include "sg_sw_sec4.h"
 #include "key_gen.h"
+#include "caamhash_desc.h"
 
 #define CAAM_CRA_PRIORITY		3000
 
@@ -70,14 +71,6 @@
 
 #define CAAM_MAX_HASH_BLOCK_SIZE	SHA512_BLOCK_SIZE
 #define CAAM_MAX_HASH_DIGEST_SIZE	SHA512_DIGEST_SIZE
-
-/* length of descriptors text */
-#define DESC_AHASH_BASE			(3 * CAAM_CMD_SZ)
-#define DESC_AHASH_UPDATE_LEN		(6 * CAAM_CMD_SZ)
-#define DESC_AHASH_UPDATE_FIRST_LEN	(DESC_AHASH_BASE + 4 * CAAM_CMD_SZ)
-#define DESC_AHASH_FINAL_LEN		(DESC_AHASH_BASE + 5 * CAAM_CMD_SZ)
-#define DESC_AHASH_FINUP_LEN		(DESC_AHASH_BASE + 5 * CAAM_CMD_SZ)
-#define DESC_AHASH_DIGEST_LEN		(DESC_AHASH_BASE + 4 * CAAM_CMD_SZ)
 
 #define DESC_HASH_MAX_USED_BYTES	(DESC_AHASH_FINAL_LEN + \
 					 CAAM_MAX_HASH_KEY_SIZE)
@@ -218,7 +211,7 @@ static inline int buf_map_to_sec4_sg(struct device *jrdev,
 }
 
 /* Map state->caam_ctx, and add it to link table */
-static inline int ctx_map_to_sec4_sg(u32 *desc, struct device *jrdev,
+static inline int ctx_map_to_sec4_sg(struct device *jrdev,
 				     struct caam_hash_state *state, int ctx_len,
 				     struct sec4_sg_entry *sec4_sg, u32 flag)
 {
@@ -234,66 +227,20 @@ static inline int ctx_map_to_sec4_sg(u32 *desc, struct device *jrdev,
 	return 0;
 }
 
-/*
- * For ahash update, final and finup (import_ctx = true)
- *     import context, read and write to seqout
- * For ahash firsts and digest (import_ctx = false)
- *     read and write to seqout
- */
-static inline void ahash_gen_sh_desc(u32 *desc, u32 state, int digestsize,
-				     struct caam_hash_ctx *ctx, bool import_ctx)
-{
-	u32 op = ctx->adata.algtype;
-	u32 *skip_key_load;
-
-	init_sh_desc(desc, HDR_SHARE_SERIAL);
-
-	/* Append key if it has been set; ahash update excluded */
-	if ((state != OP_ALG_AS_UPDATE) && (ctx->adata.keylen)) {
-		/* Skip key loading if already shared */
-		skip_key_load = append_jump(desc, JUMP_JSL | JUMP_TEST_ALL |
-					    JUMP_COND_SHRD);
-
-		append_key_as_imm(desc, ctx->key, ctx->adata.keylen_pad,
-				  ctx->adata.keylen, CLASS_2 |
-				  KEY_DEST_MDHA_SPLIT | KEY_ENC);
-
-		set_jump_tgt_here(desc, skip_key_load);
-
-		op |= OP_ALG_AAI_HMAC_PRECOMP;
-	}
-
-	/* If needed, import context from software */
-	if (import_ctx)
-		append_seq_load(desc, ctx->ctx_len, LDST_CLASS_2_CCB |
-				LDST_SRCDST_BYTE_CONTEXT);
-
-	/* Class 2 operation */
-	append_operation(desc, op | state | OP_ALG_ENCRYPT);
-
-	/*
-	 * Load from buf and/or src and write to req->result or state->context
-	 * Calculate remaining bytes to read
-	 */
-	append_math_add(desc, VARSEQINLEN, SEQINLEN, REG0, CAAM_CMD_SZ);
-	/* Read remaining bytes */
-	append_seq_fifo_load(desc, 0, FIFOLD_CLASS_CLASS2 | FIFOLD_TYPE_LAST2 |
-			     FIFOLD_TYPE_MSG | KEY_VLF);
-	/* Store class2 context bytes */
-	append_seq_store(desc, digestsize, LDST_CLASS_2_CCB |
-			 LDST_SRCDST_BYTE_CONTEXT);
-}
-
 static int ahash_set_sh_desc(struct crypto_ahash *ahash)
 {
 	struct caam_hash_ctx *ctx = crypto_ahash_ctx(ahash);
 	int digestsize = crypto_ahash_digestsize(ahash);
 	struct device *jrdev = ctx->jrdev;
+	struct caam_drv_private *ctrlpriv = dev_get_drvdata(jrdev->parent);
 	u32 *desc;
+
+	ctx->adata.key_virt = ctx->key;
 
 	/* ahash_update shared descriptor */
 	desc = ctx->sh_desc_update;
-	ahash_gen_sh_desc(desc, OP_ALG_AS_UPDATE, ctx->ctx_len, ctx, true);
+	cnstr_shdsc_ahash(desc, &ctx->adata, OP_ALG_AS_UPDATE, ctx->ctx_len,
+			  ctx->ctx_len, true, ctrlpriv->era);
 	dma_sync_single_for_device(jrdev, ctx->sh_desc_update_dma,
 				   desc_bytes(desc), DMA_TO_DEVICE);
 #ifdef DEBUG
@@ -304,7 +251,8 @@ static int ahash_set_sh_desc(struct crypto_ahash *ahash)
 
 	/* ahash_update_first shared descriptor */
 	desc = ctx->sh_desc_update_first;
-	ahash_gen_sh_desc(desc, OP_ALG_AS_INIT, ctx->ctx_len, ctx, false);
+	cnstr_shdsc_ahash(desc, &ctx->adata, OP_ALG_AS_INIT, ctx->ctx_len,
+			  ctx->ctx_len, false, ctrlpriv->era);
 	dma_sync_single_for_device(jrdev, ctx->sh_desc_update_first_dma,
 				   desc_bytes(desc), DMA_TO_DEVICE);
 #ifdef DEBUG
@@ -315,7 +263,8 @@ static int ahash_set_sh_desc(struct crypto_ahash *ahash)
 
 	/* ahash_final shared descriptor */
 	desc = ctx->sh_desc_fin;
-	ahash_gen_sh_desc(desc, OP_ALG_AS_FINALIZE, digestsize, ctx, true);
+	cnstr_shdsc_ahash(desc, &ctx->adata, OP_ALG_AS_FINALIZE, digestsize,
+			  ctx->ctx_len, true, ctrlpriv->era);
 	dma_sync_single_for_device(jrdev, ctx->sh_desc_fin_dma,
 				   desc_bytes(desc), DMA_TO_DEVICE);
 #ifdef DEBUG
@@ -326,7 +275,8 @@ static int ahash_set_sh_desc(struct crypto_ahash *ahash)
 
 	/* ahash_digest shared descriptor */
 	desc = ctx->sh_desc_digest;
-	ahash_gen_sh_desc(desc, OP_ALG_AS_INITFINAL, digestsize, ctx, false);
+	cnstr_shdsc_ahash(desc, &ctx->adata, OP_ALG_AS_INITFINAL, digestsize,
+			  ctx->ctx_len, false, ctrlpriv->era);
 	dma_sync_single_for_device(jrdev, ctx->sh_desc_digest_dma,
 				   desc_bytes(desc), DMA_TO_DEVICE);
 #ifdef DEBUG
@@ -421,6 +371,7 @@ static int ahash_setkey(struct crypto_ahash *ahash,
 	struct caam_hash_ctx *ctx = crypto_ahash_ctx(ahash);
 	int blocksize = crypto_tfm_alg_blocksize(&ahash->base);
 	int digestsize = crypto_ahash_digestsize(ahash);
+	struct caam_drv_private *ctrlpriv = dev_get_drvdata(ctx->jrdev->parent);
 	int ret;
 	u8 *hashed_key = NULL;
 
@@ -441,16 +392,26 @@ static int ahash_setkey(struct crypto_ahash *ahash,
 		key = hashed_key;
 	}
 
-	ret = gen_split_key(ctx->jrdev, ctx->key, &ctx->adata, key, keylen,
-			    CAAM_MAX_HASH_KEY_SIZE);
-	if (ret)
-		goto bad_free_key;
+	/*
+	 * If DKP is supported, use it in the shared descriptor to generate
+	 * the split key.
+	 */
+	if (ctrlpriv->era >= 6) {
+		ctx->adata.key_inline = true;
+		ctx->adata.keylen = keylen;
+		ctx->adata.keylen_pad = split_key_len(ctx->adata.algtype &
+						      OP_ALG_ALGSEL_MASK);
 
-#ifdef DEBUG
-	print_hex_dump(KERN_ERR, "ctx.key@"__stringify(__LINE__)": ",
-		       DUMP_PREFIX_ADDRESS, 16, 4, ctx->key,
-		       ctx->adata.keylen_pad, 1);
-#endif
+		if (ctx->adata.keylen_pad > CAAM_MAX_HASH_KEY_SIZE)
+			goto bad_free_key;
+
+		memcpy(ctx->key, key, keylen);
+	} else {
+		ret = gen_split_key(ctx->jrdev, ctx->key, &ctx->adata, key,
+				    keylen, CAAM_MAX_HASH_KEY_SIZE);
+		if (ret)
+			goto bad_free_key;
+	}
 
 	kfree(hashed_key);
 	return ahash_set_sh_desc(ahash);
@@ -773,7 +734,7 @@ static int ahash_update_ctx(struct ahash_request *req)
 		edesc->src_nents = src_nents;
 		edesc->sec4_sg_bytes = sec4_sg_bytes;
 
-		ret = ctx_map_to_sec4_sg(desc, jrdev, state, ctx->ctx_len,
+		ret = ctx_map_to_sec4_sg(jrdev, state, ctx->ctx_len,
 					 edesc->sec4_sg, DMA_BIDIRECTIONAL);
 		if (ret)
 			goto unmap_ctx;
@@ -871,9 +832,8 @@ static int ahash_final_ctx(struct ahash_request *req)
 	desc = edesc->hw_desc;
 
 	edesc->sec4_sg_bytes = sec4_sg_bytes;
-	edesc->src_nents = 0;
 
-	ret = ctx_map_to_sec4_sg(desc, jrdev, state, ctx->ctx_len,
+	ret = ctx_map_to_sec4_sg(jrdev, state, ctx->ctx_len,
 				 edesc->sec4_sg, DMA_TO_DEVICE);
 	if (ret)
 		goto unmap_ctx;
@@ -967,7 +927,7 @@ static int ahash_finup_ctx(struct ahash_request *req)
 
 	edesc->src_nents = src_nents;
 
-	ret = ctx_map_to_sec4_sg(desc, jrdev, state, ctx->ctx_len,
+	ret = ctx_map_to_sec4_sg(jrdev, state, ctx->ctx_len,
 				 edesc->sec4_sg, DMA_TO_DEVICE);
 	if (ret)
 		goto unmap_ctx;
@@ -1123,7 +1083,6 @@ static int ahash_final_no_ctx(struct ahash_request *req)
 		dev_err(jrdev, "unable to map dst\n");
 		goto unmap;
 	}
-	edesc->src_nents = 0;
 
 #ifdef DEBUG
 	print_hex_dump(KERN_ERR, "jobdesc@"__stringify(__LINE__)": ",
@@ -1205,7 +1164,6 @@ static int ahash_update_no_ctx(struct ahash_request *req)
 
 		edesc->src_nents = src_nents;
 		edesc->sec4_sg_bytes = sec4_sg_bytes;
-		edesc->dst_dma = 0;
 
 		ret = buf_map_to_sec4_sg(jrdev, edesc->sec4_sg, state);
 		if (ret)
@@ -1417,7 +1375,6 @@ static int ahash_update_first(struct ahash_request *req)
 		}
 
 		edesc->src_nents = src_nents;
-		edesc->dst_dma = 0;
 
 		ret = ahash_edesc_add_src(ctx, edesc, req, mapped_nents, 0, 0,
 					  to_hash);

@@ -775,6 +775,17 @@ static int dpa_private_netdev_init(struct net_device *net_dev)
 	/* Advertise NETIF_F_HW_ACCEL_MQ to avoid Tx timeout warnings */
 	net_dev->features |= NETIF_F_HW_ACCEL_MQ;
 
+#ifndef CONFIG_PPC
+	/* Due to the A010022 FMan errata, we can not use contig frames larger
+	 * than 4K, nor S/G frames. We need to stop advertising S/G and GSO
+	 * support.
+	 */
+	if (unlikely(dpaa_errata_a010022)) {
+		net_dev->hw_features &= ~NETIF_F_SG;
+		net_dev->features &= ~NETIF_F_GSO;
+	}
+#endif
+
 	return dpa_netdev_init(net_dev, mac_addr, tx_timeout);
 }
 
@@ -863,7 +874,7 @@ static int dpa_priv_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 
 	for (i = 0; i < count; i++) {
 		int err;
-		err = dpa_bp_alloc(&dpa_bp[i]);
+		err = dpa_bp_alloc(&dpa_bp[i], net_dev->dev.parent);
 		if (err < 0) {
 			dpa_bp_free(priv);
 			priv->dpa_bp = NULL;

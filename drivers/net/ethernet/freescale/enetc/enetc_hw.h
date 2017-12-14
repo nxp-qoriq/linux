@@ -49,6 +49,29 @@
 #define ENETC_SIPMAR0	0x80
 #define ENETC_SIPMAR1	0x84
 
+/* VF-PF Message passing */
+#define ENETC_VSI_START_IDX	1
+#define ENETC_DEFAULT_MSG_SIZE	1024
+static inline u32 enetc_vsi_set_msize(u32 size)
+{
+	return size < ENETC_DEFAULT_MSG_SIZE ? size >> 5 : 0;
+}
+
+#define ENETC_PSIMSGSR	0x204
+#define ENETC_PSIMSGSR_MR_MASK	GENMASK(2, 1)
+#define ENETC_PSIMSGSR_MS	BIT(0)
+#define ENETC_PSIVMSGRCVAR0(n)	(0x208 + (n) * 0x8) /* n = VSI index */
+#define ENETC_PSIVMSGRCVAR1(n)	(0x20C + (n) * 0x8)
+
+#define ENETC_VSIMSGSR	0x204
+#define ENETC_VSIMSGSR_MB	BIT(0)
+#define ENETC_VSIMSGSR_MS	BIT(1)
+#define ENETC_VSIMSGSNDAR0	0x210
+#define ENETC_VSIMSGSNDAR1	0x214
+
+#define ENETC_SIMSGSR_SET_MC(val) ((val) << 16)
+#define ENETC_SIMSGSR_GET_MC(val) ((val) >> 16)
+
 /* SI statistics */
 #define ENETC_SIROCT	0x300
 #define ENETC_SIRFRM	0x308
@@ -71,6 +94,9 @@
 #define ENETC_SICAPR0	0x900
 #define ENETC_SICAPR1	0x904
 
+#define ENETC_PSIIER	0xa00
+#define ENETC_PSIIER_MR_MASK	GENMASK(2, 1)
+#define ENETC_PSIIDR	0xa10
 #define ENETC_SIMSIVR	0xa20
 
 #define ENETC_SIMSITRV(n) (0xB00 + (n) * 0x4)
@@ -344,3 +370,30 @@ static inline void enetc_configure_hw_vector(struct enetc_hw *hw, int entry)
 		enetc_wr(hw, ENETC_SIMSIVR, entry);
 	}
 }
+
+/* Messaging */
+
+/* Command completion status */
+enum enetc_msg_cmd_status {
+	ENETC_MSG_CMD_STATUS_OK,
+	ENETC_MSG_CMD_STATUS_FAIL
+};
+
+/* VSI-PSI command message types */
+enum enetc_msg_cmd_type {
+	ENETC_MSG_CMD_MNG_MAC = 1, /* manage MAC address */
+	ENETC_MSG_CMD_MNG_RX_MAC_FILTER,/* manage RX MAC table */
+	ENETC_MSG_CMD_MNG_RX_VLAN_FILTER /* manage RX VLAN table */
+};
+
+/* VS-PSI command action types */
+enum enetc_msg_cmd_action_type {
+	ENETC_MSG_CMD_MNG_ADD = 1,
+	ENETC_MSG_CMD_MNG_REMOVE
+};
+
+/* PSI-VSI command header format */
+struct enetc_msg_cmd_header {
+	u16 type;	/* command class type */
+	u16 id;		/* denotes the specific required action */
+};

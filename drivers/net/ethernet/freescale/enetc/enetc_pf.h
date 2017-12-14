@@ -34,8 +34,17 @@
 
 #include "enetc.h"
 
+#define ENETC_MAX_VF_CNT_PER_PF	2
+
 struct enetc_pf {
 	struct enetc_si *si;
 	int num_vfs; /* number of active VFs, after sriov_init */
 	int total_vfs; /* max number of VFs, set for PF at probe */
+
+	struct enetc_msg_swbd rxmsg[ENETC_MAX_VF_CNT_PER_PF];
+	struct work_struct msg_task;
+	char msg_int_name[IFNAMSIZ + 8];
 };
+
+int enetc_msg_psi_init(struct enetc_pf *pf);
+void enetc_msg_psi_free(struct enetc_pf *pf);

@@ -138,6 +138,12 @@ struct enetc_mac_filter {
 	int mac_addr_cnt;
 };
 
+struct enetc_msg_swbd {
+	void *vaddr;
+	dma_addr_t dma;
+	int size;
+};
+
 /* PCI IEP device data */
 struct enetc_si {
 	struct pci_dev *pdev;
@@ -199,6 +205,14 @@ struct enetc_ndev_priv {
 
 	struct enetc_cls_rule *cls_rules;
 	u16 rss_table[64]; /* < TODO: remove and use HW results */
+};
+
+/* Messaging */
+
+/* VF-PF set primary MAC address message format */
+struct enetc_msg_cmd_set_primary_mac {
+	struct enetc_msg_cmd_header header;
+	struct sockaddr mac;
 };
 
 /* SI common */

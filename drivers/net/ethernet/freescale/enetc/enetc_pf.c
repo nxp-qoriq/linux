@@ -341,6 +341,7 @@ static int enetc_sriov_configure(struct pci_dev *pdev, int num_vfs)
 
 	if (!num_vfs) {
 		dev_info(&pdev->dev, "SR-IOV stop\n");
+		enetc_msg_psi_free(pf);
 		pci_disable_sriov(pdev);
 		pf->num_vfs = 0;
 	} else {
@@ -352,9 +353,20 @@ static int enetc_sriov_configure(struct pci_dev *pdev, int num_vfs)
 		}
 
 		pf->num_vfs = num_vfs;
+		err = enetc_msg_psi_init(pf);
+		if (err) {
+			dev_err(&pdev->dev, "enetc_msg_psi_init (%d)\n", err);
+			goto err_msg_psi;
+		}
 	}
 
 	return num_vfs;
+
+err_msg_psi:
+	pci_disable_sriov(pdev);
+	pf->num_vfs = 0;
+
+	return err;
 }
 #else
 #define enetc_sriov_configure(pdev, num_vfs)	(void)0

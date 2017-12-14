@@ -1,5 +1,6 @@
 obj-$(CONFIG_FSL_ENETC) += fsl-enetc.o
 fsl-enetc-$(CONFIG_FSL_ENETC) += enetc.o enetc_cbdr.o enetc_ethtool.o
+fsl-enetc-$(CONFIG_PCI_IOV) += enetc_msg.o
 fsl-enetc-objs := enetc_pf.o $(fsl-enetc-y)
 
 obj-$(CONFIG_FSL_ENETC_VF) += fsl-enetc-vf.o

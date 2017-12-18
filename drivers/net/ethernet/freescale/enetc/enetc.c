@@ -967,22 +967,6 @@ static void enetc_setup_bdrs(struct enetc_ndev_priv *priv)
 		enetc_setup_rxbdr(&priv->si->hw, priv->rx_ring[i]);
 }
 
-static void enetc_configure_hw_vector(struct enetc_hw *hw,
-				      enum enetc_msix_type type, int idx,
-				      u16 entry)
-{
-	switch (type) {
-	case ENETC_MSIX_SI_INT:
-		enetc_wr(hw, ENETC_SIMSIVR, entry);
-		break;
-	case ENETC_MSIX_SI_BDR_INT:
-		/* TODO: Only queue pairs supported for now */
-		enetc_wr(hw, ENETC_SIMSITRV(idx), entry);
-		enetc_wr(hw, ENETC_SIMSIRRV(idx), entry);
-		break;
-	}
-}
-
 int enetc_setup_irqs(struct enetc_ndev_priv *priv)
 {
 	struct pci_dev *pdev = priv->si->pdev;
@@ -998,8 +982,8 @@ int enetc_setup_irqs(struct enetc_ndev_priv *priv)
 			dev_err(priv->dev, "request_irq() failed!\n");
 			goto irq_err;
 		}
-		enetc_configure_hw_vector(&priv->si->hw, ENETC_MSIX_SI_BDR_INT,
-					  i, ENETC_BDR_INT_BASE_IDX + i);
+		enetc_configure_hw_vector(&priv->si->hw,
+					  ENETC_BDR_INT_BASE_IDX + i);
 	}
 
 	return 0;
@@ -1149,7 +1133,7 @@ int enetc_alloc_msix(struct enetc_ndev_priv *priv)
 	struct pci_dev *pdev = priv->si->pdev;
 	int i, n, nvec;
 
-	nvec = ENETC_SI_INT_NUM + priv->bdr_int_num;
+	nvec = ENETC_BDR_INT_BASE_IDX + priv->bdr_int_num;
 	/* allocate MSIX for both messaging and Rx/Tx interrupts */
 	n = pci_alloc_irq_vectors(pdev, nvec, nvec, PCI_IRQ_MSIX);
 

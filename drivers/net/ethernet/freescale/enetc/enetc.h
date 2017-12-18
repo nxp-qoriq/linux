@@ -138,14 +138,6 @@ struct enetc_mac_filter {
 	int mac_addr_cnt;
 };
 
-/* ENETC MSIX interrupt classe types */
-enum enetc_msix_type {ENETC_MSIX_SI_INT, ENETC_MSIX_SI_BDR_INT};
-
-/* base index for station interface interrupts */
-#define ENETC_SI_INT_BASE_IDX 0
-#define ENETC_SI_INT_NUM 1
-/* base index for Rx/Tx interrupts */
-#define ENETC_BDR_INT_BASE_IDX 1
 /* PCI IEP device data */
 struct enetc_si {
 	struct pci_dev *pdev;

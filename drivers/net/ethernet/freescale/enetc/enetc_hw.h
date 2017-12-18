@@ -326,3 +326,21 @@ static inline void enetc_get_primary_mac_addr(struct enetc_hw *hw, u8 *addr)
 	*(u32 *)(addr + 2) = htonl((u32)enetc_rd(hw, ENETC_SIPMAR0));
 	*(u16 *)addr = htons(enetc_rd(hw, ENETC_SIPMAR1) >> 16);
 }
+
+#define ENETC_SI_INT_IDX	0
+/* base index for Rx/Tx interrupts */
+#define ENETC_BDR_INT_BASE_IDX	1
+
+static inline void enetc_configure_hw_vector(struct enetc_hw *hw, int entry)
+{
+	if (entry >= ENETC_BDR_INT_BASE_IDX) {
+		/* TODO: Only queue pairs supported for now */
+		int idx = entry - ENETC_BDR_INT_BASE_IDX;
+
+		enetc_wr(hw, ENETC_SIMSITRV(idx), entry);
+		enetc_wr(hw, ENETC_SIMSIRRV(idx), entry);
+	} else {
+		/* configure SI interrupt */
+		enetc_wr(hw, ENETC_SIMSIVR, entry);
+	}
+}

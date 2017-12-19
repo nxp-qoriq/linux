@@ -284,24 +284,34 @@ static void enetc_unmap_tx_buff(struct enetc_bdr *tx_ring,
 	}
 }
 
+static int enetc_bd_ready_count(struct enetc_bdr *tx_ring, int ci)
+{
+	int pi = enetc_rd_reg(tx_ring->tcisr) & ENETC_TBCISR_IDX_MASK;
+
+	return pi >= ci ? pi - ci : tx_ring->bd_count - ci + pi;
+}
+
 static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
 {
 	struct net_device *ndev = tx_ring->ndev;
 	int tx_frm_cnt = 0, tx_byte_cnt = 0;
 	struct enetc_tx_swbd *tx_swbd;
 	bool frame_cleaned = false;
-	int i, last;
+	int i, last, bds_to_clean;
 
 	i = tx_ring->next_to_clean;
 	tx_swbd = &tx_ring->tx_swbd[i];
-	last = tx_swbd->last_in_frame;
+	bds_to_clean = enetc_bd_ready_count(tx_ring, i);
 
-	while ((enetc_rd_reg(tx_ring->tcisr) & ENETC_TBCISR_IDX_MASK) != i) {
+	while (bds_to_clean) {
+		/* ready Tx BDs will always make up an exact # of frames */
+		last = tx_swbd->last_in_frame;
 		do {
 			enetc_unmap_tx_buff(tx_ring, tx_swbd);
 			tx_byte_cnt += tx_swbd->len;
 			frame_cleaned = (i == last);
 
+			bds_to_clean--;
 			tx_swbd++;
 			i++;
 			if (unlikely(i == tx_ring->bd_count)) {
@@ -314,10 +324,8 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
 
 		tx_frm_cnt++;
 
-		if (!tx_swbd->skb)
-			break;
-
-		last = tx_swbd->last_in_frame;
+		if (unlikely(!bds_to_clean))
+			bds_to_clean = enetc_bd_ready_count(tx_ring, i);
 	}
 
 	tx_ring->next_to_clean = i;

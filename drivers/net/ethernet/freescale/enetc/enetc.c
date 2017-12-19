@@ -55,6 +55,13 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 static irqreturn_t enetc_msix(int irq, void *data)
 {
 	struct napi_struct *napi = data;
+	struct enetc_int_vector
+		*v = container_of(napi, struct enetc_int_vector, napi);
+	struct enetc_ndev_priv *priv = netdev_priv(v->tx_ring.ndev);
+
+	/* disable interrupts */
+	enetc_txbdr_wr(&priv->si->hw, v->tx_ring.index, ENETC_TBIER, 0);
+	enetc_rxbdr_wr(&priv->si->hw, v->rx_ring.index, ENETC_RBIER, 0);
 
 	napi_schedule(napi);
 
@@ -240,6 +247,7 @@ static int enetc_poll(struct napi_struct *napi, int budget)
 {
 	struct enetc_int_vector
 		*v = container_of(napi, struct enetc_int_vector, napi);
+	struct enetc_ndev_priv *priv = netdev_priv(v->tx_ring.ndev);
 	bool complete = true;
 	int work_done;
 
@@ -253,6 +261,11 @@ static int enetc_poll(struct napi_struct *napi, int budget)
 		return budget;
 
 	napi_complete_done(napi, work_done);
+
+	enetc_txbdr_wr(&priv->si->hw, v->tx_ring.index, ENETC_TBIER,
+		       ENETC_TBIER_TXFIE);
+	enetc_rxbdr_wr(&priv->si->hw, v->rx_ring.index, ENETC_RBIER,
+		       ENETC_RBIER_RXTIE);
 
 	return work_done;
 }
@@ -279,6 +292,8 @@ static void enetc_unmap_tx_buff(struct enetc_bdr *tx_ring,
 static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
 {
 	struct net_device *ndev = tx_ring->ndev;
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_hw *hw = &priv->si->hw;
 	int tx_frm_cnt = 0, tx_byte_cnt = 0;
 	struct enetc_tx_swbd *tx_swbd;
 	bool frame_cleaned = false;
@@ -301,6 +316,8 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
 				tx_swbd = tx_ring->tx_swbd;
 			}
 		} while (!frame_cleaned);
+
+		enetc_wr(hw, ENETC_SITXIDR, BIT(tx_ring->index));
 
 		tx_frm_cnt++;
 
@@ -417,6 +434,8 @@ static void enetc_get_offloads(struct enetc_bdr *rx_ring,
 static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 			       struct napi_struct *napi, int work_limit)
 {
+	struct enetc_ndev_priv *priv = netdev_priv(rx_ring->ndev);
+	struct enetc_hw *hw = &priv->si->hw;
 	int rx_frm_cnt = 0, rx_byte_cnt = 0;
 	int cleaned_cnt, i;
 
@@ -441,6 +460,7 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 		if (!bd_status)
 			break;
 
+		enetc_wr(hw, ENETC_SIRXIDR, BIT(rx_ring->index));
 		dma_rmb(); /* for readig other rxbd fields */
 		size = le16_to_cpu(rxbd->r.buf_len);
 		skb = enetc_map_rx_buff_to_skb(rx_ring, i, size);

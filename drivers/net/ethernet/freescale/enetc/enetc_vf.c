@@ -36,7 +36,7 @@
 #include "enetc.h"
 
 #define ENETC_DRV_VER_MAJ 0
-#define ENETC_DRV_VER_MIN 5
+#define ENETC_DRV_VER_MIN 6
 
 #define ENETC_DRV_VER_STR __stringify(ENETC_DRV_VER_MAJ) "." \
 			  __stringify(ENETC_DRV_VER_MIN)

@@ -374,48 +374,6 @@ end:
 	return total_len;
 }
 
-static struct dma_async_tx_descriptor *dpaa2_qdma_prep_sg(
-		struct dma_chan *chan,
-		struct scatterlist *dst_sg, u32 dst_nents,
-		struct scatterlist *src_sg, u32 src_nents,
-		unsigned long flags)
-{
-	struct dpaa2_qdma_chan *dpaa2_chan = to_dpaa2_qdma_chan(chan);
-	struct dpaa2_qdma_comp *dpaa2_comp;
-	struct dpaa2_frame_list *f_list;
-	struct device *dev = dpaa2_chan->qdma->priv->dev;
-	uint32_t total_len = 0;
-
-	/* basic sanity checks */
-	if (dst_nents == 0 || src_nents == 0)
-		return NULL;
-
-	if (dst_sg == NULL || src_sg == NULL)
-		return NULL;
-
-	/* get the descriptors required */
-	dpaa2_comp = dpaa2_qdma_request_desc(dpaa2_chan);
-
-	/* populate Frame descriptor */
-	dpaa2_qdma_populate_fd(QDMA_FD_LONG_FORMAT, dpaa2_comp);
-
-	/* prepare Scatter gather entry for source and destination */
-	total_len = dpaa2_qdma_populate_sg(dev, dpaa2_chan,
-			dpaa2_comp, dst_sg, dst_nents, src_sg, src_nents);
-
-	f_list = (struct dpaa2_frame_list *)dpaa2_comp->fl_virt_addr;
-	/* first frame list for descriptor buffer */
-	dpaa2_qdma_populate_first_framel(f_list, dpaa2_comp);
-	f_list++;
-	/* prepare Scatter gather entry for source and destination */
-	/* populate source and destination frame list table */
-	dpaa2_qdma_populate_frames(f_list, dpaa2_comp->sge_dst_bus_addr,
-			dpaa2_comp->sge_src_bus_addr,
-			total_len, QDMA_FL_FMT_SGE);
-
-	return vchan_tx_prep(&dpaa2_chan->vchan, &dpaa2_comp->vdesc, flags);
-}
-
 static enum dma_status dpaa2_qdma_tx_status(struct dma_chan *chan,
 		dma_cookie_t cookie, struct dma_tx_state *txstate)
 {
@@ -886,7 +844,6 @@ static int dpaa2_qdma_probe(struct fsl_mc_device *dpdmai_dev)
 	dma_cap_set(DMA_PRIVATE, dpaa2_qdma->dma_dev.cap_mask);
 	dma_cap_set(DMA_SLAVE, dpaa2_qdma->dma_dev.cap_mask);
 	dma_cap_set(DMA_MEMCPY, dpaa2_qdma->dma_dev.cap_mask);
-	dma_cap_set(DMA_SG, dpaa2_qdma->dma_dev.cap_mask);
 
 	dpaa2_qdma->dma_dev.dev = dev;
 	dpaa2_qdma->dma_dev.device_alloc_chan_resources
@@ -895,7 +852,6 @@ static int dpaa2_qdma_probe(struct fsl_mc_device *dpdmai_dev)
 		= dpaa2_qdma_free_chan_resources;
 	dpaa2_qdma->dma_dev.device_tx_status = dpaa2_qdma_tx_status;
 	dpaa2_qdma->dma_dev.device_prep_dma_memcpy = dpaa2_qdma_prep_memcpy;
-	dpaa2_qdma->dma_dev.device_prep_dma_sg = dpaa2_qdma_prep_sg;
 	dpaa2_qdma->dma_dev.device_issue_pending = dpaa2_qdma_issue_pending;
 
 	err = dma_async_device_register(&dpaa2_qdma->dma_dev);

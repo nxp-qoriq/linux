@@ -562,12 +562,34 @@ void xhci_set_link_state(struct xhci_hcd *xhci, __le32 __iomem **port_array,
 				int port_id, u32 link_state)
 {
 	u32 temp;
+	u32 portpmsc_u2_backup = 0;
+
+	/* Backup U2 timeout info before initiating U3 entry erratum A-010131 */
+	if (xhci->shared_hcd->speed >= HCD_USB3 &&
+			link_state == USB_SS_PORT_LS_U3 &&
+			(xhci->quirks & XHCI_DIS_U1U2_WHEN_U3)) {
+		portpmsc_u2_backup = readl(port_array[port_id] + PORTPMSC);
+		portpmsc_u2_backup &= PORT_U2_TIMEOUT_MASK;
+		temp = readl(port_array[port_id] + PORTPMSC);
+		temp |= PORT_U2_TIMEOUT_MASK;
+		writel(temp, port_array[port_id] + PORTPMSC);
+	}
 
 	temp = readl(port_array[port_id]);
 	temp = xhci_port_state_to_neutral(temp);
 	temp &= ~PORT_PLS_MASK;
 	temp |= PORT_LINK_STROBE | link_state;
 	writel(temp, port_array[port_id]);
+
+	/* Restore U2 timeout info after U3 entry complete */
+	if (xhci->shared_hcd->speed >= HCD_USB3 &&
+			link_state == USB_SS_PORT_LS_U3 &&
+			(xhci->quirks & XHCI_DIS_U1U2_WHEN_U3)) {
+		temp = readl(port_array[port_id] + PORTPMSC);
+		temp &= ~PORT_U2_TIMEOUT_MASK;
+		temp |= portpmsc_u2_backup;
+		writel(temp, port_array[port_id] + PORTPMSC);
+	}
 }
 
 static void xhci_set_remote_wake_mask(struct xhci_hcd *xhci,

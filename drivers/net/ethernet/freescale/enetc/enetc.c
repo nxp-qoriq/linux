@@ -54,16 +54,13 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 
 static irqreturn_t enetc_msix(int irq, void *data)
 {
-	struct napi_struct *napi = data;
-	struct enetc_int_vector
-		*v = container_of(napi, struct enetc_int_vector, napi);
-	struct enetc_ndev_priv *priv = netdev_priv(v->tx_ring.ndev);
+	struct enetc_int_vector	*v = data;
 
 	/* disable interrupts */
-	enetc_txbdr_wr(&priv->si->hw, v->tx_ring.index, ENETC_TBIER, 0);
-	enetc_rxbdr_wr(&priv->si->hw, v->rx_ring.index, ENETC_RBIER, 0);
+	enetc_wr_reg(v->tbier, 0);
+	enetc_wr_reg(v->rbier, 0);
 
-	napi_schedule(napi);
+	napi_schedule(&v->napi);
 
 	return IRQ_HANDLED;
 }
@@ -247,7 +244,6 @@ static int enetc_poll(struct napi_struct *napi, int budget)
 {
 	struct enetc_int_vector
 		*v = container_of(napi, struct enetc_int_vector, napi);
-	struct enetc_ndev_priv *priv = netdev_priv(v->tx_ring.ndev);
 	bool complete = true;
 	int work_done;
 
@@ -262,10 +258,9 @@ static int enetc_poll(struct napi_struct *napi, int budget)
 
 	napi_complete_done(napi, work_done);
 
-	enetc_txbdr_wr(&priv->si->hw, v->tx_ring.index, ENETC_TBIER,
-		       ENETC_TBIER_TXFIE);
-	enetc_rxbdr_wr(&priv->si->hw, v->rx_ring.index, ENETC_RBIER,
-		       ENETC_RBIER_RXTIE);
+	/* enable interrupts */
+	enetc_wr_reg(v->tbier, ENETC_TBIER_TXFIE);
+	enetc_wr_reg(v->rbier, ENETC_RBIER_RXTIE);
 
 	return work_done;
 }
@@ -292,8 +287,6 @@ static void enetc_unmap_tx_buff(struct enetc_bdr *tx_ring,
 static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
 {
 	struct net_device *ndev = tx_ring->ndev;
-	struct enetc_ndev_priv *priv = netdev_priv(ndev);
-	struct enetc_hw *hw = &priv->si->hw;
 	int tx_frm_cnt = 0, tx_byte_cnt = 0;
 	struct enetc_tx_swbd *tx_swbd;
 	bool frame_cleaned = false;
@@ -317,7 +310,7 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
 			}
 		} while (!frame_cleaned);
 
-		enetc_wr(hw, ENETC_SITXIDR, BIT(tx_ring->index));
+		enetc_wr_reg(tx_ring->idr, BIT(tx_ring->index));
 
 		tx_frm_cnt++;
 
@@ -434,8 +427,6 @@ static void enetc_get_offloads(struct enetc_bdr *rx_ring,
 static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 			       struct napi_struct *napi, int work_limit)
 {
-	struct enetc_ndev_priv *priv = netdev_priv(rx_ring->ndev);
-	struct enetc_hw *hw = &priv->si->hw;
 	int rx_frm_cnt = 0, rx_byte_cnt = 0;
 	int cleaned_cnt, i;
 
@@ -460,7 +451,7 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 		if (!bd_status)
 			break;
 
-		enetc_wr(hw, ENETC_SIRXIDR, BIT(rx_ring->index));
+		enetc_wr_reg(rx_ring->idr, BIT(rx_ring->index));
 		dma_rmb(); /* for readig other rxbd fields */
 		size = le16_to_cpu(rxbd->r.buf_len);
 		skb = enetc_map_rx_buff_to_skb(rx_ring, i, size);
@@ -941,6 +932,7 @@ static void enetc_setup_txbdr(struct enetc_hw *hw, struct enetc_bdr *tx_ring)
 	enetc_txbdr_wr(hw, idx, ENETC_TBCISR, 0);
 	tx_ring->tcir = hw->reg + ENETC_BDR(TX, idx, ENETC_TBCIR);
 	tx_ring->tcisr = hw->reg + ENETC_BDR(TX, idx, ENETC_TBCISR);
+	tx_ring->idr = hw->reg + ENETC_SITXIDR;
 }
 
 static void enetc_setup_rxbdr(struct enetc_hw *hw, struct enetc_bdr *rx_ring)
@@ -972,6 +964,7 @@ static void enetc_setup_rxbdr(struct enetc_hw *hw, struct enetc_bdr *rx_ring)
 
 	enetc_rxbdr_wr(hw, idx, ENETC_RBPIR, 0);
 	rx_ring->rcir = hw->reg + ENETC_BDR(RX, idx, ENETC_RBCIR);
+	rx_ring->idr = hw->reg + ENETC_SIRXIDR;
 
 	enetc_refill_rx_ring(rx_ring, enetc_bd_unused(rx_ring));
 }
@@ -995,15 +988,19 @@ int enetc_setup_irqs(struct enetc_ndev_priv *priv)
 	for (i = 0; i < priv->bdr_int_num; i++) {
 		int irq = pci_irq_vector(pdev, ENETC_BDR_INT_BASE_IDX + i);
 		struct enetc_int_vector *v = &priv->int_vector[i];
+		struct enetc_hw *hw = &priv->si->hw;
 
 		sprintf(v->name, "%s-rxtx%d", priv->ndev->name, i);
-		err = request_irq(irq, enetc_msix, 0, v->name, &v->napi);
+		err = request_irq(irq, enetc_msix, 0, v->name, v);
 		if (err) {
 			dev_err(priv->dev, "request_irq() failed!\n");
 			goto irq_err;
 		}
-		enetc_configure_hw_vector(&priv->si->hw,
-					  ENETC_BDR_INT_BASE_IDX + i);
+
+		v->tbier = hw->reg + ENETC_BDR(TX, i, ENETC_TBIER);
+		v->rbier = hw->reg + ENETC_BDR(RX, i, ENETC_RBIER);
+
+		enetc_configure_hw_vector(hw, ENETC_BDR_INT_BASE_IDX + i);
 	}
 
 	return 0;

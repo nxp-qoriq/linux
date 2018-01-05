@@ -92,6 +92,7 @@ struct enetc_bdr {
 		void __iomem *tcisr; /* Tx */
 		int next_to_alloc; /* Rx */
 	};
+	void __iomem *idr; /* Interrupt Detect Register pointer */
 
 	struct enetc_ring_stats stats;
 
@@ -176,6 +177,8 @@ static inline bool enetc_si_is_pf(struct enetc_si *si)
 #define ENETC_MAX_NUM_TXQS	8
 
 struct enetc_int_vector {
+	void __iomem *tbier;
+	void __iomem *rbier;
 	struct napi_struct napi;
 	char name[IFNAMSIZ + 8];
 

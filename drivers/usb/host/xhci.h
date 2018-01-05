@@ -1657,6 +1657,7 @@ struct xhci_hcd {
 #define XHCI_SSIC_PORT_UNUSED	(1 << 22)
 #define XHCI_NO_64BIT_SUPPORT	(1 << 23)
 #define XHCI_MISSING_CAS	(1 << 24)
+#define XHCI_DIS_U1U2_WHEN_U3 (1 << 32)
 #define XHCI_STOP_EP_IN_U1     BIT(34)
 /* For controller with a broken Port Disable implementation */
 #define XHCI_BROKEN_PORT_PED	(1 << 25)

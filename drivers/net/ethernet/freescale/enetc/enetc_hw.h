@@ -136,8 +136,10 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_TBLENR	0x20
 #define ENETC_TBCISR_IDX_MASK	0xffff
 #define ENETC_TBIER	0xa0
-#define ENETC_TBIER_TXFIE	BIT(1)
+#define ENETC_TBIER_TXTIE	BIT(0)
 #define ENETC_TBIDR	0xa4
+#define ENETC_TBICIR0	0xa8
+#define ENETC_TBICIR0_ICEN	BIT(31)
 
 //FIXME , BG 0.7: #define ENETC_RTBMR_RSIZE(n)  __ilog2_u32((n) >> 6)
 #define ENETC_RTBLENR_LEN(n)	(((n) >> 3) << 7)
@@ -245,7 +247,6 @@ struct enetc_tx_bd {
 #define ENETC_TXBD_FLAGS_L4CS	BIT(0)
 #define ENETC_TXBD_FLAGS_CSUM	BIT(3)
 #define ENETC_TXBD_FLAGS_TSTMP	BIT(4)
-#define ENETC_TXBD_FLAGS_IE	BIT(5)
 #define ENETC_TXBD_FLAGS_F	BIT(7)
 
 /* L3 csum flags */

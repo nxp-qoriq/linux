@@ -201,7 +201,7 @@ static void enetc_update_txbdr(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 	struct enetc_tx_swbd *tx_swbd;
 	struct enetc_tx_bd *txbd;
 	bool do_csum;
-	u8 flags;
+	u8 flags = 0;
 	int i;
 
 	i = tx_ring->next_to_use;
@@ -210,7 +210,6 @@ static void enetc_update_txbdr(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 
 	do_csum = enetc_tx_csum(skb, txbd);
 
-	flags = ENETC_TXBD_FLAGS_IE;
 	if (do_csum)
 		flags |= ENETC_TXBD_FLAGS_CSUM | ENETC_TXBD_FLAGS_L4CS;
 
@@ -259,7 +258,7 @@ static int enetc_poll(struct napi_struct *napi, int budget)
 	napi_complete_done(napi, work_done);
 
 	/* enable interrupts */
-	enetc_wr_reg(v->tbier, ENETC_TBIER_TXFIE);
+	enetc_wr_reg(v->tbier, ENETC_TBIER_TXTIE);
 	enetc_wr_reg(v->rbier, ENETC_RBIER_RXTIE);
 
 	return work_done;
@@ -932,6 +931,9 @@ static void enetc_setup_txbdr(struct enetc_hw *hw, struct enetc_bdr *tx_ring)
 	enetc_txbdr_wr(hw, idx, ENETC_TBLENR,
 		       ENETC_RTBLENR_LEN(tx_ring->bd_count));
 
+	/* enable Tx ints by setting pkt thr to 1 */
+	enetc_txbdr_wr(hw, idx, ENETC_TBICIR0, ENETC_TBICIR0_ICEN | 0x1);
+
 	tbmr = ENETC_TBMR_EN;
 	/* enable ring */
 	enetc_txbdr_wr(hw, idx, ENETC_TBMR, tbmr);
@@ -1038,7 +1040,7 @@ static void enetc_enable_interrupts(struct enetc_ndev_priv *priv)
 	/* enable Tx & Rx event indication */
 	for (i = 0; i < priv->bdr_int_num; i++) {
 		enetc_txbdr_wr(&priv->si->hw, i,
-			       ENETC_TBIER, ENETC_TBIER_TXFIE);
+			       ENETC_TBIER, ENETC_TBIER_TXTIE);
 		enetc_rxbdr_wr(&priv->si->hw, i,
 			       ENETC_RBIER, ENETC_RBIER_RXTIE);
 	}

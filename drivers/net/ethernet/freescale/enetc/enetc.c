@@ -40,8 +40,6 @@
 static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb);
 static void enetc_unmap_tx_buff(struct enetc_bdr *tx_ring,
 				struct enetc_tx_swbd *tx_swbd);
-static void enetc_update_txbdr(struct enetc_bdr *tx_ring, struct sk_buff *skb,
-			       int count);
 static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring);
 
 static struct sk_buff *enetc_map_rx_buff_to_skb(struct enetc_bdr *rx_ring,
@@ -84,77 +82,16 @@ netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
 	}
 
 	count = enetc_map_tx_buffs(tx_ring, skb);
-
-	if (likely(count)) {
-		enetc_update_txbdr(tx_ring, skb, count);
-
-		if (enetc_bd_unused(tx_ring) < ENETC_FREE_TXBD_NEEDED)
-			// TODO: check h/w index (CISR) for more acurate status
-			netif_stop_subqueue(ndev, tx_ring->index);
-	} else {
+	if (unlikely(!count)) {
 		dev_kfree_skb_any(skb);
+		return NETDEV_TX_OK;
 	}
+
+	if (enetc_bd_unused(tx_ring) < ENETC_FREE_TXBD_NEEDED)
+		// TODO: check h/w index (CISR) for more acurate status
+		netif_stop_subqueue(ndev, tx_ring->index);
 
 	return NETDEV_TX_OK;
-}
-
-static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb)
-{
-	unsigned int nr_frags = skb_shinfo(skb)->nr_frags;
-	struct enetc_tx_swbd *tx_swbd;
-	struct skb_frag_struct *frag;
-	int len = skb_headlen(skb);
-	int i, start, count = 0;
-	unsigned int f;
-
-	i = tx_ring->next_to_use;
-	start = tx_ring->next_to_use;
-	tx_swbd = &tx_ring->tx_swbd[i];
-
-	tx_swbd->len = len;
-	tx_swbd->dma = dma_map_single(tx_ring->dev, skb->data,
-				      len, DMA_TO_DEVICE);
-	if (unlikely(dma_mapping_error(tx_ring->dev, tx_swbd->dma)))
-		goto dma_err;
-	tx_swbd->is_dma_page = 0;
-	count++;
-
-	frag = &skb_shinfo(skb)->frags[0];
-	for (f = 0; f < nr_frags; f++, frag++) {
-		len = skb_frag_size(frag);
-
-		tx_swbd++;
-		i++;
-		if (unlikely(i == tx_ring->bd_count)) {
-			i = 0;
-			tx_swbd = tx_ring->tx_swbd;
-		}
-
-		tx_swbd->len = len;
-		tx_swbd->is_dma_page = 1;
-		tx_swbd->dma = skb_frag_dma_map(tx_ring->dev, frag, 0, len,
-						DMA_TO_DEVICE);
-		if (dma_mapping_error(tx_ring->dev, tx_swbd->dma))
-			goto dma_err;
-		count++;
-	}
-	tx_ring->tx_swbd[i].skb = skb;
-	tx_ring->tx_swbd[start].last_in_frame = i;
-
-	return count;
-
-dma_err:
-	dev_err(tx_ring->dev, "DMA map error");
-
-	do {
-		tx_swbd = &tx_ring->tx_swbd[i];
-		enetc_unmap_tx_buff(tx_ring, tx_swbd);
-		if (i == 0)
-			i = tx_ring->bd_count;
-		i--;
-	} while (count--);
-
-	return 0;
 }
 
 static bool enetc_tx_csum(struct sk_buff *skb, struct enetc_tx_bd *txbd)
@@ -195,34 +132,52 @@ static bool enetc_tx_csum(struct sk_buff *skb, struct enetc_tx_bd *txbd)
 	return true;
 }
 
-static void enetc_update_txbdr(struct enetc_bdr *tx_ring, struct sk_buff *skb,
-			       int count)
+static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb)
 {
+	unsigned int nr_frags = skb_shinfo(skb)->nr_frags;
 	struct enetc_tx_swbd *tx_swbd;
+	struct skb_frag_struct *frag;
+	int len = skb_headlen(skb);
 	struct enetc_tx_bd *txbd;
+	int i, start, count = 0;
+	unsigned int f;
+	dma_addr_t dma;
 	bool do_csum;
 	u8 flags = 0;
-	int i;
 
 	i = tx_ring->next_to_use;
+	start = tx_ring->next_to_use;
+
+	dma = dma_map_single(tx_ring->dev, skb->data, len, DMA_TO_DEVICE);
+	if (unlikely(dma_mapping_error(tx_ring->dev, dma)))
+		goto dma_err;
+
 	txbd = ENETC_TXBD(*tx_ring, i);
+	txbd->addr = cpu_to_le64(dma);
+	txbd->buf_len = cpu_to_le16(len);
+
 	tx_swbd = &tx_ring->tx_swbd[i];
+	tx_swbd->dma = dma;
+	tx_swbd->len = len;
+	tx_swbd->is_dma_page = 0;
+	count++;
 
 	do_csum = enetc_tx_csum(skb, txbd);
-
 	if (do_csum)
 		flags |= ENETC_TXBD_FLAGS_CSUM | ENETC_TXBD_FLAGS_L4CS;
 
 	/* first BD needs frm_len set */
 	txbd->frm_len = cpu_to_le16(skb->len);
+	/* last BD needs 'F' bit set */
+	txbd->flags = nr_frags ? flags : flags | ENETC_TXBD_FLAGS_F;
 
-	while (count--) {
-		txbd->addr = cpu_to_le64(tx_swbd->dma);
-		txbd->buf_len = cpu_to_le16(tx_swbd->len);
-
-		/* last BD needs 'F' bit set */
-		txbd->flags = count ? flags : flags | ENETC_TXBD_FLAGS_F;
-		flags = 0;
+	frag = &skb_shinfo(skb)->frags[0];
+	for (f = 0; f < nr_frags; f++, frag++) {
+		len = skb_frag_size(frag);
+		dma = skb_frag_dma_map(tx_ring->dev, frag, 0, len,
+				       DMA_TO_DEVICE);
+		if (dma_mapping_error(tx_ring->dev, dma))
+			goto dma_err;
 
 		tx_swbd++;
 		txbd++;
@@ -232,11 +187,43 @@ static void enetc_update_txbdr(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 			tx_swbd = tx_ring->tx_swbd;
 			txbd = ENETC_TXBD(*tx_ring, 0);
 		}
+
+		txbd->addr = cpu_to_le64(dma);
+		txbd->buf_len = cpu_to_le16(len);
+
+		tx_swbd->dma = dma;
+		tx_swbd->len = len;
+		tx_swbd->is_dma_page = 1;
+		count++;
 	}
 
+	if (nr_frags)
+		/* last BD needs 'F' bit set */
+		txbd->flags = ENETC_TXBD_FLAGS_F;
+
+	tx_ring->tx_swbd[i].skb = skb;
+	tx_ring->tx_swbd[start].last_in_frame = i;
+
+	enetc_bdr_idx_inc(tx_ring, &i);
 	tx_ring->next_to_use = i;
+
 	/* let H/W know BD ring has been updated */
 	enetc_wr_reg(tx_ring->tcir, i); /* includes wmb() */
+
+	return count;
+
+dma_err:
+	dev_err(tx_ring->dev, "DMA map error");
+
+	do {
+		tx_swbd = &tx_ring->tx_swbd[i];
+		enetc_unmap_tx_buff(tx_ring, tx_swbd);
+		if (i == 0)
+			i = tx_ring->bd_count;
+		i--;
+	} while (count--);
+
+	return 0;
 }
 
 static int enetc_poll(struct napi_struct *napi, int budget)

@@ -231,22 +231,33 @@ struct enetc_hw {
 				enetc_bdr_wr(hw, RX, n, off, val)
 
 /* Buffer Descriptors (BD) */
-struct enetc_tx_bd {
-	__le64 addr;
-	__le16 buf_len;
-	__le16 frm_len;
-	union {
-		struct {
-			__le16 l3_csoff;
-			u8 l4_csoff;
-			u8 flags;
-		}; /* default layout */
+union enetc_tx_bd {
+	struct {
+		__le64 addr;
+		__le16 buf_len;
+		__le16 frm_len;
+		union {
+			struct {
+				__le16 l3_csoff;
+				u8 l4_csoff;
+				u8 flags;
+			}; /* default layout */
+		};
 	};
+	struct {
+		__le32 ts;
+		__le16 tpid;
+		__le16 vid;
+		u8 reserved[6];
+		u8 e_flags;
+		u8 flags;
+	} ext; /* Tx BD extension */
 };
 
 #define ENETC_TXBD_FLAGS_L4CS	BIT(0)
 #define ENETC_TXBD_FLAGS_CSUM	BIT(3)
 #define ENETC_TXBD_FLAGS_TSTMP	BIT(4)
+#define ENETC_TXBD_FLAGS_EX	BIT(6)
 #define ENETC_TXBD_FLAGS_F	BIT(7)
 
 /* L3 csum flags */

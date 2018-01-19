@@ -126,7 +126,7 @@ struct enetc_cbdr {
 	dma_addr_t bd_dma_base;
 };
 
-#define ENETC_TXBD(BDR, i) (&(((struct enetc_tx_bd *)((BDR).bd_base))[i]))
+#define ENETC_TXBD(BDR, i) (&(((union enetc_tx_bd *)((BDR).bd_base))[i]))
 #define ENETC_RXBD(BDR, i) (&(((union enetc_rx_bd *)((BDR).bd_base))[i]))
 
 #define ENETC_MADDR_HASH_TBL_SZ	64

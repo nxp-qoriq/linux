@@ -63,7 +63,8 @@ static irqreturn_t enetc_msix(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-#define ENETC_FREE_TXBD_NEEDED MAX_SKB_FRAGS
+/* max number of fragments + optional extension BD */
+#define ENETC_FREE_TXBD_NEEDED (MAX_SKB_FRAGS + 1)
 
 netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
 {
@@ -94,7 +95,7 @@ netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
 	return NETDEV_TX_OK;
 }
 
-static bool enetc_tx_csum(struct sk_buff *skb, struct enetc_tx_bd *txbd)
+static bool enetc_tx_csum(struct sk_buff *skb, union enetc_tx_bd *txbd)
 {
 	int l3_start, l3_hsize, l4_hsize;
 	u16 l3_flags, l4_flags;
@@ -138,11 +139,11 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb)
 	struct enetc_tx_swbd *tx_swbd;
 	struct skb_frag_struct *frag;
 	int len = skb_headlen(skb);
-	struct enetc_tx_bd *txbd;
+	union enetc_tx_bd *txbd;
 	int i, start, count = 0;
+	bool do_vlan, do_ts;
 	unsigned int f;
 	dma_addr_t dma;
-	bool do_csum;
 	u8 flags = 0;
 
 	i = tx_ring->next_to_use;
@@ -162,14 +163,48 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb)
 	tx_swbd->is_dma_page = 0;
 	count++;
 
-	do_csum = enetc_tx_csum(skb, txbd);
-	if (do_csum)
+	do_vlan = skb_vlan_tag_present(skb);
+	do_ts = skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP;
+
+	if (do_vlan || do_ts)
+		flags |= ENETC_TXBD_FLAGS_EX;
+
+	if (enetc_tx_csum(skb, txbd))
 		flags |= ENETC_TXBD_FLAGS_CSUM | ENETC_TXBD_FLAGS_L4CS;
 
 	/* first BD needs frm_len set */
 	txbd->frm_len = cpu_to_le16(skb->len);
 	/* last BD needs 'F' bit set */
-	txbd->flags = nr_frags ? flags : flags | ENETC_TXBD_FLAGS_F;
+	if (!nr_frags)
+		flags |= ENETC_TXBD_FLAGS_F;
+	txbd->flags = flags;
+
+	if (flags & ENETC_TXBD_FLAGS_EX) {
+		/* add extension BD for VLAN and/or timestamping */
+		tx_swbd++;
+		txbd++;
+		i++;
+		if (unlikely(i == tx_ring->bd_count)) {
+			i = 0;
+			tx_swbd = tx_ring->tx_swbd;
+			txbd = ENETC_TXBD(*tx_ring, 0);
+		}
+
+		if (do_vlan) {
+			txbd->ext.vid = cpu_to_le16(skb_vlan_tag_get(skb));
+			txbd->ext.tpid = 0; /* < C-TAG */
+			txbd->ext.e_flags |= 1; /* < do VLAN */
+		}
+
+		if (do_ts) {
+			// TODO: Tx timestamp offload h/w settings
+			skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
+		}
+
+		/* set 'F' if last */
+		txbd->ext.flags = flags & ENETC_TXBD_FLAGS_F;
+		count++;
+	}
 
 	frag = &skb_shinfo(skb)->frags[0];
 	for (f = 0; f < nr_frags; f++, frag++) {
@@ -641,7 +676,7 @@ static int enetc_alloc_txbdr(struct enetc_bdr *txr)
 	if (!txr->tx_swbd)
 		return -ENOMEM;
 
-	size = txr->bd_count * sizeof(struct enetc_tx_bd);
+	size = txr->bd_count * sizeof(union enetc_tx_bd);
 	txr->bd_base = dma_zalloc_coherent(txr->dev, size, &txr->bd_dma_base,
 					   GFP_KERNEL);
 	if (!txr->bd_base) {
@@ -659,7 +694,7 @@ static void enetc_free_txbdr(struct enetc_bdr *txr)
 {
 	int size;
 
-	size = txr->bd_count * sizeof(struct enetc_tx_bd);
+	size = txr->bd_count * sizeof(union enetc_tx_bd);
 
 	dma_free_coherent(txr->dev, size, txr->bd_base, txr->bd_dma_base);
 	txr->bd_base = NULL;

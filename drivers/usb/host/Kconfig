@@ -164,7 +164,7 @@ config XPS_USB_HCD_XILINX
 		devices only.
 
 config USB_EHCI_FSL
-	tristate "Support for Freescale PPC on-chip EHCI USB controller"
+	tristate "Support for Freescale QorIQ(ARM/PPC) on-chip EHCI USB controller"
 	depends on USB_EHCI_HCD
 	select USB_EHCI_ROOT_HUB_TT
 	---help---

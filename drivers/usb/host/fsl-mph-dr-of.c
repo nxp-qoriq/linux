@@ -98,8 +98,8 @@ static struct platform_device *fsl_usb2_device_register(
 
 	pdev->dev.coherent_dma_mask = ofdev->dev.coherent_dma_mask;
 
-	if (!pdev->dev.dma_mask)
-		pdev->dev.dma_mask = &ofdev->dev.coherent_dma_mask;
+	if (!pdev->dev.dma_mask && ofdev->dev.of_node)
+		of_dma_configure(&pdev->dev, ofdev->dev.of_node);
 	else
 		dma_set_mask(&pdev->dev, DMA_BIT_MASK(32));
 

@@ -251,7 +251,7 @@ static int dpaa2_eth_xdp_xmit(struct dpaa2_eth_priv *priv,
 	dpaa2_fd_set_frc(&tx_fd, frc | DPAA2_FD_FRC_FAEADV);
 
 	ctrl = DPAA2_FAEAD_A4V | DPAA2_FAEAD_A2V | DPAA2_FAEAD_EBDDV;
-	faead = dpaa2_get_faead(buf_start);
+	faead = dpaa2_eth_get_faead(buf_start);
 	faead->ctrl = cpu_to_le32(ctrl);
 	faead->conf_fqid = 0;
 
@@ -277,6 +277,21 @@ static int dpaa2_eth_xdp_xmit(struct dpaa2_eth_priv *priv,
 	return err;
 }
 
+static void free_bufs(struct dpaa2_eth_priv *priv, u64 *buf_array, int count)
+{
+	struct device *dev = priv->net_dev->dev.parent;
+	void *vaddr;
+	int i;
+
+	for (i = 0; i < count; i++) {
+		/* Same logic as on regular Rx path */
+		vaddr = dpaa2_eth_iova_to_virt(priv->iommu_domain, buf_array[i]);
+		dma_unmap_single(dev, buf_array[i], DPAA2_ETH_RX_BUF_SIZE,
+				 DMA_BIDIRECTIONAL);
+		put_page(virt_to_head_page(vaddr));
+	}
+}
+
 static void release_fd_buf(struct dpaa2_eth_priv *priv,
 			   struct dpaa2_eth_channel *ch,
 			   dma_addr_t addr)
@@ -298,21 +313,6 @@ static void release_fd_buf(struct dpaa2_eth_priv *priv,
 		free_bufs(priv, ch->rel_buf_array, ch->rel_buf_cnt);
 
 	ch->rel_buf_cnt = 0;
-}
-
-static void free_bufs(struct dpaa2_eth_priv *priv, u64 *buf_array, int count)
-{
-	struct device *dev = priv->net_dev->dev.parent;
-	void *vaddr;
-	int i;
-
-	for (i = 0; i < count; i++) {
-		/* Same logic as on regular Rx path */
-		vaddr = dpaa2_eth_iova_to_virt(priv->iommu_domain, buf_array[i]);
-		dma_unmap_single(dev, buf_array[i], DPAA2_ETH_RX_BUF_SIZE,
-				 DMA_BIDIRECTIONAL);
-		put_page(virt_to_head_page(vaddr));
-	}
 }
 
 /* Main Rx frame processing routine */

@@ -40,7 +40,7 @@
 static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb);
 static void enetc_unmap_tx_buff(struct enetc_bdr *tx_ring,
 				struct enetc_tx_swbd *tx_swbd);
-static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring);
+static int enetc_clean_tx_ring(struct enetc_bdr *tx_ring);
 
 static struct sk_buff *enetc_map_rx_buff_to_skb(struct enetc_bdr *rx_ring,
 						int i, u16 size);
@@ -237,7 +237,6 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb)
 		txbd->flags = ENETC_TXBD_FLAGS_F;
 
 	tx_ring->tx_swbd[i].skb = skb;
-	tx_ring->tx_swbd[start].last_in_frame = i;
 
 	enetc_bdr_idx_inc(tx_ring, &i);
 	tx_ring->next_to_use = i;
@@ -312,38 +311,36 @@ static int enetc_bd_ready_count(struct enetc_bdr *tx_ring, int ci)
 	return pi >= ci ? pi - ci : tx_ring->bd_count - ci + pi;
 }
 
-static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
+static int enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
 {
 	struct net_device *ndev = tx_ring->ndev;
 	int tx_frm_cnt = 0, tx_byte_cnt = 0;
 	struct enetc_tx_swbd *tx_swbd;
-	bool frame_cleaned = false;
-	int i, last, bds_to_clean;
+	int i, bds_to_clean;
 
 	i = tx_ring->next_to_clean;
 	tx_swbd = &tx_ring->tx_swbd[i];
 	bds_to_clean = enetc_bd_ready_count(tx_ring, i);
 
 	while (bds_to_clean) {
-		/* ready Tx BDs will always make up an exact # of frames */
-		last = tx_swbd->last_in_frame;
-		do {
-			enetc_unmap_tx_buff(tx_ring, tx_swbd);
-			tx_byte_cnt += tx_swbd->len;
-			frame_cleaned = (i == last);
+		bool is_eof = !!tx_swbd->skb;
 
-			bds_to_clean--;
-			tx_swbd++;
-			i++;
-			if (unlikely(i == tx_ring->bd_count)) {
-				i = 0;
-				tx_swbd = tx_ring->tx_swbd;
-			}
-		} while (!frame_cleaned);
+		enetc_unmap_tx_buff(tx_ring, tx_swbd);
+		tx_byte_cnt += tx_swbd->len;
 
-		enetc_wr_reg(tx_ring->idr, BIT(tx_ring->index));
+		bds_to_clean--;
+		tx_swbd++;
+		i++;
+		if (unlikely(i == tx_ring->bd_count)) {
+			i = 0;
+			tx_swbd = tx_ring->tx_swbd;
+		}
 
-		tx_frm_cnt++;
+		if (is_eof) {
+			tx_frm_cnt++;
+			/* re-arm interrupt source */
+			enetc_wr_reg(tx_ring->idr, BIT(tx_ring->index));
+		}
 
 		if (unlikely(!bds_to_clean))
 			bds_to_clean = enetc_bd_ready_count(tx_ring, i);
@@ -353,13 +350,13 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
 	tx_ring->stats.packets += tx_frm_cnt;
 	tx_ring->stats.bytes += tx_byte_cnt;
 
-	if (unlikely(frame_cleaned && netif_carrier_ok(ndev) &&
+	if (unlikely(tx_frm_cnt && netif_carrier_ok(ndev) &&
 		     __netif_subqueue_stopped(ndev, tx_ring->index) &&
 		     (enetc_bd_unused(tx_ring) >= ENETC_FREE_TXBD_NEEDED))) {
 		netif_wake_subqueue(ndev, tx_ring->index);
 	}
 
-	return frame_cleaned;
+	return tx_frm_cnt;
 }
 
 static bool enetc_new_page(struct enetc_bdr *rx_ring,

@@ -51,7 +51,6 @@ struct enetc_tx_swbd {
 	struct sk_buff *skb;
 	dma_addr_t dma;
 	u16 len;
-	u16 last_in_frame;
 	u16 is_dma_page;
 };
 

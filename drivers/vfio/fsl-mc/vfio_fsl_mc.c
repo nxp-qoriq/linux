@@ -289,8 +289,9 @@ static ssize_t vfio_fsl_mc_read(void *device_data, char __user *buf,
 	uint64_t data[8];
 	int i;
 
-	/* Read ioctl supported only for DPRC device */
-	if (strcmp(vdev->mc_dev->obj_desc.type, "dprc"))
+	/* Read ioctl supported only for DPRC and DPMCP device */
+	if (strcmp(vdev->mc_dev->obj_desc.type, "dprc") &&
+	    strcmp(vdev->mc_dev->obj_desc.type, "dpmcp"))
 		return -EINVAL;
 
 	if (index >= vdev->num_regions)
@@ -391,8 +392,9 @@ static ssize_t vfio_fsl_mc_write(void *device_data, const char __user *buf,
 	uint64_t data[8];
 	int ret;
 
-	/* Write ioctl supported only for DPRC device */
-	if (strcmp(vdev->mc_dev->obj_desc.type, "dprc"))
+	/* Write ioctl supported only for DPRC and DPMCP device */
+	if (strcmp(vdev->mc_dev->obj_desc.type, "dprc") &&
+	    strcmp(vdev->mc_dev->obj_desc.type, "dpmcp"))
 		return -EINVAL;
 
 	if (index >= vdev->num_regions)

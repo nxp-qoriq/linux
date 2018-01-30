@@ -169,13 +169,7 @@ static int pfe_platform_probe(struct platform_device *pdev)
 
 	pfe->ddr_phys_baseaddr = res.start;
 	pfe->ddr_size = resource_size(&res);
-
 	pfe->ddr_baseaddr = phys_to_virt(res.start);
-	if (!pfe->ddr_baseaddr) {
-		pr_err("ioremap() ddr failed\n");
-		rc = -ENOMEM;
-		goto err_ddr;
-	}
 
 	pfe->scfg =
 		syscon_regmap_lookup_by_phandle(pdev->dev.of_node,
@@ -257,8 +251,6 @@ err_hif_irq:
 	iounmap(pfe->cbus_baseaddr);
 
 err_axi:
-	iounmap(pfe->ddr_baseaddr);
-
 err_ddr:
 	platform_set_drvdata(pdev, NULL);
 
@@ -281,7 +273,6 @@ static int pfe_platform_remove(struct platform_device *pdev)
 	rc = pfe_remove(pfe);
 
 	iounmap(pfe->cbus_baseaddr);
-	iounmap(pfe->ddr_baseaddr);
 
 	platform_set_drvdata(pdev, NULL);
 

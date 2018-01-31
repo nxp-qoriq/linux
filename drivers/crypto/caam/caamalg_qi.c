@@ -53,6 +53,7 @@ struct caam_ctx {
 	u32 sh_desc_givenc[DESC_MAX_USED_LEN];
 	u8 key[CAAM_MAX_KEY_SIZE];
 	dma_addr_t key_dma;
+	enum dma_data_direction dir;
 	struct alginfo adata;
 	struct alginfo cdata;
 	unsigned int authsize;
@@ -231,7 +232,7 @@ static int aead_setkey(struct crypto_aead *aead, const u8 *key,
 		       keys.enckeylen);
 		dma_sync_single_for_device(jrdev, ctx->key_dma,
 					   ctx->adata.keylen_pad +
-					   keys.enckeylen, DMA_TO_DEVICE);
+					   keys.enckeylen, ctx->dir);
 		goto skip_split_key;
 	}
 
@@ -244,7 +245,7 @@ static int aead_setkey(struct crypto_aead *aead, const u8 *key,
 	/* postpend encryption key to auth split key */
 	memcpy(ctx->key + ctx->adata.keylen_pad, keys.enckey, keys.enckeylen);
 	dma_sync_single_for_device(jrdev, ctx->key_dma, ctx->adata.keylen_pad +
-				   keys.enckeylen, DMA_TO_DEVICE);
+				   keys.enckeylen, ctx->dir);
 #ifdef DEBUG
 	print_hex_dump(KERN_ERR, "ctx.key@" __stringify(__LINE__)": ",
 		       DUMP_PREFIX_ADDRESS, 16, 4, ctx->key,
@@ -387,7 +388,7 @@ static int tls_setkey(struct crypto_aead *tls, const u8 *key,
 		       keys.enckeylen);
 		dma_sync_single_for_device(jrdev, ctx->key_dma,
 					   ctx->adata.keylen_pad +
-					   keys.enckeylen, DMA_TO_DEVICE);
+					   keys.enckeylen, ctx->dir);
 		goto skip_split_key;
 	}
 
@@ -400,7 +401,7 @@ static int tls_setkey(struct crypto_aead *tls, const u8 *key,
 	/* postpend encryption key to auth split key */
 	memcpy(ctx->key + ctx->adata.keylen_pad, keys.enckey, keys.enckeylen);
 	dma_sync_single_for_device(jrdev, ctx->key_dma, ctx->adata.keylen_pad +
-				   keys.enckeylen, DMA_TO_DEVICE);
+				   keys.enckeylen, ctx->dir);
 
 #ifdef DEBUG
 	dev_err(jrdev, "split keylen %d split keylen padded %d\n",
@@ -2981,7 +2982,8 @@ struct caam_crypto_alg {
 	struct caam_alg_entry caam;
 };
 
-static int caam_init_common(struct caam_ctx *ctx, struct caam_alg_entry *caam)
+static int caam_init_common(struct caam_ctx *ctx, struct caam_alg_entry *caam,
+			   bool uses_dkp)
 {
 	struct caam_drv_private *priv;
 	/* Digest sizes for MD5, SHA1, SHA-224, SHA-256, SHA-384, SHA-512 */
@@ -3005,8 +3007,14 @@ static int caam_init_common(struct caam_ctx *ctx, struct caam_alg_entry *caam)
 		return PTR_ERR(ctx->jrdev);
 	}
 
+	priv = dev_get_drvdata(ctx->jrdev->parent);
+	if (priv->era >= 6 && uses_dkp)
+		ctx->dir = DMA_BIDIRECTIONAL;
+	else
+		ctx->dir = DMA_TO_DEVICE;
+
 	ctx->key_dma = dma_map_single(ctx->jrdev, ctx->key, sizeof(ctx->key),
-				      DMA_TO_DEVICE);
+				      ctx->dir);
 	if (dma_mapping_error(ctx->jrdev, ctx->key_dma)) {
 		dev_err(ctx->jrdev, "unable to map key\n");
 		caam_jr_free(ctx->jrdev);
@@ -3033,7 +3041,6 @@ static int caam_init_common(struct caam_ctx *ctx, struct caam_alg_entry *caam)
 		ctx->authsize = 0;
 	}
 
-	priv = dev_get_drvdata(ctx->jrdev->parent);
 	ctx->qidev = priv->qidev;
 
 	spin_lock_init(&ctx->lock);
@@ -3051,7 +3058,7 @@ static int caam_cra_init(struct crypto_tfm *tfm)
 							crypto_alg);
 	struct caam_ctx *ctx = crypto_tfm_ctx(tfm);
 
-	return caam_init_common(ctx, &caam_alg->caam);
+	return caam_init_common(ctx, &caam_alg->caam, false);
 }
 
 static int caam_aead_init(struct crypto_aead *tfm)
@@ -3061,7 +3068,9 @@ static int caam_aead_init(struct crypto_aead *tfm)
 						      aead);
 	struct caam_ctx *ctx = crypto_aead_ctx(tfm);
 
-	return caam_init_common(ctx, &caam_alg->caam);
+	return caam_init_common(ctx, &caam_alg->caam,
+				(alg->setkey == aead_setkey) ||
+				(alg->setkey == tls_setkey));
 }
 
 static void caam_exit_common(struct caam_ctx *ctx)
@@ -3070,8 +3079,7 @@ static void caam_exit_common(struct caam_ctx *ctx)
 	caam_drv_ctx_rel(ctx->drv_ctx[DECRYPT]);
 	caam_drv_ctx_rel(ctx->drv_ctx[GIVENCRYPT]);
 
-	dma_unmap_single(ctx->jrdev, ctx->key_dma, sizeof(ctx->key),
-			 DMA_TO_DEVICE);
+	dma_unmap_single(ctx->jrdev, ctx->key_dma, sizeof(ctx->key), ctx->dir);
 
 	caam_jr_free(ctx->jrdev);
 }

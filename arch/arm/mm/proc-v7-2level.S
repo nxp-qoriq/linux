@@ -40,7 +40,16 @@
  *	Note that we always need to flush BTAC/BTB if IBE is set
  *	even on Cortex-A8 revisions not affected by 430973.
  *	If IBE is not set, the flush BTAC/BTB won't do anything.
+ *
+ *	Cortex-A15 requires ACTLR[0] to be set from secure in order
+ *	for the icache invalidation to also invalidate the BTB.
  */
+ENTRY(cpu_v7_icinv_switch_mm)
+#ifdef CONFIG_MMU
+	mcr	p15, 0, r0, c7, c5, 0		@ ICIALLU
+	/* Fall through to switch_mm... */
+#endif
+
 ENTRY(cpu_v7_btbinv_switch_mm)
 #ifdef CONFIG_MMU
 	mov	r2, #0
@@ -67,6 +76,7 @@ ENTRY(cpu_v7_switch_mm)
 	bx	lr
 ENDPROC(cpu_v7_switch_mm)
 ENDPROC(cpu_v7_btbinv_switch_mm)
+ENDPROC(cpu_v7_icinv_switch_mm)
 
 /*
  *	cpu_v7_set_pte_ext(ptep, pte)

@@ -31,6 +31,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include "../../fsl-mc/include/mc.h"
+#include "../../fsl-mc/include/mc-sys.h"
 #include "dpsw.h"
 #include "dpsw-cmd.h"
 

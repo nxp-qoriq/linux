@@ -429,12 +429,15 @@ struct sk_filter {
 
 struct bpf_skb_data_end {
 	struct qdisc_skb_cb qdisc_cb;
+	void *data_meta;
 	void *data_end;
 };
 
 struct xdp_buff {
 	void *data;
 	void *data_end;
+	void *data_meta;
+	void *data_hard_start;
 };
 
 /* compute the linear packet data range [data, data_end) which

@@ -720,6 +720,8 @@
 			snps,dis_rxdet_inp3_quirk;
 			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
 			snps,dma-snooping;
+			usb3-lpm-capable;
+			snps,dis-u1u2-when-u3-quirk;
 		};
 
 		usb1: usb3@3000000 {
@@ -732,6 +734,8 @@
 			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
 			snps,dma-snooping;
 			configure-gfladj;
+			usb3-lpm-capable;
+			snps,dis-u1u2-when-u3-quirk;
 		};
 
 		usb2: usb3@3100000 {
@@ -744,6 +748,8 @@
 			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
 			snps,dma-snooping;
 			configure-gfladj;
+			usb3-lpm-capable;
+			snps,dis-u1u2-when-u3-quirk;
 		};
 
 		sata: sata@3200000 {

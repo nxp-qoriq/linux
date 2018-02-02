@@ -646,6 +646,8 @@
 			configure-gfladj;
 			dma-coherent;
 			snps,dis_rxdet_inp3_quirk;
+			usb3-lpm-capable;
+			snps,dis-u1u2-when-u3-quirk;
 		};
 
 		pcie@3400000 {

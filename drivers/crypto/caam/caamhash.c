@@ -100,6 +100,7 @@ struct caam_hash_ctx {
 	dma_addr_t sh_desc_update_first_dma;
 	dma_addr_t sh_desc_fin_dma;
 	dma_addr_t sh_desc_digest_dma;
+	enum dma_data_direction dir;
 	struct device *jrdev;
 	u8 key[CAAM_MAX_HASH_KEY_SIZE];
 	int ctx_len;
@@ -242,7 +243,7 @@ static int ahash_set_sh_desc(struct crypto_ahash *ahash)
 	cnstr_shdsc_ahash(desc, &ctx->adata, OP_ALG_AS_UPDATE, ctx->ctx_len,
 			  ctx->ctx_len, true, ctrlpriv->era);
 	dma_sync_single_for_device(jrdev, ctx->sh_desc_update_dma,
-				   desc_bytes(desc), DMA_TO_DEVICE);
+				   desc_bytes(desc), ctx->dir);
 #ifdef DEBUG
 	print_hex_dump(KERN_ERR,
 		       "ahash update shdesc@"__stringify(__LINE__)": ",
@@ -254,7 +255,7 @@ static int ahash_set_sh_desc(struct crypto_ahash *ahash)
 	cnstr_shdsc_ahash(desc, &ctx->adata, OP_ALG_AS_INIT, ctx->ctx_len,
 			  ctx->ctx_len, false, ctrlpriv->era);
 	dma_sync_single_for_device(jrdev, ctx->sh_desc_update_first_dma,
-				   desc_bytes(desc), DMA_TO_DEVICE);
+				   desc_bytes(desc), ctx->dir);
 #ifdef DEBUG
 	print_hex_dump(KERN_ERR,
 		       "ahash update first shdesc@"__stringify(__LINE__)": ",
@@ -266,7 +267,7 @@ static int ahash_set_sh_desc(struct crypto_ahash *ahash)
 	cnstr_shdsc_ahash(desc, &ctx->adata, OP_ALG_AS_FINALIZE, digestsize,
 			  ctx->ctx_len, true, ctrlpriv->era);
 	dma_sync_single_for_device(jrdev, ctx->sh_desc_fin_dma,
-				   desc_bytes(desc), DMA_TO_DEVICE);
+				   desc_bytes(desc), ctx->dir);
 #ifdef DEBUG
 	print_hex_dump(KERN_ERR, "ahash final shdesc@"__stringify(__LINE__)": ",
 		       DUMP_PREFIX_ADDRESS, 16, 4, desc,
@@ -278,7 +279,7 @@ static int ahash_set_sh_desc(struct crypto_ahash *ahash)
 	cnstr_shdsc_ahash(desc, &ctx->adata, OP_ALG_AS_INITFINAL, digestsize,
 			  ctx->ctx_len, false, ctrlpriv->era);
 	dma_sync_single_for_device(jrdev, ctx->sh_desc_digest_dma,
-				   desc_bytes(desc), DMA_TO_DEVICE);
+				   desc_bytes(desc), ctx->dir);
 #ifdef DEBUG
 	print_hex_dump(KERN_ERR,
 		       "ahash digest shdesc@"__stringify(__LINE__)": ",
@@ -1676,6 +1677,7 @@ static int caam_hash_cra_init(struct crypto_tfm *tfm)
 					 HASH_MSG_LEN + 64,
 					 HASH_MSG_LEN + SHA512_DIGEST_SIZE };
 	dma_addr_t dma_addr;
+	struct caam_drv_private *priv;
 
 	/*
 	 * Get a Job ring from Job Ring driver to ensure in-order
@@ -1687,10 +1689,13 @@ static int caam_hash_cra_init(struct crypto_tfm *tfm)
 		return PTR_ERR(ctx->jrdev);
 	}
 
+	priv = dev_get_drvdata(ctx->jrdev->parent);
+	ctx->dir = priv->era >= 6 ? DMA_BIDIRECTIONAL : DMA_TO_DEVICE;
+
 	dma_addr = dma_map_single_attrs(ctx->jrdev, ctx->sh_desc_update,
 					offsetof(struct caam_hash_ctx,
 						 sh_desc_update_dma),
-					DMA_TO_DEVICE, DMA_ATTR_SKIP_CPU_SYNC);
+					ctx->dir, DMA_ATTR_SKIP_CPU_SYNC);
 	if (dma_mapping_error(ctx->jrdev, dma_addr)) {
 		dev_err(ctx->jrdev, "unable to map shared descriptors\n");
 		caam_jr_free(ctx->jrdev);
@@ -1725,7 +1730,7 @@ static void caam_hash_cra_exit(struct crypto_tfm *tfm)
 	dma_unmap_single_attrs(ctx->jrdev, ctx->sh_desc_update_dma,
 			       offsetof(struct caam_hash_ctx,
 					sh_desc_update_dma),
-			       DMA_TO_DEVICE, DMA_ATTR_SKIP_CPU_SYNC);
+			       ctx->dir, DMA_ATTR_SKIP_CPU_SYNC);
 	caam_jr_free(ctx->jrdev);
 }
 

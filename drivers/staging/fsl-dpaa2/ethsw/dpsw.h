@@ -1,15 +1,16 @@
-/* Copyright 2013-2015 Freescale Semiconductor Inc.
+/* Copyright 2013-2016 Freescale Semiconductor Inc.
+ * Copyright 2017 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * * Redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer.
- * * Redistributions in binary form must reproduce the above copyright
- * notice, this list of conditions and the following disclaimer in the
- * documentation and/or other materials provided with the distribution.
- * * Neither the name of the above-listed copyright holders nor the
- * names of any contributors may be used to endorse or promote products
- * derived from this software without specific prior written permission.
+ *     * Redistributions of source code must retain the above copyright
+ *	 notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *	 notice, this list of conditions and the following disclaimer in the
+ *	 documentation and/or other materials provided with the distribution.
+ *     * Neither the name of the above-listed copyright holders nor the
+ *	 names of any contributors may be used to endorse or promote products
+ *	 derived from this software without specific prior written permission.
  *
  *
  * ALTERNATIVELY, this software may be distributed under the terms of the
@@ -133,17 +134,6 @@ struct dpsw_cfg {
 	} adv;
 };
 
-int dpsw_create(struct fsl_mc_io *mc_io,
-		u16 dprc_token,
-		u32 cmd_flags,
-		const struct dpsw_cfg *cfg,
-		u32 *obj_id);
-
-int dpsw_destroy(struct fsl_mc_io *mc_io,
-		 u16 dprc_token,
-		 u32 cmd_flags,
-		 u32 object_id);
-
 int dpsw_enable(struct fsl_mc_io *mc_io,
 		u32 cmd_flags,
 		u16 token);
@@ -151,11 +141,6 @@ int dpsw_enable(struct fsl_mc_io *mc_io,
 int dpsw_disable(struct fsl_mc_io *mc_io,
 		 u32 cmd_flags,
 		 u16 token);
-
-int dpsw_is_enabled(struct fsl_mc_io *mc_io,
-		    u32 cmd_flags,
-		    u16 token,
-		    int *en);
 
 int dpsw_reset(struct fsl_mc_io *mc_io,
 	       u32 cmd_flags,
@@ -185,42 +170,17 @@ struct dpsw_irq_cfg {
 	     int irq_num;
 };
 
-int dpsw_set_irq(struct fsl_mc_io *mc_io,
-		 u32 cmd_flags,
-		 u16 token,
-		 u8 irq_index,
-		 struct dpsw_irq_cfg *irq_cfg);
-
-int dpsw_get_irq(struct fsl_mc_io *mc_io,
-		 u32 cmd_flags,
-		 u16 token,
-		 u8 irq_index,
-		 int *type,
-		 struct dpsw_irq_cfg *irq_cfg);
-
 int dpsw_set_irq_enable(struct fsl_mc_io *mc_io,
 			u32 cmd_flags,
 			u16 token,
 			u8 irq_index,
 			u8 en);
 
-int dpsw_get_irq_enable(struct fsl_mc_io *mc_io,
-			u32 cmd_flags,
-			u16 token,
-			u8 irq_index,
-			u8 *en);
-
 int dpsw_set_irq_mask(struct fsl_mc_io *mc_io,
 		      u32 cmd_flags,
 		      u16 token,
 		      u8 irq_index,
 		      u32 mask);
-
-int dpsw_get_irq_mask(struct fsl_mc_io *mc_io,
-		      u32 cmd_flags,
-		      u16 token,
-		      u8 irq_index,
-		      u32 *mask);
 
 int dpsw_get_irq_status(struct fsl_mc_io *mc_io,
 			u32 cmd_flags,
@@ -274,11 +234,6 @@ int dpsw_get_attributes(struct fsl_mc_io *mc_io,
 			u16 token,
 			struct dpsw_attr *attr);
 
-int dpsw_set_reflection_if(struct fsl_mc_io *mc_io,
-			   u32 cmd_flags,
-			   u16 token,
-			   u16 if_id);
-
 /**
  * enum dpsw_action - Action selection for special/control frames
  * @DPSW_ACTION_DROP: Drop frame
@@ -330,7 +285,7 @@ int dpsw_if_set_link_cfg(struct fsl_mc_io *mc_io,
 struct dpsw_link_state {
 	u32 rate;
 	u64 options;
-	int up;
+	u8 up;
 };
 
 int dpsw_if_get_link_state(struct fsl_mc_io *mc_io,
@@ -343,22 +298,16 @@ int dpsw_if_set_flooding(struct fsl_mc_io *mc_io,
 			 u32 cmd_flags,
 			 u16 token,
 			 u16 if_id,
-			 int en);
+			 u8 en);
 
 int dpsw_if_set_broadcast(struct fsl_mc_io *mc_io,
 			  u32 cmd_flags,
 			  u16 token,
 			  u16 if_id,
-			  int en);
-
-int dpsw_if_set_multicast(struct fsl_mc_io *mc_io,
-			  u32 cmd_flags,
-			  u16 token,
-			  u16 if_id,
-			  int en);
+			  u8 en);
 
 /**
- * struct dpsw_tci_cfg - Tag Contorl Information (TCI) configuration
+ * struct dpsw_tci_cfg - Tag Control Information (TCI) configuration
  * @pcp: Priority Code Point (PCP): a 3-bit field which refers
  *		 to the IEEE 802.1p priority
  * @dei: Drop Eligible Indicator (DEI): a 1-bit field. May be used
@@ -382,12 +331,6 @@ int dpsw_if_set_tci(struct fsl_mc_io *mc_io,
 		    u16 if_id,
 		    const struct dpsw_tci_cfg *cfg);
 
-int dpsw_if_get_tci(struct fsl_mc_io *mc_io,
-		    u32 cmd_flags,
-		    u16 token,
-		    u16 if_id,
-		    struct dpsw_tci_cfg *cfg);
-
 /**
  * enum dpsw_stp_state - Spanning Tree Protocol (STP) states
  * @DPSW_STP_STATE_BLOCKING: Blocking state
@@ -397,10 +340,11 @@ int dpsw_if_get_tci(struct fsl_mc_io *mc_io,
  *
  */
 enum dpsw_stp_state {
-	DPSW_STP_STATE_BLOCKING = 0,
+	DPSW_STP_STATE_DISABLED = 0,
 	DPSW_STP_STATE_LISTENING = 1,
 	DPSW_STP_STATE_LEARNING = 2,
-	DPSW_STP_STATE_FORWARDING = 3
+	DPSW_STP_STATE_FORWARDING = 3,
+	DPSW_STP_STATE_BLOCKING = 0
 };
 
 /**
@@ -431,29 +375,6 @@ enum dpsw_accepted_frames {
 	DPSW_ADMIT_ALL = 1,
 	DPSW_ADMIT_ONLY_VLAN_TAGGED = 3
 };
-
-/**
- * struct dpsw_accepted_frames_cfg - Types of frames to accept configuration
- * @type: Defines ingress accepted frames
- * @unaccept_act: When a frame is not accepted, it may be discarded or
- *			redirected to control interface depending on this mode
- */
-struct dpsw_accepted_frames_cfg {
-	enum dpsw_accepted_frames type;
-	enum dpsw_action unaccept_act;
-};
-
-int dpsw_if_set_accepted_frames(struct fsl_mc_io *mc_io,
-				u32 cmd_flags,
-				u16 token,
-				u16 if_id,
-				const struct dpsw_accepted_frames_cfg *cfg);
-
-int dpsw_if_set_accept_all_vlan(struct fsl_mc_io *mc_io,
-				u32 cmd_flags,
-				u16 token,
-				u16 if_id,
-				int accept_all);
 
 /**
  * enum dpsw_counter  - Counters types
@@ -492,244 +413,6 @@ int dpsw_if_get_counter(struct fsl_mc_io *mc_io,
 			enum dpsw_counter type,
 			u64 *counter);
 
-int dpsw_if_set_counter(struct fsl_mc_io *mc_io,
-			u32 cmd_flags,
-			u16 token,
-			u16 if_id,
-			enum dpsw_counter type,
-			u64 counter);
-
-/**
- * Maximum number of TC
- */
-#define DPSW_MAX_TC             8
-
-/**
- * enum dpsw_priority_selector - User priority
- * @DPSW_UP_PCP: Priority Code Point (PCP): a 3-bit field which
- *				 refers to the IEEE 802.1p priority.
- * @DPSW_UP_DSCP: Differentiated services Code Point (DSCP): 6 bit
- *				field from IP header
- *
- */
-enum dpsw_priority_selector {
-	DPSW_UP_PCP = 0,
-	DPSW_UP_DSCP = 1
-};
-
-/**
- * enum dpsw_schedule_mode - Traffic classes scheduling
- * @DPSW_SCHED_STRICT_PRIORITY: schedule strict priority
- * @DPSW_SCHED_WEIGHTED: schedule based on token bucket created algorithm
- */
-enum dpsw_schedule_mode {
-	DPSW_SCHED_STRICT_PRIORITY,
-	DPSW_SCHED_WEIGHTED
-};
-
-/**
- * struct dpsw_tx_schedule_cfg - traffic class configuration
- * @mode: Strict or weight-based scheduling
- * @delta_bandwidth: weighted Bandwidth in range from 100 to 10000
- */
-struct dpsw_tx_schedule_cfg {
-	enum dpsw_schedule_mode mode;
-	u16 delta_bandwidth;
-};
-
-/**
- * struct dpsw_tx_selection_cfg - Mapping user priority into traffic
- *					class configuration
- * @priority_selector: Source for user priority regeneration
- * @tc_id: The Regenerated User priority that the incoming
- *				User Priority is mapped to for this interface
- * @tc_sched: Traffic classes configuration
- */
-struct dpsw_tx_selection_cfg {
-	enum dpsw_priority_selector priority_selector;
-	u8 tc_id[DPSW_MAX_PRIORITIES];
-	struct dpsw_tx_schedule_cfg tc_sched[DPSW_MAX_TC];
-};
-
-int dpsw_if_set_tx_selection(struct fsl_mc_io *mc_io,
-			     u32 cmd_flags,
-			     u16 token,
-			     u16 if_id,
-			     const struct dpsw_tx_selection_cfg *cfg);
-
-/**
- * enum dpsw_reflection_filter - Filter type for frames to reflect
- * @DPSW_REFLECTION_FILTER_INGRESS_ALL: Reflect all frames
- * @DPSW_REFLECTION_FILTER_INGRESS_VLAN: Reflect only frames belong to
- *			particular VLAN defined by vid parameter
- *
- */
-enum dpsw_reflection_filter {
-	DPSW_REFLECTION_FILTER_INGRESS_ALL = 0,
-	DPSW_REFLECTION_FILTER_INGRESS_VLAN = 1
-};
-
-/**
- * struct dpsw_reflection_cfg - Structure representing reflection information
- * @filter: Filter type for frames to reflect
- * @vlan_id: Vlan Id to reflect; valid only when filter type is
- *		DPSW_INGRESS_VLAN
- */
-struct dpsw_reflection_cfg {
-	enum dpsw_reflection_filter filter;
-	u16 vlan_id;
-};
-
-int dpsw_if_add_reflection(struct fsl_mc_io *mc_io,
-			   u32 cmd_flags,
-			   u16 token,
-			   u16 if_id,
-			   const struct dpsw_reflection_cfg *cfg);
-
-int dpsw_if_remove_reflection(struct fsl_mc_io *mc_io,
-			      u32 cmd_flags,
-			      u16 token,
-			      u16 if_id,
-			      const struct dpsw_reflection_cfg *cfg);
-
-/**
- * enum dpsw_metering_mode - Metering modes
- * @DPSW_METERING_MODE_NONE: metering disabled
- * @DPSW_METERING_MODE_RFC2698: RFC 2698
- * @DPSW_METERING_MODE_RFC4115: RFC 4115
- */
-enum dpsw_metering_mode {
-	DPSW_METERING_MODE_NONE = 0,
-	DPSW_METERING_MODE_RFC2698,
-	DPSW_METERING_MODE_RFC4115
-};
-
-/**
- * enum dpsw_metering_unit - Metering count
- * @DPSW_METERING_UNIT_BYTES: count bytes
- * @DPSW_METERING_UNIT_FRAMES: count frames
- */
-enum dpsw_metering_unit {
-	DPSW_METERING_UNIT_BYTES = 0,
-	DPSW_METERING_UNIT_FRAMES
-};
-
-/**
- * struct dpsw_metering_cfg - Metering configuration
- * @mode: metering modes
- * @units: Bytes or frame units
- * @cir: Committed information rate (CIR) in Kbits/s
- * @eir: Peak information rate (PIR) Kbit/s  rfc2698
- *	 Excess information rate (EIR) Kbit/s rfc4115
- * @cbs: Committed burst size (CBS) in bytes
- * @ebs: Peak burst size (PBS) in bytes for rfc2698
- *       Excess bust size (EBS) in bytes rfc4115
- *
- */
-struct dpsw_metering_cfg {
-	enum dpsw_metering_mode mode;
-	enum dpsw_metering_unit units;
-	u32 cir;
-	u32 eir;
-	u32 cbs;
-	u32 ebs;
-};
-
-int dpsw_if_set_flooding_metering(struct fsl_mc_io *mc_io,
-				  u32 cmd_flags,
-				  u16 token,
-				  u16 if_id,
-				  const struct dpsw_metering_cfg *cfg);
-
-int dpsw_if_set_metering(struct fsl_mc_io *mc_io,
-			 u32 cmd_flags,
-			 u16 token,
-			 u16 if_id,
-			 u8 tc_id,
-			 const struct dpsw_metering_cfg *cfg);
-
-/**
- * enum dpsw_early_drop_unit - DPSW early drop unit
- * @DPSW_EARLY_DROP_UNIT_BYTE: count bytes
- * @DPSW_EARLY_DROP_UNIT_FRAMES: count frames
- */
-enum dpsw_early_drop_unit {
-	DPSW_EARLY_DROP_UNIT_BYTE = 0,
-	DPSW_EARLY_DROP_UNIT_FRAMES
-};
-
-/**
- * enum dpsw_early_drop_mode - DPSW early drop mode
- * @DPSW_EARLY_DROP_MODE_NONE: early drop is disabled
- * @DPSW_EARLY_DROP_MODE_TAIL: early drop in taildrop mode
- * @DPSW_EARLY_DROP_MODE_WRED: early drop in WRED mode
- */
-enum dpsw_early_drop_mode {
-	DPSW_EARLY_DROP_MODE_NONE = 0,
-	DPSW_EARLY_DROP_MODE_TAIL,
-	DPSW_EARLY_DROP_MODE_WRED
-};
-
-/**
- * struct dpsw_wred_cfg - WRED configuration
- * @max_threshold: maximum threshold that packets may be discarded. Above this
- *	  threshold all packets are discarded; must be less than 2^39;
- *	  approximated to be expressed as (x+256)*2^(y-1) due to HW
- *	    implementation.
- * @min_threshold: minimum threshold that packets may be discarded at
- * @drop_probability: probability that a packet will be discarded (1-100,
- *	associated with the maximum threshold)
- */
-struct dpsw_wred_cfg {
-	u64 min_threshold;
-	u64 max_threshold;
-	u8 drop_probability;
-};
-
-/**
- * struct dpsw_early_drop_cfg - early-drop configuration
- * @drop_mode: drop mode
- * @units: count units
- * @yellow: WRED - 'yellow' configuration
- * @green: WRED - 'green' configuration
- * @tail_drop_threshold: tail drop threshold
- */
-struct dpsw_early_drop_cfg {
-	enum dpsw_early_drop_mode drop_mode;
-	enum dpsw_early_drop_unit units;
-	struct dpsw_wred_cfg yellow;
-	struct dpsw_wred_cfg green;
-	u32 tail_drop_threshold;
-};
-
-void dpsw_prepare_early_drop(const struct dpsw_early_drop_cfg *cfg,
-			     u8 *early_drop_buf);
-
-int dpsw_if_set_early_drop(struct fsl_mc_io *mc_io,
-			   u32 cmd_flags,
-			   u16 token,
-			   u16 if_id,
-			   u8 tc_id,
-			   u64 early_drop_iova);
-
-/**
- * struct dpsw_custom_tpid_cfg - Structure representing tag Protocol identifier
- * @tpid: An additional tag protocol identifier
- */
-struct dpsw_custom_tpid_cfg {
-	u16 tpid;
-};
-
-int dpsw_add_custom_tpid(struct fsl_mc_io *mc_io,
-			 u32 cmd_flags,
-			 u16 token,
-			 const struct dpsw_custom_tpid_cfg *cfg);
-
-int dpsw_remove_custom_tpid(struct fsl_mc_io *mc_io,
-			    u32 cmd_flags,
-			    u16 token,
-			    const struct dpsw_custom_tpid_cfg *cfg);
-
 int dpsw_if_enable(struct fsl_mc_io *mc_io,
 		   u32 cmd_flags,
 		   u16 token,
@@ -740,48 +423,11 @@ int dpsw_if_disable(struct fsl_mc_io *mc_io,
 		    u16 token,
 		    u16 if_id);
 
-/**
- * struct dpsw_if_attr - Structure representing DPSW interface attributes
- * @num_tcs: Number of traffic classes
- * @rate: Transmit rate in bits per second
- * @options: Interface configuration options (bitmap)
- * @enabled: Indicates if interface is enabled
- * @accept_all_vlan: The device discards/accepts incoming frames
- *		for VLANs that do not include this interface
- * @admit_untagged: When set to 'DPSW_ADMIT_ONLY_VLAN_TAGGED', the device
- *		discards untagged frames or priority-tagged frames received on
- *		this interface;
- *		When set to 'DPSW_ADMIT_ALL', untagged frames or priority-
- *		tagged frames received on this interface are accepted
- * @qdid: control frames transmit qdid
- */
-struct dpsw_if_attr {
-	u8 num_tcs;
-	u32 rate;
-	u32 options;
-	int enabled;
-	int accept_all_vlan;
-	enum dpsw_accepted_frames admit_untagged;
-	u16 qdid;
-};
-
-int dpsw_if_get_attributes(struct fsl_mc_io *mc_io,
-			   u32 cmd_flags,
-			   u16 token,
-			   u16 if_id,
-			   struct dpsw_if_attr *attr);
-
 int dpsw_if_set_max_frame_length(struct fsl_mc_io *mc_io,
 				 u32 cmd_flags,
 				 u16 token,
 				 u16 if_id,
 				 u16 frame_length);
-
-int dpsw_if_get_max_frame_length(struct fsl_mc_io *mc_io,
-				 u32 cmd_flags,
-				 u16 token,
-				 u16 if_id,
-				 u16 *frame_length);
 
 /**
  * struct dpsw_vlan_cfg - VLAN Configuration
@@ -821,12 +467,6 @@ int dpsw_vlan_add_if_untagged(struct fsl_mc_io *mc_io,
 			      u16 vlan_id,
 			      const struct dpsw_vlan_if_cfg *cfg);
 
-int dpsw_vlan_add_if_flooding(struct fsl_mc_io *mc_io,
-			      u32 cmd_flags,
-			      u16 token,
-			      u16 vlan_id,
-			      const struct dpsw_vlan_if_cfg *cfg);
-
 int dpsw_vlan_remove_if(struct fsl_mc_io *mc_io,
 			u32 cmd_flags,
 			u16 token,
@@ -839,75 +479,10 @@ int dpsw_vlan_remove_if_untagged(struct fsl_mc_io *mc_io,
 				 u16 vlan_id,
 				 const struct dpsw_vlan_if_cfg *cfg);
 
-int dpsw_vlan_remove_if_flooding(struct fsl_mc_io *mc_io,
-				 u32 cmd_flags,
-				 u16 token,
-				 u16 vlan_id,
-				 const struct dpsw_vlan_if_cfg *cfg);
-
 int dpsw_vlan_remove(struct fsl_mc_io *mc_io,
 		     u32 cmd_flags,
 		     u16 token,
 		     u16 vlan_id);
-
-/**
- * struct dpsw_vlan_attr - VLAN attributes
- * @fdb_id: Associated FDB ID
- * @num_ifs: Number of interfaces
- * @num_untagged_ifs: Number of untagged interfaces
- * @num_flooding_ifs: Number of flooding interfaces
- */
-struct dpsw_vlan_attr {
-	u16 fdb_id;
-	u16 num_ifs;
-	u16 num_untagged_ifs;
-	u16 num_flooding_ifs;
-};
-
-int dpsw_vlan_get_attributes(struct fsl_mc_io *mc_io,
-			     u32 cmd_flags,
-			     u16 token,
-			     u16 vlan_id,
-			     struct dpsw_vlan_attr *attr);
-
-int dpsw_vlan_get_if(struct fsl_mc_io *mc_io,
-		     u32 cmd_flags,
-		     u16 token,
-		     u16 vlan_id,
-		     struct dpsw_vlan_if_cfg *cfg);
-
-int dpsw_vlan_get_if_flooding(struct fsl_mc_io *mc_io,
-			      u32 cmd_flags,
-			      u16 token,
-			      u16 vlan_id,
-			      struct dpsw_vlan_if_cfg *cfg);
-
-int dpsw_vlan_get_if_untagged(struct fsl_mc_io *mc_io,
-			      u32 cmd_flags,
-			      u16 token,
-			      u16 vlan_id,
-			      struct dpsw_vlan_if_cfg *cfg);
-
-/**
- * struct dpsw_fdb_cfg  - FDB Configuration
- * @num_fdb_entries: Number of FDB entries
- * @fdb_aging_time: Aging time in seconds
- */
-struct dpsw_fdb_cfg {
-	u16 num_fdb_entries;
-	u16 fdb_aging_time;
-};
-
-int dpsw_fdb_add(struct fsl_mc_io *mc_io,
-		 u32 cmd_flags,
-		 u16 token,
-		 u16 *fdb_id,
-		 const struct dpsw_fdb_cfg *cfg);
-
-int dpsw_fdb_remove(struct fsl_mc_io *mc_io,
-		    u32 cmd_flags,
-		    u16 token,
-		    u16 fdb_id);
 
 /**
  * enum dpsw_fdb_entry_type - FDB Entry type - Static/Dynamic
@@ -937,12 +512,6 @@ int dpsw_fdb_add_unicast(struct fsl_mc_io *mc_io,
 			 u16 fdb_id,
 			 const struct dpsw_fdb_unicast_cfg *cfg);
 
-int dpsw_fdb_get_unicast(struct fsl_mc_io *mc_io,
-			 u32 cmd_flags,
-			 u16 token,
-			 u16 fdb_id,
-			 struct dpsw_fdb_unicast_cfg *cfg);
-
 int dpsw_fdb_remove_unicast(struct fsl_mc_io *mc_io,
 			    u32 cmd_flags,
 			    u16 token,
@@ -968,12 +537,6 @@ int dpsw_fdb_add_multicast(struct fsl_mc_io *mc_io,
 			   u16 token,
 			   u16 fdb_id,
 			   const struct dpsw_fdb_multicast_cfg *cfg);
-
-int dpsw_fdb_get_multicast(struct fsl_mc_io *mc_io,
-			   u32 cmd_flags,
-			   u16 token,
-			   u16 fdb_id,
-			   struct dpsw_fdb_multicast_cfg *cfg);
 
 int dpsw_fdb_remove_multicast(struct fsl_mc_io *mc_io,
 			      u32 cmd_flags,
@@ -1039,227 +602,6 @@ struct dpsw_fdb_attr {
 	u16 num_fdb_mc_groups;
 	u16 max_fdb_mc_groups;
 };
-
-int dpsw_fdb_get_attributes(struct fsl_mc_io *mc_io,
-			    u32 cmd_flags,
-			    u16 token,
-			    u16 fdb_id,
-			    struct dpsw_fdb_attr *attr);
-
-/**
- * struct dpsw_acl_cfg - ACL Configuration
- * @max_entries: Number of FDB entries
- */
-struct dpsw_acl_cfg {
-	u16 max_entries;
-};
-
-/**
- * struct dpsw_acl_fields - ACL fields.
- * @l2_dest_mac: Destination MAC address: BPDU, Multicast, Broadcast, Unicast,
- *			slow protocols, MVRP, STP
- * @l2_source_mac: Source MAC address
- * @l2_tpid: Layer 2 (Ethernet) protocol type, used to identify the following
- *		protocols: MPLS, PTP, PFC, ARP, Jumbo frames, LLDP, IEEE802.1ae,
- *		Q-in-Q, IPv4, IPv6, PPPoE
- * @l2_pcp_dei: indicate which protocol is encapsulated in the payload
- * @l2_vlan_id: layer 2 VLAN ID
- * @l2_ether_type: layer 2 Ethernet type
- * @l3_dscp: Layer 3 differentiated services code point
- * @l3_protocol: Tells the Network layer at the destination host, to which
- *		Protocol this packet belongs to. The following protocol are
- *		supported: ICMP, IGMP, IPv4 (encapsulation), TCP, IPv6
- *		(encapsulation), GRE, PTP
- * @l3_source_ip: Source IPv4 IP
- * @l3_dest_ip: Destination IPv4 IP
- * @l4_source_port: Source TCP/UDP Port
- * @l4_dest_port: Destination TCP/UDP Port
- */
-struct dpsw_acl_fields {
-	u8 l2_dest_mac[6];
-	u8 l2_source_mac[6];
-	u16 l2_tpid;
-	u8 l2_pcp_dei;
-	u16 l2_vlan_id;
-	u16 l2_ether_type;
-	u8 l3_dscp;
-	u8 l3_protocol;
-	u32 l3_source_ip;
-	u32 l3_dest_ip;
-	u16 l4_source_port;
-	u16 l4_dest_port;
-};
-
-/**
- * struct dpsw_acl_key - ACL key
- * @match: Match fields
- * @mask: Mask: b'1 - valid, b'0 don't care
- */
-struct dpsw_acl_key {
-	struct dpsw_acl_fields match;
-	struct dpsw_acl_fields mask;
-};
-
-/**
- * enum dpsw_acl_action
- * @DPSW_ACL_ACTION_DROP: Drop frame
- * @DPSW_ACL_ACTION_REDIRECT: Redirect to certain port
- * @DPSW_ACL_ACTION_ACCEPT: Accept frame
- * @DPSW_ACL_ACTION_REDIRECT_TO_CTRL_IF: Redirect to control interface
- */
-enum dpsw_acl_action {
-	DPSW_ACL_ACTION_DROP,
-	DPSW_ACL_ACTION_REDIRECT,
-	DPSW_ACL_ACTION_ACCEPT,
-	DPSW_ACL_ACTION_REDIRECT_TO_CTRL_IF
-};
-
-/**
- * struct dpsw_acl_result - ACL action
- * @action: Action should be taken when	ACL entry hit
- * @if_id:  Interface IDs to redirect frame. Valid only if redirect selected for
- *		 action
- */
-struct dpsw_acl_result {
-	enum dpsw_acl_action action;
-	u16 if_id;
-};
-
-/**
- * struct dpsw_acl_entry_cfg - ACL entry
- * @key_iova: I/O virtual address of DMA-able memory filled with key after call
- *				to dpsw_acl_prepare_entry_cfg()
- * @result: Required action when entry hit occurs
- * @precedence: Precedence inside ACL 0 is lowest; This priority can not change
- *		during the lifetime of a Policy. It is user responsibility to
- *		space the priorities according to consequent rule additions.
- */
-struct dpsw_acl_entry_cfg {
-	u64 key_iova;
-	struct dpsw_acl_result result;
-	int precedence;
-};
-
-int dpsw_acl_add(struct fsl_mc_io *mc_io,
-		 u32 cmd_flags,
-		 u16 token,
-		 u16 *acl_id,
-		 const struct dpsw_acl_cfg *cfg);
-
-int dpsw_acl_remove(struct fsl_mc_io *mc_io,
-		    u32 cmd_flags,
-		    u16 token,
-		    u16 acl_id);
-
-void dpsw_acl_prepare_entry_cfg(const struct dpsw_acl_key *key,
-				uint8_t *entry_cfg_buf);
-
-int dpsw_acl_add_entry(struct fsl_mc_io *mc_io,
-		       u32 cmd_flags,
-		       u16 token,
-		       u16 acl_id,
-		       const struct dpsw_acl_entry_cfg *cfg);
-
-int dpsw_acl_remove_entry(struct fsl_mc_io *mc_io,
-			  u32 cmd_flags,
-			  u16 token,
-			  u16 acl_id,
-			  const struct dpsw_acl_entry_cfg *cfg);
-
-/**
- * struct dpsw_acl_if_cfg - List of interfaces to Associate with ACL
- * @num_ifs: Number of interfaces
- * @if_id: List of interfaces
- */
-struct dpsw_acl_if_cfg {
-	u16 num_ifs;
-	u16 if_id[DPSW_MAX_IF];
-};
-
-int dpsw_acl_add_if(struct fsl_mc_io *mc_io,
-		    u32 cmd_flags,
-		    u16 token,
-		    u16 acl_id,
-		    const struct dpsw_acl_if_cfg *cfg);
-
-int dpsw_acl_remove_if(struct fsl_mc_io *mc_io,
-		       u32 cmd_flags,
-		       u16 token,
-		       u16 acl_id,
-		       const struct dpsw_acl_if_cfg *cfg);
-
-/**
- * struct dpsw_acl_attr -  ACL Attributes
- * @max_entries: Max number of ACL entries
- * @num_entries: Number of used ACL entries
- * @num_ifs: Number of interfaces associated with ACL
- */
-struct dpsw_acl_attr {
-	u16 max_entries;
-	u16 num_entries;
-	u16 num_ifs;
-};
-
-int dpsw_acl_get_attributes(struct fsl_mc_io *mc_io,
-			    u32 cmd_flags,
-			    u16 token,
-			    u16 acl_id,
-			    struct dpsw_acl_attr *attr);
-/**
- * struct dpsw_ctrl_if_attr - Control interface attributes
- * @rx_fqid:		Receive FQID
- * @rx_err_fqid:		Receive error FQID
- * @tx_err_conf_fqid:	Transmit error and confirmation FQID
- */
-struct dpsw_ctrl_if_attr {
-	u32 rx_fqid;
-	u32 rx_err_fqid;
-	u32 tx_err_conf_fqid;
-};
-
-int dpsw_ctrl_if_get_attributes(struct fsl_mc_io *mc_io,
-				u32 cmd_flags,
-				u16 token,
-				struct dpsw_ctrl_if_attr *attr);
-
-/**
- * Maximum number of DPBP
- */
-#define DPSW_MAX_DPBP     8
-
-/**
- * struct dpsw_ctrl_if_pools_cfg - Control interface buffer pools configuration
- * @num_dpbp: Number of DPBPs
- * @pools: Array of buffer pools parameters; The number of valid entries
- *	must match 'num_dpbp' value
- */
-struct dpsw_ctrl_if_pools_cfg {
-	u8 num_dpbp;
-	/**
-	 * struct pools - Buffer pools parameters
-	 * @dpbp_id: DPBP object ID
-	 * @buffer_size: Buffer size
-	 * @backup_pool: Backup pool
-	 */
-	struct {
-		int dpbp_id;
-		u16 buffer_size;
-		int backup_pool;
-	} pools[DPSW_MAX_DPBP];
-};
-
-int dpsw_ctrl_if_set_pools(struct fsl_mc_io *mc_io,
-			   u32 cmd_flags,
-			   u16 token,
-			   const struct dpsw_ctrl_if_pools_cfg *cfg);
-
-int dpsw_ctrl_if_enable(struct fsl_mc_io *mc_io,
-			u32 cmd_flags,
-			u16 token);
-
-int dpsw_ctrl_if_disable(struct fsl_mc_io *mc_io,
-			 u32 cmd_flags,
-			 u16 token);
 
 int dpsw_get_api_version(struct fsl_mc_io *mc_io,
 			 u32 cmd_flags,

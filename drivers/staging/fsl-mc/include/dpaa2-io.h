@@ -53,6 +53,8 @@ struct device;
  * for dequeue.
  */
 
+#define DPAA2_IO_ANY_CPU	-1
+
 /**
  * struct dpaa2_io_desc - The DPIO descriptor
  * @receives_notifications: Use notificaton mode. Non-zero if the DPIO
@@ -85,13 +87,15 @@ void dpaa2_io_down(struct dpaa2_io *d);
 
 irqreturn_t dpaa2_io_irq(struct dpaa2_io *obj);
 
+struct dpaa2_io *dpaa2_io_service_select(int cpu);
+
 /**
  * struct dpaa2_io_notification_ctx - The DPIO notification context structure
  * @cb:           The callback to be invoked when the notification arrives
  * @is_cdan:      Zero for FQDAN, non-zero for CDAN
  * @id:           FQID or channel ID, needed for rearm
- * @desired_cpu:  The cpu on which the notifications will show up. -1 means
- *                any CPU.
+ * @desired_cpu:  The cpu on which the notifications will show up. Use
+ *                DPAA2_IO_ANY_CPU if don't care
  * @dpio_id:      The dpio index
  * @qman64:       The 64-bit context value shows up in the FQDAN/CDAN.
  * @node:         The list node
@@ -136,14 +140,6 @@ struct dpaa2_io_store *dpaa2_io_store_create(unsigned int max_frames,
 void dpaa2_io_store_destroy(struct dpaa2_io_store *s);
 struct dpaa2_dq *dpaa2_io_store_next(struct dpaa2_io_store *s, int *is_last);
 
-#ifdef CONFIG_FSL_QBMAN_DEBUG
-int dpaa2_io_query_fq_count(struct dpaa2_io *d, uint32_t fqid,
-			   uint32_t *fcnt, uint32_t *bcnt);
-int dpaa2_io_query_bp_count(struct dpaa2_io *d, uint32_t bpid,
-			   uint32_t *num);
-#endif
-
-
 /***************/
 /* CSCN        */
 /***************/
@@ -186,5 +182,10 @@ static inline bool dpaa2_cscn_state_congested(struct dpaa2_cscn *cscn)
 {
 	return ((cscn->state & DPAA2_CSCN_STATE_MASK) == DPAA2_CSCN_CONGESTED);
 }
+
+int dpaa2_io_query_fq_count(struct dpaa2_io *d, u32 fqid,
+			    u32 *fcnt, u32 *bcnt);
+int dpaa2_io_query_bp_count(struct dpaa2_io *d, u32 bpid,
+			    u32 *num);
 
 #endif /* __FSL_DPAA2_IO_H */

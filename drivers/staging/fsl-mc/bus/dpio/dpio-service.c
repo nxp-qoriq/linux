@@ -41,7 +41,6 @@
 
 #include "dpio.h"
 #include "qbman-portal.h"
-#include "qbman_debug.h"
 
 struct dpaa2_io {
 	atomic_t refs;
@@ -77,7 +76,7 @@ static inline struct dpaa2_io *service_select_by_cpu(struct dpaa2_io *d,
 	if (d)
 		return d;
 
-	if (unlikely(cpu >= (int)num_possible_cpus()))
+	if (cpu != DPAA2_IO_ANY_CPU && cpu >= num_possible_cpus())
 		return NULL;
 
 	/*
@@ -110,6 +109,23 @@ static inline struct dpaa2_io *service_select(struct dpaa2_io *d)
 }
 
 /**
+ * dpaa2_io_service_select() - return a dpaa2_io service affined to this cpu
+ * @cpu: the cpu id
+ *
+ * Return the affine dpaa2_io service, or NULL if there is no service affined
+ * to the specified cpu. If DPAA2_IO_ANY_CPU is used, return the next available
+ * service.
+ */
+struct dpaa2_io *dpaa2_io_service_select(int cpu)
+{
+	if (cpu == DPAA2_IO_ANY_CPU)
+		return service_select(NULL);
+
+	return service_select_by_cpu(NULL, cpu);
+}
+EXPORT_SYMBOL_GPL(dpaa2_io_service_select);
+
+/**
  * dpaa2_io_create() - create a dpaa2_io object.
  * @desc: the dpaa2_io descriptor
  *
@@ -126,7 +142,7 @@ struct dpaa2_io *dpaa2_io_create(const struct dpaa2_io_desc *desc)
 		return NULL;
 
 	/* check if CPU is out of range (-1 means any cpu) */
-	if (desc->cpu >= (int)num_possible_cpus()) {
+	if (desc->cpu != DPAA2_IO_ANY_CPU && desc->cpu >= num_possible_cpus()) {
 		kfree(obj);
 		return NULL;
 	}
@@ -622,7 +638,6 @@ struct dpaa2_dq *dpaa2_io_store_next(struct dpaa2_io_store *s, int *is_last)
 }
 EXPORT_SYMBOL(dpaa2_io_store_next);
 
-#ifdef CONFIG_FSL_QBMAN_DEBUG
 /**
  * dpaa2_io_query_fq_count() - Get the frame and byte count for a given fq.
  * @d: the given DPIO object.
@@ -635,10 +650,10 @@ EXPORT_SYMBOL(dpaa2_io_store_next);
  *
  * Return 0 for a successful query, and negative error code if query fails.
  */
-int dpaa2_io_query_fq_count(struct dpaa2_io *d, uint32_t fqid,
+int dpaa2_io_query_fq_count(struct dpaa2_io *d, u32 fqid,
 			    u32 *fcnt, u32 *bcnt)
 {
-	struct qbman_attr state;
+	struct qbman_fq_query_np_rslt state;
 	struct qbman_swp *swp;
 	unsigned long irqflags;
 	int ret;
@@ -661,17 +676,17 @@ int dpaa2_io_query_fq_count(struct dpaa2_io *d, uint32_t fqid,
 EXPORT_SYMBOL(dpaa2_io_query_fq_count);
 
 /**
- * dpaa2_io_query_bp_count() - Query the number of buffers currenty in a
+ * dpaa2_io_query_bp_count() - Query the number of buffers currently in a
  * buffer pool.
  * @d: the given DPIO object.
  * @bpid: the index of buffer pool to be queried.
  * @num: the queried number of buffers in the buffer pool.
  *
- * Return 0 for a sucessful query, and negative error code if query fails.
+ * Return 0 for a successful query, and negative error code if query fails.
  */
-int dpaa2_io_query_bp_count(struct dpaa2_io *d, uint32_t bpid, u32 *num)
+int dpaa2_io_query_bp_count(struct dpaa2_io *d, u32 bpid, u32 *num)
 {
-	struct qbman_attr state;
+	struct qbman_bp_query_rslt state;
 	struct qbman_swp *swp;
 	unsigned long irqflags;
 	int ret;
@@ -690,4 +705,3 @@ int dpaa2_io_query_bp_count(struct dpaa2_io *d, uint32_t bpid, u32 *num)
 	return 0;
 }
 EXPORT_SYMBOL(dpaa2_io_query_bp_count);
-#endif

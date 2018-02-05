@@ -5124,7 +5124,8 @@ M:	"J. German Rivera" <German.Rivera@freescale.com>
 M:	Stuart Yoder <stuart.yoder@nxp.com>
 L:	linux-kernel@vger.kernel.org
 S:	Maintained
-F:	drivers/staging/fsl-mc/
+F:	drivers/bus/fsl-mc/
+F:	Documentation/networking/dpaa2/overview.rst
 
 FREEVXFS FILESYSTEM
 M:	Christoph Hellwig <hch@infradead.org>

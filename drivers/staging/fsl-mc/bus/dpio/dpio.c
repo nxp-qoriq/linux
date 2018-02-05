@@ -32,6 +32,7 @@
  */
 #include "../../include/mc-sys.h"
 #include "../../include/mc-cmd.h"
+#include <linux/fsl/mc.h>
 
 #include "dpio.h"
 #include "dpio-cmd.h"

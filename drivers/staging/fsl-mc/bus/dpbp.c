@@ -31,6 +31,7 @@
  */
 #include "../include/mc-sys.h"
 #include "../include/mc-cmd.h"
+#include <linux/fsl/mc.h>
 #include "../include/dpbp.h"
 
 #include "dpbp-cmd.h"

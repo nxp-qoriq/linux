@@ -3534,15 +3534,6 @@ static int dpaa2_eth_probe(struct fsl_mc_device *dpni_dev)
 		goto err_alloc_percpu_extras;
 	}
 
-	snprintf(net_dev->name, IFNAMSIZ, "ni%d", dpni_dev->obj_desc.id);
-	if (!dev_valid_name(net_dev->name)) {
-		dev_warn(&net_dev->dev,
-			 "netdevice name \"%s\" cannot be used, reverting to default..\n",
-			 net_dev->name);
-		dev_alloc_name(net_dev, "eth%d");
-		dev_warn(&net_dev->dev, "using name \"%s\"\n", net_dev->name);
-	}
-
 	err = netdev_init(net_dev);
 	if (err)
 		goto err_netdev_init;

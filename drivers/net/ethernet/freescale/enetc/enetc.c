@@ -877,11 +877,12 @@ static void enetc_setup_cbdr(struct enetc_hw *hw, struct enetc_cbdr *cbdr)
 	enetc_wr(hw, ENETC_SICBDRBAR1, upper_32_bits(cbdr->bd_dma_base));
 	enetc_wr(hw, ENETC_SICBDRLENR, ENETC_RTBLENR_LEN(cbdr->bd_count));
 
+	enetc_wr(hw, ENETC_SICBDRCIR, 0);
+	enetc_wr(hw, ENETC_SICBDRCISR, 0);
+
 	/* enable ring */
 	enetc_wr(hw, ENETC_SICBDRMR, BIT(31));
 
-	enetc_wr(hw, ENETC_SICBDRCIR, 0);
-	enetc_wr(hw, ENETC_SICBDRCISR, 0);
 	cbdr->cir = hw->reg + ENETC_SICBDRCIR;
 	cbdr->cisr = hw->reg + ENETC_SICBDRCISR;
 }
@@ -951,6 +952,9 @@ static void enetc_setup_txbdr(struct enetc_hw *hw, struct enetc_bdr *tx_ring)
 	enetc_txbdr_wr(hw, idx, ENETC_TBLENR,
 		       ENETC_RTBLENR_LEN(tx_ring->bd_count));
 
+	enetc_txbdr_wr(hw, idx, ENETC_TBCIR, 0);
+	enetc_txbdr_wr(hw, idx, ENETC_TBCISR, 0);
+
 	/* enable Tx ints by setting pkt thr to 1 */
 	enetc_txbdr_wr(hw, idx, ENETC_TBICIR0, ENETC_TBICIR0_ICEN | 0x1);
 
@@ -958,8 +962,6 @@ static void enetc_setup_txbdr(struct enetc_hw *hw, struct enetc_bdr *tx_ring)
 	/* enable ring */
 	enetc_txbdr_wr(hw, idx, ENETC_TBMR, tbmr);
 
-	enetc_txbdr_wr(hw, idx, ENETC_TBCIR, 0);
-	enetc_txbdr_wr(hw, idx, ENETC_TBCISR, 0);
 	tx_ring->tcir = hw->reg + ENETC_BDR(TX, idx, ENETC_TBCIR);
 	tx_ring->tcisr = hw->reg + ENETC_BDR(TX, idx, ENETC_TBCISR);
 	tx_ring->idr = hw->reg + ENETC_SITXIDR;
@@ -986,6 +988,8 @@ static void enetc_setup_rxbdr(struct enetc_hw *hw, struct enetc_bdr *rx_ring)
 
 	enetc_rxbdr_wr(hw, idx, ENETC_RBBSR, ENETC_RXB_DMA_SIZE);
 
+	enetc_rxbdr_wr(hw, idx, ENETC_RBPIR, 0);
+
 	/* enable Rx ints by setting pkt thr to 1 (BG 0.7) */
 	enetc_rxbdr_wr(hw, idx, ENETC_RBICIR0, ENETC_RBICIR0_ICEN | 0x1);
 
@@ -993,7 +997,6 @@ static void enetc_setup_rxbdr(struct enetc_hw *hw, struct enetc_bdr *rx_ring)
 	/* enable ring */
 	enetc_rxbdr_wr(hw, idx, ENETC_RBMR, rbmr);
 
-	enetc_rxbdr_wr(hw, idx, ENETC_RBPIR, 0);
 	rx_ring->rcir = hw->reg + ENETC_BDR(RX, idx, ENETC_RBCIR);
 	rx_ring->idr = hw->reg + ENETC_SIRXIDR;
 

@@ -892,7 +892,10 @@ static void enetc_configure_si(struct enetc_si *si)
 	struct enetc_hw *hw = &si->hw;
 
 	enetc_setup_cbdr(hw, &si->cbd_ring);
-
+	/* set SI cache attributes */
+	enetc_wr(hw, ENETC_SICAR0,
+		 ENETC_SICAR_RD_COHERENT | ENETC_SICAR_WR_COHERENT);
+	enetc_wr(hw, ENETC_SICAR1, ENETC_SICAR_WR_MSI);
 	/* enable SI, start RSS by default */
 	enetc_wr(hw, ENETC_SIMR, ENETC_SIMR_EN | ENETC_SIMR_RSSE);
 }

@@ -94,6 +94,14 @@ static inline u32 enetc_vsi_set_msize(u32 size)
 #define ENETC_SICAPR0	0x900
 #define ENETC_SICAPR1	0x904
 
+// FIXME: Temp hash filter registers, for m0169 (BG v88).
+// These moved to the Port reg block in the latest BG.
+// Use these temporarily, only for PF level MAC filtering.
+#define ENETC_UMHFTR0	0x1010
+#define ENETC_UMHFTR1	0x1014
+#define ENETC_MMHFTR0	0x1018
+#define ENETC_MMHFTR1	0x101c
+
 #define ENETC_PSIIER	0xa00
 #define ENETC_PSIIER_MR_MASK	GENMASK(2, 1)
 #define ENETC_PSIIDR	0xa10
@@ -313,9 +321,8 @@ union enetc_rx_bd {
 #define ENETC_RXBD_FLAG_VLAN	BIT(9)
 
 #define ENETC_MAC_ADDR_FILT_CNT	8 /* # of supported entries per port */
+#define EMETC_MAC_ADDR_FILT_RES	3 /* # of reserved entries at the beginning */
 #define ENETC_MAX_NUM_VFS	2
-#define ENETC_MAC_FILT_PER_SI	(ENETC_MAC_ADDR_FILT_CNT / \
-				(ENETC_MAX_NUM_VFS + 1))
 
 struct enetc_cbd {
 	union {

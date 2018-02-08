@@ -117,54 +117,122 @@ static int enetc_send_cmd(struct enetc_si *si, struct enetc_cbd *cbd,
 	return ENETC_CMD_OK;
 }
 
-/* MAC Address Filter Table Entry Set Descriptor */
-void enetc_sync_mac_filters(struct enetc_si *si, int si_idx)
+static void enetc_clear_mac_flt_entry(struct enetc_si *si, int index)
 {
-	struct enetc_mac_filter *f = si->mac_filter;
 	struct enetc_cbd cbd;
 	bool async = false;
-	int i, ret;
+	int ret;
 
-	for (i = si_idx; i < si_idx + MADDR_TYPE; i++, f++) {
-		bool enable = !!f->mac_addr_cnt;
-		bool em = (f->mac_addr_cnt == 1); /* exact match */
-		bool mc = (i == MC); /* mcast filter */
+	memset(&cbd, 0, sizeof(cbd));
 
-		WARN_ON(i - si_idx > ENETC_MAC_FILT_PER_SI);
+	cbd.cls = 1;
+	cbd.status_flags = ENETC_CBD_FLAGS_SF;
+	if (async)
+		cbd.status_flags |= ENETC_CBD_FLAGS_IE;
 
-		memset(&cbd, 0, sizeof(cbd));
+	cbd.index = cpu_to_le16(index);
 
-		/* fill up the "set" descriptor */
-		cbd.cls = 1;
-		cbd.status_flags = ENETC_CBD_FLAGS_SF;
-		if (async)
-			cbd.status_flags |= ENETC_CBD_FLAGS_IE;
-		cbd.index = cpu_to_le16(i);
-		cbd.opt[3] = cpu_to_le32(si_idx);
-		cbd.opt[0] = cpu_to_le32((mc ? BIT(1) : 0) |
-					 (em ? BIT(0) : 0));
-		if (enable)
-			cbd.opt[0] |= BIT(31);
+	ret = enetc_send_cmd(si, &cbd, async);
+	if (ret) {
+		pr_err("MAC filter clear failed (%d)!\n", ret);
+		WARN_ON(1);
+	}
+}
 
+static void enetc_set_mac_flt_entry(struct enetc_si *si, int index,
+				    char *mac_addr, int si_map)
+{
+	struct enetc_cbd cbd;
+	bool async = false;
+	u16 upper;
+	u32 lower;
+	int ret;
+
+	memset(&cbd, 0, sizeof(cbd));
+
+	/* fill up the "set" descriptor */
+	cbd.cls = 1;
+	cbd.status_flags = ENETC_CBD_FLAGS_SF;
+	if (async)
+		cbd.status_flags |= ENETC_CBD_FLAGS_IE;
+
+	cbd.index = cpu_to_le16(index);
+	cbd.opt[3] = cpu_to_le32(si_map);
+	/* enable entry */
+	cbd.opt[0] = cpu_to_le32(BIT(31));
+
+	upper = ntohs(*(const u16 *)mac_addr);
+	lower = ntohl(*(const u32 *)(mac_addr + 2));
+	cbd.addr[0] = cpu_to_le32(lower);
+	cbd.addr[1] = cpu_to_le16(upper);
+
+	ret = enetc_send_cmd(si, &cbd, async);
+	if (ret) {
+		pr_err("MAC filter update failed (%d)!\n", ret);
+		WARN_ON(1);
+		// TODO: fallback to promisc mode
+	}
+}
+
+static void enetc_clear_mac_ht_flt(struct enetc_hw *hw, bool mc)
+{
+	if (mc) {
+		enetc_wr(hw, ENETC_MMHFTR0, 0);
+		enetc_wr(hw, ENETC_MMHFTR1, 0);
+	} else {
+		enetc_wr(hw, ENETC_UMHFTR0, 0);
+		enetc_wr(hw, ENETC_UMHFTR1, 0);
+	}
+}
+
+static void enetc_set_mac_ht_flt(struct enetc_hw *hw, u32 *hash, bool mc)
+{
+	if (mc) {
+		enetc_wr(hw, ENETC_MMHFTR0, *hash);
+		enetc_wr(hw, ENETC_MMHFTR1, *(hash + 1));
+	} else {
+		enetc_wr(hw, ENETC_UMHFTR0, *hash);
+		enetc_wr(hw, ENETC_UMHFTR1, *(hash + 1));
+	}
+}
+
+/* MAC Address Filter Table Entry Set Descriptor */
+void enetc_sync_mac_filters(struct enetc_si *si, struct enetc_mac_filter *tbl,
+			    int si_idx)
+{
+	struct enetc_mac_filter *f;
+	int i, pos;
+
+	if (!enetc_si_is_pf(si)) {
+		pr_err("VFs not allowed to change MAC addr filters!\n");
+		return;
+	}
+
+	f = &tbl[si_idx * MADDR_TYPE];
+	pos = EMETC_MAC_ADDR_FILT_RES + si_idx;
+
+	for (i = 0; i < MADDR_TYPE; i++, f++) {
+		bool em = (f->mac_addr_cnt == 1) && (i == UC);
+		bool clear = !f->mac_addr_cnt;
+		bool mc = (i == MC);
+
+		if (clear) {
+			if (!mc)
+				enetc_clear_mac_flt_entry(si, pos);
+
+			enetc_clear_mac_ht_flt(&si->hw, mc);
+			continue;
+		}
+
+		/* exact match filter */
 		if (em) {
-			u16 upper = ntohs(*(const u16 *)f->mac_addr);
-			u32 lower = ntohl(*(const u32 *)(f->mac_addr + 2));
-
-			cbd.addr[0] = cpu_to_le32(lower);
-			cbd.addr[1] = cpu_to_le16(upper);
-		} else {
-			u32 *hash = (u32 *)f->mac_hash_table;
-
-			cbd.addr[0] = cpu_to_le32(*(u32 *)hash);
-			cbd.addr[1] = cpu_to_le32(*(u32 *)(hash + 1));
+			enetc_set_mac_flt_entry(si, pos, f->mac_addr,
+						BIT(si_idx));
+			continue;
 		}
 
-		ret = enetc_send_cmd(si, &cbd, async);
-		if (ret) {
-			pr_err("MAC filter update failed (%d)!", ret);
-			WARN_ON(1);
-			// TODO: fallback to promisc mode
-		}
+		/* hash table filter */
+		enetc_set_mac_ht_flt(&si->hw, (u32 *)f->mac_hash_table, mc);
 	}
 }
 

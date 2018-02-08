@@ -118,6 +118,7 @@ static void enetc_add_mac_addr_ht_filter(struct enetc_mac_filter *filter,
 static void enetc_pf_set_rx_mode(struct net_device *ndev)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_pf *pf = enetc_si_priv(priv->si);
 	struct enetc_hw *hw = &priv->si->hw;
 	bool uprom = false, mprom = false;
 	struct enetc_mac_filter *filter;
@@ -139,36 +140,36 @@ static void enetc_pf_set_rx_mode(struct net_device *ndev)
 	/* first 2 filter entries belong to PF */
 	if (!uprom) {
 		/* Update unicast filters */
-		filter = &priv->si->mac_filter[UC];
+		filter = &pf->mac_filter[UC];
 		enetc_reset_mac_addr_filter(filter);
 
 		em = (netdev_uc_count(ndev) == 1);
 		netdev_for_each_uc_addr(ha, ndev) {
-			if (em)
+			if (em) {
 				enetc_add_mac_addr_em_filter(filter, ha->addr);
-			else
-				enetc_add_mac_addr_ht_filter(filter, ha->addr);
+				break;
+			}
+
+			enetc_add_mac_addr_ht_filter(filter, ha->addr);
 		}
 	}
 
 	if (!mprom) {
 		/* Update multicast filters */
-		filter = &priv->si->mac_filter[MC];
+		filter = &pf->mac_filter[MC];
 		enetc_reset_mac_addr_filter(filter);
 
-		em = (netdev_mc_count(ndev) == 1);
 		netdev_for_each_mc_addr(ha, ndev) {
 			if (!is_multicast_ether_addr(ha->addr))
 				continue;
-			if (em)
-				enetc_add_mac_addr_em_filter(filter, ha->addr);
-			else
-				enetc_add_mac_addr_ht_filter(filter, ha->addr);
+
+			enetc_add_mac_addr_ht_filter(filter, ha->addr);
 		}
 	}
 
 	if (!uprom || !mprom)
-		enetc_sync_mac_filters(priv->si, 0); /* update PF entries */
+		/* update PF entries */
+		enetc_sync_mac_filters(pf->si, pf->mac_filter, 0);
 
 	psipmr |= enetc_port_rd(hw, ENETC_PSIPMR) &
 		  ~(ENETC_PSIPMR_SET_UP(0) | ENETC_PSIPMR_SET_MP(0));

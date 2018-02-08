@@ -34,14 +34,16 @@
 
 #include "enetc.h"
 
-#define ENETC_MAX_VF_CNT_PER_PF	2
+#define ENETC_MAX_NUM_MAC_FLT	((ENETC_MAX_NUM_VFS + 1) * MADDR_TYPE)
 
 struct enetc_pf {
 	struct enetc_si *si;
 	int num_vfs; /* number of active VFs, after sriov_init */
 	int total_vfs; /* max number of VFs, set for PF at probe */
 
-	struct enetc_msg_swbd rxmsg[ENETC_MAX_VF_CNT_PER_PF];
+	struct enetc_mac_filter mac_filter[ENETC_MAX_NUM_MAC_FLT];
+
+	struct enetc_msg_swbd rxmsg[ENETC_MAX_NUM_VFS];
 	struct work_struct msg_task;
 	char msg_int_name[IFNAMSIZ + 8];
 };

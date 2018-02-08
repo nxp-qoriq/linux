@@ -151,8 +151,6 @@ struct enetc_si {
 
 	struct net_device *ndev; /* back ref. */
 
-	struct enetc_mac_filter mac_filter[ENETC_MAC_ADDR_FILT_CNT];
-
 	struct enetc_cbdr cbd_ring;
 
 	int num_rx_rings; /* how many rings are available in the SI */
@@ -237,7 +235,8 @@ struct net_device_stats *enetc_get_stats(struct net_device *ndev);
 void enetc_set_ethtool_ops(struct net_device *ndev);
 
 /* control buffer descriptor ring (CBDR) */
-void enetc_sync_mac_filters(struct enetc_si *si, int si_idx);
+void enetc_sync_mac_filters(struct enetc_si *si, struct enetc_mac_filter *tbl,
+			    int si_idx);
 int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 		       int index);
 int enetc_set_rss_table(struct enetc_si *si, u16 *table, int len);

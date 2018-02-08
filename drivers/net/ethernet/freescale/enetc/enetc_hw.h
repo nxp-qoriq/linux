@@ -159,9 +159,11 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PMR_EN	GENMASK(18, 16)
 #define ENETC_PSR	0x00004 /* RO */
 #define ENETC_PSIPMR	0x00018
-#define ENETC_PSIPMR_SET_UP(n)	(0x1 << (n)) /* n = SI index */
-#define ENETC_PSIPMR_SET_MP(n)	(0x1 << ((n) + 8))
-#define ENETC_PSIPMR_SET_VP(n)	(0x1 << ((n) + 16))
+#define ENETC_PSIPMR_SET_UP(n)	BIT(n) /* n = SI index */
+#define ENETC_PSIPMR_SET_MP(n)	BIT((n) + 16)
+#define ENETC_PSIPVMR	0x0001c
+#define ENETC_PSIPVMR_SET_VP(n)	BIT(n)
+#define ENETC_PSIPVMR_SET_VUTA(n)	BIT((n) + 16)
 #define ENETC_PSIPMAR0(n)	(0x00100 + (n) * 0x20) /* n = SI index */
 #define ENETC_PSIPMAR1(n)	(0x00104 + (n) * 0x20)
 #define ENETC_PSIIVLANR(n)	(0x00210 + (n) * 4) /* n = SI index */

@@ -59,6 +59,9 @@
 		sdhc = &sdhc;
 
 		crypto = &crypto;
+		qman = &qman;
+		bman = &bman;
+
 
 		fman0 = &fman0;
 		ethernet0 = &enet0;

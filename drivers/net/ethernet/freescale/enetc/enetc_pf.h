@@ -35,6 +35,7 @@
 #include "enetc.h"
 
 #define ENETC_MAX_NUM_MAC_FLT	((ENETC_MAX_NUM_VFS + 1) * MADDR_TYPE)
+#define ENETC_PF_NUM_RINGS	8
 
 struct enetc_pf {
 	struct enetc_si *si;

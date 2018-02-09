@@ -240,17 +240,6 @@ static int enetc_pf_set_vf_spoofchk(struct net_device *ndev, int vf, bool en)
 	return 0;
 }
 
-static int enetc_pf_set_features(struct net_device *ndev,
-				 netdev_features_t features)
-{
-	netdev_features_t changed = ndev->features ^ features;
-
-	if (changed & NETIF_F_LOOPBACK)
-		enetc_set_loopback(ndev, !!(features & NETIF_F_LOOPBACK));
-
-	return 0;
-}
-
 static void enetc_port_setup_primary_mac_address(struct enetc_si *si)
 {
 	unsigned char mac_addr[MAX_ADDR_LEN];
@@ -285,7 +274,7 @@ static void enetc_port_alloc_rfs(struct enetc_si *si)
 	enetc_port_wr(hw, ENETC_PRFSMR, ENETC_PRFSMR_RFSE);
 }
 
-static void enetc_port_alloc_rings(struct enetc_si *si)
+static void enetc_port_si_configure(struct enetc_si *si)
 {
 	struct enetc_pf *pf = enetc_si_priv(si);
 	struct enetc_hw *hw = &si->hw;
@@ -293,12 +282,44 @@ static void enetc_port_alloc_rings(struct enetc_si *si)
 	u32 val;
 
 	val = enetc_port_rd(hw, ENETC_PCAPR0);
-	num_rings = min(val >> 24, (val >> 16) & 0xff);
+	num_rings = min(ENETC_PCAPR0_RXBDR(val), ENETC_PCAPR0_TXBDR(val));
 
-	val = ENETC_PSICFGR0_SET_TXBDR(num_rings);
-	val |= ENETC_PSICFGR0_SET_RXBDR(num_rings);
-	for (i = 0; i < pf->total_vfs + 1; i++)
+	val = ENETC_PSICFGR0_SET_TXBDR(ENETC_PF_NUM_RINGS);
+	val |= ENETC_PSICFGR0_SET_RXBDR(ENETC_PF_NUM_RINGS);
+
+	if (unlikely(num_rings < ENETC_PF_NUM_RINGS)) {
+		val = ENETC_PSICFGR0_SET_TXBDR(num_rings);
+		val |= ENETC_PSICFGR0_SET_RXBDR(num_rings);
+
+		dev_warn(&si->pdev->dev, "Found %d rings, expected %d!\n",
+			 num_rings, ENETC_PF_NUM_RINGS);
+
+		num_rings = 0;
+	}
+
+	/* Add default one-time settings for SI0 (PF) */
+	val |= ENETC_PSICFGR0_SIVC(ENETC_VLAN_TYPE_C | ENETC_VLAN_TYPE_S);
+
+	enetc_port_wr(hw, ENETC_PSICFGR0(0), val);
+
+	if (num_rings)
+		num_rings -= ENETC_PF_NUM_RINGS;
+
+	/* Configure the SIs for each available VF */
+	val = ENETC_PSICFGR0_SIVC(ENETC_VLAN_TYPE_C | ENETC_VLAN_TYPE_S);
+
+	if (num_rings) {
+		num_rings /= pf->total_vfs;
+		val |= ENETC_PSICFGR0_SET_TXBDR(num_rings);
+		val |= ENETC_PSICFGR0_SET_RXBDR(num_rings);
+	}
+
+	for (i = 1; i < pf->total_vfs; i++)
 		enetc_port_wr(hw, ENETC_PSICFGR0(i), val);
+
+	/* Port level VLAN settings */
+	val = ENETC_PVCLCTR_OVTPIDL(ENETC_VLAN_TYPE_C | ENETC_VLAN_TYPE_S);
+	enetc_port_wr(hw, ENETC_PVCLCTR, val);
 }
 
 static void enetc_configure_port_mac(struct enetc_si *si)
@@ -316,8 +337,7 @@ static void enetc_configure_port(struct enetc_si *si)
 
 	enetc_configure_port_mac(si);
 
-	/* split up rings between functions */
-	enetc_port_alloc_rings(si);
+	enetc_port_si_configure(si);
 
 	/* split up RFS entries */
 	enetc_port_alloc_rfs(si);
@@ -374,6 +394,26 @@ err_msg_psi:
 #define enetc_sriov_configure(pdev, num_vfs)	(void)0
 #endif
 
+static int enetc_pf_set_features(struct net_device *ndev,
+				 netdev_features_t features)
+{
+	netdev_features_t changed = ndev->features ^ features;
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+
+	if (changed & NETIF_F_HW_VLAN_CTAG_RX)
+		enetc_enable_rxvlan(&priv->si->hw, 0,
+				    !!(features & NETIF_F_HW_VLAN_CTAG_RX));
+
+	if (changed & NETIF_F_HW_VLAN_CTAG_TX)
+		enetc_enable_txvlan(&priv->si->hw, 0,
+				    !!(features & NETIF_F_HW_VLAN_CTAG_TX));
+
+	if (changed & NETIF_F_LOOPBACK)
+		enetc_set_loopback(ndev, !!(features & NETIF_F_LOOPBACK));
+
+	return 0;
+}
+
 static const struct net_device_ops enetc_ndev_ops = {
 	.ndo_open		= enetc_open,
 	.ndo_stop		= enetc_close,
@@ -406,11 +446,12 @@ static void enetc_pf_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 	ndev->max_mtu = ENETC_MAX_MTU;
 
 	ndev->hw_features = NETIF_F_RXCSUM | NETIF_F_HW_CSUM |
-			    NETIF_F_HW_VLAN_CTAG_TX | NETIF_F_LOOPBACK;
+			    NETIF_F_HW_VLAN_CTAG_TX | NETIF_F_HW_VLAN_CTAG_RX |
+			    NETIF_F_LOOPBACK;
 	ndev->features = NETIF_F_HIGHDMA | NETIF_F_SG |
 			 NETIF_F_RXCSUM | NETIF_F_HW_CSUM |
 			 NETIF_F_HW_VLAN_CTAG_TX |
-			 NETIF_F_HW_VLAN_CTAG_RX; /* < has to stay on for now */
+			 NETIF_F_HW_VLAN_CTAG_RX;
 
 	ndev->priv_flags |= IFF_UNICAST_FLT;
 

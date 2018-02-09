@@ -126,6 +126,7 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_BDR(type, n, off)	(0x8000 + (type) * 0x100 + (n) * 0x200 + (off))
 /*** RX BDR reg offsets */
 #define ENETC_RBMR	0
+#define ENETC_RBMR_VTE	BIT(5)
 #define ENETC_RBMR_EN	BIT(31)
 
 #define ENETC_RBSR	0x4
@@ -143,6 +144,8 @@ enum enetc_bdr_type {TX, RX};
 
 /*** TX BDR reg offsets */
 #define ENETC_TBMR	0
+#define ENETC_TBMR_VIH	BIT(9)
+
 #define ENETC_TBSR	0x4
 #define ENETC_TBBAR0	0x10
 #define ENETC_TBBAR1	0x14
@@ -173,16 +176,24 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PSIPVMR_SET_VUTA(n)	BIT((n) + 16)
 #define ENETC_PSIPMAR0(n)	(0x00100 + (n) * 0x20) /* n = SI index */
 #define ENETC_PSIPMAR1(n)	(0x00104 + (n) * 0x20)
+#define ENETC_PVCLCTR		0x0208
+#define ENETC_VLAN_TYPE_C	BIT(0)
+#define ENETC_VLAN_TYPE_S	BIT(1)
+#define ENETC_PVCLCTR_OVTPIDL(bmp)	((bmp) & 0xff) /* VLAN_TYPE */
+
 #define ENETC_PSIIVLANR(n)	(0x00210 + (n) * 4) /* n = SI index */
 #define ENETC_PSIIVLAN_EN	BIT(31)
 #define ENETC_PSIIVLAN_SET_QOS(val)	((u32)(val) << 12)
 #define ENETC_PCAPR0	0x00900
+#define ENETC_PCAPR0_RXBDR(val)	((val) >> 24)
+#define ENETC_PCAPR0_TXBDR(val)	(((val) >> 16) & 0xff)
 #define ENETC_PCAPR1	0x00904
 
 #define ENETC_PSICFGR0(n)	(0x00940 + (n) * 0xc)  /* n = SI index */
 #define ENETC_PSICFGR0_SET_TXBDR(val)	((val) & 0xff)
 #define ENETC_PSICFGR0_SET_RXBDR(val)	(((val) & 0xff) << 16)
 #define ENETC_PSICFGR0_ASE	BIT(15)
+#define ENETC_PSICFGR0_SIVC(bmp)	(((bmp) & 0xff) << 24) /* VLAN_TYPE */
 
 #define ENETC_RSSHASH_KEY_SIZE	40
 #define ENETC_PRSSK(n)		(0x01410 + (n) * 4) /* n = [0..9] */
@@ -427,3 +438,23 @@ struct enetc_msg_cmd_header {
 	u16 type;	/* command class type */
 	u16 id;		/* denotes the specific required action */
 };
+
+/* Common H/W utility functions */
+
+static inline void enetc_enable_rxvlan(struct enetc_hw *hw, int si_idx,
+				       bool en)
+{
+	u32 val = enetc_rxbdr_rd(hw, si_idx, ENETC_RBMR);
+
+	val = (val & ~ENETC_RBMR_VTE) | (en ? ENETC_RBMR_VTE : 0);
+	enetc_rxbdr_wr(hw, si_idx, ENETC_RBMR, val);
+}
+
+static inline void enetc_enable_txvlan(struct enetc_hw *hw, int si_idx,
+				       bool en)
+{
+	u32 val = enetc_txbdr_rd(hw, si_idx, ENETC_TBMR);
+
+	val = (val & ~ENETC_TBMR_VIH) | (en ? ENETC_TBMR_VIH : 0);
+	enetc_txbdr_wr(hw, si_idx, ENETC_TBMR, val);
+}

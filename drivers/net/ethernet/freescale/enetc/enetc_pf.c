@@ -224,8 +224,7 @@ static int enetc_pf_set_vf_vlan(struct net_device *ndev, int vf, u16 vlan,
 	return 0;
 }
 
-static int enetc_pf_set_vf_spoofchk(struct net_device *ndev, int vf,
-				    bool setting)
+static int enetc_pf_set_vf_spoofchk(struct net_device *ndev, int vf, bool en)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	struct enetc_pf *pf = enetc_si_priv(priv->si);
@@ -234,9 +233,9 @@ static int enetc_pf_set_vf_spoofchk(struct net_device *ndev, int vf,
 	if (vf > pf->num_vfs)
 		return -EINVAL;
 
-	cfgr = enetc_port_rd(&priv->si->hw, ENETC_PV0CFGR(vf + 1));
-	cfgr = (cfgr & ~ENETC_PVCFGR_ASE) | (setting ? ENETC_PVCFGR_ASE : 0);
-	enetc_port_wr(&priv->si->hw, ENETC_PV0CFGR(vf + 1), cfgr);
+	cfgr = enetc_port_rd(&priv->si->hw, ENETC_PSICFGR0(vf + 1));
+	cfgr = (cfgr & ~ENETC_PSICFGR0_ASE) | (en ? ENETC_PSICFGR0_ASE : 0);
+	enetc_port_wr(&priv->si->hw, ENETC_PSICFGR0(vf + 1), cfgr);
 
 	return 0;
 }
@@ -296,10 +295,10 @@ static void enetc_port_alloc_rings(struct enetc_si *si)
 	val = enetc_port_rd(hw, ENETC_PCAPR0);
 	num_rings = min(val >> 24, (val >> 16) & 0xff);
 
-	val = ENETC_PVCFGR_SET_TXBDR(num_rings);
-	val |= ENETC_PVCFGR_SET_RXBDR(num_rings);
+	val = ENETC_PSICFGR0_SET_TXBDR(num_rings);
+	val |= ENETC_PSICFGR0_SET_RXBDR(num_rings);
 	for (i = 0; i < pf->total_vfs + 1; i++)
-		enetc_port_wr(hw, ENETC_PV0CFGR(i), val);
+		enetc_port_wr(hw, ENETC_PSICFGR0(i), val);
 }
 
 static void enetc_configure_port_mac(struct enetc_si *si)

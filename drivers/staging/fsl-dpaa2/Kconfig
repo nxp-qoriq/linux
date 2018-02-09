@@ -29,7 +29,7 @@ config FSL_DPAA2_ETH_USE_ERR_QUEUE
 
 # QBMAN_DEBUG requires some additional DPIO APIs
 config FSL_DPAA2_ETH_DEBUGFS
-	depends on DEBUG_FS && FSL_QBMAN_DEBUG
+	depends on DEBUG_FS
 	bool "Enable debugfs support"
 	default n
 	---help---

@@ -766,6 +766,7 @@ enum device_link_state {
  * @c_node: Hook to the consumer device's list of links to suppliers.
  * @status: The state of the link (with respect to the presence of drivers).
  * @flags: Link flags.
+ * @kref: Count repeated addition of the same link.
  * @rcu_head: An RCU head to use for deferred execution of SRCU callbacks.
  */
 struct device_link {
@@ -775,6 +776,7 @@ struct device_link {
 	struct list_head c_node;
 	enum device_link_state status;
 	u32 flags;
+	struct kref kref;
 #ifdef CONFIG_SRCU
 	struct rcu_head rcu_head;
 #endif

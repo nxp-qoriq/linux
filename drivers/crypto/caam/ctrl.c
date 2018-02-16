@@ -3,6 +3,7 @@
  * Controller-level driver, kernel property detection, initialization
  *
  * Copyright 2008-2012 Freescale Semiconductor, Inc.
+ * Copyright 2018 NXP
  */
 
 #include <linux/device.h>
@@ -452,7 +453,7 @@ static int caam_probe(struct platform_device *pdev)
 	struct caam_perfmon *perfmon;
 #endif
 	u32 scfgr, comp_params;
-	u32 cha_vid_ls;
+	u8 rng_vid;
 	int pg_size;
 	int BLOCK_OFFSET = 0;
 
@@ -697,15 +698,19 @@ static int caam_probe(struct platform_device *pdev)
 		set_dma_ops(&caam_dma_dev->dev, get_dma_ops(dev));
 	}
 
-	cha_vid_ls = rd_reg32(&ctrl->perfmon.cha_id_ls);
+	if (ctrlpriv->era < 10)
+		rng_vid = (rd_reg32(&ctrl->perfmon.cha_id_ls) &
+			   CHA_ID_LS_RNG_MASK) >> CHA_ID_LS_RNG_SHIFT;
+	else
+		rng_vid = (rd_reg32(&ctrl->vreg.rng) & CHA_VER_VID_MASK) >>
+			   CHA_VER_VID_SHIFT;
 
 	/*
 	 * If SEC has RNG version >= 4 and RNG state handle has not been
 	 * already instantiated, do RNG instantiation
 	 * In case of SoCs with Management Complex, RNG is managed by MC f/w.
 	 */
-	if (!ctrlpriv->mc_en &&
-	    (cha_vid_ls & CHA_ID_LS_RNG_MASK) >> CHA_ID_LS_RNG_SHIFT >= 4) {
+	if (!ctrlpriv->mc_en && rng_vid >= 4) {
 		ctrlpriv->rng4_sh_init =
 			rd_reg32(&ctrl->r4tst[0].rdsta);
 		/*

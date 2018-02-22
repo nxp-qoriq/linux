@@ -494,6 +494,11 @@ static int enetc_pf_probe(struct pci_dev *pdev,
 	}
 
 	si = pci_get_drvdata(pdev);
+	if (!si->hw.port || !si->hw.global) {
+		err = -ENODEV;
+		dev_err(&pdev->dev, "could not map PF space, probing a VF?\n");
+		goto err_map_pf_space;
+	}
 
 	enetc_get_si_caps(si);
 
@@ -553,6 +558,7 @@ err_alloc_si_res:
 	si->ndev = NULL;
 	free_netdev(ndev);
 err_alloc_netdev:
+err_map_pf_space:
 	enetc_pci_remove(pdev);
 
 	return err;

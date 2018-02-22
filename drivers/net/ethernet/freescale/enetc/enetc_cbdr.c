@@ -174,23 +174,23 @@ static void enetc_set_mac_flt_entry(struct enetc_si *si, int index,
 	}
 }
 
-static void enetc_clear_mac_ht_flt(struct enetc_hw *hw, bool mc)
+static void enetc_clear_mac_ht_flt(struct enetc_hw *hw, int type)
 {
-	if (mc) {
+	if (type == MC) {
 		enetc_wr(hw, ENETC_MMHFTR0, 0);
 		enetc_wr(hw, ENETC_MMHFTR1, 0);
-	} else {
+	} else { /* UC */
 		enetc_wr(hw, ENETC_UMHFTR0, 0);
 		enetc_wr(hw, ENETC_UMHFTR1, 0);
 	}
 }
 
-static void enetc_set_mac_ht_flt(struct enetc_hw *hw, u32 *hash, bool mc)
+static void enetc_set_mac_ht_flt(struct enetc_hw *hw, u32 *hash, int type)
 {
-	if (mc) {
+	if (type == MC) {
 		enetc_wr(hw, ENETC_MMHFTR0, *hash);
 		enetc_wr(hw, ENETC_MMHFTR1, *(hash + 1));
-	} else {
+	} else { /* UC */
 		enetc_wr(hw, ENETC_UMHFTR0, *hash);
 		enetc_wr(hw, ENETC_UMHFTR1, *(hash + 1));
 	}
@@ -214,25 +214,29 @@ void enetc_sync_mac_filters(struct enetc_si *si, struct enetc_mac_filter *tbl,
 	for (i = 0; i < MADDR_TYPE; i++, f++) {
 		bool em = (f->mac_addr_cnt == 1) && (i == UC);
 		bool clear = !f->mac_addr_cnt;
-		bool mc = (i == MC);
 
 		if (clear) {
-			if (!mc)
+			if (i == UC)
 				enetc_clear_mac_flt_entry(si, pos);
 
-			enetc_clear_mac_ht_flt(&si->hw, mc);
+			enetc_clear_mac_ht_flt(&si->hw, i);
 			continue;
 		}
 
 		/* exact match filter */
 		if (em) {
+			enetc_clear_mac_ht_flt(&si->hw, UC);
+
 			enetc_set_mac_flt_entry(si, pos, f->mac_addr,
 						BIT(si_idx));
 			continue;
 		}
 
-		/* hash table filter */
-		enetc_set_mac_ht_flt(&si->hw, (u32 *)f->mac_hash_table, mc);
+		/* hash table filter, clear EM filter for UC entries */
+		if (i == UC)
+			enetc_clear_mac_flt_entry(si, pos);
+
+		enetc_set_mac_ht_flt(&si->hw, (u32 *)f->mac_hash_table, i);
 	}
 }
 

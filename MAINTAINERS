@@ -8709,6 +8709,13 @@ F:	Documentation/devicetree/bindings/nvmem/
 F:	include/linux/nvmem-consumer.h
 F:	include/linux/nvmem-provider.h
 
+NXP FLEX SPI DRIVER
+M:	Yogesh Gaur <yogeshnarayan.gaur@nxp.com>
+M:	Suresh Gupta <suresh.gupta@nxp.com>
+L:	linux-mtd@lists.infradead.org
+S:	Maintained
+F:	drivers/mtd/spi-nor/nxp-flexspi.c
+
 NXP-NCI NFC DRIVER
 M:	Clément Perrochaud <clement.perrochaud@effinnov.com>
 R:	Charles Gorand <charles.gorand@effinnov.com>

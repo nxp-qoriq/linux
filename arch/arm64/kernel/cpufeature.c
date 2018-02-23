@@ -1063,8 +1063,8 @@ bool this_cpu_has_cap(unsigned int cap)
 	if (WARN_ON(preemptible()))
 		return false;
 
-	for (caps = arm64_features; caps->desc; caps++)
-		if (caps->capability == cap && caps->matches)
+	for (caps = arm64_features; caps->matches; caps++)
+		if (caps->capability == cap)
 			return caps->matches(caps, SCOPE_LOCAL_CPU);
 
 	return false;

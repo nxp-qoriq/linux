@@ -147,3 +147,15 @@
 &usb1 {
 	status = "okay";
 };
+
+&fspi {
+	status = "okay";
+	flash0: mt35xu512aba@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "micron,m25p80";
+		m25p,fast-read;
+		spi-max-frequency = <20000000>;
+		reg = <0>;
+	};
+};

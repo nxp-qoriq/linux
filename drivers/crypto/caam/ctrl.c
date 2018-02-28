@@ -17,6 +17,7 @@
 #include "jr.h"
 #include "desc_constr.h"
 #include "ctrl.h"
+#include "error.h"
 
 bool caam_little_end;
 EXPORT_SYMBOL(caam_little_end);
@@ -41,6 +42,12 @@ static inline struct clk *caam_drv_identify_clk(struct device *dev,
 	return caam_imx ? devm_clk_get(dev, clk_name) : NULL;
 }
 
+#if defined(CONFIG_EMU_PXP) || defined(CONFIG_EMU_CFP)
+static const bool det_mode = true;
+#else
+static const bool det_mode;
+#endif
+
 /*
  * Descriptor to instantiate RNG State Handle 0 in normal mode and
  * load the JDKEK, TDKEK and TDSK registers
@@ -54,7 +61,13 @@ static void build_instantiation_desc(u32 *desc, int handle, int do_sk)
 	op_flags = OP_TYPE_CLASS1_ALG | OP_ALG_ALGSEL_RNG |
 			(handle << OP_ALG_AAI_SHIFT) | OP_ALG_AS_INIT;
 
-	/* INIT RNG in non-test mode */
+	if (det_mode) {
+		append_load_imm_u32(desc, 0, LDST_CLASS_1_CCB |
+				    LDST_SRCDST_WORD_KEYSZ_REG | LDST_IMM);
+		op_flags |= OP_ALG_RNG_TST;
+	}
+
+	/* INIT RNG */
 	append_operation(desc, op_flags);
 
 	if (!handle && do_sk) {
@@ -72,9 +85,14 @@ static void build_instantiation_desc(u32 *desc, int handle, int do_sk)
 		 */
 		append_load_imm_u32(desc, 1, LDST_SRCDST_WORD_CLRW);
 
+		op_flags = OP_TYPE_CLASS1_ALG | OP_ALG_ALGSEL_RNG |
+			   OP_ALG_AAI_RNG4_SK;
+
+		if (det_mode)
+			op_flags |= OP_ALG_RNG_TST;
+
 		/* Initialize State Handle  */
-		append_operation(desc, OP_TYPE_CLASS1_ALG | OP_ALG_ALGSEL_RNG |
-				 OP_ALG_AAI_RNG4_SK);
+		append_operation(desc, op_flags);
 	}
 
 	append_jump(desc, JUMP_CLASS_CLASS1 | JUMP_TYPE_HALT);
@@ -245,9 +263,24 @@ static int instantiate_rng(struct device *ctrldev, int state_handle_mask,
 		if (ret)
 			break;
 
-		rdsta_val = rd_reg32(&ctrl->r4tst[0].rdsta) & RDSTA_IFMASK;
+		if (det_mode)
+			rdsta_val = (rd_reg32(&ctrl->r4tst[0].rdsta) &
+				     RDSTA_TFMASK) >> RDSTA_TFSHIFT;
+		else
+			rdsta_val = rd_reg32(&ctrl->r4tst[0].rdsta) &
+				    RDSTA_IFMASK;
+
 		if ((status && status != JRSTA_SSRC_JUMP_HALT_CC) ||
 		    !(rdsta_val & (1 << sh_idx))) {
+			if (status && status != JRSTA_SSRC_JUMP_HALT_CC) {
+				dev_info(ctrldev, "RNG: handle %d init failed with status\n",
+					 sh_idx);
+				caam_jr_strstatus(ctrldev, status);
+			} else {
+				dev_info(ctrldev, "RNG: handle %d init failed\n",
+					 sh_idx);
+			}
+
 			ret = -EAGAIN;
 			break;
 		}
@@ -743,7 +776,8 @@ static int caam_probe(struct platform_device *pdev)
 			 * Also, if a handle was instantiated, do not change
 			 * the TRNG parameters.
 			 */
-			if (!(ctrlpriv->rng4_sh_init || inst_handles)) {
+			if (!det_mode &&
+			    !(ctrlpriv->rng4_sh_init || inst_handles)) {
 				dev_info(dev,
 					 "Entropy delay = %u\n",
 					 ent_delay);
@@ -759,6 +793,8 @@ static int caam_probe(struct platform_device *pdev)
 			 */
 			ret = instantiate_rng(dev, inst_handles,
 					      gen_sk);
+			if (det_mode)
+				break;
 			if (ret == -EAGAIN)
 				/*
 				 * if here, the loop will rerun,

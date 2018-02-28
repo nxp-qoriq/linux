@@ -1209,6 +1209,8 @@
 #define OP_ALG_AAI_RNG4_AI	(0x80 << OP_ALG_AAI_SHIFT)
 #define OP_ALG_AAI_RNG4_SK	(0x100 << OP_ALG_AAI_SHIFT)
 
+#define OP_ALG_RNG_TST		0x01
+
 /* hmac/smac AAI set */
 #define OP_ALG_AAI_HASH		(0x00 << OP_ALG_AAI_SHIFT)
 #define OP_ALG_AAI_HMAC		(0x01 << OP_ALG_AAI_SHIFT)

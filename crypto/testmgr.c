@@ -3855,6 +3855,7 @@ static const struct alg_test_desc alg_test_descs[] = {
 	}
 };
 
+#if !defined(CONFIG_EMU_CFP) && !defined(CONFIG_EMU_PXP)
 static bool alg_test_descs_checked;
 
 static void alg_test_descs_check_order(void)
@@ -3883,6 +3884,7 @@ static void alg_test_descs_check_order(void)
 		}
 	}
 }
+#endif
 
 static int alg_find_test(const char *alg)
 {
@@ -3920,7 +3922,17 @@ int alg_test(const char *driver, const char *alg, u32 type, u32 mask)
 		return 0;
 	}
 
+	/*
+	 * Emulator-specific changes:
+	 * - disable checking algorithm order
+	 * - run self-tests only for caam algorithms
+	 */
+#if defined(CONFIG_EMU_CFP) || defined(CONFIG_EMU_PXP)
+	if (!strstr(driver, "caam"))
+		return 0;
+#else
 	alg_test_descs_check_order();
+#endif
 
 	if ((type & CRYPTO_ALG_TYPE_MASK) == CRYPTO_ALG_TYPE_CIPHER) {
 		char nalg[CRYPTO_MAX_ALG_NAME];

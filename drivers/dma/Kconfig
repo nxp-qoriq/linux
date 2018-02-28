@@ -72,6 +72,7 @@ config AMCC_PPC440SPE_ADMA
 	select DMA_ENGINE_RAID
 	select ARCH_HAS_ASYNC_TX_FIND_CHANNEL
 	select ASYNC_TX_ENABLE_CHANNEL_SWITCH
+	select ARCH_DMA_ADDR_T_64BIT
 	help
 	  Enable support for the AMCC PPC440SPe RAID engines.
 
@@ -192,6 +193,20 @@ config FSL_EDMA
 	  Support the Freescale eDMA engine with programmable channel
 	  multiplexing capability for DMA request sources(slot).
 	  This module can be found on Freescale Vybrid and LS-1 SoCs.
+
+config FSL_QDMA
+       tristate "Freescale qDMA engine support"
+       select DMA_ENGINE
+       select DMA_VIRTUAL_CHANNELS
+       select DMA_ENGINE_RAID
+       select ASYNC_TX_ENABLE_CHANNEL_SWITCH
+       help
+         Support the Freescale qDMA engine with command queue and legacy mode.
+         Channel virtualization is supported through enqueuing of DMA jobs to,
+         or dequeuing DMA jobs from, different work queues.
+         This module can be found on Freescale LS SoCs.
+
+source drivers/dma/dpaa2-qdma/Kconfig
 
 config FSL_RAID
         tristate "Freescale RAID engine Support"
@@ -523,6 +538,23 @@ config ZX_DMA
 	help
 	  Support the DMA engine for ZTE ZX296702 platform devices.
 
+config CRYPTO_DEV_FSL_CAAM_DMA
+	tristate "CAAM DMA engine support"
+	depends on CRYPTO_DEV_FSL_CAAM_JR
+	default y
+	select DMA_ENGINE
+	select ASYNC_CORE
+	select ASYNC_TX_ENABLE_CHANNEL_SWITCH
+	help
+	  Selecting this will offload the DMA operations for users of
+	  the scatter gather memcopy API to the CAAM via job rings. The
+	  CAAM is a hardware module that provides hardware acceleration to
+	  cryptographic operations. It has a built-in DMA controller that can
+	  be programmed to read/write cryptographic data. This module defines
+	  a DMA driver that uses the DMA capabilities of the CAAM.
+
+	  To compile this as a module, choose M here: the module
+	  will be called caam_dma.
 
 # driver files
 source "drivers/dma/bestcomm/Kconfig"

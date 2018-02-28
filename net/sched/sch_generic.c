@@ -290,8 +290,14 @@ static void dev_watchdog(unsigned long arg)
 				txq = netdev_get_tx_queue(dev, i);
 				/*
 				 * old device drivers set dev->trans_start
+				 * NETIF_F_HW_ACCEL_MQ is set for device that
+				 * need to avoid locking on SMP systems
 				 */
-				trans_start = txq->trans_start ? : dev->trans_start;
+				if (dev->features & NETIF_F_HW_ACCEL_MQ)
+					trans_start = dev->trans_start;
+				else
+					trans_start = txq->trans_start ? :
+						dev->trans_start;
 				if (netif_xmit_stopped(txq) &&
 				    time_after(jiffies, (trans_start +
 							 dev->watchdog_timeo))) {

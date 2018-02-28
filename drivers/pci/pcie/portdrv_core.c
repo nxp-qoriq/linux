@@ -43,6 +43,19 @@ static void release_pcie_device(struct device *dev)
 }
 
 /**
+ * pcibios_check_service_irqs - check irqs in the device tree
+ * @dev: PCI Express port to handle
+ * @irqs: Array of irqs to populate
+ * @mask: Bitmask of port capabilities returned by get_port_device_capability()
+ *
+ * Return value: 0 means no service irqs in the device tree
+ *
+ */
+int __weak pcibios_check_service_irqs(struct pci_dev *dev, int *irqs, int mask)
+{
+	return 0;
+}
+/**
  * pcie_port_msix_add_entry - add entry to given array of MSI-X entries
  * @entries: Array of MSI-X entries
  * @new_entry: Index of the entry to add to the array
@@ -199,6 +212,21 @@ static int pcie_port_enable_msix(struct pci_dev *dev, int *vectors, int mask)
 static int init_service_irqs(struct pci_dev *dev, int *irqs, int mask)
 {
 	int i, irq = -1;
+	int ret;
+
+	/* Check if some platforms owns independent irq pins for AER/PME etc.
+	 * Some platforms may own independent AER/PME interrupts and set
+	 * them in the device tree file.
+	 */
+	for (i = 0; i < PCIE_PORT_DEVICE_MAXSERVICES; i++)
+			irqs[i] = -1;
+
+	ret = pcibios_check_service_irqs(dev, irqs, mask);
+	if (ret) {
+		if (dev->irq)
+			irq = dev->irq;
+		goto no_msi;
+	}
 
 	/*
 	 * If MSI cannot be used for PCIe PME or hotplug, we have to use
@@ -225,7 +253,8 @@ static int init_service_irqs(struct pci_dev *dev, int *irqs, int mask)
 
  no_msi:
 	for (i = 0; i < PCIE_PORT_DEVICE_MAXSERVICES; i++)
-		irqs[i] = irq;
+		if (irqs[i] == -1)
+			irqs[i] = irq;
 	irqs[PCIE_PORT_SERVICE_VC_SHIFT] = -1;
 
 	if (irq < 0)

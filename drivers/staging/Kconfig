@@ -106,8 +106,14 @@ source "drivers/staging/fbtft/Kconfig"
 
 source "drivers/staging/fsl-mc/Kconfig"
 
+source "drivers/staging/fsl-dpaa2/Kconfig"
+
 source "drivers/staging/wilc1000/Kconfig"
 
 source "drivers/staging/most/Kconfig"
+
+source "drivers/staging/fsl_qbman/Kconfig"
+
+source "drivers/staging/fsl_ppfe/Kconfig"
 
 endif # STAGING

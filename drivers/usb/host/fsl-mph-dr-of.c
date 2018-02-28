@@ -17,6 +17,7 @@
 #include <linux/of_platform.h>
 #include <linux/clk.h>
 #include <linux/module.h>
+#include <linux/dma-mapping.h>
 
 struct fsl_usb2_dev_data {
 	char *dr_mode;		/* controller mode */
@@ -96,7 +97,11 @@ static struct platform_device *fsl_usb2_device_register(
 	pdev->dev.parent = &ofdev->dev;
 
 	pdev->dev.coherent_dma_mask = ofdev->dev.coherent_dma_mask;
-	*pdev->dev.dma_mask = *ofdev->dev.dma_mask;
+
+	if (!pdev->dev.dma_mask)
+		pdev->dev.dma_mask = &ofdev->dev.coherent_dma_mask;
+	else
+		dma_set_mask(&pdev->dev, DMA_BIT_MASK(32));
 
 	retval = platform_device_add_data(pdev, pdata, sizeof(*pdata));
 	if (retval)
@@ -225,6 +230,17 @@ static int fsl_usb2_mph_dr_of_probe(struct platform_device *ofdev)
 		pdata->has_fsl_erratum_a005275 = 1;
 	else
 		pdata->has_fsl_erratum_a005275 = 0;
+
+	if (of_get_property(np, "fsl,erratum_a006918", NULL))
+		pdata->has_fsl_erratum_a006918 = 1;
+	else
+		pdata->has_fsl_erratum_a006918 = 0;
+
+	if (of_get_property(np, "fsl,usb_erratum_14", NULL))
+		pdata->has_fsl_erratum_14 = 1;
+	else
+		pdata->has_fsl_erratum_14 = 0;
+
 
 	/*
 	 * Determine whether phy_clk_valid needs to be checked

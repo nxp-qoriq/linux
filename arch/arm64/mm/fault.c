@@ -43,6 +43,28 @@
 
 static const char *fault_name(unsigned int esr);
 
+#ifdef CONFIG_KPROBES
+static inline int notify_page_fault(struct pt_regs *regs, unsigned int esr)
+{
+	int ret = 0;
+
+	/* kprobe_running() needs smp_processor_id() */
+	if (!user_mode(regs)) {
+		preempt_disable();
+		if (kprobe_running() && kprobe_fault_handler(regs, esr))
+			ret = 1;
+		preempt_enable();
+	}
+
+	return ret;
+}
+#else
+static inline int notify_page_fault(struct pt_regs *regs, unsigned int esr)
+{
+	return 0;
+}
+#endif
+
 /*
  * Dump out the page tables associated with 'addr' in mm 'mm'.
  */
@@ -244,6 +266,14 @@ out:
 	return fault;
 }
 
+static inline int permission_fault(unsigned int esr)
+{
+	unsigned int ec       = (esr & ESR_ELx_EC_MASK) >> ESR_ELx_EC_SHIFT;
+	unsigned int fsc_type = esr & ESR_ELx_FSC_TYPE;
+
+	return (ec == ESR_ELx_EC_DABT_CUR && fsc_type == ESR_ELx_FSC_PERM);
+}
+
 static int __kprobes do_page_fault(unsigned long addr, unsigned int esr,
 				   struct pt_regs *regs)
 {
@@ -252,6 +282,9 @@ static int __kprobes do_page_fault(unsigned long addr, unsigned int esr,
 	int fault, sig, code;
 	unsigned long vm_flags = VM_READ | VM_WRITE | VM_EXEC;
 	unsigned int mm_flags = FAULT_FLAG_ALLOW_RETRY | FAULT_FLAG_KILLABLE;
+
+	if (notify_page_fault(regs, esr))
+		return 0;
 
 	tsk = current;
 	mm  = tsk->mm;
@@ -277,12 +310,13 @@ static int __kprobes do_page_fault(unsigned long addr, unsigned int esr,
 		mm_flags |= FAULT_FLAG_WRITE;
 	}
 
-	/*
-	 * PAN bit set implies the fault happened in kernel space, but not
-	 * in the arch's user access functions.
-	 */
-	if (IS_ENABLED(CONFIG_ARM64_PAN) && (regs->pstate & PSR_PAN_BIT))
-		goto no_context;
+	if (permission_fault(esr) && (addr < USER_DS)) {
+		if (get_fs() == KERNEL_DS)
+			die("Accessing user space memory with fs=KERNEL_DS", regs, esr);
+
+		if (!search_exception_tables(regs->pc))
+			die("Accessing user space memory outside uaccess.h routines", regs, esr);
+	}
 
 	/*
 	 * As per x86, we may deadlock here. However, since the kernel only
@@ -609,6 +643,7 @@ asmlinkage int __exception do_debug_exception(unsigned long addr,
 
 	return 0;
 }
+NOKPROBE_SYMBOL(do_debug_exception);
 
 #ifdef CONFIG_ARM64_PAN
 int cpu_enable_pan(void *__unused)
@@ -624,3 +659,17 @@ int cpu_enable_pan(void *__unused)
 	return 0;
 }
 #endif /* CONFIG_ARM64_PAN */
+
+#ifdef CONFIG_ARM64_UAO
+/*
+ * Kernel threads have fs=KERNEL_DS by default, and don't need to call
+ * set_fs(), devtmpfs in particular relies on this behaviour.
+ * We need to enable the feature at runtime (instead of adding it to
+ * PSR_MODE_EL1h) as the feature may not be implemented by the cpu.
+ */
+void cpu_enable_uao(void *__unused)
+{
+	asm(SET_PSTATE_UAO(1));
+	return 0;
+}
+#endif /* CONFIG_ARM64_UAO */

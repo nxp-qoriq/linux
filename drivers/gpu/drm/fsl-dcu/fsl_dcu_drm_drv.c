@@ -38,27 +38,14 @@ static const struct regmap_config fsl_dcu_regmap_config = {
 static int fsl_dcu_drm_irq_init(struct drm_device *dev)
 {
 	struct fsl_dcu_drm_device *fsl_dev = dev->dev_private;
-	unsigned int value;
 	int ret;
 
 	ret = drm_irq_install(dev, fsl_dev->irq);
 	if (ret < 0)
 		dev_err(dev->dev, "failed to install IRQ handler\n");
 
-	ret = regmap_write(fsl_dev->regmap, DCU_INT_STATUS, 0);
-	if (ret)
-		dev_err(dev->dev, "set DCU_INT_STATUS failed\n");
-	ret = regmap_read(fsl_dev->regmap, DCU_INT_MASK, &value);
-	if (ret)
-		dev_err(dev->dev, "read DCU_INT_MASK failed\n");
-	value &= DCU_INT_MASK_VBLANK;
-	ret = regmap_write(fsl_dev->regmap, DCU_INT_MASK, value);
-	if (ret)
-		dev_err(dev->dev, "set DCU_INT_MASK failed\n");
-	ret = regmap_write(fsl_dev->regmap, DCU_UPDATE_MODE,
-			   DCU_UPDATE_MODE_READREG);
-	if (ret)
-		dev_err(dev->dev, "set DCU_UPDATE_MODE failed\n");
+	regmap_write(fsl_dev->regmap, DCU_INT_STATUS, 0);
+	regmap_write(fsl_dev->regmap, DCU_INT_MASK, ~0);
 
 	return ret;
 }
@@ -243,15 +230,16 @@ static int fsl_dcu_drm_pm_resume(struct device *dev)
 	if (!fsl_dev)
 		return 0;
 
+	ret = clk_prepare(fsl_dev->clk);
+	if (ret < 0) {
+		dev_err(dev, "failed to prepare dcu clk\n");
+		return ret;
+	}
+
 	ret = clk_enable(fsl_dev->clk);
 	if (ret < 0) {
 		dev_err(dev, "failed to enable dcu clk\n");
 		clk_unprepare(fsl_dev->clk);
-		return ret;
-	}
-	ret = clk_prepare(fsl_dev->clk);
-	if (ret < 0) {
-		dev_err(dev, "failed to prepare dcu clk\n");
 		return ret;
 	}
 

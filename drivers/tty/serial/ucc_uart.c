@@ -31,9 +31,10 @@
 #include <linux/dma-mapping.h>
 
 #include <linux/fs_uart_pd.h>
-#include <asm/ucc_slow.h>
+#include <soc/fsl/qe/ucc_slow.h>
 
 #include <linux/firmware.h>
+#include <asm/cpm.h>
 #include <asm/reg.h>
 
 /*

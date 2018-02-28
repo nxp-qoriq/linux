@@ -29,6 +29,8 @@ obj-$(CONFIG_DW_DMAC_CORE) += dw/
 obj-$(CONFIG_EP93XX_DMA) += ep93xx_dma.o
 obj-$(CONFIG_FSL_DMA) += fsldma.o
 obj-$(CONFIG_FSL_EDMA) += fsl-edma.o
+obj-$(CONFIG_FSL_QDMA) += fsl-qdma.o
+obj-$(CONFIG_FSL_DPAA2_QDMA) += dpaa2-qdma/
 obj-$(CONFIG_FSL_RAID) += fsl_raid.o
 obj-$(CONFIG_HSU_DMA) += hsu/
 obj-$(CONFIG_IMG_MDC_DMA) += img-mdc-dma.o
@@ -65,5 +67,6 @@ obj-$(CONFIG_TI_DMA_CROSSBAR) += ti-dma-crossbar.o
 obj-$(CONFIG_TI_EDMA) += edma.o
 obj-$(CONFIG_XGENE_DMA) += xgene-dma.o
 obj-$(CONFIG_ZX_DMA) += zx296702_dma.o
+obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM_DMA) += caam_dma.o
 
 obj-y += xilinx/

@@ -33,14 +33,18 @@
 
 /* PEX Internal Configuration Registers */
 #define PCIE_STRFMR1		0x71c /* Symbol Timer & Filter Mask Register1 */
+#define PCIE_ABSERR		0x8d0 /* Bridge Slave Error Response Register */
+#define PCIE_ABSERR_SETTING	0x9401 /* Forward error of non-posted request */
 #define PCIE_DBI_RO_WR_EN	0x8bc /* DBI Read-Only Write Enable Register */
 
-/* PEX LUT registers */
-#define PCIE_LUT_DBG		0x7FC /* PEX LUT Debug Register */
+#define PCIE_IATU_NUM		6
+
+static void ls_pcie_host_init(struct pcie_port *pp);
 
 struct ls_pcie_drvdata {
 	u32 lut_offset;
 	u32 ltssm_shift;
+	u32 lut_dbg;
 	struct pcie_host_ops *ops;
 };
 
@@ -77,6 +81,24 @@ static void ls_pcie_fix_class(struct ls_pcie *pcie)
 	iowrite16(PCI_CLASS_BRIDGE_PCI, pcie->dbi + PCI_CLASS_DEVICE);
 }
 
+/* Drop MSG TLP except for Vendor MSG */
+static void ls_pcie_drop_msg_tlp(struct ls_pcie *pcie)
+{
+	u32 val;
+
+	val = ioread32(pcie->dbi + PCIE_STRFMR1);
+	val &= 0xDFFFFFFF;
+	iowrite32(val, pcie->dbi + PCIE_STRFMR1);
+}
+
+static void ls_pcie_disable_outbound_atus(struct ls_pcie *pcie)
+{
+	int i;
+
+	for (i = 0; i < PCIE_IATU_NUM; i++)
+		dw_pcie_disable_outbound_atu(&pcie->pp, i);
+}
+
 static int ls1021_pcie_link_up(struct pcie_port *pp)
 {
 	u32 state;
@@ -97,7 +119,7 @@ static int ls1021_pcie_link_up(struct pcie_port *pp)
 static void ls1021_pcie_host_init(struct pcie_port *pp)
 {
 	struct ls_pcie *pcie = to_ls_pcie(pp);
-	u32 val, index[2];
+	u32 index[2];
 
 	pcie->scfg = syscon_regmap_lookup_by_phandle(pp->dev->of_node,
 						     "fsl,pcie-scfg");
@@ -116,13 +138,7 @@ static void ls1021_pcie_host_init(struct pcie_port *pp)
 
 	dw_pcie_setup_rc(pp);
 
-	/*
-	 * LS1021A Workaround for internal TKT228622
-	 * to fix the INTx hang issue
-	 */
-	val = ioread32(pcie->dbi + PCIE_STRFMR1);
-	val &= 0xffff;
-	iowrite32(val, pcie->dbi + PCIE_STRFMR1);
+	ls_pcie_drop_msg_tlp(pcie);
 }
 
 static int ls_pcie_link_up(struct pcie_port *pp)
@@ -130,7 +146,7 @@ static int ls_pcie_link_up(struct pcie_port *pp)
 	struct ls_pcie *pcie = to_ls_pcie(pp);
 	u32 state;
 
-	state = (ioread32(pcie->lut + PCIE_LUT_DBG) >>
+	state = (ioread32(pcie->lut + pcie->drvdata->lut_dbg) >>
 		 pcie->drvdata->ltssm_shift) &
 		 LTSSM_STATE_MASK;
 
@@ -140,6 +156,12 @@ static int ls_pcie_link_up(struct pcie_port *pp)
 	return 1;
 }
 
+/* Forward error response of outbound non-posted requests */
+static void ls_pcie_fix_error_response(struct ls_pcie *pcie)
+{
+	iowrite32(PCIE_ABSERR_SETTING, pcie->dbi + PCIE_ABSERR);
+}
+
 static void ls_pcie_host_init(struct pcie_port *pp)
 {
 	struct ls_pcie *pcie = to_ls_pcie(pp);
@@ -147,7 +169,12 @@ static void ls_pcie_host_init(struct pcie_port *pp)
 	iowrite32(1, pcie->dbi + PCIE_DBI_RO_WR_EN);
 	ls_pcie_fix_class(pcie);
 	ls_pcie_clear_multifunction(pcie);
+	ls_pcie_drop_msg_tlp(pcie);
 	iowrite32(0, pcie->dbi + PCIE_DBI_RO_WR_EN);
+
+	ls_pcie_disable_outbound_atus(pcie);
+	ls_pcie_fix_error_response(pcie);
+	dw_pcie_setup_rc(pp);
 }
 
 static int ls_pcie_msi_host_init(struct pcie_port *pp,
@@ -190,19 +217,39 @@ static struct ls_pcie_drvdata ls1021_drvdata = {
 static struct ls_pcie_drvdata ls1043_drvdata = {
 	.lut_offset = 0x10000,
 	.ltssm_shift = 24,
+	.lut_dbg = 0x7fc,
+	.ops = &ls_pcie_host_ops,
+};
+
+static struct ls_pcie_drvdata ls1046_drvdata = {
+	.lut_offset = 0x80000,
+	.ltssm_shift = 24,
+	.lut_dbg = 0x407fc,
 	.ops = &ls_pcie_host_ops,
 };
 
 static struct ls_pcie_drvdata ls2080_drvdata = {
 	.lut_offset = 0x80000,
 	.ltssm_shift = 0,
+	.lut_dbg = 0x7fc,
+	.ops = &ls_pcie_host_ops,
+};
+
+static struct ls_pcie_drvdata ls2088_drvdata = {
+	.lut_offset = 0x80000,
+	.ltssm_shift = 0,
+	.lut_dbg = 0x407fc,
 	.ops = &ls_pcie_host_ops,
 };
 
 static const struct of_device_id ls_pcie_of_match[] = {
+	{ .compatible = "fsl,ls1012a-pcie", .data = &ls1046_drvdata },
 	{ .compatible = "fsl,ls1021a-pcie", .data = &ls1021_drvdata },
 	{ .compatible = "fsl,ls1043a-pcie", .data = &ls1043_drvdata },
+	{ .compatible = "fsl,ls1046a-pcie", .data = &ls1046_drvdata },
 	{ .compatible = "fsl,ls2080a-pcie", .data = &ls2080_drvdata },
+	{ .compatible = "fsl,ls2088a-pcie", .data = &ls2088_drvdata },
+	{ .compatible = "fsl,ls1088a-pcie", .data = &ls2088_drvdata },
 	{ },
 };
 MODULE_DEVICE_TABLE(of, ls_pcie_of_match);

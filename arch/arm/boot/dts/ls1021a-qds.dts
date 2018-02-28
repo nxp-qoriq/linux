@@ -124,6 +124,19 @@
 	};
 };
 
+&qspi {
+	num-cs = <2>;
+	status = "okay";
+
+	qflash0: s25fl128s@0 {
+		compatible = "spansion,m25p80";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		spi-max-frequency = <20000000>;
+		reg = <0>;
+	};
+};
+
 &enet0 {
 	tbi-handle = <&tbi0>;
 	phy-handle = <&sgmii_phy1c>;
@@ -320,10 +333,22 @@
 	status = "okay";
 };
 
+&sata {
+	status = "okay";
+};
+
 &uart0 {
 	status = "okay";
 };
 
 &uart1 {
+	status = "okay";
+};
+
+&can0 {
+	status = "okay";
+};
+
+&can1 {
 	status = "okay";
 };

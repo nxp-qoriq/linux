@@ -826,6 +826,20 @@ static int __spi_unmap_msg(struct spi_master *master, struct spi_message *msg)
 	return 0;
 }
 #else /* !CONFIG_HAS_DMA */
+static inline int spi_map_buf(struct spi_master *master,
+			      struct device *dev, struct sg_table *sgt,
+			      void *buf, size_t len,
+			      enum dma_data_direction dir)
+{
+	return -EINVAL;
+}
+
+static inline void spi_unmap_buf(struct spi_master *master,
+				 struct device *dev, struct sg_table *sgt,
+				 enum dma_data_direction dir)
+{
+}
+
 static inline int __spi_map_msg(struct spi_master *master,
 				struct spi_message *msg)
 {
@@ -1135,6 +1149,7 @@ static void __spi_pump_messages(struct spi_master *master, bool in_kthread)
 		}
 	}
 
+	mutex_lock(&master->bus_lock_mutex);
 	trace_spi_message_start(master->cur_msg);
 
 	if (master->prepare_message) {
@@ -1144,6 +1159,7 @@ static void __spi_pump_messages(struct spi_master *master, bool in_kthread)
 				"failed to prepare message: %d\n", ret);
 			master->cur_msg->status = ret;
 			spi_finalize_current_message(master);
+			mutex_unlock(&master->bus_lock_mutex);
 			return;
 		}
 		master->cur_msg_prepared = true;
@@ -1153,6 +1169,7 @@ static void __spi_pump_messages(struct spi_master *master, bool in_kthread)
 	if (ret) {
 		master->cur_msg->status = ret;
 		spi_finalize_current_message(master);
+		mutex_unlock(&master->bus_lock_mutex);
 		return;
 	}
 
@@ -1160,8 +1177,10 @@ static void __spi_pump_messages(struct spi_master *master, bool in_kthread)
 	if (ret) {
 		dev_err(&master->dev,
 			"failed to transfer one message from queue\n");
+		mutex_unlock(&master->bus_lock_mutex);
 		return;
 	}
+	mutex_unlock(&master->bus_lock_mutex);
 }
 
 /**
@@ -2328,6 +2347,60 @@ int spi_async_locked(struct spi_device *spi, struct spi_message *message)
 }
 EXPORT_SYMBOL_GPL(spi_async_locked);
 
+
+int spi_flash_read(struct spi_device *spi,
+		   struct spi_flash_read_message *msg)
+
+{
+	struct spi_master *master = spi->master;
+	struct device *rx_dev = NULL;
+	int ret;
+
+	if ((msg->opcode_nbits == SPI_NBITS_DUAL ||
+	     msg->addr_nbits == SPI_NBITS_DUAL) &&
+	    !(spi->mode & (SPI_TX_DUAL | SPI_TX_QUAD)))
+		return -EINVAL;
+	if ((msg->opcode_nbits == SPI_NBITS_QUAD ||
+	     msg->addr_nbits == SPI_NBITS_QUAD) &&
+	    !(spi->mode & SPI_TX_QUAD))
+		return -EINVAL;
+	if (msg->data_nbits == SPI_NBITS_DUAL &&
+	    !(spi->mode & (SPI_RX_DUAL | SPI_RX_QUAD)))
+		return -EINVAL;
+	if (msg->data_nbits == SPI_NBITS_QUAD &&
+	    !(spi->mode &  SPI_RX_QUAD))
+		return -EINVAL;
+
+	if (master->auto_runtime_pm) {
+		ret = pm_runtime_get_sync(master->dev.parent);
+		if (ret < 0) {
+			dev_err(&master->dev, "Failed to power device: %d\n",
+				ret);
+			return ret;
+		}
+	}
+
+	mutex_lock(&master->bus_lock_mutex);
+	if (master->dma_rx) {
+		rx_dev = master->dma_rx->device->dev;
+		ret = spi_map_buf(master, rx_dev, &msg->rx_sg,
+				  msg->buf, msg->len,
+				  DMA_FROM_DEVICE);
+		if (!ret)
+			msg->cur_msg_mapped = true;
+	}
+	ret = master->spi_flash_read(spi, msg);
+	if (msg->cur_msg_mapped)
+		spi_unmap_buf(master, rx_dev, &msg->rx_sg,
+			      DMA_FROM_DEVICE);
+	mutex_unlock(&master->bus_lock_mutex);
+
+	if (master->auto_runtime_pm)
+		pm_runtime_put(master->dev.parent);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(spi_flash_read);
 
 /*-------------------------------------------------------------------------*/
 

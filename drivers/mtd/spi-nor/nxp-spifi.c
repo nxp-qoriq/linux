@@ -172,8 +172,8 @@ static int nxp_spifi_write_reg(struct spi_nor *nor, u8 opcode, u8 *buf, int len)
 	return nxp_spifi_wait_for_cmd(spifi);
 }
 
-static int nxp_spifi_read(struct spi_nor *nor, loff_t from, size_t len,
-			  size_t *retlen, u_char *buf)
+static ssize_t nxp_spifi_read(struct spi_nor *nor, loff_t from, size_t len,
+			      u_char *buf)
 {
 	struct nxp_spifi *spifi = nor->priv;
 	int ret;
@@ -188,8 +188,8 @@ static int nxp_spifi_read(struct spi_nor *nor, loff_t from, size_t len,
 	return 0;
 }
 
-static void nxp_spifi_write(struct spi_nor *nor, loff_t to, size_t len,
-			    size_t *retlen, const u_char *buf)
+static ssize_t nxp_spifi_write(struct spi_nor *nor, loff_t to, size_t len,
+			       size_t *retlen, const u_char *buf)
 {
 	struct nxp_spifi *spifi = nor->priv;
 	u32 cmd;
@@ -197,10 +197,9 @@ static void nxp_spifi_write(struct spi_nor *nor, loff_t to, size_t len,
 
 	ret = nxp_spifi_set_memory_mode_off(spifi);
 	if (ret)
-		return;
+		return ret;
 
 	writel(to, spifi->io_base + SPIFI_ADDR);
-	*retlen += len;
 
 	cmd = SPIFI_CMD_DOUT |
 	      SPIFI_CMD_DATALEN(len) |
@@ -212,7 +211,7 @@ static void nxp_spifi_write(struct spi_nor *nor, loff_t to, size_t len,
 	while (len--)
 		writeb(*buf++, spifi->io_base + SPIFI_DATA);
 
-	nxp_spifi_wait_for_cmd(spifi);
+	return nxp_spifi_wait_for_cmd(spifi);
 }
 
 static int nxp_spifi_erase(struct spi_nor *nor, loff_t offs)
@@ -271,7 +270,6 @@ static void nxp_spifi_dummy_id_read(struct spi_nor *nor)
 static int nxp_spifi_setup_flash(struct nxp_spifi *spifi,
 				 struct device_node *np)
 {
-	struct mtd_part_parser_data ppdata;
 	enum read_mode flash_read;
 	u32 ctrl, property;
 	u16 mode = 0;
@@ -330,7 +328,7 @@ static int nxp_spifi_setup_flash(struct nxp_spifi *spifi,
 	writel(ctrl, spifi->io_base + SPIFI_CTRL);
 
 	spifi->nor.dev   = spifi->dev;
-	spifi->nor.flash_node = np;
+	spi_nor_set_flash_node(&spifi->nor, np);
 	spifi->nor.priv  = spifi;
 	spifi->nor.read  = nxp_spifi_read;
 	spifi->nor.write = nxp_spifi_write;
@@ -361,8 +359,7 @@ static int nxp_spifi_setup_flash(struct nxp_spifi *spifi,
 		return ret;
 	}
 
-	ppdata.of_node = np;
-	ret = mtd_device_parse_register(&spifi->nor.mtd, NULL, &ppdata, NULL, 0);
+	ret = mtd_device_register(&spifi->nor.mtd, NULL, 0);
 	if (ret) {
 		dev_err(spifi->dev, "mtd device parse failed\n");
 		return ret;

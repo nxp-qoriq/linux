@@ -198,7 +198,11 @@ __acquires(ep->udc->lock)
 
 	spin_unlock(&ep->udc->lock);
 
-	usb_gadget_giveback_request(&ep->ep, &req->req);
+	/* this complete() should a func implemented by gadget layer,
+	 * eg fsg->bulk_in_complete()
+	 */
+	if (req->req.complete)
+		usb_gadget_giveback_request(&ep->ep, &req->req);
 
 	spin_lock(&ep->udc->lock);
 	ep->stopped = stopped;
@@ -245,10 +249,10 @@ static int dr_controller_setup(struct fsl_udc *udc)
 		if (udc->pdata->have_sysif_regs) {
 			if (udc->pdata->controller_ver) {
 				/* controller version 1.6 or above */
-				ctrl = __raw_readl(&usb_sys_regs->control);
+				ctrl = ioread32be(&usb_sys_regs->control);
 				ctrl &= ~USB_CTRL_UTMI_PHY_EN;
 				ctrl |= USB_CTRL_USB_EN;
-				__raw_writel(ctrl, &usb_sys_regs->control);
+				iowrite32be(ctrl, &usb_sys_regs->control);
 			}
 		}
 		portctrl |= PORTSCX_PTS_ULPI;
@@ -257,13 +261,14 @@ static int dr_controller_setup(struct fsl_udc *udc)
 		portctrl |= PORTSCX_PTW_16BIT;
 		/* fall through */
 	case FSL_USB2_PHY_UTMI:
+	case FSL_USB2_PHY_UTMI_DUAL:
 		if (udc->pdata->have_sysif_regs) {
 			if (udc->pdata->controller_ver) {
 				/* controller version 1.6 or above */
-				ctrl = __raw_readl(&usb_sys_regs->control);
+				ctrl = ioread32be(&usb_sys_regs->control);
 				ctrl |= (USB_CTRL_UTMI_PHY_EN |
 					USB_CTRL_USB_EN);
-				__raw_writel(ctrl, &usb_sys_regs->control);
+				iowrite32be(ctrl, &usb_sys_regs->control);
 				mdelay(FSL_UTMI_PHY_DLY); /* Delay for UTMI
 					PHY CLK to become stable - 10ms*/
 			}
@@ -329,22 +334,22 @@ static int dr_controller_setup(struct fsl_udc *udc)
 	/* Config control enable i/o output, cpu endian register */
 #ifndef CONFIG_ARCH_MXC
 	if (udc->pdata->have_sysif_regs) {
-		ctrl = __raw_readl(&usb_sys_regs->control);
+		ctrl = ioread32be(&usb_sys_regs->control);
 		ctrl |= USB_CTRL_IOENB;
-		__raw_writel(ctrl, &usb_sys_regs->control);
+		iowrite32be(ctrl, &usb_sys_regs->control);
 	}
 #endif
 
-#if defined(CONFIG_PPC32) && !defined(CONFIG_NOT_COHERENT_CACHE)
+#if !defined(CONFIG_NOT_COHERENT_CACHE)
 	/* Turn on cache snooping hardware, since some PowerPC platforms
 	 * wholly rely on hardware to deal with cache coherent. */
 
 	if (udc->pdata->have_sysif_regs) {
 		/* Setup Snooping for all the 4GB space */
 		tmp = SNOOP_SIZE_2GB;	/* starts from 0x0, size 2G */
-		__raw_writel(tmp, &usb_sys_regs->snoop1);
+		iowrite32be(tmp, &usb_sys_regs->snoop1);
 		tmp |= 0x80000000;	/* starts from 0x8000000, size 2G */
-		__raw_writel(tmp, &usb_sys_regs->snoop2);
+		iowrite32be(tmp, &usb_sys_regs->snoop2);
 	}
 #endif
 
@@ -1057,7 +1062,7 @@ static int fsl_ep_fifo_status(struct usb_ep *_ep)
 	struct ep_queue_head *qh;
 
 	ep = container_of(_ep, struct fsl_ep, ep);
-	if (!_ep || (!ep->ep.desc && ep_index(ep) != 0))
+	if (!_ep || !ep->ep.desc || (ep_index(ep) == 0))
 		return -ENODEV;
 
 	udc = (struct fsl_udc *)ep->udc;
@@ -1599,14 +1604,13 @@ static int process_ep_req(struct fsl_udc *udc, int pipe,
 		struct fsl_req *curr_req)
 {
 	struct ep_td_struct *curr_td;
-	int	td_complete, actual, remaining_length, j, tmp;
+	int	actual, remaining_length, j, tmp;
 	int	status = 0;
 	int	errors = 0;
 	struct  ep_queue_head *curr_qh = &udc->ep_qh[pipe];
 	int direction = pipe % 2;
 
 	curr_td = curr_req->head;
-	td_complete = 0;
 	actual = curr_req->req.length;
 
 	for (j = 0; j < curr_req->dtd_count; j++) {
@@ -1651,11 +1655,9 @@ static int process_ep_req(struct fsl_udc *udc, int pipe,
 				status = -EPROTO;
 				break;
 			} else {
-				td_complete++;
 				break;
 			}
 		} else {
-			td_complete++;
 			VDBG("dTD transmitted successful");
 		}
 
@@ -1698,7 +1700,7 @@ static void dtd_complete_irq(struct fsl_udc *udc)
 		curr_ep = get_ep_by_pipe(udc, i);
 
 		/* If the ep is configured */
-		if (curr_ep->name == NULL) {
+		if (strncmp(curr_ep->name, "ep", 2)) {
 			WARNING("Invalid EP?");
 			continue;
 		}
@@ -2420,10 +2422,12 @@ static int fsl_udc_probe(struct platform_device *pdev)
 		usb_sys_regs = (void *)dr_regs + USB_DR_SYS_OFFSET;
 #endif
 
+#ifdef CONFIG_ARCH_MXC
 	/* Initialize USB clocks */
 	ret = fsl_udc_clk_init(pdev);
 	if (ret < 0)
 		goto err_iounmap_noclk;
+#endif
 
 	/* Read Device Controller Capability Parameters register */
 	dccparams = fsl_readl(&dr_regs->dccparams);
@@ -2463,9 +2467,11 @@ static int fsl_udc_probe(struct platform_device *pdev)
 		dr_controller_setup(udc_controller);
 	}
 
+#ifdef CONFIG_ARCH_MXC
 	ret = fsl_udc_clk_finalize(pdev);
 	if (ret)
 		goto err_free_irq;
+#endif
 
 	/* Setup gadget structure */
 	udc_controller->gadget.ops = &fsl_gadget_ops;
@@ -2478,6 +2484,7 @@ static int fsl_udc_probe(struct platform_device *pdev)
 	/* Setup gadget.dev and register with kernel */
 	dev_set_name(&udc_controller->gadget.dev, "gadget");
 	udc_controller->gadget.dev.of_node = pdev->dev.of_node;
+	set_dma_ops(&udc_controller->gadget.dev, pdev->dev.archdata.dma_ops);
 
 	if (!IS_ERR_OR_NULL(udc_controller->transceiver))
 		udc_controller->gadget.is_otg = 1;
@@ -2529,7 +2536,9 @@ err_free_irq:
 err_iounmap:
 	if (pdata->exit)
 		pdata->exit(pdev);
+#ifdef CONFIG_ARCH_MXC
 	fsl_udc_clk_release();
+#endif
 err_iounmap_noclk:
 	iounmap(dr_regs);
 err_release_mem_region:
@@ -2557,8 +2566,9 @@ static int fsl_udc_remove(struct platform_device *pdev)
 	udc_controller->done = &done;
 	usb_del_gadget_udc(&udc_controller->gadget);
 
+#ifdef CONFIG_ARCH_MXC
 	fsl_udc_clk_release();
-
+#endif
 	/* DR has been stopped in usb_gadget_unregister_driver() */
 	remove_proc_file();
 
@@ -2570,7 +2580,7 @@ static int fsl_udc_remove(struct platform_device *pdev)
 	dma_pool_destroy(udc_controller->td_pool);
 	free_irq(udc_controller->irq, udc_controller);
 	iounmap(dr_regs);
-	if (pdata->operating_mode == FSL_USB2_DR_DEVICE)
+	if (res && (pdata->operating_mode == FSL_USB2_DR_DEVICE))
 		release_mem_region(res->start, resource_size(res));
 
 	/* free udc --wait for the release() finished */

@@ -230,6 +230,8 @@
 #define DEV_NAME	"ttyLP"
 #define UART_NR		6
 
+static DECLARE_BITMAP(linemap, UART_NR);
+
 struct lpuart_port {
 	struct uart_port	port;
 	struct clk		*clk;
@@ -1815,9 +1817,13 @@ static int lpuart_probe(struct platform_device *pdev)
 
 	ret = of_alias_get_id(np, "serial");
 	if (ret < 0) {
-		dev_err(&pdev->dev, "failed to get alias id, errno %d\n", ret);
-		return ret;
+		ret = find_first_zero_bit(linemap, UART_NR);
+		if (ret >= UART_NR) {
+			dev_err(&pdev->dev, "port line is full, add device failed\n");
+			return ret;
+		}
 	}
+	set_bit(ret, linemap);
 	sport->port.line = ret;
 	sport->lpuart32 = of_device_is_compatible(np, "fsl,ls1021a-lpuart");
 
@@ -1885,6 +1891,7 @@ static int lpuart_remove(struct platform_device *pdev)
 	struct lpuart_port *sport = platform_get_drvdata(pdev);
 
 	uart_remove_one_port(&lpuart_reg, &sport->port);
+	clear_bit(sport->port.line, linemap);
 
 	clk_disable_unprepare(sport->clk);
 

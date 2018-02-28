@@ -17,6 +17,8 @@
 #include <linux/mm.h>
 #include <linux/of_pci.h>
 #include <linux/of_platform.h>
+#include <linux/of_irq.h>
+#include <linux/pcieport_if.h>
 #include <linux/slab.h>
 
 #include <asm/pci-bridge.h>
@@ -59,6 +61,66 @@ int pcibios_add_device(struct pci_dev *dev)
 	dev->irq = of_irq_parse_and_map_pci(dev, 0, 0);
 
 	return 0;
+}
+
+int pci_mmap_page_range(struct pci_dev *dev, struct vm_area_struct *vma,
+			enum pci_mmap_state mmap_state, int write_combine)
+{
+	if (mmap_state == pci_mmap_io)
+		return -EINVAL;
+
+	/*
+	 * Mark this as IO
+	 */
+	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+
+	if (remap_pfn_range(vma, vma->vm_start, vma->vm_pgoff,
+			     vma->vm_end - vma->vm_start,
+			     vma->vm_page_prot))
+		return -EAGAIN;
+
+	return 0;
+}
+
+/*
+ * Check device tree if the service interrupts are there
+ */
+int pcibios_check_service_irqs(struct pci_dev *dev, int *irqs, int mask)
+{
+	int ret, count = 0;
+	struct device_node *np = NULL;
+
+	if (dev->bus->dev.of_node)
+		np = dev->bus->dev.of_node;
+
+	if (np == NULL)
+		return 0;
+
+	if (!IS_ENABLED(CONFIG_OF_IRQ))
+		return 0;
+
+	/* If root port doesn't support MSI/MSI-X/INTx in RC mode,
+	 * request irq for aer
+	 */
+	if (mask & PCIE_PORT_SERVICE_AER) {
+		ret = of_irq_get_byname(np, "aer");
+		if (ret > 0) {
+			irqs[PCIE_PORT_SERVICE_AER_SHIFT] = ret;
+			count++;
+		}
+	}
+
+	if (mask & PCIE_PORT_SERVICE_PME) {
+		ret = of_irq_get_byname(np, "pme");
+		if (ret > 0) {
+			irqs[PCIE_PORT_SERVICE_PME_SHIFT] = ret;
+			count++;
+		}
+	}
+
+	/* TODO: add more service interrupts if there it is in the device tree*/
+
+	return count;
 }
 
 /*

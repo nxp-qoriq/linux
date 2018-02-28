@@ -9,7 +9,7 @@ Required properties:
 - clocks:		From common clock binding: handle to dcu clock.
 - clock-names:		From common clock binding: Shall be "dcu".
 - big-endian		Boolean property, LS1021A DCU registers are big-endian.
-- fsl,panel:		The phandle to panel node.
+- port			Video port for the panel output
 
 Examples:
 dcu: dcu@2ce0000 {
@@ -18,5 +18,10 @@ dcu: dcu@2ce0000 {
 	clocks = <&platform_clk 0>;
 	clock-names = "dcu";
 	big-endian;
-	fsl,panel = <&panel>;
+
+	port {
+		dcu_out: endpoint {
+			remote-endpoint = <&panel_out>;
+	     };
+	};
 };

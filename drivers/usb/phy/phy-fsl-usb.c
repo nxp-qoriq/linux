@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2007,2008 Freescale semiconductor, Inc.
+ * Copyright 2007,2008 Freescale Semiconductor, Inc.
  *
  * Author: Li Yang <LeoLi@freescale.com>
  *         Jerry Huang <Chang-Ming.Huang@freescale.com>
@@ -463,6 +463,7 @@ void otg_reset_controller(void)
 int fsl_otg_start_host(struct otg_fsm *fsm, int on)
 {
 	struct usb_otg *otg = fsm->otg;
+	struct usb_bus *host = otg->host;
 	struct device *dev;
 	struct fsl_otg *otg_dev =
 		container_of(otg->usb_phy, struct fsl_otg, phy);
@@ -486,6 +487,7 @@ int fsl_otg_start_host(struct otg_fsm *fsm, int on)
 			otg_reset_controller();
 			VDBG("host on......\n");
 			if (dev->driver->pm && dev->driver->pm->resume) {
+				host->is_otg = 1;
 				retval = dev->driver->pm->resume(dev);
 				if (fsm->id) {
 					/* default-b */
@@ -510,8 +512,11 @@ int fsl_otg_start_host(struct otg_fsm *fsm, int on)
 		else {
 			VDBG("host off......\n");
 			if (dev && dev->driver) {
-				if (dev->driver->pm && dev->driver->pm->suspend)
+				if (dev->driver->pm &&
+						dev->driver->pm->suspend) {
+					host->is_otg = 1;
 					retval = dev->driver->pm->suspend(dev);
+				}
 				if (fsm->id)
 					/* default-b */
 					fsl_otg_drv_vbus(fsm, 0);
@@ -539,8 +544,17 @@ int fsl_otg_start_gadget(struct otg_fsm *fsm, int on)
 	dev = otg->gadget->dev.parent;
 
 	if (on) {
-		if (dev->driver->resume)
+		/* Delay gadget resume to synchronize between host and gadget
+		 * drivers. Upon role-reversal host drv is shutdown by kernel
+		 * worker thread. By the time host drv shuts down, controller
+		 * gets programmed for gadget role. Shutting host drv after
+		 * this results in controller getting reset, and it stops
+		 * responding to otg events
+		 */
+		if (dev->driver->resume) {
+			msleep(1000);
 			dev->driver->resume(dev);
+		}
 	} else {
 		if (dev->driver->suspend)
 			dev->driver->suspend(dev, otg_suspend_state);
@@ -672,6 +686,10 @@ static void fsl_otg_event(struct work_struct *work)
 		fsl_otg_start_host(fsm, 0);
 		otg_drv_vbus(fsm, 0);
 		fsl_otg_start_gadget(fsm, 1);
+	} else {
+		fsl_otg_start_gadget(fsm, 0);
+		otg_drv_vbus(fsm, 1);
+		fsl_otg_start_host(fsm, 1);
 	}
 }
 
@@ -724,6 +742,7 @@ irqreturn_t fsl_otg_isr(int irq, void *dev_id)
 {
 	struct otg_fsm *fsm = &((struct fsl_otg *)dev_id)->fsm;
 	struct usb_otg *otg = ((struct fsl_otg *)dev_id)->phy.otg;
+	struct fsl_otg *otg_dev = dev_id;
 	u32 otg_int_src, otg_sc;
 
 	otg_sc = fsl_readl(&usb_dr_regs->otgsc);
@@ -753,18 +772,8 @@ irqreturn_t fsl_otg_isr(int irq, void *dev_id)
 				otg->gadget->is_a_peripheral = !fsm->id;
 			VDBG("ID int (ID is %d)\n", fsm->id);
 
-			if (fsm->id) {	/* switch to gadget */
-				schedule_delayed_work(
-					&((struct fsl_otg *)dev_id)->otg_event,
-					100);
-			} else {	/* switch to host */
-				cancel_delayed_work(&
-						    ((struct fsl_otg *)dev_id)->
-						    otg_event);
-				fsl_otg_start_gadget(fsm, 0);
-				otg_drv_vbus(fsm, 1);
-				fsl_otg_start_host(fsm, 1);
-			}
+			schedule_delayed_work(&otg_dev->otg_event, 100);
+
 			return IRQ_HANDLED;
 		}
 	}
@@ -923,12 +932,32 @@ int usb_otg_start(struct platform_device *pdev)
 	temp &= ~(PORTSC_PHY_TYPE_SEL | PORTSC_PTW);
 	switch (pdata->phy_mode) {
 	case FSL_USB2_PHY_ULPI:
+		if (pdata->controller_ver) {
+			/* controller version 1.6 or above */
+			setbits32(&p_otg->dr_mem_map->control,
+				USB_CTRL_ULPI_PHY_CLK_SEL);
+			/*
+			 * Due to controller issue of PHY_CLK_VALID in ULPI
+			 * mode, we set USB_CTRL_USB_EN before checking
+			 * PHY_CLK_VALID, otherwise PHY_CLK_VALID doesn't work.
+			 */
+			clrsetbits_be32(&p_otg->dr_mem_map->control,
+				USB_CTRL_UTMI_PHY_EN, USB_CTRL_IOENB);
+		}
 		temp |= PORTSC_PTS_ULPI;
 		break;
 	case FSL_USB2_PHY_UTMI_WIDE:
 		temp |= PORTSC_PTW_16BIT;
 		/* fall through */
 	case FSL_USB2_PHY_UTMI:
+		if (pdata->controller_ver) {
+			/* controller version 1.6 or above */
+			setbits32(&p_otg->dr_mem_map->control,
+				USB_CTRL_UTMI_PHY_EN);
+			/* Delay for UTMI PHY CLK to become stable - 10ms */
+			mdelay(FSL_UTMI_PHY_DLY);
+		}
+		setbits32(&p_otg->dr_mem_map->control, USB_CTRL_UTMI_PHY_EN);
 		temp |= PORTSC_PTS_UTMI;
 		/* fall through */
 	default:

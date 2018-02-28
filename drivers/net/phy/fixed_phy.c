@@ -59,6 +59,8 @@ static int fixed_phy_update_regs(struct fixed_phy *fp)
 
 	if (fp->status.duplex) {
 		switch (fp->status.speed) {
+		case 10000:
+			break;
 		case 1000:
 			bmsr |= BMSR_ESTATEN;
 			break;
@@ -73,6 +75,8 @@ static int fixed_phy_update_regs(struct fixed_phy *fp)
 		}
 	} else {
 		switch (fp->status.speed) {
+		case 10000:
+			break;
 		case 1000:
 			bmsr |= BMSR_ESTATEN;
 			break;
@@ -94,6 +98,7 @@ static int fixed_phy_update_regs(struct fixed_phy *fp)
 			bmcr |= BMCR_FULLDPLX;
 
 			switch (fp->status.speed) {
+			case 10000:
 			case 1000:
 				bmcr |= BMCR_SPEED1000;
 				lpagb |= LPA_1000FULL;
@@ -111,6 +116,7 @@ static int fixed_phy_update_regs(struct fixed_phy *fp)
 			}
 		} else {
 			switch (fp->status.speed) {
+			case 10000:
 			case 1000:
 				bmcr |= BMCR_SPEED1000;
 				lpagb |= LPA_1000HALF;
@@ -286,7 +292,7 @@ err_regs:
 }
 EXPORT_SYMBOL_GPL(fixed_phy_add);
 
-void fixed_phy_del(int phy_addr)
+static void fixed_phy_del(int phy_addr)
 {
 	struct fixed_mdio_bus *fmb = &platform_fmb;
 	struct fixed_phy *fp, *tmp;
@@ -301,7 +307,6 @@ void fixed_phy_del(int phy_addr)
 		}
 	}
 }
-EXPORT_SYMBOL_GPL(fixed_phy_del);
 
 static int phy_fixed_addr;
 static DEFINE_SPINLOCK(phy_fixed_addr_lock);
@@ -371,6 +376,14 @@ struct phy_device *fixed_phy_register(unsigned int irq,
 	return phy;
 }
 EXPORT_SYMBOL_GPL(fixed_phy_register);
+
+void fixed_phy_unregister(struct phy_device *phy)
+{
+	phy_device_remove(phy);
+	of_node_put(phy->dev.of_node);
+	fixed_phy_del(phy->addr);
+}
+EXPORT_SYMBOL_GPL(fixed_phy_unregister);
 
 static int __init fixed_mdio_bus_init(void)
 {

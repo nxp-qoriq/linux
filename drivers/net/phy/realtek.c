@@ -102,7 +102,9 @@ static int rtl8211f_config_init(struct phy_device *phydev)
 	if (ret < 0)
 		return ret;
 
-	if (phydev->interface == PHY_INTERFACE_MODE_RGMII) {
+	if (phydev->interface == PHY_INTERFACE_MODE_RGMII_ID ||
+	    phydev->interface == PHY_INTERFACE_MODE_RGMII_TXID ||
+	    phydev->interface == PHY_INTERFACE_MODE_RGMII) {
 		/* enable TXDLY */
 		phy_write(phydev, RTL8211F_PAGE_SELECT, 0xd08);
 		reg = phy_read(phydev, 0x11);

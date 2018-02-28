@@ -105,6 +105,26 @@
 			bitclock-master;
 		};
 	};
+
+	panel: panel {
+		compatible = "nec,nl4827hc19-05b";
+
+		port {
+			panel_in: endpoint {
+				remote-endpoint = <&dcu_out>;
+			};
+		};
+	};
+};
+
+&dcu {
+	status = "okay";
+
+	port {
+		dcu_out: endpoint {
+			remote-endpoint = <&panel_in>;
+		};
+	};
 };
 
 &dspi1 {
@@ -118,6 +138,19 @@
 		spi-max-frequency = <16000000>;
 		spi-cpol;
 		spi-cpha;
+		reg = <0>;
+	};
+};
+
+&qspi {
+	num-cs = <2>;
+	status = "okay";
+
+	qflash0: n25q128a13@0 {
+		compatible = "n25q128a13", "jedec,spi-nor";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		spi-max-frequency = <20000000>;
 		reg = <0>;
 	};
 };
@@ -208,7 +241,15 @@
 	};
 };
 
+&esdhc {
+        status = "okay";
+};
+
 &sai1 {
+	status = "okay";
+};
+
+&sata {
 	status = "okay";
 };
 
@@ -217,5 +258,13 @@
 };
 
 &uart1 {
+	status = "okay";
+};
+
+&can0 {
+	status = "okay";
+};
+
+&can1 {
 	status = "okay";
 };

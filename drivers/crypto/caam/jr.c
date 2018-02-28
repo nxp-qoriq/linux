@@ -9,6 +9,7 @@
 #include <linux/of_address.h>
 
 #include "compat.h"
+#include "ctrl.h"
 #include "regs.h"
 #include "jr.h"
 #include "desc.h"
@@ -22,6 +23,14 @@ struct jr_driver_data {
 
 static struct jr_driver_data driver_data;
 
+static int jr_driver_probed;
+
+int caam_jr_driver_probed(void)
+{
+	return jr_driver_probed;
+}
+EXPORT_SYMBOL(caam_jr_driver_probed);
+
 static int caam_reset_hw_jr(struct device *dev)
 {
 	struct caam_drv_private_jr *jrp = dev_get_drvdata(dev);
@@ -31,7 +40,7 @@ static int caam_reset_hw_jr(struct device *dev)
 	 * mask interrupts since we are going to poll
 	 * for reset completion status
 	 */
-	setbits32(&jrp->rregs->rconfig_lo, JRCFG_IMSK);
+	clrsetbits_32(&jrp->rregs->rconfig_lo, 0, JRCFG_IMSK);
 
 	/* initiate flush (required prior to reset) */
 	wr_reg32(&jrp->rregs->jrcommand, JRCR_RESET);
@@ -57,7 +66,7 @@ static int caam_reset_hw_jr(struct device *dev)
 	}
 
 	/* unmask interrupts */
-	clrbits32(&jrp->rregs->rconfig_lo, JRCFG_IMSK);
+	clrsetbits_32(&jrp->rregs->rconfig_lo, JRCFG_IMSK, 0);
 
 	return 0;
 }
@@ -65,7 +74,7 @@ static int caam_reset_hw_jr(struct device *dev)
 /*
  * Shutdown JobR independent of platform property code
  */
-int caam_jr_shutdown(struct device *dev)
+static int caam_jr_shutdown(struct device *dev)
 {
 	struct caam_drv_private_jr *jrp = dev_get_drvdata(dev);
 	dma_addr_t inpbusaddr, outbusaddr;
@@ -118,6 +127,8 @@ static int caam_jr_remove(struct platform_device *pdev)
 		dev_err(jrdev, "Failed to shut down job ring\n");
 	irq_dispose_mapping(jrpriv->irq);
 
+	jr_driver_probed--;
+
 	return ret;
 }
 
@@ -147,7 +158,7 @@ static irqreturn_t caam_jr_interrupt(int irq, void *st_dev)
 	}
 
 	/* mask valid interrupts */
-	setbits32(&jrp->rregs->rconfig_lo, JRCFG_IMSK);
+	clrsetbits_32(&jrp->rregs->rconfig_lo, 0, JRCFG_IMSK);
 
 	/* Have valid interrupt at this point, just ACK and trigger */
 	wr_reg32(&jrp->rregs->jrintstatus, irqstate);
@@ -182,7 +193,7 @@ static void caam_jr_dequeue(unsigned long devarg)
 			sw_idx = (tail + i) & (JOBR_DEPTH - 1);
 
 			if (jrp->outring[hw_idx].desc ==
-			    jrp->entinfo[sw_idx].desc_addr_dma)
+			    caam_dma_to_cpu(jrp->entinfo[sw_idx].desc_addr_dma))
 				break; /* found */
 		}
 		/* we should never fail to find a matching descriptor */
@@ -200,7 +211,7 @@ static void caam_jr_dequeue(unsigned long devarg)
 		usercall = jrp->entinfo[sw_idx].callbk;
 		userarg = jrp->entinfo[sw_idx].cbkarg;
 		userdesc = jrp->entinfo[sw_idx].desc_addr_virt;
-		userstatus = jrp->outring[hw_idx].jrstatus;
+		userstatus = caam32_to_cpu(jrp->outring[hw_idx].jrstatus);
 
 		/*
 		 * Make sure all information from the job has been obtained
@@ -236,7 +247,7 @@ static void caam_jr_dequeue(unsigned long devarg)
 	}
 
 	/* reenable / unmask IRQs */
-	clrbits32(&jrp->rregs->rconfig_lo, JRCFG_IMSK);
+	clrsetbits_32(&jrp->rregs->rconfig_lo, JRCFG_IMSK, 0);
 }
 
 /**
@@ -278,6 +289,36 @@ struct device *caam_jr_alloc(void)
 	return dev;
 }
 EXPORT_SYMBOL(caam_jr_alloc);
+
+/**
+ * caam_jridx_alloc() - Alloc a specific job ring based on its index.
+ *
+ * returns :  pointer to the newly allocated physical
+ *	      JobR dev can be written to if successful.
+ **/
+struct device *caam_jridx_alloc(int idx)
+{
+	struct caam_drv_private_jr *jrpriv;
+	struct device *dev = ERR_PTR(-ENODEV);
+
+	spin_lock(&driver_data.jr_alloc_lock);
+
+	if (list_empty(&driver_data.jr_list))
+		goto end;
+
+	list_for_each_entry(jrpriv, &driver_data.jr_list, list_node) {
+		if (jrpriv->ridx == idx) {
+			atomic_inc(&jrpriv->tfm_count);
+			dev = jrpriv->dev;
+			break;
+		}
+	}
+
+end:
+	spin_unlock(&driver_data.jr_alloc_lock);
+	return dev;
+}
+EXPORT_SYMBOL(caam_jridx_alloc);
 
 /**
  * caam_jr_free() - Free the Job Ring
@@ -330,7 +371,7 @@ int caam_jr_enqueue(struct device *dev, u32 *desc,
 	int head, tail, desc_size;
 	dma_addr_t desc_dma;
 
-	desc_size = (*desc & HDR_JD_LENGTH_MASK) * sizeof(u32);
+	desc_size = (caam32_to_cpu(*desc) & HDR_JD_LENGTH_MASK) * sizeof(u32);
 	desc_dma = dma_map_single(dev, desc, desc_size, DMA_TO_DEVICE);
 	if (dma_mapping_error(dev, desc_dma)) {
 		dev_err(dev, "caam_jr_enqueue(): can't map jobdesc\n");
@@ -356,7 +397,7 @@ int caam_jr_enqueue(struct device *dev, u32 *desc,
 	head_entry->cbkarg = areq;
 	head_entry->desc_addr_dma = desc_dma;
 
-	jrp->inpring[jrp->inp_ring_write_index] = desc_dma;
+	jrp->inpring[jrp->inp_ring_write_index] = cpu_to_caam_dma(desc_dma);
 
 	/*
 	 * Guarantee that the descriptor's DMA address has been written to
@@ -444,9 +485,9 @@ static int caam_jr_init(struct device *dev)
 	spin_lock_init(&jrp->outlock);
 
 	/* Select interrupt coalescing parameters */
-	setbits32(&jrp->rregs->rconfig_lo, JOBR_INTC |
-		  (JOBR_INTC_COUNT_THLD << JRCFG_ICDCT_SHIFT) |
-		  (JOBR_INTC_TIME_THLD << JRCFG_ICTT_SHIFT));
+	clrsetbits_32(&jrp->rregs->rconfig_lo, 0, JOBR_INTC |
+		      (JOBR_INTC_COUNT_THLD << JRCFG_ICDCT_SHIFT) |
+		      (JOBR_INTC_TIME_THLD << JRCFG_ICTT_SHIFT));
 
 	return 0;
 
@@ -496,15 +537,28 @@ static int caam_jr_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
-	jrpriv->rregs = (struct caam_job_ring __force *)ctrl;
+	jrpriv->rregs = (struct caam_job_ring __iomem __force *)ctrl;
 
-	if (sizeof(dma_addr_t) == sizeof(u64))
-		if (of_device_is_compatible(nprop, "fsl,sec-v5.0-job-ring"))
-			dma_set_mask_and_coherent(jrdev, DMA_BIT_MASK(40));
+	if (sizeof(dma_addr_t) == sizeof(u64)) {
+		if (caam_dpaa2)
+			error = dma_set_mask_and_coherent(jrdev,
+							  DMA_BIT_MASK(49));
+		else if (of_device_is_compatible(nprop,
+						 "fsl,sec-v5.0-job-ring"))
+			error = dma_set_mask_and_coherent(jrdev,
+							  DMA_BIT_MASK(40));
 		else
-			dma_set_mask_and_coherent(jrdev, DMA_BIT_MASK(36));
-	else
-		dma_set_mask_and_coherent(jrdev, DMA_BIT_MASK(32));
+			error = dma_set_mask_and_coherent(jrdev,
+							  DMA_BIT_MASK(36));
+	} else {
+		error = dma_set_mask_and_coherent(jrdev, DMA_BIT_MASK(32));
+	}
+	if (error) {
+		dev_err(jrdev, "dma_set_mask_and_coherent failed (%d)\n",
+			error);
+		iounmap(ctrl);
+		return error;
+	}
 
 	/* Identify the interrupt */
 	jrpriv->irq = irq_of_parse_and_map(nprop, 0);
@@ -513,6 +567,7 @@ static int caam_jr_probe(struct platform_device *pdev)
 	error = caam_jr_init(jrdev); /* now turn on hardware */
 	if (error) {
 		irq_dispose_mapping(jrpriv->irq);
+		iounmap(ctrl);
 		return error;
 	}
 
@@ -523,10 +578,12 @@ static int caam_jr_probe(struct platform_device *pdev)
 
 	atomic_set(&jrpriv->tfm_count, 0);
 
+	jr_driver_probed++;
+
 	return 0;
 }
 
-static struct of_device_id caam_jr_match[] = {
+static const struct of_device_id caam_jr_match[] = {
 	{
 		.compatible = "fsl,sec-v4.0-job-ring",
 	},

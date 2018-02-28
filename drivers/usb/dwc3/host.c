@@ -17,6 +17,7 @@
 
 #include <linux/platform_device.h>
 #include <linux/usb/xhci_pdriver.h>
+#include <linux/of_device.h>
 
 #include "core.h"
 
@@ -34,9 +35,20 @@ int dwc3_host_init(struct dwc3 *dwc)
 
 	dma_set_coherent_mask(&xhci->dev, dwc->dev->coherent_dma_mask);
 
+	if (IS_ENABLED(CONFIG_OF) && dwc->dev->of_node)
+		of_dma_configure(&xhci->dev, dwc->dev->of_node);
+	else
+		dma_set_coherent_mask(&xhci->dev, dwc->dev->coherent_dma_mask);
+
 	xhci->dev.parent	= dwc->dev;
 	xhci->dev.dma_mask	= dwc->dev->dma_mask;
 	xhci->dev.dma_parms	= dwc->dev->dma_parms;
+
+	/* set DMA operations */
+	if (dwc->dev->of_node && of_dma_is_coherent(dwc->dev->of_node)) {
+		xhci->dev.archdata.dma_ops = dwc->dev->archdata.dma_ops;
+		dev_dbg(dwc->dev, "set dma_ops for usb\n");
+	}
 
 	dwc->xhci = xhci;
 

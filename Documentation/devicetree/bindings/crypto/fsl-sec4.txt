@@ -6,6 +6,7 @@ Copyright (C) 2008-2011 Freescale Semiconductor Inc.
    -Overview
    -SEC 4 Node
    -Job Ring Node
+   -CAAM DMA Node
    -Run Time Integrity Check (RTIC) Node
    -Run Time Integrity Check (RTIC) Memory Node
    -Secure Non-Volatile Storage (SNVS) Node
@@ -123,6 +124,9 @@ PROPERTIES
 
 
 EXAMPLE
+
+iMX6QDL/SX requires four clocks
+
 	crypto@300000 {
 		compatible = "fsl,sec-v4.0";
 		fsl,sec-era = <2>;
@@ -137,6 +141,23 @@ EXAMPLE
 			 <&clks IMX6QDL_CLK_CAAM_IPG>,
 			 <&clks IMX6QDL_CLK_EIM_SLOW>;
 		clock-names = "mem", "aclk", "ipg", "emi_slow";
+	};
+
+
+iMX6UL does only require three clocks
+
+	crypto: caam@2140000 {
+		compatible = "fsl,sec-v4.0";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		reg = <0x2140000 0x3c000>;
+		ranges = <0 0x2140000 0x3c000>;
+		interrupts = <GIC_SPI 48 IRQ_TYPE_LEVEL_HIGH>;
+
+		clocks = <&clks IMX6UL_CLK_CAAM_MEM>,
+			 <&clks IMX6UL_CLK_CAAM_ACLK>,
+			 <&clks IMX6UL_CLK_CAAM_IPG>;
+		clock-names = "mem", "aclk", "ipg";
 	};
 
 =====================================================================
@@ -195,6 +216,26 @@ EXAMPLE
 		interrupts = <88 2>;
 	};
 
+=====================================================================
+CAAM DMA Node
+
+    Child node of the crypto node that enables the use of the DMA capabilities
+    of the CAAM by a stand-alone driver. The only required property is the
+    "compatible" property. All the other properties are determined from
+    the job rings on which the CAAM DMA driver depends (ex: the number of
+    dma-channels is equal to the number of defined job rings).
+
+  - compatible
+      Usage: required
+      Value type: <string>
+      Definition: Must include "fsl,sec-v4.0-dma"
+
+EXAMPLE
+  caam-dma {
+    compatible = "fsl,sec-v5.4-dma",
+                 "fsl,sec-v5.0-dma",
+                 "fsl,sec-v4.0-dma";
+  }
 
 =====================================================================
 Run Time Integrity Check (RTIC) Node

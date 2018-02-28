@@ -48,7 +48,7 @@
 #define DPRC_CMD_BASE_VERSION			1
 #define DPRC_CMD_ID_OFFSET			4
 
-#define DPRC_CMD(id)	((id << DPRC_CMD_ID_OFFSET) | DPRC_CMD_BASE_VERSION)
+#define DPRC_CMD(id)	(((id) << DPRC_CMD_ID_OFFSET) | DPRC_CMD_BASE_VERSION)
 
 /* Command IDs */
 #define DPRC_CMDID_CLOSE                        DPRC_CMD(0x800)
@@ -82,8 +82,7 @@ struct dprc_cmd_open {
 struct dprc_cmd_create_container {
 	/* cmd word 0 */
 	__le32 options;
-	__le16 icid;
-	__le16 pad0;
+	__le32 icid;
 	/* cmd word 1 */
 	__le32 pad1;
 	__le32 portal_id;
@@ -184,8 +183,7 @@ struct dprc_cmd_clear_irq_status {
 struct dprc_rsp_get_attributes {
 	/* response word 0 */
 	__le32 container_id;
-	__le16 icid;
-	__le16 pad;
+	__le32 icid;
 	/* response word 1 */
 	__le32 options;
 	__le32 portal_id;

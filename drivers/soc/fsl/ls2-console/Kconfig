@@ -1,0 +1,4 @@
+config FSL_LS2_CONSOLE
+        tristate "Layerscape MC and AIOP console support"
+	depends on ARCH_LAYERSCAPE
+        default y

@@ -1,0 +1,85 @@
+/*
+ * Freescale Management Complex (MC) bus private declarations
+ *
+ * Copyright (C) 2016 Freescale Semiconductor, Inc.
+ *
+ * This file is licensed under the terms of the GNU General Public
+ * License version 2. This program is licensed "as is" without any
+ * warranty of any kind, whether express or implied.
+ */
+#ifndef _FSL_MC_PRIVATE_H_
+#define _FSL_MC_PRIVATE_H_
+
+#include "../include/mc.h"
+#include "../include/dprc.h"
+#include <linux/mutex.h>
+#include <linux/cdev.h>
+
+/**
+ * Maximum number of total IRQs that can be pre-allocated for an MC bus'
+ * IRQ pool
+ */
+#define FSL_MC_IRQ_POOL_MAX_TOTAL_IRQS	256
+
+#define to_fsl_mc_bus(_mc_dev) \
+	container_of(_mc_dev, struct fsl_mc_bus, mc_dev)
+
+int __must_check fsl_mc_device_add(struct fsl_mc_obj_desc *obj_desc,
+				   struct fsl_mc_io *mc_io,
+				   struct device *parent_dev,
+				   const char *driver_override,
+				   struct fsl_mc_device **new_mc_dev);
+
+int __init dprc_driver_init(void);
+
+void dprc_driver_exit(void);
+
+int dprc_scan_objects(struct fsl_mc_device *mc_bus_dev,
+		      const char *driver_override,
+		      unsigned int *total_irq_count);
+
+bool fsl_mc_is_root_dprc(struct device *dev);
+
+int __init fsl_mc_allocator_driver_init(void);
+
+void fsl_mc_allocator_driver_exit(void);
+
+void fsl_mc_init_all_resource_pools(struct fsl_mc_device *mc_bus_dev);
+
+void fsl_mc_cleanup_all_resource_pools(struct fsl_mc_device *mc_bus_dev);
+
+int __must_check fsl_mc_resource_allocate(struct fsl_mc_bus *mc_bus,
+					  enum fsl_mc_pool_type pool_type,
+					  struct fsl_mc_resource
+							  **new_resource);
+
+void fsl_mc_resource_free(struct fsl_mc_resource *resource);
+
+int fsl_mc_msi_domain_alloc_irqs(struct device *dev,
+				 unsigned int irq_count);
+
+void fsl_mc_msi_domain_free_irqs(struct device *dev);
+
+int __init its_fsl_mc_msi_init(void);
+
+void its_fsl_mc_msi_cleanup(void);
+
+int fsl_mc_find_msi_domain(struct device *mc_platform_dev,
+			   struct irq_domain **mc_msi_domain);
+
+int fsl_mc_populate_irq_pool(struct fsl_mc_bus *mc_bus,
+			     unsigned int irq_count);
+
+void fsl_mc_cleanup_irq_pool(struct fsl_mc_bus *mc_bus);
+
+int __must_check fsl_create_mc_io(struct device *dev,
+				  phys_addr_t mc_portal_phys_addr,
+				  u32 mc_portal_size,
+				  struct fsl_mc_device *dpmcp_dev,
+				  u32 flags, struct fsl_mc_io **new_mc_io);
+
+void fsl_destroy_mc_io(struct fsl_mc_io *mc_io);
+
+bool fsl_mc_is_root_dprc(struct device *dev);
+
+#endif /* _FSL_MC_PRIVATE_H_ */

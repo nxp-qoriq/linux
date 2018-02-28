@@ -8,7 +8,7 @@
 
 config FSL_MC_BUS
 	bool "QorIQ DPAA2 fsl-mc bus driver"
-	depends on OF && ARCH_LAYERSCAPE
+	depends on OF && (ARCH_LAYERSCAPE || (COMPILE_TEST && (ARM || ARM64 || X86 || PPC)))
 	select GENERIC_MSI_IRQ_DOMAIN
 	help
 	  Driver to enable the bus infrastructure for the QorIQ DPAA2
@@ -16,9 +16,16 @@ config FSL_MC_BUS
 	  DPAA2 objects (which are represented as Linux devices) and
 	  binding objects to drivers.
 
+config FSL_MC_RESTOOL
+	bool "Management Complex (MC) restool support"
+	depends on FSL_MC_BUS
+	help
+	  Provides kernel support for the Freescale Management
+	  Complex resource manager user-space tool.
+
 config FSL_MC_DPIO
         tristate "QorIQ DPAA2 DPIO driver"
-        depends on FSL_MC_BUS
+        depends on FSL_MC_BUS && ARCH_LAYERSCAPE
         help
 	  Driver for the DPAA2 DPIO object.  A DPIO provides queue and
 	  buffer management facilities for software to interact with
@@ -31,10 +38,3 @@ config FSL_QBMAN_DEBUG
 	depends on FSL_MC_DPIO
 	help
 	  QBMan debug assistant APIs.
-
-config FSL_MC_RESTOOL
-        tristate "Freescale Management Complex (MC) restool driver"
-        depends on FSL_MC_BUS
-        help
-          Driver that provides kernel support for the Freescale Management
-          Complex resource manager user-space tool.

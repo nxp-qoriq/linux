@@ -29,8 +29,8 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include "../include/mc-sys.h"
-#include "../include/mc-cmd.h"
+#include <linux/kernel.h>
+#include "../include/mc.h"
 #include "../include/dprc.h"
 
 #include "dprc-cmd.h"
@@ -475,7 +475,7 @@ int dprc_get_attributes(struct fsl_mc_io *mc_io,
 	/* retrieve response parameters */
 	rsp_params = (struct dprc_rsp_get_attributes *)cmd.params;
 	attr->container_id = le32_to_cpu(rsp_params->container_id);
-	attr->icid = le16_to_cpu(rsp_params->icid);
+	attr->icid = le32_to_cpu(rsp_params->icid);
 	attr->options = le32_to_cpu(rsp_params->options);
 	attr->portal_id = le32_to_cpu(rsp_params->portal_id);
 
@@ -536,7 +536,7 @@ int dprc_get_obj(struct fsl_mc_io *mc_io,
 		 u32 cmd_flags,
 		 u16 token,
 		 int obj_index,
-		 struct dprc_obj_desc *obj_desc)
+		 struct fsl_mc_obj_desc *obj_desc)
 {
 	struct mc_command cmd = { 0 };
 	struct dprc_cmd_get_obj *cmd_params;

@@ -53,10 +53,20 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 static irqreturn_t enetc_msix(int irq, void *data)
 {
 	struct enetc_int_vector	*v = data;
+	struct enetc_hw *hw = &v->priv->si->hw;
+	unsigned long flags;
+	u32 ier;
 
 	/* disable interrupts */
 	enetc_wr_reg(v->tbier, 0);
 	enetc_wr_reg(v->rbier, 0);
+
+	spin_lock_irqsave(&v->priv->rtxint_lock, flags);
+	ier = enetc_rd(hw, ENETC_SITXIER);
+	enetc_wr(hw, ENETC_SITXIER, ier & ~(ENETC_SITXIER_TX0IE << v->tx_ring.index));
+	ier = enetc_rd(hw, ENETC_SIRXIER);
+	enetc_wr(hw, ENETC_SIRXIER, ier & ~(ENETC_SIRXIER_RX0IE << v->rx_ring.index));
+	spin_unlock_irqrestore(&v->priv->rtxint_lock, flags);
 
 	napi_schedule(&v->napi);
 
@@ -264,8 +274,10 @@ static int enetc_poll(struct napi_struct *napi, int budget)
 {
 	struct enetc_int_vector
 		*v = container_of(napi, struct enetc_int_vector, napi);
+	struct enetc_hw *hw = &v->priv->si->hw;
 	bool complete = true;
 	int work_done;
+	u32 ier;
 
 	enetc_clean_tx_ring(&v->tx_ring);
 
@@ -281,6 +293,13 @@ static int enetc_poll(struct napi_struct *napi, int budget)
 	/* enable interrupts */
 	enetc_wr_reg(v->tbier, ENETC_TBIER_TXTIE);
 	enetc_wr_reg(v->rbier, ENETC_RBIER_RXTIE);
+
+	spin_lock_irq(&v->priv->rtxint_lock);
+	ier = enetc_rd(hw, ENETC_SITXIER);
+	enetc_wr(hw, ENETC_SITXIER, ier | (ENETC_SITXIER_TX0IE << v->tx_ring.index));
+	ier = enetc_rd(hw, ENETC_SIRXIER);
+	enetc_wr(hw, ENETC_SIRXIER, ier | (ENETC_SIRXIER_RX0IE << v->rx_ring.index));
+	spin_unlock_irq(&v->priv->rtxint_lock);
 
 	return work_done;
 }
@@ -1028,6 +1047,8 @@ int enetc_setup_irqs(struct enetc_ndev_priv *priv)
 	struct pci_dev *pdev = priv->si->pdev;
 	int i, err;
 
+	spin_lock_init(&priv->rtxint_lock);
+
 	for (i = 0; i < priv->bdr_int_num; i++) {
 		int irq = pci_irq_vector(pdev, ENETC_BDR_INT_BASE_IDX + i);
 		struct enetc_int_vector *v = &priv->int_vector[i];
@@ -1040,6 +1061,7 @@ int enetc_setup_irqs(struct enetc_ndev_priv *priv)
 			goto irq_err;
 		}
 
+		v->priv = priv;
 		v->tbier = hw->reg + ENETC_BDR(TX, i, ENETC_TBIER);
 		v->rbier = hw->reg + ENETC_BDR(RX, i, ENETC_RBIER);
 
@@ -1068,7 +1090,13 @@ void enetc_free_irqs(struct enetc_ndev_priv *priv)
 
 static void enetc_enable_interrupts(struct enetc_ndev_priv *priv)
 {
+	struct enetc_hw *hw = &priv->si->hw;
 	int i;
+
+	spin_lock_irq(&priv->rtxint_lock);
+	enetc_wr(hw, ENETC_SITXIER, GENMASK(priv->bdr_int_num - 1, 0));
+	enetc_wr(hw, ENETC_SIRXIER, GENMASK(priv->bdr_int_num - 1, 0));
+	spin_unlock_irq(&priv->rtxint_lock);
 
 	/* enable Tx & Rx event indication */
 	for (i = 0; i < priv->bdr_int_num; i++) {
@@ -1081,16 +1109,17 @@ static void enetc_enable_interrupts(struct enetc_ndev_priv *priv)
 
 static void enetc_disable_interrupts(struct enetc_ndev_priv *priv)
 {
-	struct pci_dev *pdev = priv->si->pdev;
+	struct enetc_hw *hw = &priv->si->hw;
 	int i;
 
-	for (i = 0; i < priv->bdr_int_num; i++) {
-		int irq = pci_irq_vector(pdev, ENETC_BDR_INT_BASE_IDX + i);
+	spin_lock_irq(&priv->rtxint_lock);
+	enetc_wr(hw, ENETC_SITXIER, 0);
+	enetc_wr(hw, ENETC_SIRXIER, 0);
+	spin_unlock_irq(&priv->rtxint_lock);
 
+	for (i = 0; i < priv->bdr_int_num; i++) {
 		enetc_txbdr_wr(&priv->si->hw, i, ENETC_TBIER, 0);
 		enetc_rxbdr_wr(&priv->si->hw, i, ENETC_RBIER, 0);
-
-		synchronize_irq(irq);
 	}
 }
 

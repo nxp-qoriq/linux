@@ -1,0 +1,41 @@
+INTRODUCTION
+============
+
+This branch is based on the v4.15 release of Linux and contains arm64
+mitigations against the cache speculation side-channels described at
+http://www.arm.com/security-update and commonly referred to as "Spectre" and
+"Meltdown". Mitigations against variant 2 are also included for the 32-bit
+armv7 architecture.
+
+
+LAYOUT
+======
+
+Each commit contains a subject prefix which clearly identifies the variant
+which it is attempting to mitigate against:
+
+  [Variant 1/Spectre-v1]
+  [Variant 2/Spectre-v2]
+  [Variant 3/Meltdown]
+
+The commit message begins with a reference to the upstream commit ID. The
+arm64 patches are targeting the v4.16 release of Linux and so the upstream
+commit IDs may not appear in mainline releases prior to v4.16, although they
+should still be accurate.
+
+
+NOTES TO INTEGRATORS
+====================
+
+Please note that this branch is intended to be used as the basis for backport
+efforts into stable and distribution kernels. It is not intended to be
+integrated directly into production kernels and will consequently be frozen
+when v4.16 is released after which it *WILL NOT RECEIVE FURTHER UPDATES*.
+
+Subsequent fixes and mitigation work will be queued in the mainline kernel
+and CC'd to the stable trees as per the usual kernel development process.
+Integrators are advised to track these trees as closely as possible.
+
+The patches here are intended to be specific to the arm/arm64 architectures
+and therefore mitigation efforts elsewhere in the kernel (for example, in the
+eBPF subsystem) are not included as part of this branch.

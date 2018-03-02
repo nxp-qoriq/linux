@@ -5120,8 +5120,15 @@ static int __cold dpaa2_dpseci_dpio_setup(struct dpaa2_caam_priv *priv)
 		/* Register notification callbacks */
 		err = dpaa2_io_service_register(NULL, nctx);
 		if (unlikely(err)) {
-			dev_err(dev, "notification register failed\n");
+			dev_dbg(dev, "No affine DPIO for cpu %d\n", cpu);
 			nctx->cb = NULL;
+			/*
+			 * If no affine DPIO for this core, there's probably
+			 * none available for next cores either. Signal we want
+			 * to retry later, in case the DPIO devices weren't
+			 * probed yet.
+			 */
+			err = -EPROBE_DEFER;
 			goto err;
 		}
 
@@ -5599,7 +5606,11 @@ static int dpaa2_caam_probe(struct fsl_mc_device *dpseci_dev)
 	/* Obtain a MC portal */
 	err = fsl_mc_portal_allocate(dpseci_dev, 0, &priv->mc_io);
 	if (err) {
-		dev_err(dev, "MC portal allocation failed\n");
+		if (err == -ENXIO)
+			err = -EPROBE_DEFER;
+		else
+			dev_err(dev, "MC portal allocation failed\n");
+
 		goto err_dma_mask;
 	}
 

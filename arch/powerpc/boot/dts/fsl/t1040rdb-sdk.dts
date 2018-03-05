@@ -23,5 +23,9 @@
 			compatible = "fsl,dpa-ethernet";
 			fsl,fman-mac = <&enet3>;
 		};
+		ethernet@4 {
+			compatible = "fsl,dpa-ethernet";
+			fsl,fman-mac = <&enet4>;
+		};
 	};
 };

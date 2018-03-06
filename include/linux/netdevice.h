@@ -43,6 +43,9 @@
 #ifdef CONFIG_DCB
 #include <net/dcbnl.h>
 #endif
+#ifdef CONFIG_TSN
+#include <net/tsn.h>
+#endif
 #include <net/netprio_cgroup.h>
 
 #include <linux/netdev_features.h>
@@ -1884,6 +1887,9 @@ struct net_device {
 
 #ifdef CONFIG_DCB
 	const struct dcbnl_rtnl_ops *dcbnl_ops;
+#endif
+#ifdef CONFIG_TSN
+	const struct tsn_ops *tsn_ops;
 #endif
 	u8			num_tc;
 	struct netdev_tc_txq	tc_to_txq[TC_MAX_QUEUE];

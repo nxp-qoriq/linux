@@ -215,6 +215,19 @@ struct enetc_msg_cmd_set_primary_mac {
 	struct sockaddr mac;
 };
 
+#define ENETC_RING_UNUSED(R)	(((R)->next_to_clean - (R)->next_to_use - 1 \
+				 + (R)->bd_count) % (R)->bd_count)
+
+#define ENETC_CBD(R, i)	(&(((struct enetc_cbd *)((R).bd_base))[i]))
+
+#define ENETC_CBDR_TIMEOUT	1000 /* usecs */
+
+enum enetc_cbdr_stat {
+	ENETC_CMD_OK,
+	ENETC_CMD_BUSY,
+	ENETC_CMD_TIMEOUT,
+};
+
 /* SI common */
 int enetc_pci_probe(struct pci_dev *pdev, const char *name, int sizeof_priv);
 void enetc_pci_remove(struct pci_dev *pdev);

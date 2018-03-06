@@ -34,19 +34,6 @@
 
 #include "enetc.h"
 
-#define ENETC_RING_UNUSED(R)	(((R)->next_to_clean - (R)->next_to_use - 1 \
-				 + (R)->bd_count) % (R)->bd_count)
-
-#define ENETC_CBD(R, i)	(&(((struct enetc_cbd *)((R).bd_base))[i]))
-
-#define ENETC_CBDR_TIMEOUT	1000 /* usecs */
-
-enum enetc_cbdr_stat {
-	ENETC_CMD_OK,
-	ENETC_CMD_BUSY,
-	ENETC_CMD_TIMEOUT,
-};
-
 static void enetc_clean_cbdr(struct enetc_si *si)
 {
 	struct enetc_cbdr *ring = &si->cbd_ring;

@@ -876,7 +876,7 @@ int qbman_swp_release(struct qbman_swp *s, const struct qbman_release_desc *d,
 struct qbman_acquire_desc {
 	u8 verb;
 	u8 reserved;
-	u16 bpid;
+	__le16 bpid;
 	u8 num;
 	u8 reserved2[59];
 };
@@ -884,10 +884,10 @@ struct qbman_acquire_desc {
 struct qbman_acquire_rslt {
 	u8 verb;
 	u8 rslt;
-	u16 reserved;
+	__le16 reserved;
 	u8 num;
 	u8 reserved2[3];
-	u64 buf[7];
+	__le64 buf[7];
 };
 
 /**
@@ -950,7 +950,7 @@ int qbman_swp_acquire(struct qbman_swp *s, u16 bpid, u64 *buffers,
 struct qbman_alt_fq_state_desc {
 	u8 verb;
 	u8 reserved[3];
-	u32 fqid;
+	__le32 fqid;
 	u8 reserved2[56];
 };
 
@@ -999,11 +999,11 @@ int qbman_swp_alt_fq_state(struct qbman_swp *s, u32 fqid,
 struct qbman_cdan_ctrl_desc {
 	u8 verb;
 	u8 reserved;
-	u16 ch;
+	__le16 ch;
 	u8 we;
 	u8 ctrl;
-	u16 reserved2;
-	u64 cdan_ctx;
+	__le16 reserved2;
+	__le64 cdan_ctx;
 	u8 reserved3[48];
 
 };
@@ -1011,7 +1011,7 @@ struct qbman_cdan_ctrl_desc {
 struct qbman_cdan_ctrl_rslt {
 	u8 verb;
 	u8 rslt;
-	u16 ch;
+	__le16 ch;
 	u8 reserved[60];
 };
 

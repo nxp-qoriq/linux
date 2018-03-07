@@ -568,6 +568,7 @@ static struct platform_device *dpaa_eth_add_device(int fman_id,
 
 	pdev->dev.of_node = node;
 	pdev->dev.parent = priv->dev;
+	set_dma_ops(&pdev->dev, get_dma_ops(priv->dev));
 
 	ret = platform_device_add_data(pdev, &data, sizeof(data));
 	if (ret)

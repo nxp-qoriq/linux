@@ -533,6 +533,8 @@ static int enetc_pf_probe(struct pci_dev *pdev,
 		goto err_alloc_msix;
 	}
 
+	enetc_tsn_init(si);
+
 	err = register_netdev(ndev);
 	if (err)
 		goto err_reg_netdev;

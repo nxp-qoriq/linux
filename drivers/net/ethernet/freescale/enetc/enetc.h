@@ -253,3 +253,9 @@ void enetc_sync_mac_filters(struct enetc_si *si, struct enetc_mac_filter *tbl,
 int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 		       int index);
 int enetc_set_rss_table(struct enetc_si *si, u16 *table, int len);
+
+#ifdef CONFIG_ENETC_TSN
+void enetc_tsn_init(struct enetc_si *si);
+#else
+#define enetc_tsn_init(si) (void)0
+#endif

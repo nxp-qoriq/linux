@@ -9,3 +9,13 @@ config FSL_ENETC_VF
 	depends on PCI
 	---help---
 	  TBD
+
+if FSL_ENETC
+
+config ENETC_TSN
+	bool "TSN Support for NXP ENETC driver"
+	default n
+	depends on TSN
+	---help---
+	  This driver supports TSN on Freescale ENETC driver.
+endif

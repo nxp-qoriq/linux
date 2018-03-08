@@ -263,12 +263,6 @@ static int fsl_dcu_drm_pm_resume(struct device *dev)
 		return ret;
 	}
 
-	ret = clk_prepare_enable(fsl_dev->pix_clk);
-	if (ret < 0) {
-		dev_err(dev, "failed to enable dcu pix clk\n");
-		return ret;
-	}
-
 	if (fsl_dev->tcon)
 		fsl_tcon_bypass_enable(fsl_dev->tcon);
 	fsl_dcu_drm_init_planes(fsl_dev->drm);
@@ -393,12 +387,6 @@ static int fsl_dcu_drm_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to register pix clk\n");
 		ret = PTR_ERR(fsl_dev->pix_clk);
 		goto disable_clk;
-	}
-
-	ret = clk_prepare_enable(fsl_dev->pix_clk);
-	if (ret < 0) {
-		dev_err(dev, "failed to enable dcu pix clk\n");
-		return ret;
 	}
 
 	fsl_dev->tcon = fsl_tcon_init(dev);

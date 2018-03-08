@@ -228,4 +228,9 @@ config ARCH_ZYNQMP
 	help
 	  This enables support for Xilinx ZynqMP Family
 
+config ARCH_LX2160A_SIMU
+	bool "LX2160A SIMU"
+	help
+	  This enables support for LX2160A SIMU
+
 endmenu

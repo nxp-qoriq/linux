@@ -57,4 +57,34 @@
 	port@87000 {
 		fsl,qman-channel-id = <0x80e>;
 	};
+
+	policer@c0000 {
+		compatible = "fsl,fman-policer";
+		reg = <0xc0000 0x1000>;
+	};
+
+	keygen@c1000 {
+		compatible = "fsl,fman-keygen";
+		reg = <0xc1000 0x1000>;
+	};
+
+	dma@c2000 {
+		compatible = "fsl,fman-dma";
+		reg = <0xc2000 0x1000>;
+	};
+
+	fpm@c3000 {
+		compatible = "fsl,fman-fpm";
+		reg = <0xc3000 0x1000>;
+	};
+
+	parser@c7000 {
+		compatible = "fsl,fman-parser";
+		reg = <0xc7000 0x1000>;
+	};
+
+	vsps@dc000 {
+		compatible = "fsl,fman-vsps";
+		reg = <0xdc000 0x1000>;
+	};
 };

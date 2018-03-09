@@ -1421,6 +1421,7 @@ config RCU_CPU_STALL_TIMEOUT
 	int "RCU CPU stall timeout in seconds"
 	depends on RCU_STALL_COMMON
 	range 3 300
+	default 300 if ARCH_LX2160A_SIMU
 	default 21
 	help
 	  If a given RCU grace period extends more than the specified

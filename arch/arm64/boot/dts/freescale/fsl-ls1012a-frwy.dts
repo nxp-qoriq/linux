@@ -1,7 +1,7 @@
 /*
  * Device Tree file for NXP LS1012A FRWY Board.
  *
- * Copyright 2018 NXP, Inc.
+ * Copyright 2018 NXP
  *
  * This file is dual-licensed: you can use it either under the terms
  * of the GPLv2 or the X11 license, at your option. Note that this dual
@@ -112,6 +112,30 @@
 		VDDA-supply = <&reg_1p8v>;
 		VDDIO-supply = <&reg_1p8v>;
 		clocks = <&sys_mclk>;
+	};
+};
+
+&i2c0 {
+	status = "okay";
+};
+
+&dspi {
+	bus-num = <0>;
+	status = "okay";
+
+	sc16is740: sc16is740@0 {
+		compatible = "nxp,sc16is740";
+		reg = <0>;
+		spi-max-frequency = <4000000>;
+		clocks = <&clk24m>;
+		interrupt-parent = <&gpio1>;
+		interrupts = <13 2>;
+		clk24m: oscillator {
+			#clock-cells = <0>;
+			compatible = "fixed-clock";
+			clock-frequency = <24000000>;
+		};
+
 	};
 };
 

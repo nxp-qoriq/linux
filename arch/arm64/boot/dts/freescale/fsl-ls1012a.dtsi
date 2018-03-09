@@ -1,7 +1,7 @@
 /*
  * Device Tree Include file for Freescale Layerscape-1012A family SoC.
  *
- * Copyright 2016 Freescale Semiconductor, Inc.
+ * Copyright 2016-2018 NXP
  *
  * This file is dual-licensed: you can use it either under the terms
  * of the GPLv2 or the X11 license, at your option. Note that this dual
@@ -332,6 +332,19 @@
 					};
 				};
 			};
+		};
+
+		dspi: dspi@2100000 {
+			compatible = "fsl,ls1012a-dspi", "fsl,ls1021a-v1.0-dspi";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x0 0x2100000 0x0 0x10000>;
+			interrupts = <0 64 IRQ_TYPE_LEVEL_HIGH>;
+			clock-names = "dspi";
+			clocks = <&clockgen 4 0>;
+			spi-num-chipselects = <5>;
+			big-endian;
+			status = "disabled";
 		};
 
 		esdhc0: esdhc@1560000 {

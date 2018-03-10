@@ -36,6 +36,11 @@
 #include <asm/pgtable-prot.h>
 #include "../../include/dpaa2-fd.h"
 
+/* Forcing the pre-QMAN 5.0 behavior until 
+ * we can verify behavior/performance on hardware. 
+ */
+#define CONFIG_FSL_MC_QMAN_NOT_SHARABLE_MEMORY_CACHE 1
+
 struct dpaa2_dq;
 struct qbman_swp;
 

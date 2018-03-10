@@ -114,9 +114,6 @@ enum qbman_sdqcr_fc {
 	qbman_sdqcr_fc_up_to_3 = 1
 };
 
-#define dccvac(p) { asm volatile("dc cvac, %0;" : : "r" (p) : "memory"); }
-#define dcivac(p) { asm volatile("dc ivac, %0" : : "r"(p) : "memory"); }
-
 /* Portal Access */
 
 static inline u32 qbman_read_register(struct qbman_swp *p, u32 offset)

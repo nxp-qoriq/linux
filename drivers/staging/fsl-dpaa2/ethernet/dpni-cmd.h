@@ -1,5 +1,5 @@
 /* Copyright 2013-2016 Freescale Semiconductor Inc.
- * Copyright 2016 NXP
+ * Copyright 2016-2018 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -73,7 +73,7 @@
 #define DPNI_CMDID_SET_MAX_FRAME_LENGTH			DPNI_CMD(0x216)
 #define DPNI_CMDID_GET_MAX_FRAME_LENGTH			DPNI_CMD(0x217)
 #define DPNI_CMDID_SET_LINK_CFG				DPNI_CMD(0x21A)
-#define DPNI_CMDID_SET_TX_SHAPING			DPNI_CMD(0x21B)
+#define DPNI_CMDID_SET_TX_SHAPING			DPNI_CMD_V2(0x21B)
 
 #define DPNI_CMDID_SET_MCAST_PROMISC			DPNI_CMD(0x220)
 #define DPNI_CMDID_GET_MCAST_PROMISC			DPNI_CMD(0x221)
@@ -89,11 +89,13 @@
 
 #define DPNI_CMDID_SET_QOS_TBL				DPNI_CMD(0x240)
 #define DPNI_CMDID_ADD_QOS_ENT				DPNI_CMD(0x241)
+#define DPNI_CMDID_REMOVE_QOS_ENT			DPNI_CMD(0x242)
 #define DPNI_CMDID_ADD_FS_ENT				DPNI_CMD(0x244)
 #define DPNI_CMDID_REMOVE_FS_ENT			DPNI_CMD(0x245)
 #define DPNI_CMDID_CLR_FS_ENT				DPNI_CMD(0x246)
 
-#define DPNI_CMDID_GET_STATISTICS			DPNI_CMD(0x25D)
+#define DPNI_CMDID_SET_TX_PRIORITIES			DPNI_CMD_V2(0x250)
+#define DPNI_CMDID_GET_STATISTICS			DPNI_CMD_V2(0x25D)
 #define DPNI_CMDID_RESET_STATISTICS			DPNI_CMD(0x25E)
 #define DPNI_CMDID_GET_QUEUE				DPNI_CMD(0x25F)
 #define DPNI_CMDID_SET_QUEUE				DPNI_CMD(0x260)
@@ -307,6 +309,7 @@ struct dpni_rsp_get_tx_data_offset {
 
 struct dpni_cmd_get_statistics {
 	u8 page_number;
+	u8 param;
 };
 
 struct dpni_rsp_get_statistics {
@@ -339,12 +342,20 @@ struct dpni_rsp_get_link_state {
 	__le64 options;
 };
 
+#define DPNI_COUPLED_SHIFT	0
+#define DPNI_COUPLED_SIZE	1
+
 struct dpni_cmd_set_tx_shaping {
 	/* cmd word 0 */
-	__le16 max_burst_size;
-	__le16 pad0[3];
+	__le16 tx_cr_max_burst_size;
+	__le16 tx_er_max_burst_size;
+	__le32 pad;
 	/* cmd word 1 */
-	__le32 rate_limit;
+	__le32 tx_cr_rate_limit;
+	__le32 tx_er_rate_limit;
+	/* cmd word 2 */
+	/* from LSB: coupled:1 */
+	u8 coupled;
 };
 
 struct dpni_cmd_set_max_frame_length {
@@ -404,6 +415,24 @@ struct dpni_cmd_remove_mac_addr {
 struct dpni_cmd_clear_mac_filters {
 	/* from LSB: unicast:1, multicast:1 */
 	u8 flags;
+};
+
+#define DPNI_SEPARATE_GRP_SHIFT 0
+#define DPNI_SEPARATE_GRP_SIZE  1
+#define DPNI_MODE_1_SHIFT		0
+#define DPNI_MODE_1_SIZE		4
+#define DPNI_MODE_2_SHIFT		4
+#define DPNI_MODE_2_SIZE		4
+
+struct dpni_cmd_set_tx_priorities {
+	__le16 flags;
+	u8 prio_group_A;
+	u8 prio_group_B;
+	__le32 pad0;
+	u8 modes[4];
+	__le32 pad1;
+	__le64 pad2;
+	__le16 delta_bandwidth[8];
 };
 
 #define DPNI_DIST_MODE_SHIFT		0

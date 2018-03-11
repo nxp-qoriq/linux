@@ -1,4 +1,5 @@
-/* Copyright 2014-2015 Freescale Semiconductor Inc.
+/* Copyright 2014-2016 Freescale Semiconductor Inc.
+ * Copyright 2017-2018 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -63,6 +64,7 @@ static char dpaa2_ethtool_extras[][ETH_GSTRING_LEN] = {
 	"tx conf bytes",
 	"tx sg frames",
 	"tx sg bytes",
+	"tx realloc frames",
 	"rx sg frames",
 	"rx sg bytes",
 	/* how many times we had to retry the enqueue command */
@@ -298,7 +300,7 @@ static void dpaa2_eth_get_ethtool_stats(struct net_device *net_dev,
 	/* Print standard counters, from DPNI statistics */
 	for (j = 0; j <= 2; j++) {
 		err = dpni_get_statistics(priv->mc_io, 0, priv->mc_token,
-					  j, &dpni_stats);
+					  j, 0, &dpni_stats);
 		if (err != 0)
 			netdev_warn(net_dev, "Err %d getting DPNI stats page %d",
 				    err, j);
@@ -701,7 +703,7 @@ static int do_cls(struct net_device *net_dev,
 	rule_cfg.key_size = cls_key_size(priv);
 
 	/* allocate twice the key size, for the actual key and for mask */
-	dma_mem = kzalloc(rule_cfg.key_size * 2, GFP_DMA | GFP_KERNEL);
+	dma_mem = kzalloc(rule_cfg.key_size * 2, GFP_KERNEL);
 	if (!dma_mem)
 		return -ENOMEM;
 

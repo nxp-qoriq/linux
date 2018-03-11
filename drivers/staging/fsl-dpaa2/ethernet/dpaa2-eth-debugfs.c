@@ -1,5 +1,5 @@
-
-/* Copyright 2015 Freescale Semiconductor Inc.
+/* Copyright 2015-2016 Freescale Semiconductor Inc.
+ * Copyright 2017-2018 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -47,14 +47,14 @@ static int dpaa2_dbg_cpu_show(struct seq_file *file, void *offset)
 	int i;
 
 	seq_printf(file, "Per-CPU stats for %s\n", priv->net_dev->name);
-	seq_printf(file, "%s%16s%16s%16s%16s%16s%16s%16s%16s\n",
+	seq_printf(file, "%s%16s%16s%16s%16s%16s%16s%16s%16s%16s\n",
 		   "CPU", "Rx", "Rx Err", "Rx SG", "Tx", "Tx Err", "Tx conf",
-		   "Tx SG", "Enq busy");
+		   "Tx SG", "Tx realloc", "Enq busy");
 
 	for_each_online_cpu(i) {
 		stats = per_cpu_ptr(priv->percpu_stats, i);
 		extras = per_cpu_ptr(priv->percpu_extras, i);
-		seq_printf(file, "%3d%16llu%16llu%16llu%16llu%16llu%16llu%16llu%16llu\n",
+		seq_printf(file, "%3d%16llu%16llu%16llu%16llu%16llu%16llu%16llu%16llu%16llu\n",
 			   i,
 			   stats->rx_packets,
 			   stats->rx_errors,
@@ -63,6 +63,7 @@ static int dpaa2_dbg_cpu_show(struct seq_file *file, void *offset)
 			   stats->tx_errors,
 			   extras->tx_conf_frames,
 			   extras->tx_sg_frames,
+			   extras->tx_reallocs,
 			   extras->tx_portal_busy);
 	}
 
@@ -109,7 +110,7 @@ static int dpaa2_dbg_fqs_show(struct seq_file *file, void *offset)
 	u32 fcnt, bcnt;
 	int i, err;
 
-	seq_printf(file, "FQ stats for %s:\n", priv->net_dev->name);
+	seq_printf(file, "non-zero FQ stats for %s:\n", priv->net_dev->name);
 	seq_printf(file, "%s%16s%16s%16s%16s%16s%16s\n",
 		   "VFQID", "CPU", "Traffic Class", "Type", "Frames",
 		   "Pending frames", "Congestion");
@@ -119,6 +120,10 @@ static int dpaa2_dbg_fqs_show(struct seq_file *file, void *offset)
 		err = dpaa2_io_query_fq_count(NULL, fq->fqid, &fcnt, &bcnt);
 		if (err)
 			fcnt = 0;
+
+		/* A lot of queues, no use displaying zero traffic ones */
+		if (!fq->stats.frames && !fcnt)
+			continue;
 
 		seq_printf(file, "%5d%16d%16d%16s%16llu%16u%16llu\n",
 			   fq->fqid,

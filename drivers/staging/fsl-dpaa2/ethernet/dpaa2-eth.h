@@ -1,4 +1,5 @@
-/* Copyright 2014-2015 Freescale Semiconductor Inc.
+/* Copyright 2014-2016 Freescale Semiconductor Inc.
+ * Copyright 2017-2018 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -41,6 +42,8 @@
 #include "net.h"
 
 #include "dpaa2-eth-debugfs.h"
+
+#define DPAA2_WRIOP_VERSION(x, y, z) ((x) << 10 | (y) << 5 | (z) << 0)
 
 #define DPAA2_ETH_STORE_SIZE		16
 
@@ -96,21 +99,11 @@
 #define DPAA2_ETH_TX_BUF_ALIGN		64
 #define DPAA2_ETH_RX_BUF_ALIGN		64
 #define DPAA2_ETH_RX_BUF_ALIGN_V1	256
-#define DPAA2_ETH_NEEDED_HEADROOM(p_priv) \
-	((p_priv)->tx_data_offset + DPAA2_ETH_TX_BUF_ALIGN - HH_DATA_MOD)
 
 /* rx_extra_head prevents reallocations in L3 processing. */
 #define DPAA2_ETH_SKB_SIZE \
 	(DPAA2_ETH_RX_BUF_SIZE + \
 	 SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
-
-/* Hardware only sees DPAA2_ETH_RX_BUF_SIZE, but we need to allocate ingress
- * buffers large enough to allow building an skb around them and also account
- * for alignment restrictions.
- */
-#define DPAA2_ETH_BUF_RAW_SIZE(p_priv) \
-	(DPAA2_ETH_SKB_SIZE + \
-	(p_priv)->rx_buf_align)
 
 /* PTP nominal frequency 1GHz */
 #define DPAA2_PTP_NOMINAL_FREQ_PERIOD_NS 1
@@ -120,13 +113,6 @@
  * options are either 0 or 64, so we choose the latter.
  */
 #define DPAA2_ETH_SWA_SIZE		64
-
-/* Extra headroom space requested to hardware, in order to make sure there's
- * no realloc'ing in forwarding scenarios
- */
-#define DPAA2_ETH_RX_HEAD_ROOM \
-	(DPAA2_ETH_TX_HWA_SIZE - DPAA2_ETH_RX_HWA_SIZE + \
-	 DPAA2_ETH_TX_BUF_ALIGN)
 
 /* Must keep this struct smaller than DPAA2_ETH_SWA_SIZE */
 struct dpaa2_eth_swa {
@@ -153,9 +139,7 @@ struct dpaa2_eth_swa {
 /* Annotation bits in FD CTRL */
 #define DPAA2_FD_CTRL_ASAL		0x00020000	/* ASAL = 128 */
 
-/* Size of hardware annotation area based on the current buffer layout
- * configuration
- */
+/* Hardware annotation area in RX/TX buffers */
 #define DPAA2_ETH_RX_HWA_SIZE		64
 #define DPAA2_ETH_TX_HWA_SIZE		128
 
@@ -191,17 +175,25 @@ struct dpaa2_faead {
 #define DPAA2_FAEAD_UPD			0x00000010
 
 /* accessors for the hardware annotation fields that we use */
-#define dpaa2_eth_get_hwa(buf_addr) \
-	((void *)(buf_addr) + DPAA2_ETH_SWA_SIZE)
+static inline void *dpaa2_eth_get_hwa(void *buf_addr, bool swa)
+{
+	return buf_addr + (swa ? DPAA2_ETH_SWA_SIZE : 0);
+}
 
-#define dpaa2_eth_get_fas(buf_addr) \
-	(struct dpaa2_fas *)(dpaa2_eth_get_hwa(buf_addr) + DPAA2_FAS_OFFSET)
+static inline struct dpaa2_fas *dpaa2_eth_get_fas(void *buf_addr, bool swa)
+{
+	return dpaa2_eth_get_hwa(buf_addr, swa) + DPAA2_FAS_OFFSET;
+}
 
-#define dpaa2_eth_get_ts(buf_addr) \
-	(u64 *)(dpaa2_eth_get_hwa(buf_addr) + DPAA2_TS_OFFSET)
+static inline u64 *dpaa2_eth_get_ts(void *buf_addr, bool swa)
+{
+	return dpaa2_eth_get_hwa(buf_addr, swa) + DPAA2_TS_OFFSET;
+}
 
-#define dpaa2_eth_get_faead(buf_addr) \
-	(struct dpaa2_faead *)(dpaa2_eth_get_hwa(buf_addr) + DPAA2_FAEAD_OFFSET)
+static inline struct dpaa2_faead *dpaa2_eth_get_faead(void *buf_addr, bool swa)
+{
+	return dpaa2_eth_get_hwa(buf_addr, swa) + DPAA2_FAEAD_OFFSET;
+}
 
 /* Error and status bits in the frame annotation status word */
 /* Debug frame, otherwise supposed to be discarded */
@@ -248,11 +240,6 @@ struct dpaa2_faead {
 					 (DPAA2_FAS_BLE)	| \
 					 (DPAA2_FAS_L3CE)	| \
 					 (DPAA2_FAS_L4CE))
-/* Tx errors */
-#define DPAA2_FAS_TX_ERR_MASK	((DPAA2_FAS_KSE)		| \
-				 (DPAA2_FAS_EOFHE)	| \
-				 (DPAA2_FAS_MNLE)		| \
-				 (DPAA2_FAS_TIDE))
 
 /* Time in milliseconds between link state updates */
 #define DPAA2_ETH_LINK_STATE_REFRESH	1000
@@ -278,6 +265,7 @@ struct dpaa2_eth_drv_stats {
 	__u64	tx_conf_bytes;
 	__u64	tx_sg_frames;
 	__u64	tx_sg_bytes;
+	__u64	tx_reallocs;
 	__u64	rx_sg_frames;
 	__u64	rx_sg_bytes;
 	/* Enqueues retried due to portal busy */
@@ -438,6 +426,8 @@ struct dpaa2_eth_priv {
 	u8 dcbx_mode;
 	struct ieee_pfc pfc;
 	bool vlan_clsf_set;
+
+	bool ceetm_en;
 };
 
 #define dpaa2_eth_hash_enabled(priv)	\
@@ -457,6 +447,51 @@ struct dpaa2_eth_priv {
 
 extern const struct ethtool_ops dpaa2_ethtool_ops;
 extern const char dpaa2_eth_drv_version[];
+
+/* Hardware only sees DPAA2_ETH_RX_BUF_SIZE, but the skb built around
+ * the buffer also needs space for its shared info struct, and we need
+ * to allocate enough to accommodate hardware alignment restrictions
+ */
+static inline unsigned int dpaa2_eth_buf_raw_size(struct dpaa2_eth_priv *priv)
+{
+	return DPAA2_ETH_SKB_SIZE + priv->rx_buf_align;
+}
+
+/* Total headroom needed by the hardware in Tx frame buffers */
+static inline unsigned int
+dpaa2_eth_needed_headroom(struct dpaa2_eth_priv *priv, struct sk_buff *skb)
+{
+	unsigned int headroom = DPAA2_ETH_SWA_SIZE;
+
+	/* If we don't have an skb (e.g. XDP buffer), we only need space for
+	 * the software annotation area
+	 */
+	if (!skb)
+		return headroom;
+
+	/* For non-linear skbs we have no headroom requirement, as we build a
+	 * SG frame with a newly allocated SGT buffer
+	 */
+	if (skb_is_nonlinear(skb))
+		return 0;
+
+	/* If we have Tx timestamping, need 128B hardware annotation */
+	if (priv->ts_tx_en && skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)
+		headroom += DPAA2_ETH_TX_HWA_SIZE;
+
+	return headroom;
+}
+
+/* Extra headroom space requested to hardware, in order to make sure there's
+ * no realloc'ing in forwarding scenarios. We need to reserve enough space
+ * such that we can accommodate the maximum required Tx offset and alignment
+ * in the ingress frame buffer
+ */
+static inline unsigned int dpaa2_eth_rx_headroom(struct dpaa2_eth_priv *priv)
+{
+	return priv->tx_data_offset + DPAA2_ETH_TX_BUF_ALIGN -
+	       DPAA2_ETH_RX_HWA_SIZE;
+}
 
 static inline int dpaa2_eth_queue_count(struct dpaa2_eth_priv *priv)
 {
@@ -491,6 +526,11 @@ dpaa2_eth_get_td_type(struct dpaa2_eth_priv *priv)
 		return DPAA2_ETH_TD_NONE;
 	else
 		return DPAA2_ETH_TD_QUEUE;
+}
+
+static inline int dpaa2_eth_ch_count(struct dpaa2_eth_priv *priv)
+{
+	return 1;
 }
 
 void check_cls_support(struct dpaa2_eth_priv *priv);

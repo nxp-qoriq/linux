@@ -38,3 +38,9 @@ config FSL_MC_RESTOOL
         help
           Driver that provides kernel support for the Freescale Management
           Complex resource manager user-space tool.
+
+config FSL_MC_QMAN_NOT_SHARABLE_MEMORY_CACHE
+        tristate "Force using the interface before qman 5.0"
+        depends on FSL_MC_BUS
+        help
+          Do not use the memory mapped cache interface for QMAN.

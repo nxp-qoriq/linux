@@ -262,6 +262,8 @@ enum dprc_iter_status {
 /* Region flags */
 /* Cacheable - Indicates that region should be mapped as cacheable */
 #define DPRC_REGION_CACHEABLE	0x00000001
+/* Shareable - Indicates that region should be mapped as shareable (coherent) */
+#define DPRC_REGION_SHAREABLE	0x00000002
 
 /**
  * enum dprc_region_type - Region type
@@ -270,7 +272,8 @@ enum dprc_iter_status {
  */
 enum dprc_region_type {
 	DPRC_REGION_TYPE_MC_PORTAL,
-	DPRC_REGION_TYPE_QBMAN_PORTAL
+	DPRC_REGION_TYPE_QBMAN_PORTAL,
+	DPRC_REGION_TYPE_QBMAN_MEM_BACKED_PORTAL
 };
 
 /**
@@ -288,6 +291,7 @@ struct dprc_region_desc {
 	u32 size;
 	u32 flags;
 	enum dprc_region_type type;
+	u64 base_address;
 };
 
 int dprc_get_obj_region(struct fsl_mc_io *mc_io,

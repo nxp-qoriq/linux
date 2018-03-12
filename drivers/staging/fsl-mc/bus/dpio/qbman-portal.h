@@ -32,8 +32,14 @@
 #ifndef __FSL_QBMAN_PORTAL_H
 #define __FSL_QBMAN_PORTAL_H
 
-#include "qbman_private.h"
+#include <linux/io.h>
+#include <asm/pgtable-prot.h>
 #include "../../include/dpaa2-fd.h"
+
+/* Forcing the pre-QMAN 5.0 behavior until 
+ * we can verify behavior/performance on hardware. 
+ */
+#define CONFIG_FSL_MC_QMAN_NOT_SHARABLE_MEMORY_CACHE 1
 
 struct dpaa2_dq;
 struct qbman_swp;
@@ -135,6 +141,11 @@ struct qbman_swp {
 	struct {
 		u32 valid_bit; /* 0x00 or 0x80 */
 	} mc;
+
+	/* Management response */
+	struct {
+		u32 valid_bit; /* 0x00 or 0x80 */
+	} mr;
 
 	/* Push dequeues */
 	u32 sdq;
@@ -467,196 +478,77 @@ static inline void *qbman_swp_mc_complete(struct qbman_swp *swp, void *cmd,
 	return cmd;
 }
 
-/* ------------ */
-/* qb_attr_code */
-/* ------------ */
+#define PROT_NORMAL_NS    (PTE_TYPE_PAGE | PTE_AF | PTE_PXN | PTE_UXN |\
+			   PTE_DIRTY | PTE_WRITE | PTE_ATTRINDX(MT_NORMAL))
 
-/* This struct locates a sub-field within a QBMan portal (CENA) cacheline which
- * is either serving as a configuration command or a query result. The
- * representation is inherently little-endian, as the indexing of the words is
- * itself little-endian in nature and layerscape is little endian for anything
- * that crosses a word boundary too (64-bit fields are the obvious examples).
- */
-struct qb_attr_code {
-	unsigned int word; /* which u32[] array member encodes the field */
-	unsigned int lsoffset; /* encoding offset from ls-bit */
-	unsigned int width; /* encoding width. (bool must be 1.) */
+#define qbman_cena_ioremap(addr, size)   __ioremap((addr), (size), \
+			   __pgprot(PROT_NORMAL_NS))
+
+#define clean(p) { asm volatile("dc cvac, %0;" : : "r" (p) : "memory"); }
+#define invalidate(p) { asm volatile("dc ivac, %0" : : "r"(p) : "memory"); }
+
+static inline void qbman_inval_prefetch(struct qbman_swp *p, uint32_t offset)
+{
+	invalidate(p->addr_cena + offset);
+	prefetch(p->addr_cena + offset);
+}
+
+/* Query APIs */
+struct qbman_fq_query_np_rslt {
+	u8 verb;
+	u8 rslt;
+	u8 st1;
+	u8 st2;
+	u8 reserved[2];
+	u16 od1_sfdr;
+	u16 od2_sfdr;
+	u16 od3_sfdr;
+	u16 ra1_sfdr;
+	u16 ra2_sfdr;
+	u32 pfdr_hptr;
+	u32 pfdr_tptr;
+	u32 frm_cnt;
+	u32 byte_cnt;
+	u16 ics_surp;
+	u8 is;
+	u8 reserved2[29];
 };
 
-/* Some pre-defined codes */
-extern struct qb_attr_code code_generic_verb;
-extern struct qb_attr_code code_generic_rslt;
+int qbman_fq_query_state(struct qbman_swp *s, u32 fqid,
+			 struct qbman_fq_query_np_rslt *r);
+u32 qbman_fq_state_frame_count(const struct qbman_fq_query_np_rslt *r);
+u32 qbman_fq_state_byte_count(const struct qbman_fq_query_np_rslt *r);
 
-/* Macros to define codes */
-#define QB_CODE(a, b, c) { a, b, c}
-#define QB_CODE_NULL \
-	QB_CODE((unsigned int)-1, (unsigned int)-1, (unsigned int)-1)
+struct qbman_bp_query_rslt {
+	u8 verb;
+	u8 rslt;
+	u8 reserved[4];
+	u8 bdi;
+	u8 state;
+	u32 fill;
+	u32 hdotr;
+	u16 swdet;
+	u16 swdxt;
+	u16 hwdet;
+	u16 hwdxt;
+	u16 swset;
+	u16 swsxt;
+	u16 vbpid;
+	u16 icid;
+	u64 bpscn_addr;
+	u64 bpscn_ctx;
+	u16 hw_targ;
+	u8 dbe;
+	u8 reserved2;
+	u8 sdcnt;
+	u8 hdcnt;
+	u8 sscnt;
+	u8 reserved3[9];
+};
 
-/* Rotate a code "ms", meaning that it moves from less-significant bytes to
- * more-significant, from less-significant words to more-significant, etc. The
- * "ls" version does the inverse, from more-significant towards
- * less-significant.
- */
-static inline void qb_attr_code_rotate_ms(struct qb_attr_code *code,
-					  unsigned int bits)
-{
-	code->lsoffset += bits;
-	while (code->lsoffset > 31) {
-		code->word++;
-		code->lsoffset -= 32;
-	}
-}
+int qbman_bp_query(struct qbman_swp *s, u32 bpid,
+		   struct qbman_bp_query_rslt *r);
 
-static inline void qb_attr_code_rotate_ls(struct qb_attr_code *code,
-					  unsigned int bits)
-{
-	/* Don't be fooled, this trick should work because the types are
-	 * unsigned. So the case that interests the while loop (the rotate has
-	 * gone too far and the word count needs to compensate for it), is
-	 * manifested when lsoffset is negative. But that equates to a really
-	 * large unsigned value, starting with lots of "F"s. As such, we can
-	 * continue adding 32 back to it until it wraps back round above zero,
-	 * to a value of 31 or less...
-	 */
-	code->lsoffset -= bits;
-	while (code->lsoffset > 31) {
-		code->word--;
-		code->lsoffset += 32;
-	}
-}
-
-/* Implement a loop of code rotations until 'expr' evaluates to FALSE (0). */
-#define qb_attr_code_for_ms(code, bits, expr) \
-		for (; expr; qb_attr_code_rotate_ms(code, bits))
-#define qb_attr_code_for_ls(code, bits, expr) \
-		for (; expr; qb_attr_code_rotate_ls(code, bits))
-
-static inline void word_copy(void *d, const void *s, unsigned int cnt)
-{
-	u32 *dd = d;
-	const u32 *ss = s;
-
-	while (cnt--)
-		*(dd++) = *(ss++);
-}
-
-/*
- * Currently, the CENA support code expects each 32-bit word to be written in
- * host order, and these are converted to hardware (little-endian) order on
- * command submission. However, 64-bit quantities are must be written (and read)
- * as two 32-bit words with the least-significant word first, irrespective of
- * host endianness.
- */
-static inline void u64_to_le32_copy(void *d, const u64 *s,
-				    unsigned int cnt)
-{
-	u32 *dd = d;
-	const u32 *ss = (const u32 *)s;
-
-	while (cnt--) {
-		/*
-		 * TBD: the toolchain was choking on the use of 64-bit types up
-		 * until recently so this works entirely with 32-bit variables.
-		 * When 64-bit types become usable again, investigate better
-		 * ways of doing this.
-		 */
-#if defined(__BIG_ENDIAN)
-		*(dd++) = ss[1];
-		*(dd++) = ss[0];
-		ss += 2;
-#else
-		*(dd++) = *(ss++);
-		*(dd++) = *(ss++);
-#endif
-	}
-}
-
-static inline void u64_from_le32_copy(u64 *d, const void *s,
-				      unsigned int cnt)
-{
-	const u32 *ss = s;
-	u32 *dd = (u32 *)d;
-
-	while (cnt--) {
-#if defined(__BIG_ENDIAN)
-		dd[1] = *(ss++);
-		dd[0] = *(ss++);
-		dd += 2;
-#else
-		*(dd++) = *(ss++);
-		*(dd++) = *(ss++);
-#endif
-	}
-}
-
-/* decode a field from a cacheline */
-static inline u32 qb_attr_code_decode(const struct qb_attr_code *code,
-				      const u32 *cacheline)
-{
-	return d32_u32(code->lsoffset, code->width, cacheline[code->word]);
-}
-
-static inline u64 qb_attr_code_decode_64(const struct qb_attr_code *code,
-					 const u64 *cacheline)
-{
-	u64 res;
-
-	u64_from_le32_copy(&res, &cacheline[code->word / 2], 1);
-	return res;
-}
-
-/* encode a field to a cacheline */
-static inline void qb_attr_code_encode(const struct qb_attr_code *code,
-				       u32 *cacheline, u32 val)
-{
-	cacheline[code->word] =
-		r32_u32(code->lsoffset, code->width, cacheline[code->word])
-		| e32_u32(code->lsoffset, code->width, val);
-}
-
-static inline void qb_attr_code_encode_64(const struct qb_attr_code *code,
-					  u64 *cacheline, u64 val)
-{
-	u64_to_le32_copy(&cacheline[code->word / 2], &val, 1);
-}
-
-/* Small-width signed values (two's-complement) will decode into medium-width
- * positives. (Eg. for an 8-bit signed field, which stores values from -128 to
- * +127, a setting of -7 would appear to decode to the 32-bit unsigned value
- * 249. Likewise -120 would decode as 136.) This function allows the caller to
- * "re-sign" such fields to 32-bit signed. (Eg. -7, which was 249 with an 8-bit
- * encoding, will become 0xfffffff9 if you cast the return value to u32).
- */
-static inline int32_t qb_attr_code_makesigned(const struct qb_attr_code *code,
-					      u32 val)
-{
-	WARN_ON(val >= (1 << code->width));
-	/* If the high bit was set, it was encoding a negative */
-	if (val >= (1 << (code->width - 1)))
-		return (int32_t)0 - (int32_t)(((u32)1 << code->width) -
-			val);
-	/* Otherwise, it was encoding a positive */
-	return (int32_t)val;
-}
-
-/* ---------------------- */
-/* Descriptors/cachelines */
-/* ---------------------- */
-
-/* To avoid needless dynamic allocation, the driver API often gives the caller
- * a "descriptor" type that the caller can instantiate however they like.
- * Ultimately though, it is just a cacheline of binary storage (or something
- * smaller when it is known that the descriptor doesn't need all 64 bytes) for
- * holding pre-formatted pieces of hardware commands. The performance-critical
- * code can then copy these descriptors directly into hardware command
- * registers more efficiently than trying to construct/format commands
- * on-the-fly. The API user sees the descriptor as an array of 32-bit words in
- * order for the compiler to know its size, but the internal details are not
- * exposed. The following macro is used within the driver for converting *any*
- * descriptor pointer to a usable array pointer. The use of a macro (instead of
- * an inline) is necessary to work with different descriptor types and to work
- * correctly with const and non-const inputs (and similarly-qualified outputs).
- */
-#define qb_cl(d) (&(d)->dont_manipulate_directly[0])
+u32 qbman_bp_info_num_free_bufs(struct qbman_bp_query_rslt *a);
 
 #endif /* __FSL_QBMAN_PORTAL_H */

@@ -167,12 +167,18 @@ static int dpaa2_dpio_probe(struct fsl_mc_device *dpio_dev)
 	}
 	desc.cpu = next_cpu;
 
-	/*
-	 * Set the CENA regs to be the cache enabled area of the portal to
-	 * achieve the best performance.
-	 */
-	desc.regs_cena = ioremap_cache_ns(dpio_dev->regions[0].start,
-		resource_size(&dpio_dev->regions[0]));
+	if (dpio_dev->obj_desc.region_count < 3 
+	    || IS_ENABLED(CONFIG_FSL_MC_QMAN_NOT_SHARABLE_MEMORY_CACHE)) {
+		/* No support for DDR backed portals, use classic mapping */
+		desc.regs_cena = qbman_cena_ioremap(dpio_dev->regions[0].start,
+					resource_size(&dpio_dev->regions[0]));
+	} else {
+		desc.regs_cena = memremap(dpio_dev->regions[2].start,
+					resource_size(&dpio_dev->regions[2]),
+					MEMREMAP_WB);
+		pr_info("Mapped 0x%llx to %p size %llu\n",dpio_dev->regions[2].start, desc.regs_cena, resource_size(&dpio_dev->regions[2]));
+
+	}
 	desc.regs_cinh = ioremap(dpio_dev->regions[1].start,
 		resource_size(&dpio_dev->regions[1]));
 

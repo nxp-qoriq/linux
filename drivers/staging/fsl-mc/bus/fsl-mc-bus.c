@@ -503,10 +503,20 @@ static int fsl_mc_device_get_mmio_regions(struct fsl_mc_device *mc_dev,
 			goto error_cleanup_regions;
 		}
 
+		pr_info("Got region %d for obj type %s base 0x%llx offset 0x%x size 0x%x\n", i, obj_desc->type,
+		        region_desc.base_address, region_desc.base_offset, region_desc.size);
 		WARN_ON(region_desc.size == 0);
-		error = translate_mc_addr(mc_dev, mc_region_type,
+		/* Older MC only returned region offset and no base address
+		 * If base address is in the region_desc use it otherwise revert to old
+		 * mechanism
+		 */
+		if (region_desc.base_address)
+			regions[i].start = region_desc.base_address + region_desc.base_offset;
+		else
+			error = translate_mc_addr(mc_dev, mc_region_type,
 					  region_desc.base_offset,
 					  &regions[i].start);
+
 		if (error < 0) {
 			dev_err(parent_dev,
 				"Invalid MC offset: %#x (for %s.%d\'s region %d)\n",
@@ -520,6 +530,9 @@ static int fsl_mc_device_get_mmio_regions(struct fsl_mc_device *mc_dev,
 		regions[i].flags = IORESOURCE_IO;
 		if (region_desc.flags & DPRC_REGION_CACHEABLE)
 			regions[i].flags |= IORESOURCE_CACHEABLE;
+		if (region_desc.flags & DPRC_REGION_SHAREABLE)
+			regions[i].flags |= IORESOURCE_MEM;
+
 	}
 
 	mc_dev->regions = regions;

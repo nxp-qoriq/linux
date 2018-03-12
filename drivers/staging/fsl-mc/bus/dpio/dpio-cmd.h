@@ -70,6 +70,9 @@ struct dpio_rsp_get_attr {
 	__le64 qbman_portal_ci_addr;
 	/* cmd word 3 */
 	__le32 qbman_version;
+	u32 pad;
+	/* cmd word 4 */
+	__le32 clk;
 };
 
 #endif /* _FSL_DPIO_CMD_H */

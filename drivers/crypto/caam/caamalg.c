@@ -118,6 +118,7 @@ struct caam_ctx {
 	unsigned int authsize;
 };
 
+#ifndef CONFIG_ARCH_LX2160A_SIMU
 static int aead_null_set_sh_desc(struct crypto_aead *aead)
 {
 	struct caam_ctx *ctx = crypto_aead_ctx(aead);
@@ -376,6 +377,7 @@ static int gcm_set_sh_desc(struct crypto_aead *aead)
 
 	return 0;
 }
+#endif
 
 static int chapoly_setauthsize(struct crypto_aead *authenc, unsigned int authsize)
 {
@@ -388,6 +390,7 @@ static int chapoly_setauthsize(struct crypto_aead *authenc, unsigned int authsiz
 	return 0;
 }
 
+#ifndef CONFIG_ARCH_LX2160A_SIMU
 static int gcm_setauthsize(struct crypto_aead *authenc, unsigned int authsize)
 {
 	struct caam_ctx *ctx = crypto_aead_ctx(authenc);
@@ -397,6 +400,7 @@ static int gcm_setauthsize(struct crypto_aead *authenc, unsigned int authsize)
 
 	return 0;
 }
+#endif
 
 static int rfc4106_set_sh_desc(struct crypto_aead *aead)
 {
@@ -542,6 +546,7 @@ static int chapoly_setkey(struct crypto_aead *aead, const u8 *key,
 	return 0;
 }
 
+#ifndef CONFIG_ARCH_LX2160A_SIMU
 static int aead_setkey(struct crypto_aead *aead,
 			       const u8 *key, unsigned int keylen)
 {
@@ -625,6 +630,7 @@ static int gcm_setkey(struct crypto_aead *aead,
 
 	return gcm_set_sh_desc(aead);
 }
+#endif
 
 static int rfc4106_setkey(struct crypto_aead *aead,
 			  const u8 *key, unsigned int keylen)
@@ -1348,6 +1354,7 @@ static void init_chapoly_dec_job(struct aead_request *req,
 			FIFOLD_TYPE_LAST2 | FIFOLD_TYPE_ICV);
 }
 
+#ifndef CONFIG_ARCH_LX2160A_SIMU
 static void init_authenc_job(struct aead_request *req,
 			     struct aead_edesc *edesc,
 			     bool all_contig, bool encrypt)
@@ -1396,6 +1403,7 @@ static void init_authenc_job(struct aead_request *req,
 				   LDST_SRCDST_BYTE_CONTEXT |
 				   (ivoffset << LDST_OFFSET_SHIFT));
 }
+#endif
 
 /*
  * Fill in ablkcipher job descriptor
@@ -1731,6 +1739,7 @@ static int ipsec_gcm_encrypt(struct aead_request *req)
 	return gcm_encrypt(req);
 }
 
+#ifndef CONFIG_ARCH_LX2160A_SIMU
 static int aead_encrypt(struct aead_request *req)
 {
 	struct aead_edesc *edesc;
@@ -1766,6 +1775,7 @@ static int aead_encrypt(struct aead_request *req)
 
 	return ret;
 }
+#endif
 
 static int gcm_decrypt(struct aead_request *req)
 {
@@ -1810,6 +1820,7 @@ static int ipsec_gcm_decrypt(struct aead_request *req)
 	return gcm_decrypt(req);
 }
 
+#ifndef CONFIG_ARCH_LX2160A_SIMU
 static int aead_decrypt(struct aead_request *req)
 {
 	struct aead_edesc *edesc;
@@ -1849,6 +1860,7 @@ static int aead_decrypt(struct aead_request *req)
 
 	return ret;
 }
+#endif
 
 /*
  * allocate and map the ablkcipher extended descriptor for ablkcipher
@@ -2385,6 +2397,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.class1_alg_type = OP_ALG_ALGSEL_AES | OP_ALG_AAI_GCM,
 		},
 	},
+#ifndef CONFIG_ARCH_LX2160A_SIMU
 	/* Galois Counter Mode */
 	{
 		.aead = {
@@ -3669,6 +3682,7 @@ static struct caam_aead_alg driver_aeads[] = {
 					   OP_ALG_AAI_AEAD,
 		},
 	},
+#endif
 };
 
 struct caam_crypto_alg {

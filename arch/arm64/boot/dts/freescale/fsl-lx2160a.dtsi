@@ -663,6 +663,14 @@
 			clock-names = "fspi_en", "fspi";
 		};
 
+		watchdog@23a0000 {
+			compatible = "arm,sbsa-gwdt";
+			reg = <0x0 0x23a0000 0 0x1000>,
+			      <0x0 0x2390000 0 0x1000>;
+			interrupts = <0 59 4>;
+			timeout-sec = <30>;
+		};
+
 		fsl_mc: fsl-mc@80c000000 {
 			compatible = "fsl,qoriq-mc";
 			reg = <0x00000008 0x0c000000 0 0x40>,

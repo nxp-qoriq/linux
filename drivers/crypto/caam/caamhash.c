@@ -2,6 +2,7 @@
  * caam - Freescale FSL CAAM support for ahash functions of crypto API
  *
  * Copyright 2011 Freescale Semiconductor, Inc.
+ * Copyright 2017 NXP
  *
  * Based on caamalg.c crypto API driver.
  *
@@ -1649,6 +1650,25 @@ static struct caam_hash_template driver_hash[] = {
 		},
 		.alg_type = OP_ALG_ALGSEL_MD5,
 	},
+	{
+		.name = "poly1305",
+		.driver_name = "poly1305-caam",
+		.blocksize = POLY1305_BLOCK_SIZE,
+		.template_ahash = {
+			.init = ahash_init,
+			.update = ahash_update,
+			.final = ahash_final,
+			.finup = ahash_finup,
+			.digest = ahash_digest,
+			.export = ahash_export,
+			.import = ahash_import,
+			.halg = {
+				.digestsize = POLY1305_DIGEST_SIZE,
+				.statesize = sizeof(struct caam_export_state),
+			},
+		},
+		.alg_type = OP_ALG_ALGSEL_POLY1305,
+	}
 };
 
 struct caam_hash_alg {
@@ -1796,7 +1816,7 @@ static int __init caam_algapi_hash_init(void)
 	int i = 0, err = 0;
 	struct caam_drv_private *priv;
 	unsigned int md_limit = SHA512_DIGEST_SIZE;
-	u32 cha_inst, cha_vid;
+	u32 md_inst, md_vid, ptha_inst;
 
 	dev_node = of_find_compatible_node(NULL, NULL, "fsl,sec-v4.0");
 	if (!dev_node) {
@@ -1826,18 +1846,29 @@ static int __init caam_algapi_hash_init(void)
 	 * Register crypto algorithms the device supports.  First, identify
 	 * presence and attributes of MD block.
 	 */
-	cha_vid = rd_reg32(&priv->ctrl->perfmon.cha_id_ls);
-	cha_inst = rd_reg32(&priv->ctrl->perfmon.cha_num_ls);
+	if (priv->era < 10) {
+		md_vid = (rd_reg32(&priv->ctrl->perfmon.cha_id_ls) &
+			  CHA_ID_LS_MD_MASK) >> CHA_ID_LS_MD_SHIFT;
+		md_inst = (rd_reg32(&priv->ctrl->perfmon.cha_num_ls) &
+			   CHA_ID_LS_MD_MASK) >> CHA_ID_LS_MD_SHIFT;
+		ptha_inst = 0;
+	} else {
+		u32 mdha = rd_reg32(&priv->ctrl->vreg.mdha);
+
+		md_vid = (mdha & CHA_VER_VID_MASK) >> CHA_VER_VID_SHIFT;
+		md_inst = mdha & CHA_VER_NUM_MASK;
+		ptha_inst = rd_reg32(&priv->ctrl->vreg.ptha) & CHA_VER_NUM_MASK;
+	}
 
 	/*
 	 * Skip registration of any hashing algorithms if MD block
 	 * is not present.
 	 */
-	if (!((cha_inst & CHA_ID_LS_MD_MASK) >> CHA_ID_LS_MD_SHIFT))
+	if (!md_inst)
 		return -ENODEV;
 
 	/* Limit digest size based on LP256 */
-	if ((cha_vid & CHA_ID_LS_MD_MASK) == CHA_ID_LS_MD_LP256)
+	if (md_vid == CHA_VER_VID_MD_LP256)
 		md_limit = SHA256_DIGEST_SIZE;
 
 	INIT_LIST_HEAD(&hash_list);
@@ -1846,6 +1877,13 @@ static int __init caam_algapi_hash_init(void)
 	for (i = 0; i < ARRAY_SIZE(driver_hash); i++) {
 		struct caam_hash_alg *t_alg;
 		struct caam_hash_template *alg = driver_hash + i;
+
+		if (alg->alg_type == OP_ALG_ALGSEL_POLY1305) {
+			if (!ptha_inst)
+				continue;
+
+			goto register_unkeyed;
+		}
 
 		/* If MD size is not supported by device, skip registration */
 		if (alg->template_ahash.halg.digestsize > md_limit)
@@ -1868,6 +1906,7 @@ static int __init caam_algapi_hash_init(void)
 		} else
 			list_add_tail(&t_alg->entry, &hash_list);
 
+register_unkeyed:
 		/* register unkeyed version */
 		t_alg = caam_hash_alloc(alg, false);
 		if (IS_ERR(t_alg)) {

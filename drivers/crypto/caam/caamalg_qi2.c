@@ -1162,7 +1162,9 @@ static int ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 	u32 *desc;
 	u32 ctx1_iv_off = 0;
 	const bool ctr_mode = ((ctx->cdata.algtype & OP_ALG_AAI_MASK) ==
-			       OP_ALG_AAI_CTR_MOD128);
+				OP_ALG_AAI_CTR_MOD128) &&
+				((ctx->cdata.algtype & OP_ALG_ALGSEL_MASK) !=
+				OP_ALG_ALGSEL_CHACHA20);
 	const bool is_rfc3686 = (ctr_mode && strstr(alg_name, "rfc3686"));
 
 #ifdef DEBUG
@@ -1224,6 +1226,7 @@ static int ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 	return 0;
 }
 
+#ifndef CONFIG_ARCH_LX2160A_SIMU
 static int xts_ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 				 const u8 *key, unsigned int keylen)
 {
@@ -1263,6 +1266,7 @@ static int xts_ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 
 	return 0;
 }
+#endif
 
 static struct ablkcipher_edesc *ablkcipher_edesc_alloc(struct ablkcipher_request
 						       *req, bool encrypt)
@@ -2149,6 +2153,7 @@ static struct caam_alg_template driver_algs[] = {
 		},
 		.class1_alg_type = OP_ALG_ALGSEL_AES | OP_ALG_AAI_CTR_MOD128,
 	},
+#ifndef CONFIG_ARCH_LX2160A_SIMU
 	{
 		.name = "xts(aes)",
 		.driver_name = "xts-aes-caam-qi2",
@@ -2164,6 +2169,23 @@ static struct caam_alg_template driver_algs[] = {
 			.ivsize = AES_BLOCK_SIZE,
 		},
 		.class1_alg_type = OP_ALG_ALGSEL_AES | OP_ALG_AAI_XTS,
+	},
+#endif
+	{
+		.name = "chacha20",
+		.driver_name = "chacha20-caam-qi2",
+		.blocksize = 1,
+		.type = CRYPTO_ALG_TYPE_ABLKCIPHER,
+		.template_ablkcipher = {
+			.setkey = ablkcipher_setkey,
+			.encrypt = ablkcipher_encrypt,
+			.decrypt = ablkcipher_decrypt,
+			.geniv = "seqiv",
+			.min_keysize = CHACHA20_KEY_SIZE,
+			.max_keysize = CHACHA20_KEY_SIZE,
+			.ivsize = CHACHA20_IV_SIZE,
+		},
+		.class1_alg_type = OP_ALG_ALGSEL_CHACHA20,
 	}
 };
 
@@ -5115,8 +5137,15 @@ static int __cold dpaa2_dpseci_dpio_setup(struct dpaa2_caam_priv *priv)
 		/* Register notification callbacks */
 		err = dpaa2_io_service_register(NULL, nctx);
 		if (unlikely(err)) {
-			dev_err(dev, "notification register failed\n");
+			dev_dbg(dev, "No affine DPIO for cpu %d\n", cpu);
 			nctx->cb = NULL;
+			/*
+			 * If no affine DPIO for this core, there's probably
+			 * none available for next cores either. Signal we want
+			 * to retry later, in case the DPIO devices weren't
+			 * probed yet.
+			 */
+			err = -EPROBE_DEFER;
 			goto err;
 		}
 
@@ -5594,7 +5623,11 @@ static int dpaa2_caam_probe(struct fsl_mc_device *dpseci_dev)
 	/* Obtain a MC portal */
 	err = fsl_mc_portal_allocate(dpseci_dev, 0, &priv->mc_io);
 	if (err) {
-		dev_err(dev, "MC portal allocation failed\n");
+		if (err == -ENXIO)
+			err = -EPROBE_DEFER;
+		else
+			dev_err(dev, "MC portal allocation failed\n");
+
 		goto err_dma_mask;
 	}
 
@@ -5631,6 +5664,11 @@ static int dpaa2_caam_probe(struct fsl_mc_device *dpseci_dev)
 		dev_err(dev, "dpaa2_dpseci_enable() failed");
 		goto err_bind;
 	}
+
+	/* workaround for MC f/w reading for pre-Era 10 registers */
+	priv->sec_attr.des_acc_num = 16;
+	priv->sec_attr.aes_acc_num = 16;
+	priv->sec_attr.md_acc_num = 16;
 
 	/* register crypto algorithms the device supports */
 	INIT_LIST_HEAD(&alg_list);

@@ -970,7 +970,7 @@ static int __init caam_pkc_init(void)
 	struct platform_device *pdev;
 	struct device *ctrldev;
 	struct caam_drv_private *priv;
-	u32 cha_inst, pk_inst;
+	u32 pk_inst;
 	int err;
 
 	dev_node = of_find_compatible_node(NULL, NULL, "fsl,sec-v4.0");
@@ -998,8 +998,11 @@ static int __init caam_pkc_init(void)
 		return -ENODEV;
 
 	/* Determine public key hardware accelerator presence. */
-	cha_inst = rd_reg32(&priv->ctrl->perfmon.cha_num_ls);
-	pk_inst = (cha_inst & CHA_ID_LS_PK_MASK) >> CHA_ID_LS_PK_SHIFT;
+	if (priv->era < 10)
+		pk_inst = (rd_reg32(&priv->ctrl->perfmon.cha_num_ls) &
+			   CHA_ID_LS_PK_MASK) >> CHA_ID_LS_PK_SHIFT;
+	else
+		pk_inst = rd_reg32(&priv->ctrl->vreg.pkha) & CHA_VER_NUM_MASK;
 
 	/* Do not register algorithms if PKHA is not present. */
 	if (!pk_inst)

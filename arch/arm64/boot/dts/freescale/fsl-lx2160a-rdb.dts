@@ -46,13 +46,14 @@
 
 /dts-v1/;
 
-/include/ "fsl-lx2160a.dtsi"
+#include "fsl-lx2160a.dtsi"
 
 / {
 	model = "NXP Layerscape LX2160ARDB";
 	compatible = "fsl,lx2160a-rdb", "fsl,lx2160a";
 
 	aliases {
+		crypto = &crypto;
 		serial0 = &uart0;
 		serial1 = &uart1;
 		serial2 = &uart2;

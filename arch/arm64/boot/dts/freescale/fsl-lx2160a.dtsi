@@ -417,6 +417,45 @@
 			#interrupt-cells = <2>;
 		};
 
+		dspi0: dspi@2100000 {
+			status = "disabled";
+			compatible = "fsl,ls2080a-dspi", "fsl,ls2085a-dspi";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x0 0x2100000 0x0 0x10000>;
+			interrupts = <0 26 0x4>; /* Level high type */
+			clocks = <&clockgen 4 3>;
+			clock-names = "dspi";
+			spi-num-chipselects = <5>;
+			bus-num = <0>;
+		};
+
+		dspi1: dspi@2110000 {
+			status = "disabled";
+			compatible = "fsl,ls2080a-dspi", "fsl,ls2085a-dspi";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x0 0x2120000 0x0 0x10000>;
+			interrupts = <0 240 0x4>; /* Level high type */
+			clocks = <&clockgen 4 3>;
+			clock-names = "dspi";
+			spi-num-chipselects = <5>;
+			bus-num = <0>;
+		};
+
+		dspi2: dspi@2120000 {
+			status = "disabled";
+			compatible = "fsl,ls2080a-dspi", "fsl,ls2085a-dspi";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x0 0x2120000 0x0 0x10000>;
+			interrupts = <0 241 0x4>; /* Level high type */
+			clocks = <&clockgen 4 3>;
+			clock-names = "dspi";
+			spi-num-chipselects = <5>;
+			bus-num = <0>;
+		};
+
 
 		i2c0: i2c@2000000 {
 			compatible = "fsl,vf610-i2c";

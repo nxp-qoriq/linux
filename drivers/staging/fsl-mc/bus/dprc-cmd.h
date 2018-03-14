@@ -46,9 +46,12 @@
 
 /* Command versioning */
 #define DPRC_CMD_BASE_VERSION			1
+#define DPRC_CMD_2ND_VERSION			2
+
 #define DPRC_CMD_ID_OFFSET			4
 
 #define DPRC_CMD(id)	((id << DPRC_CMD_ID_OFFSET) | DPRC_CMD_BASE_VERSION)
+#define DPRC_CMD_V2(id)	(((id) << DPRC_CMD_ID_OFFSET) | DPRC_CMD_2ND_VERSION)
 
 /* Command IDs */
 #define DPRC_CMDID_CLOSE                        DPRC_CMD(0x800)
@@ -71,7 +74,7 @@
 #define DPRC_CMDID_GET_OBJ_COUNT                DPRC_CMD(0x159)
 #define DPRC_CMDID_GET_OBJ                      DPRC_CMD(0x15A)
 #define DPRC_CMDID_GET_RES_COUNT                DPRC_CMD(0x15B)
-#define DPRC_CMDID_GET_OBJ_REG                  DPRC_CMD(0x15E)
+#define DPRC_CMDID_GET_OBJ_REG                  DPRC_CMD_V2(0x15E)
 #define DPRC_CMDID_SET_OBJ_IRQ                  DPRC_CMD(0x15F)
 #define DPRC_CMDID_GET_OBJ_IRQ                  DPRC_CMD(0x160)
 

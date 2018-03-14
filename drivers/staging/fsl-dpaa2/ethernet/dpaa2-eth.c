@@ -3467,11 +3467,11 @@ static int dpaa2_eth_remove(struct fsl_mc_device *ls_dev)
 #endif
 	dpaa2_eth_sysfs_remove(&net_dev->dev);
 
-	disable_ch_napi(priv);
-	del_ch_napi(priv);
-
 	unregister_netdev(net_dev);
 	dev_info(net_dev->dev.parent, "Removed interface %s\n", net_dev->name);
+
+	disable_ch_napi(priv);
+	del_ch_napi(priv);
 
 	if (priv->do_link_poll)
 		kthread_stop(priv->poll_thread);

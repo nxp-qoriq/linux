@@ -253,3 +253,6 @@ void enetc_tsn_init(struct enetc_si *si);
 #else
 #define enetc_tsn_init(si) (void)0
 #endif
+
+/* common PF and VF module params */
+extern unsigned int debug;

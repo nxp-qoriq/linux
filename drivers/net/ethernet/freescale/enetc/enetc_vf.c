@@ -44,6 +44,9 @@ static const char enetc_drv_ver[] = ENETC_DRV_VER_STR;
 #define ENETC_DRV_NAME_STR "ENETC VF driver"
 static const char enetc_drv_name[] = ENETC_DRV_NAME_STR;
 
+/* VF driver params */
+module_param(debug, uint, 0);
+
 /* Messaging */
 static void enetc_msg_vsi_write_msg(struct enetc_hw *hw,
 				    struct enetc_msg_swbd *msg)

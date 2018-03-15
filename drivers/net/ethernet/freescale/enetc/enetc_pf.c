@@ -44,6 +44,9 @@ static const char enetc_drv_ver[] = ENETC_DRV_VER_STR;
 #define ENETC_DRV_NAME_STR "ENETC PF driver"
 static const char enetc_drv_name[] = ENETC_DRV_NAME_STR;
 
+/* PF driver params */
+module_param(debug, uint, 0);
+
 static void enetc_set_primary_mac_addr(struct enetc_hw *hw, int si,
 				       const u8 *addr)
 {

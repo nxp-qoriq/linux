@@ -50,6 +50,27 @@ static void enetc_process_skb(struct enetc_bdr *rx_ring, struct sk_buff *skb);
 static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 			       struct napi_struct *napi, int work_limit);
 
+unsigned int debug = 0;
+
+static void enetc_dbg_print_skb(struct sk_buff *skb, int type)
+{
+	char *c = skb->data;
+	int i;
+
+	netdev_info(skb->dev, "\n[DBG] %s skb->data: %p, len: %d\n",
+		(type == RX) ? "RX" : "TX" ,skb->data, skb->len);
+
+	for (i = 0; i < skb->len; i++) {
+		if (i % 32 == 0)
+			pr_info("%02d: ", i / 32);
+		pr_cont("%02X%s", *c++, ((i + 1) % 4 == 0) ? " " : "");
+	}
+	if (skb_vlan_tag_present(skb))
+		pr_info("VLAN tag %04x\n", skb_vlan_tag_get(skb));
+
+	pr_info("\n");
+}
+
 static irqreturn_t enetc_msix(int irq, void *data)
 {
 	struct enetc_int_vector	*v = data;
@@ -251,6 +272,8 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb)
 	enetc_bdr_idx_inc(tx_ring, &i);
 	tx_ring->next_to_use = i;
 
+	if (debug)
+		enetc_dbg_print_skb(skb, TX);
 	/* let H/W know BD ring has been updated */
 	enetc_wr_reg(tx_ring->tcir, i); /* includes wmb() */
 
@@ -559,6 +582,11 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 		}
 
 		rx_byte_cnt += skb->len;
+
+		if (debug) {
+			skb->dev = rx_ring->ndev;
+			enetc_dbg_print_skb(skb, RX);
+		}
 
 		enetc_process_skb(rx_ring, skb);
 

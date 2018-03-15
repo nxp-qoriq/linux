@@ -3006,7 +3006,7 @@ static bool __init soc_has_errata_a010022(void)
 }
 #endif
 
-static struct platform_device_id dpaa_devtype[] = {
+static const struct platform_device_id dpaa_devtype[] = {
 	{
 		.name = "dpaa-ethernet",
 		.driver_data = 0,

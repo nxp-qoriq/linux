@@ -212,6 +212,7 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PM0_TX_EN		BIT(0)
 #define ENETC_PM0_RX_EN		BIT(1)
 #define ENETC_PM0_CMD_XGLP	BIT(10)
+#define ENETC_PM0_CMD_TXP	BIT(11)
 
 #define ENETC_PM0_MAXFRM	0x08014
 #define ENETC_SET_TX_MTU(val)	((val) << 16)

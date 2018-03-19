@@ -890,7 +890,7 @@ static void enetc_free_cbdr(struct device *dev, struct enetc_cbdr *cbdr)
 
 static void enetc_setup_cbdr(struct enetc_hw *hw, struct enetc_cbdr *cbdr)
 {
-	WARN_ON(lower_32_bits(cbdr->bd_dma_base) & 0x3f);
+	WARN_ON(lower_32_bits(cbdr->bd_dma_base) & 0x7f);
 
 	enetc_wr(hw, ENETC_SICBDRBAR0, lower_32_bits(cbdr->bd_dma_base));
 	enetc_wr(hw, ENETC_SICBDRBAR1, upper_32_bits(cbdr->bd_dma_base));
@@ -961,7 +961,7 @@ static void enetc_setup_txbdr(struct enetc_hw *hw, struct enetc_bdr *tx_ring)
 	u32 tbmr;
 
 	/* 128B alignment required */
-	WARN_ON(lower_32_bits(tx_ring->bd_dma_base) & 0x3f);
+	WARN_ON(lower_32_bits(tx_ring->bd_dma_base) & 0x7f);
 
 	enetc_txbdr_wr(hw, idx, ENETC_TBBAR0,
 		       lower_32_bits(tx_ring->bd_dma_base));
@@ -998,7 +998,7 @@ static void enetc_setup_rxbdr(struct enetc_hw *hw, struct enetc_bdr *rx_ring)
 	u32 rbmr;
 
 	/* 128B alignment required */
-	WARN_ON(lower_32_bits(rx_ring->bd_dma_base) & 0x3f);
+	WARN_ON(lower_32_bits(rx_ring->bd_dma_base) & 0x7f);
 
 	enetc_rxbdr_wr(hw, idx, ENETC_RBBAR0,
 		       lower_32_bits(rx_ring->bd_dma_base));

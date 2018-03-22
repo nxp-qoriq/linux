@@ -81,9 +81,25 @@ static bool enetc_si_vlan_promisc_is_on(struct enetc_pf *pf, int si_idx)
 	return pf->vlan_promisc_simap & BIT(si_idx);
 }
 
+static bool enetc_vlan_filter_is_on(struct enetc_pf *pf)
+{
+	int i;
+
+	for_each_set_bit(i, pf->active_vlans, VLAN_N_VID)
+		return true;
+
+	return false;
+}
+
 static void enetc_enable_si_vlan_promisc(struct enetc_pf *pf, int si_idx)
 {
 	pf->vlan_promisc_simap |= BIT(si_idx);
+	enetc_set_vlan_promisc(&pf->si->hw, pf->vlan_promisc_simap);
+}
+
+static void enetc_disable_si_vlan_promisc(struct enetc_pf *pf, int si_idx)
+{
+	pf->vlan_promisc_simap &= ~BIT(si_idx);
 	enetc_set_vlan_promisc(&pf->si->hw, pf->vlan_promisc_simap);
 }
 
@@ -262,6 +278,73 @@ static void enetc_pf_set_rx_mode(struct net_device *ndev)
 	psipmr |= enetc_port_rd(hw, ENETC_PSIPMR) &
 		  ~(ENETC_PSIPMR_SET_UP(0) | ENETC_PSIPMR_SET_MP(0));
 	enetc_port_wr(hw, ENETC_PSIPMR, psipmr);
+}
+
+static void enetc_set_vlan_ht_filter(struct enetc_hw *hw, int si_idx,
+				     u32 *hash)
+{
+	enetc_port_wr(hw, ENETC_PSIVHFR0(si_idx), *hash);
+	enetc_port_wr(hw, ENETC_PSIVHFR1(si_idx), *(hash + 1));
+}
+
+static int enetc_vid_hash_idx(unsigned int vid)
+{
+	int res = 0;
+	int i;
+
+	for (i = 0; i < 6; i++)
+		res |= (__sw_hweight8(vid & (BIT(i) | BIT(i + 6))) & 0x1) << i;
+
+	return res;
+}
+
+static void enetc_sync_vlan_ht_filter(struct enetc_pf *pf, bool rehash)
+{
+	int i;
+
+	if (rehash) {
+		bitmap_zero(pf->vlan_ht_filter, ENETC_VLAN_HT_SIZE);
+
+		for_each_set_bit(i, pf->active_vlans, VLAN_N_VID) {
+			int hidx = enetc_vid_hash_idx(i);
+
+			__set_bit(hidx, pf->vlan_ht_filter);
+		}
+	}
+
+	enetc_set_vlan_ht_filter(&pf->si->hw, 0, (u32 *)pf->vlan_ht_filter);
+}
+
+static int enetc_vlan_rx_add_vid(struct net_device *ndev, __be16 prot, u16 vid)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_pf *pf = enetc_si_priv(priv->si);
+	int idx;
+
+	if (enetc_si_vlan_promisc_is_on(pf, 0))
+		enetc_disable_si_vlan_promisc(pf, 0);
+
+	__set_bit(vid, pf->active_vlans);
+
+	idx = enetc_vid_hash_idx(vid);
+	if (!__test_and_set_bit(idx, pf->vlan_ht_filter))
+		enetc_sync_vlan_ht_filter(pf, false);
+
+	return 0;
+}
+
+static int enetc_vlan_rx_del_vid(struct net_device *ndev, __be16 prot, u16 vid)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_pf *pf = enetc_si_priv(priv->si);
+
+	__clear_bit(vid, pf->active_vlans);
+	enetc_sync_vlan_ht_filter(pf, true);
+
+	if (!enetc_vlan_filter_is_on(pf))
+		enetc_enable_si_vlan_promisc(pf, 0);
+
+	return 0;
 }
 
 static void enetc_set_loopback(struct net_device *ndev, bool en)
@@ -510,6 +593,8 @@ static const struct net_device_ops enetc_ndev_ops = {
 	.ndo_get_stats		= enetc_get_stats,
 	.ndo_set_mac_address	= enetc_pf_set_mac_addr,
 	.ndo_set_rx_mode	= enetc_pf_set_rx_mode,
+	.ndo_vlan_rx_add_vid	= enetc_vlan_rx_add_vid,
+	.ndo_vlan_rx_kill_vid	= enetc_vlan_rx_del_vid,
 	.ndo_set_vf_mac		= enetc_pf_set_vf_mac,
 	.ndo_set_vf_vlan	= enetc_pf_set_vf_vlan,
 	.ndo_set_vf_spoofchk	= enetc_pf_set_vf_spoofchk,
@@ -540,7 +625,8 @@ static void enetc_pf_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 	ndev->features = NETIF_F_HIGHDMA | NETIF_F_SG |
 			 NETIF_F_RXCSUM | NETIF_F_HW_CSUM |
 			 NETIF_F_HW_VLAN_CTAG_TX |
-			 NETIF_F_HW_VLAN_CTAG_RX;
+			 NETIF_F_HW_VLAN_CTAG_RX |
+			 NETIF_F_HW_VLAN_CTAG_FILTER;
 
 	ndev->priv_flags |= IFF_UNICAST_FLT;
 

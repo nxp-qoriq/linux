@@ -223,6 +223,9 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PSIMMHFR0(n)	(0x01d08 + (n) * 0x10)
 #define ENETC_PSIMMHFR1(n)	(0x01d0c + (n) * 0x10)
 
+#define ENETC_PSIVHFR0(n)	(0x01e00 + (n) * 8) /* n = SI index */
+#define ENETC_PSIVHFR1(n)	(0x01e04 + (n) * 8) /* n = SI index */
+
 /* MAC counters */
 #define ENETC_PM0_REOCT		0x8100
 #define ENETC_PM0_RALN		0x8110

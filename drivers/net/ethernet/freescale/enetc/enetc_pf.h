@@ -48,6 +48,8 @@ struct enetc_mac_filter {
 	int mac_addr_cnt;
 };
 
+#define ENETC_VLAN_HT_SIZE	64
+
 struct enetc_pf {
 	struct enetc_si *si;
 	int num_vfs; /* number of active VFs, after sriov_init */
@@ -60,6 +62,8 @@ struct enetc_pf {
 	char msg_int_name[IFNAMSIZ + 8];
 
 	char vlan_promisc_simap; /* bitmap of SIs in VLAN promisc mode */
+	DECLARE_BITMAP(vlan_ht_filter, ENETC_VLAN_HT_SIZE);
+	DECLARE_BITMAP(active_vlans, VLAN_N_VID);
 };
 
 int enetc_msg_psi_init(struct enetc_pf *pf);

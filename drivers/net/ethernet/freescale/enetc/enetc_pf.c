@@ -80,12 +80,16 @@ static void enetc_set_isol_vlan(struct enetc_hw *hw, int si, u16 vlan, u8 qos)
 
 static int enetc_mac_addr_hash_idx(const u8 *addr)
 {
-	int i, n = 5;
+	u64 fold = ether_addr_to_u64(addr);
+	u64 mask = 0;
 	int res = 0;
+	int i;
 
-	for (i = 0; i < n; i++)
-		res |= (__sw_hweight8(addr[i]) & 0x1) << (n - i);
-	res |= __sw_hweight8(addr[n]) & 0x1;
+	for (i = 0; i < 8; i++)
+		mask |= BIT_ULL(i * 6);
+
+	for (i = 0; i < 6; i++)
+		res |= (__sw_hweight64(fold & (mask << i)) & 0x1) << i;
 
 	return res;
 }

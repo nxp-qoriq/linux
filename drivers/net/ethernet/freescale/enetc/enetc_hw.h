@@ -190,9 +190,9 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_VLAN_TYPE_S	BIT(1)
 #define ENETC_PVCLCTR_OVTPIDL(bmp)	((bmp) & 0xff) /* VLAN_TYPE */
 
-#define ENETC_PSIIVLANR(n)	(0x00210 + (n) * 4) /* n = SI index */
-#define ENETC_PSIIVLAN_EN	BIT(31)
-#define ENETC_PSIIVLAN_SET_QOS(val)	((u32)(val) << 12)
+#define ENETC_PSIVLANR(n)	(0x00240 + (n) * 4) /* n = SI index */
+#define ENETC_PSIVLAN_EN	BIT(31)
+#define ENETC_PSIVLAN_SET_QOS(val)	((u32)(val) << 12)
 #define ENETC_PCAPR0	0x00900
 #define ENETC_PCAPR0_RXBDR(val)	((val) >> 24)
 #define ENETC_PCAPR0_TXBDR(val)	(((val) >> 16) & 0xff)

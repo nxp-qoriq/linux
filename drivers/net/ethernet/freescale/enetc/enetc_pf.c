@@ -73,8 +73,9 @@ static void enetc_set_isol_vlan(struct enetc_hw *hw, int si, u16 vlan, u8 qos)
 	u32 val = 0;
 
 	if (vlan)
-		val = ENETC_PSIIVLAN_EN | ENETC_PSIIVLAN_SET_QOS(qos) | vlan;
-	enetc_port_wr(hw, ENETC_PSIIVLANR(si), val);
+		val = ENETC_PSIVLAN_EN | ENETC_PSIVLAN_SET_QOS(qos) | vlan;
+
+	enetc_port_wr(hw, ENETC_PSIVLANR(si), val);
 }
 
 static int enetc_mac_addr_hash_idx(const u8 *addr)

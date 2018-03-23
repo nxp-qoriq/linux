@@ -49,8 +49,13 @@
 /* Cache attribute registers for transactions initiated by ENETC */
 #define ENETC_SICAR0	0x08
 #define ENETC_SICAR1	0x0C
-#define ENETC_SICAR_RD_COHERENT	0x2b2b0000 /* rd snoop, no alloc */
-#define ENETC_SICAR_WR_COHERENT	0x00006767 /* wr snoop, no alloc */
+/*
+ * rd snoop, no alloc
+ * wr snoop, no alloc, partial cache line update for BDs and full cache line
+ * update for data
+ */
+#define ENETC_SICAR_RD_COHERENT	0x2b2b0000
+#define ENETC_SICAR_WR_COHERENT	0x00006727
 #define ENETC_SICAR_WR_MSI	0x00000037 /* wr no snoop, no alloc */
 
 #define ENETC_SIPMAR0	0x80

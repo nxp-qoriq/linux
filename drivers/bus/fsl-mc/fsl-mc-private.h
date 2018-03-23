@@ -10,6 +10,8 @@
 
 #include <linux/fsl/mc.h>
 #include <linux/mutex.h>
+#include <linux/cdev.h>
+#include <linux/ioctl.h>
 
 /*
  * Data Path Management Complex (DPMNG) General API
@@ -492,6 +494,24 @@ struct fsl_mc_resource_pool {
 };
 
 /**
+ * struct fsl_mc_restool - information associated with a restool device file
+ * @cdev: struct char device linked to the root dprc
+ * @dev: dev_t for the char device to be added
+ * @device: newly created device in /dev
+ * @mutex: mutex lock to serialize the open/release operations
+ * @local_instance_in_use: local MC I/O instance in use or not
+ * @dynamic_instance_count: number of dynamically created MC I/O instances
+ */
+struct fsl_mc_restool {
+	struct cdev cdev;
+	dev_t dev;
+	struct device *device;
+	struct mutex mutex; /* serialize open/release operations */
+	bool local_instance_in_use;
+	u32 dynamic_instance_count;
+};
+
+/**
  * struct fsl_mc_bus - logical bus that corresponds to a physical DPRC
  * @mc_dev: fsl-mc device for the bus device itself.
  * @resource_pools: array of resource pools (one pool per resource type)
@@ -500,6 +520,7 @@ struct fsl_mc_resource_pool {
  * @irq_resources: Pointer to array of IRQ objects for the IRQ pool
  * @scan_mutex: Serializes bus scanning
  * @dprc_attr: DPRC attributes
+ * @restool_misc: struct that abstracts the interaction with userspace restool
  */
 struct fsl_mc_bus {
 	struct fsl_mc_device mc_dev;
@@ -507,6 +528,7 @@ struct fsl_mc_bus {
 	struct fsl_mc_device_irq *irq_resources;
 	struct mutex scan_mutex;    /* serializes bus scanning */
 	struct dprc_attributes dprc_attr;
+	struct fsl_mc_restool restool_misc;
 };
 
 #define to_fsl_mc_bus(_mc_dev) \
@@ -560,5 +582,31 @@ int __must_check fsl_create_mc_io(struct device *dev,
 void fsl_destroy_mc_io(struct fsl_mc_io *mc_io);
 
 bool fsl_mc_is_root_dprc(struct device *dev);
+
+#ifdef CONFIG_FSL_MC_RESTOOL
+
+int fsl_mc_restool_create_device_file(struct fsl_mc_bus *mc_bus);
+
+void fsl_mc_restool_remove_device_file(struct fsl_mc_bus *mc_bus);
+
+int fsl_mc_restool_init(void);
+
+#else
+
+static inline int fsl_mc_restool_create_device_file(struct fsl_mc_bus *mc_bus)
+{
+	return 0;
+}
+
+static inline void fsl_mc_restool_remove_device_file(struct fsl_mc_bus *mc_bus)
+{
+}
+
+static inline int fsl_mc_restool_init(void)
+{
+	return 0;
+}
+
+#endif
 
 #endif /* _FSL_MC_PRIVATE_H_ */

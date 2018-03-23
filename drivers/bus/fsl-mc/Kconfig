@@ -14,3 +14,10 @@ config FSL_MC_BUS
 	  architecture.  The fsl-mc bus driver handles discovery of
 	  DPAA2 objects (which are represented as Linux devices) and
 	  binding objects to drivers.
+
+config FSL_MC_RESTOOL
+	bool "Management Complex (MC) restool support"
+	depends on FSL_MC_BUS
+	help
+	  Provides kernel support for the Management Complex resource
+	  manager user-space tool - restool.

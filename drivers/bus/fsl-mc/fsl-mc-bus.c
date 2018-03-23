@@ -792,6 +792,7 @@ static int fsl_mc_bus_probe(struct platform_device *pdev)
 	struct fsl_mc *mc;
 	struct fsl_mc_device *mc_bus_dev = NULL;
 	struct fsl_mc_io *mc_io = NULL;
+	struct fsl_mc_bus *mc_bus = NULL;
 	int container_id;
 	phys_addr_t mc_portal_phys_addr;
 	u32 mc_portal_size;
@@ -863,8 +864,17 @@ static int fsl_mc_bus_probe(struct platform_device *pdev)
 	if (error < 0)
 		goto error_cleanup_mc_io;
 
+	mc_bus = to_fsl_mc_bus(mc_bus_dev);
+	error = fsl_mc_restool_create_device_file(mc_bus);
+	if (error < 0)
+		goto error_cleanup_device;
+
 	mc->root_mc_bus_dev = mc_bus_dev;
+
 	return 0;
+
+error_cleanup_device:
+	fsl_mc_device_remove(mc_bus_dev);
 
 error_cleanup_mc_io:
 	fsl_destroy_mc_io(mc_io);
@@ -878,10 +888,12 @@ error_cleanup_mc_io:
 static int fsl_mc_bus_remove(struct platform_device *pdev)
 {
 	struct fsl_mc *mc = platform_get_drvdata(pdev);
+	struct fsl_mc_bus *mc_bus = to_fsl_mc_bus(mc->root_mc_bus_dev);
 
 	if (!fsl_mc_is_root_dprc(&mc->root_mc_bus_dev->dev))
 		return -EINVAL;
 
+	fsl_mc_restool_remove_device_file(mc_bus);
 	fsl_mc_device_remove(mc->root_mc_bus_dev);
 
 	fsl_destroy_mc_io(mc->root_mc_bus_dev->mc_io);
@@ -931,7 +943,14 @@ static int __init fsl_mc_bus_driver_init(void)
 	if (error < 0)
 		goto error_cleanup_dprc_driver;
 
+	error = fsl_mc_restool_init();
+	if (error < 0)
+		goto error_cleanup_mc_allocator;
+
 	return 0;
+
+error_cleanup_mc_allocator:
+	fsl_mc_allocator_driver_exit();
 
 error_cleanup_dprc_driver:
 	dprc_driver_exit();

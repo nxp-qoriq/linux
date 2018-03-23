@@ -127,6 +127,10 @@ level.
 
 DPRCs can be defined statically and populated with objects
 via a config file passed to the MC when firmware starts it.
+There is also a Linux user space tool called "restool" that can be
+used to create/destroy containers and objects dynamically. The latest
+version of restool can be found at:
+        https://github.com/qoriq-open-source/restool
 
 DPAA2 Objects for an Ethernet Network Interface
 -----------------------------------------------

@@ -120,6 +120,66 @@ static void enetc_add_mac_addr_ht_filter(struct enetc_mac_filter *filter,
 	filter->mac_addr_cnt++;
 }
 
+static void enetc_clear_mac_ht_flt(struct enetc_hw *hw, int si_idx, int type)
+{
+	if (type == UC) {
+		enetc_port_wr(hw, ENETC_PSIUMHFR0(si_idx), 0);
+		enetc_port_wr(hw, ENETC_PSIUMHFR1(si_idx), 0);
+	} else { /* MC */
+		enetc_port_wr(hw, ENETC_PSIMMHFR0(si_idx), 0);
+		enetc_port_wr(hw, ENETC_PSIMMHFR1(si_idx), 0);
+	}
+}
+
+static void enetc_set_mac_ht_flt(struct enetc_hw *hw, int si_idx, int type,
+				 u32 *hash)
+{
+	if (type == UC) {
+		enetc_port_wr(hw, ENETC_PSIUMHFR0(si_idx), *hash);
+		enetc_port_wr(hw, ENETC_PSIUMHFR1(si_idx), *(hash + 1));
+	} else { /* MC */
+		enetc_port_wr(hw, ENETC_PSIMMHFR0(si_idx), *hash);
+		enetc_port_wr(hw, ENETC_PSIMMHFR1(si_idx), *(hash + 1));
+	}
+}
+
+static void enetc_sync_mac_filters(struct enetc_pf *pf)
+{
+	struct enetc_mac_filter *f = pf->mac_filter;
+	struct enetc_si *si = pf->si;
+	int i, pos;
+
+	pos = EMETC_MAC_ADDR_FILT_RES;
+
+	for (i = 0; i < MADDR_TYPE; i++, f++) {
+		bool em = (f->mac_addr_cnt == 1) && (i == UC);
+		bool clear = !f->mac_addr_cnt;
+
+		if (clear) {
+			if (i == UC)
+				enetc_clear_mac_flt_entry(si, pos);
+
+			enetc_clear_mac_ht_flt(&si->hw, 0, i);
+			continue;
+		}
+
+		/* exact match filter */
+		if (em) {
+			enetc_clear_mac_ht_flt(&si->hw, 0, UC);
+
+			enetc_set_mac_flt_entry(si, pos, f->mac_addr,
+						BIT(0));
+			continue;
+		}
+
+		/* hash table filter, clear EM filter for UC entries */
+		if (i == UC)
+			enetc_clear_mac_flt_entry(si, pos);
+
+		enetc_set_mac_ht_flt(&si->hw, 0, i, (u32 *)f->mac_hash_table);
+	}
+}
+
 static void enetc_pf_set_rx_mode(struct net_device *ndev)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
@@ -174,7 +234,7 @@ static void enetc_pf_set_rx_mode(struct net_device *ndev)
 
 	if (!uprom || !mprom)
 		/* update PF entries */
-		enetc_sync_mac_filters(pf->si, pf->mac_filter, 0);
+		enetc_sync_mac_filters(pf);
 
 	psipmr |= enetc_port_rd(hw, ENETC_PSIPMR) &
 		  ~(ENETC_PSIPMR_SET_UP(0) | ENETC_PSIPMR_SET_MP(0));

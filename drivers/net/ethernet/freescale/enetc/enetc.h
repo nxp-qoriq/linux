@@ -129,16 +129,6 @@ struct enetc_cbdr {
 #define ENETC_TXBD(BDR, i) (&(((union enetc_tx_bd *)((BDR).bd_base))[i]))
 #define ENETC_RXBD(BDR, i) (&(((union enetc_rx_bd *)((BDR).bd_base))[i]))
 
-#define ENETC_MADDR_HASH_TBL_SZ	64
-enum enetc_mac_addr_type {UC, MC, MADDR_TYPE};
-struct enetc_mac_filter {
-	union {
-		char mac_addr[ETH_ALEN];
-		DECLARE_BITMAP(mac_hash_table, ENETC_MADDR_HASH_TBL_SZ);
-	};
-	int mac_addr_cnt;
-};
-
 struct enetc_msg_swbd {
 	void *vaddr;
 	dma_addr_t dma;
@@ -251,8 +241,9 @@ struct net_device_stats *enetc_get_stats(struct net_device *ndev);
 void enetc_set_ethtool_ops(struct net_device *ndev);
 
 /* control buffer descriptor ring (CBDR) */
-void enetc_sync_mac_filters(struct enetc_si *si, struct enetc_mac_filter *tbl,
-			    int si_idx);
+void enetc_set_mac_flt_entry(struct enetc_si *si, int index,
+			     char *mac_addr, int si_map);
+void enetc_clear_mac_flt_entry(struct enetc_si *si, int index);
 int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 		       int index);
 int enetc_set_rss_table(struct enetc_si *si, u16 *table, int len);

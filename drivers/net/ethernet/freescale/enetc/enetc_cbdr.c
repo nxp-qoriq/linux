@@ -104,7 +104,7 @@ static int enetc_send_cmd(struct enetc_si *si, struct enetc_cbd *cbd,
 	return ENETC_CMD_OK;
 }
 
-static void enetc_clear_mac_flt_entry(struct enetc_si *si, int index)
+void enetc_clear_mac_flt_entry(struct enetc_si *si, int index)
 {
 	struct enetc_cbd cbd;
 	bool async = false;
@@ -126,8 +126,8 @@ static void enetc_clear_mac_flt_entry(struct enetc_si *si, int index)
 	}
 }
 
-static void enetc_set_mac_flt_entry(struct enetc_si *si, int index,
-				    char *mac_addr, int si_map)
+void enetc_set_mac_flt_entry(struct enetc_si *si, int index,
+			     char *mac_addr, int si_map)
 {
 	struct enetc_cbd cbd;
 	bool async = false;
@@ -158,72 +158,6 @@ static void enetc_set_mac_flt_entry(struct enetc_si *si, int index,
 		pr_err("MAC filter update failed (%d)!\n", ret);
 		WARN_ON(1);
 		// TODO: fallback to promisc mode
-	}
-}
-
-static void enetc_clear_mac_ht_flt(struct enetc_hw *hw, int type)
-{
-	if (type == MC) {
-		enetc_wr(hw, ENETC_MMHFTR0, 0);
-		enetc_wr(hw, ENETC_MMHFTR1, 0);
-	} else { /* UC */
-		enetc_wr(hw, ENETC_UMHFTR0, 0);
-		enetc_wr(hw, ENETC_UMHFTR1, 0);
-	}
-}
-
-static void enetc_set_mac_ht_flt(struct enetc_hw *hw, u32 *hash, int type)
-{
-	if (type == MC) {
-		enetc_wr(hw, ENETC_MMHFTR0, *hash);
-		enetc_wr(hw, ENETC_MMHFTR1, *(hash + 1));
-	} else { /* UC */
-		enetc_wr(hw, ENETC_UMHFTR0, *hash);
-		enetc_wr(hw, ENETC_UMHFTR1, *(hash + 1));
-	}
-}
-
-/* MAC Address Filter Table Entry Set Descriptor */
-void enetc_sync_mac_filters(struct enetc_si *si, struct enetc_mac_filter *tbl,
-			    int si_idx)
-{
-	struct enetc_mac_filter *f;
-	int i, pos;
-
-	if (!enetc_si_is_pf(si)) {
-		pr_err("VFs not allowed to change MAC addr filters!\n");
-		return;
-	}
-
-	f = &tbl[si_idx * MADDR_TYPE];
-	pos = EMETC_MAC_ADDR_FILT_RES + si_idx;
-
-	for (i = 0; i < MADDR_TYPE; i++, f++) {
-		bool em = (f->mac_addr_cnt == 1) && (i == UC);
-		bool clear = !f->mac_addr_cnt;
-
-		if (clear) {
-			if (i == UC)
-				enetc_clear_mac_flt_entry(si, pos);
-
-			enetc_clear_mac_ht_flt(&si->hw, i);
-			continue;
-		}
-
-		/* exact match filter */
-		if (em) {
-			enetc_clear_mac_ht_flt(&si->hw, UC);
-
-			enetc_set_mac_flt_entry(si, pos, f->mac_addr,
-						BIT(si_idx));
-			continue;
-		}
-
-		/* hash table filter, clear EM filter for UC entries */
-		if (i == UC)
-			enetc_clear_mac_flt_entry(si, pos);
-
-		enetc_set_mac_ht_flt(&si->hw, (u32 *)f->mac_hash_table, i);
 	}
 }
 

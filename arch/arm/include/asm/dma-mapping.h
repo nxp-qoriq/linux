@@ -31,12 +31,6 @@ static inline struct dma_map_ops *get_dma_ops(struct device *dev)
 		return __generic_dma_ops(dev);
 }
 
-static inline void set_dma_ops(struct device *dev, struct dma_map_ops *ops)
-{
-	BUG_ON(!dev);
-	dev->archdata.dma_ops = ops;
-}
-
 #define HAVE_ARCH_DMA_SUPPORTED 1
 extern int dma_supported(struct device *dev, u64 mask);
 

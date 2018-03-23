@@ -605,7 +605,7 @@ static int build_sg_fd(struct dpaa2_eth_priv *priv,
 
 	/* Prepare the HW SGT structure */
 	sgt_buf_size = priv->tx_data_offset +
-		       sizeof(struct dpaa2_sg_entry) * (1 + num_dma_bufs);
+		       sizeof(struct dpaa2_sg_entry) *  num_dma_bufs;
 	sgt_buf = kzalloc(sgt_buf_size + DPAA2_ETH_TX_BUF_ALIGN, GFP_ATOMIC);
 	if (unlikely(!sgt_buf)) {
 		err = -ENOMEM;

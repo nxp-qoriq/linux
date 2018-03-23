@@ -3556,7 +3556,6 @@ static int dpaa2_eth_remove(struct fsl_mc_device *ls_dev)
 	del_ch_napi(priv);
 
 	unregister_netdev(net_dev);
-	dev_info(net_dev->dev.parent, "Removed interface %s\n", net_dev->name);
 
 	if (priv->do_link_poll)
 		kthread_stop(priv->poll_thread);
@@ -3574,6 +3573,8 @@ static int dpaa2_eth_remove(struct fsl_mc_device *ls_dev)
 
 	dev_set_drvdata(dev, NULL);
 	free_netdev(net_dev);
+
+	dev_info(net_dev->dev.parent, "Removed interface %s\n", net_dev->name);
 
 	return 0;
 }

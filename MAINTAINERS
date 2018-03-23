@@ -5127,6 +5127,7 @@ S:	Maintained
 F:	drivers/bus/fsl-mc/
 F:	Documentation/networking/dpaa2/overview.rst
 F:	include/uapi/linux/fsl_mc.h
+F:	Documentation/ABI/stable/sysfs-bus-fsl-mc
 
 FREEVXFS FILESYSTEM
 M:	Christoph Hellwig <hch@infradead.org>

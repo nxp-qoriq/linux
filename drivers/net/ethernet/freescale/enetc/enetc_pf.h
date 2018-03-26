@@ -58,6 +58,8 @@ struct enetc_pf {
 	struct enetc_msg_swbd rxmsg[ENETC_MAX_NUM_VFS];
 	struct work_struct msg_task;
 	char msg_int_name[IFNAMSIZ + 8];
+
+	char vlan_promisc_simap; /* bitmap of SIs in VLAN promisc mode */
 };
 
 int enetc_msg_psi_init(struct enetc_pf *pf);

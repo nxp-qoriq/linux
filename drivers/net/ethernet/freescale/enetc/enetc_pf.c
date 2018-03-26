@@ -68,6 +68,25 @@ static int enetc_pf_set_mac_addr(struct net_device *ndev, void *addr)
 	return 0;
 }
 
+static void enetc_set_vlan_promisc(struct enetc_hw *hw, char si_map)
+{
+	u32 val = enetc_port_rd(hw, ENETC_PSIPVMR);
+
+	val &= ~ENETC_PSIPVMR_SET_VP(ENETC_VLAN_PROMISC_MAP_ALL);
+	enetc_port_wr(hw, ENETC_PSIPVMR, ENETC_PSIPVMR_SET_VP(si_map) | val);
+}
+
+static bool enetc_si_vlan_promisc_is_on(struct enetc_pf *pf, int si_idx)
+{
+	return pf->vlan_promisc_simap & BIT(si_idx);
+}
+
+static void enetc_enable_si_vlan_promisc(struct enetc_pf *pf, int si_idx)
+{
+	pf->vlan_promisc_simap |= BIT(si_idx);
+	enetc_set_vlan_promisc(&pf->si->hw, pf->vlan_promisc_simap);
+}
+
 static void enetc_set_isol_vlan(struct enetc_hw *hw, int si, u16 vlan, u8 qos)
 {
 	u32 val = 0;
@@ -196,6 +215,10 @@ static void enetc_pf_set_rx_mode(struct net_device *ndev)
 		psipmr = ENETC_PSIPMR_SET_UP(0) | ENETC_PSIPMR_SET_MP(0);
 		uprom = true;
 		mprom = true;
+		/* enable VLAN promisc mode for SI0 */
+		if (!enetc_si_vlan_promisc_is_on(pf, 0))
+			enetc_enable_si_vlan_promisc(pf, 0);
+
 	} else if (ndev->flags & IFF_ALLMULTI) {
 		/* enable multi cast promisc mode for SI0 (PF) */
 		psipmr = ENETC_PSIPMR_SET_MP(0);
@@ -387,33 +410,34 @@ static void enetc_port_si_configure(struct enetc_si *si)
 	enetc_port_wr(hw, ENETC_PVCLCTR, val);
 }
 
-static void enetc_configure_port_mac(struct enetc_si *si)
+static void enetc_configure_port_mac(struct enetc_hw *hw)
 {
-	enetc_port_wr(&si->hw, ENETC_PM0_MAXFRM,
+	enetc_port_wr(hw, ENETC_PM0_MAXFRM,
 		      ENETC_SET_MAXFRM(ENETC_RX_MAXFRM_SIZE));
 
-	enetc_port_wr(&si->hw, ENETC_PM0_CMD_CFG,
+	enetc_port_wr(hw, ENETC_PM0_CMD_CFG,
 		      ENETC_PM0_TX_EN | ENETC_PM0_RX_EN);
 }
 
-static void enetc_configure_port(struct enetc_si *si)
+static void enetc_configure_port(struct enetc_pf *pf)
 {
-	struct enetc_hw *hw = &si->hw;
+	struct enetc_hw *hw = &pf->si->hw;
 
-	enetc_configure_port_mac(si);
+	enetc_configure_port_mac(hw);
 
-	enetc_port_si_configure(si);
+	enetc_port_si_configure(pf->si);
 
 	/* split up RFS entries */
-	enetc_port_alloc_rfs(si);
+	enetc_port_alloc_rfs(pf->si);
 
 	/* fix-up primary MAC addresses, if not set already */
-	enetc_port_setup_primary_mac_address(si);
+	enetc_port_setup_primary_mac_address(pf->si);
 
-	/* reset promiscuity to default values, except VLAN promisc for SI0 */
+	/* enforce VLAN promisc mode for all SIs */
+	pf->vlan_promisc_simap = ENETC_VLAN_PROMISC_MAP_ALL;
+	enetc_set_vlan_promisc(hw, pf->vlan_promisc_simap);
+
 	enetc_port_wr(hw, ENETC_PSIPMR, 0);
-	enetc_port_wr(hw, ENETC_PSIPVMR,
-		      ENETC_PSIPVMR_SET_VP(0) | ENETC_PSIPVMR_SET_VUTA(0));
 
 	/* enable port */
 	enetc_port_wr(hw, ENETC_PMR, ENETC_PMR_EN);
@@ -571,7 +595,7 @@ static int enetc_pf_probe(struct pci_dev *pdev,
 	pf->si = si;
 	pf->total_vfs = pci_sriov_get_totalvfs(pdev);
 
-	enetc_configure_port(si);
+	enetc_configure_port(pf);
 
 	ndev = alloc_etherdev_mq(sizeof(*priv), ENETC_MAX_NUM_TXQS);
 	if (!ndev) {

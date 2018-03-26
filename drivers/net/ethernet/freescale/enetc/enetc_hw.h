@@ -173,8 +173,9 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PSIPMR_SET_UP(n)	BIT(n) /* n = SI index */
 #define ENETC_PSIPMR_SET_MP(n)	BIT((n) + 16)
 #define ENETC_PSIPVMR	0x0001c
-#define ENETC_PSIPVMR_SET_VP(n)	BIT(n)
-#define ENETC_PSIPVMR_SET_VUTA(n)	BIT((n) + 16)
+#define ENETC_VLAN_PROMISC_MAP_ALL	0x7
+#define ENETC_PSIPVMR_SET_VP(simap)	((simap) & 0x7)
+#define ENETC_PSIPVMR_SET_VUTA(simap)	(((simap) & 0x7) << 16)
 #define ENETC_PSIPMAR0(n)	(0x00100 + (n) * 0x20) /* n = SI index */
 #define ENETC_PSIPMAR1(n)	(0x00104 + (n) * 0x20)
 #define ENETC_PVCLCTR		0x0208

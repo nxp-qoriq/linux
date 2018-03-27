@@ -13,6 +13,7 @@
 #include <linux/msi.h>
 #include <linux/dma-mapping.h>
 #include <linux/delay.h>
+#include <linux/io.h>
 
 #include <linux/fsl/mc.h>
 #include "../../include/dpaa2-io.h"
@@ -153,10 +154,20 @@ static int dpaa2_dpio_probe(struct fsl_mc_device *dpio_dev)
 	 * Set the CENA regs to be the cache enabled area of the portal to
 	 * achieve the best performance.
 	 */
-	desc.regs_cena = ioremap_cache_ns(dpio_dev->regions[0].start,
-		resource_size(&dpio_dev->regions[0]));
-	desc.regs_cinh = ioremap(dpio_dev->regions[1].start,
-		resource_size(&dpio_dev->regions[1]));
+	desc.regs_cena = devm_memremap(dev, dpio_dev->regions[1].start,
+				       resource_size(&dpio_dev->regions[1]),
+				       MEMREMAP_WC);
+	if (!desc.regs_cena) {
+		dev_err(dev, "devm_memremap failed\n");
+		goto err_allocate_irqs;
+	}
+
+	desc.regs_cinh = devm_ioremap(dev, dpio_dev->regions[1].start,
+				      resource_size(&dpio_dev->regions[1]));
+	if (!desc.regs_cinh) {
+		dev_err(dev, "devm_ioremap failed\n");
+		goto err_allocate_irqs;
+	}
 
 	err = fsl_mc_allocate_irqs(dpio_dev);
 	if (err) {

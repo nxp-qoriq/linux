@@ -41,3 +41,37 @@
 		};
 	};
 };
+
+&bportals {
+	bman-portal@28000 {
+		cell-index = <0xa>;
+	};
+
+	bman-portal@2c000 {
+		cell-index = <0xb>;
+	};
+
+	bman-portal@30000 {
+		cell-index = <0xc>;
+	};
+
+	bman-portal@34000 {
+		cell-index = <0xd>;
+	};
+
+	bman-portal@38000 {
+		cell-index = <0xe>;
+	};
+
+	bman-portal@3c000 {
+		cell-index = <0xf>;
+	};
+
+	bman-portal@40000 {
+		cell-index = <0x10>;
+	};
+
+	bman-portal@44000 {
+		cell-index = <0x11>;
+	};
+};

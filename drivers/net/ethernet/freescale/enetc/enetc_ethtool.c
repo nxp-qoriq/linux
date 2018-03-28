@@ -215,6 +215,7 @@ static int enetc_get_sset_count(struct net_device *ndev, int sset)
 
 static void enetc_get_strings(struct net_device *ndev, u32 stringset, u8 *data)
 {
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	u8 *p = data;
 	int i;
 
@@ -224,6 +225,9 @@ static void enetc_get_strings(struct net_device *ndev, u32 stringset, u8 *data)
 			strlcpy(p, enetc_si_counters[i].name, ETH_GSTRING_LEN);
 			p += ETH_GSTRING_LEN;
 		}
+		if (!enetc_si_is_pf(priv->si))
+			break;
+
 		for (i = 0; i < ARRAY_SIZE(enetc_port_counters); i++) {
 			strlcpy(p, enetc_port_counters[i].name,
 				ETH_GSTRING_LEN);
@@ -242,6 +246,9 @@ static void enetc_get_ethtool_stats(struct net_device *ndev,
 
 	for (i = 0; i < ARRAY_SIZE(enetc_si_counters); i++)
 		data[o++] = enetc_rd64(hw, enetc_si_counters[i].reg);
+
+	if (!enetc_si_is_pf(priv->si))
+		return;
 
 	for (i = 0; i < ARRAY_SIZE(enetc_port_counters); i++)
 		data[o++] = enetc_port_rd(hw, enetc_port_counters[i].reg);

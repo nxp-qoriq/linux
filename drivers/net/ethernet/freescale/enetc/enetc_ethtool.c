@@ -136,14 +136,30 @@ static struct {
 	int reg;
 	char name[ETH_GSTRING_LEN];
 } enetc_si_counters[] =  {
-	{ ENETC_SIROCT, "SI received octets" },
-	{ ENETC_SIRFRM, "SI received frames" },
-	{ ENETC_SIRUCA, "SI received unicast frames" },
-	{ ENETC_SIRMCA, "SI received multicast frames" },
-	{ ENETC_SITOCT, "SI transmit octets" },
-	{ ENETC_SITFRM, "SI transmit frames" },
-	{ ENETC_SITUCA, "SI transmit unicast frames" },
-	{ ENETC_SITMCA, "SI transmit multicast frames" },
+	{ ENETC_SIROCT, "SI rx octets" },
+	{ ENETC_SIRFRM, "SI rx frames" },
+	{ ENETC_SIRUCA, "SI rx u-cast frames" },
+	{ ENETC_SIRMCA, "SI rx m-cast frames" },
+	{ ENETC_SITOCT, "SI tx octets" },
+	{ ENETC_SITFRM, "SI tx frames" },
+	{ ENETC_SITUCA, "SI tx u-cast frames" },
+	{ ENETC_SITMCA, "SI tx m-cast frames" },
+	{ ENETC_RBDCR( 0), "Rx ring  0 discarded frames" },
+	{ ENETC_RBDCR( 1), "Rx ring  1 discarded frames" },
+	{ ENETC_RBDCR( 2), "Rx ring  2 discarded frames" },
+	{ ENETC_RBDCR( 3), "Rx ring  3 discarded frames" },
+	{ ENETC_RBDCR( 4), "Rx ring  4 discarded frames" },
+	{ ENETC_RBDCR( 5), "Rx ring  5 discarded frames" },
+	{ ENETC_RBDCR( 6), "Rx ring  6 discarded frames" },
+	{ ENETC_RBDCR( 7), "Rx ring  7 discarded frames" },
+	{ ENETC_RBDCR( 8), "Rx ring  8 discarded frames" },
+	{ ENETC_RBDCR( 9), "Rx ring  9 discarded frames" },
+	{ ENETC_RBDCR(10), "Rx ring 10 discarded frames" },
+	{ ENETC_RBDCR(11), "Rx ring 11 discarded frames" },
+	{ ENETC_RBDCR(12), "Rx ring 12 discarded frames" },
+	{ ENETC_RBDCR(13), "Rx ring 13 discarded frames" },
+	{ ENETC_RBDCR(14), "Rx ring 14 discarded frames" },
+	{ ENETC_RBDCR(15), "Rx ring 15 discarded frames" },
 };
 
 static struct {
@@ -197,6 +213,17 @@ static struct {
 	{ ENETC_PM0_TSCOL,  "MAC tx single collisions" },
 	{ ENETC_PM0_TLCOL,  "MAC tx late collisions" },
 	{ ENETC_PM0_TECOL,  "MAC tx excessive collisions" },
+	{ ENETC_UFDMF,      "SI MAC nomatch u-cast discards" },
+	{ ENETC_MFDMF,      "SI MAC nomatch m-cast discards" },
+	{ ENETC_PBFDSIR,    "SI MAC nomatch b-cast discards" },
+	{ ENETC_PUFDVFR,    "SI VLAN nomatch u-cast discards" },
+	{ ENETC_PMFDVFR,    "SI VLAN nomatch m-cast discards" },
+	{ ENETC_PBFDVFR,    "SI VLAN nomatch b-cast discards" },
+	{ ENETC_PFDMSAPR,   "SI pruning discarded frames" },
+	{ ENETC_PICDR(0),   "ICM DR0 discarded frames" },
+	{ ENETC_PICDR(1),   "ICM DR1 discarded frames" },
+	{ ENETC_PICDR(2),   "ICM DR2 discarded frames" },
+	{ ENETC_PICDR(3),   "ICM DR3 discarded frames" },
 };
 
 static int enetc_get_sset_count(struct net_device *ndev, int sset)
@@ -206,8 +233,8 @@ static int enetc_get_sset_count(struct net_device *ndev, int sset)
 	switch (sset) {
 	case ETH_SS_STATS:
 		return ARRAY_SIZE(enetc_si_counters) +
-			enetc_si_is_pf(priv->si) ?
-			ARRAY_SIZE(enetc_port_counters) : 0;
+			(enetc_si_is_pf(priv->si) ?
+			ARRAY_SIZE(enetc_port_counters) : 0);
 	default:
 		return -EOPNOTSUPP;
 	}

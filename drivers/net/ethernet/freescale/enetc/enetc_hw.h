@@ -93,6 +93,7 @@ static inline u32 enetc_vsi_set_msize(u32 size)
 #define ENETC_SITFRM	0x328
 #define ENETC_SITUCA	0x330
 #define ENETC_SITMCA	0x338
+#define ENETC_RBDCR(n)	(0x8180 + (n) * 0x200)
 
 /* Control BDR regs */
 #define ENETC_SICBDRMR		0x800
@@ -276,6 +277,16 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PM0_TSCOL		0x82E0
 #define ENETC_PM0_TLCOL		0x82E8
 #define ENETC_PM0_TECOL		0x82F0
+
+/* Port counters */
+#define ENETC_PICDR(n)		(0x0700 + (n) * 8) /* n = [0..3] */
+#define ENETC_PBFDSIR		0x0810
+#define ENETC_PFDMSAPR		0x0814
+#define ENETC_UFDMF		0x1680
+#define ENETC_MFDMF		0x1684
+#define ENETC_PUFDVFR		0x1780
+#define ENETC_PMFDVFR		0x1784
+#define ENETC_PBFDVFR		0x1788
 
 /* Global regs, offset: 2_0000h */
 #define ENETC_GLOBAL_BASE		0x20000

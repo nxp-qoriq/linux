@@ -117,6 +117,9 @@
 #define DPNI_CMDID_GET_OFFLOAD				DPNI_CMD(0x26B)
 #define DPNI_CMDID_SET_OFFLOAD				DPNI_CMD(0x26C)
 
+#define DPNI_CMDID_SET_RX_FS_DIST			DPNI_CMD(0x273)
+#define DPNI_CMDID_SET_RX_HASH_DIST			DPNI_CMD(0x274)
+
 /* Macros for accessing command fields smaller than 1byte */
 #define DPNI_MASK(field)	\
 	GENMASK(DPNI_##field##_SHIFT + DPNI_##field##_SIZE - 1, \
@@ -691,4 +694,26 @@ struct dpni_rsp_get_congestion_notification {
 	__le32 threshold_entry;
 	__le32 threshold_exit;
 };
+
+#define DPNI_RX_FS_DIST_ENABLE_SHIFT	0
+#define DPNI_RX_FS_DIST_ENABLE_SIZE	1
+struct dpni_cmd_set_rx_fs_dist {
+	__le16 dist_size;
+	u8 enable;
+	u8 tc;
+	__le16 miss_flow_id;
+	__le16 pad;
+	__le64 key_cfg_iova;
+};
+
+#define DPNI_RX_HASH_DIST_ENABLE_SHIFT	0
+#define DPNI_RX_HASH_DIST_ENABLE_SIZE	1
+struct dpni_cmd_set_rx_hash_dist {
+	__le16 dist_size;
+	u8 enable;
+	u8 tc;
+	__le32 pad;
+	__le64 key_cfg_iova;
+};
+
 #endif /* _FSL_DPNI_CMD_H */

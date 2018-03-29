@@ -211,6 +211,7 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PM0_CMD_CFG	0x08008
 #define ENETC_PM0_TX_EN		BIT(0)
 #define ENETC_PM0_RX_EN		BIT(1)
+#define ENETC_PM0_PROMISC	BIT(4)
 #define ENETC_PM0_CMD_XGLP	BIT(10)
 #define ENETC_PM0_CMD_TXP	BIT(11)
 

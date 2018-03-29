@@ -501,7 +501,8 @@ static void enetc_configure_port_mac(struct enetc_hw *hw)
 		      ENETC_SET_MAXFRM(ENETC_RX_MAXFRM_SIZE));
 
 	enetc_port_wr(hw, ENETC_PM0_CMD_CFG,
-		      ENETC_PM0_CMD_TXP	| ENETC_PM0_TX_EN | ENETC_PM0_RX_EN);
+		      ENETC_PM0_CMD_TXP	| ENETC_PM0_PROMISC |
+		      ENETC_PM0_TX_EN | ENETC_PM0_RX_EN);
 }
 
 static void enetc_configure_port(struct enetc_pf *pf)

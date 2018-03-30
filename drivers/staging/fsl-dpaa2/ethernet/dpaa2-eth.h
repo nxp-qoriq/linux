@@ -445,6 +445,12 @@ struct dpaa2_eth_priv {
 	bool ceetm_en;
 };
 
+enum dpaa2_eth_rx_dist {
+	DPAA2_ETH_RX_DIST_HASH,
+	DPAA2_ETH_RX_DIST_FS,
+	DPAA2_ETH_RX_DIST_LEGACY
+};
+
 #define dpaa2_eth_hash_enabled(priv)	\
 	((priv)->dpni_attrs.num_queues > 1)
 

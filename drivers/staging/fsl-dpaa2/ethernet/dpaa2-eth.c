@@ -2596,8 +2596,13 @@ static struct dpaa2_eth_dist_fields default_dist_fields[] = {
 static int legacy_config_dist_key(struct dpaa2_eth_priv *priv,
 				  dma_addr_t key_iova)
 {
+	struct device *dev = priv->net_dev->dev.parent;
 	struct dpni_rx_tc_dist_cfg dist_cfg;
 	int i, err;
+
+	/* In legacy mode, we can't configure flow steering independently */
+	if (!dpaa2_eth_hash_enabled(priv))
+		return -EOPNOTSUPP;
 
 	memset(&dist_cfg, 0, sizeof(dist_cfg));
 
@@ -2613,17 +2618,23 @@ static int legacy_config_dist_key(struct dpaa2_eth_priv *priv,
 	for (i = 0; i < dpaa2_eth_tc_count(priv); i++) {
 		err = dpni_set_rx_tc_dist(priv->mc_io, 0, priv->mc_token, i,
 					  &dist_cfg);
-		if (err)
+		if (err) {
+			dev_err(dev, "dpni_set_rx_tc_dist failed\n");
 			return err;
+		}
 	}
 
 	return 0;
 }
 
-static int config_dist_key(struct dpaa2_eth_priv *priv, dma_addr_t key_iova)
+static int config_hash_key(struct dpaa2_eth_priv *priv, dma_addr_t key_iova)
 {
+	struct device *dev = priv->net_dev->dev.parent;
 	struct dpni_rx_dist_cfg dist_cfg;
 	int i, err;
+
+	if (!dpaa2_eth_hash_enabled(priv))
+		return -EOPNOTSUPP;
 
 	memset(&dist_cfg, 0, sizeof(dist_cfg));
 
@@ -2633,26 +2644,53 @@ static int config_dist_key(struct dpaa2_eth_priv *priv, dma_addr_t key_iova)
 
 	for (i = 0; i < dpaa2_eth_tc_count(priv); i++) {
 		dist_cfg.tc = i;
-		err = dpni_set_rx_hash_dist(priv->mc_io, 0, priv->mc_token,
-					    &dist_cfg);
-		if (err)
-			return err;
 
-		if (dpaa2_eth_fs_enabled(priv)) {
-			err = dpni_set_rx_fs_dist(priv->mc_io, 0,
-						  priv->mc_token, &dist_cfg);
-			if (err)
-				return err;
+		err = dpni_set_rx_hash_dist(priv->mc_io, 0,
+					    priv->mc_token, &dist_cfg);
+		if (err) {
+			dev_err(dev, "dpni_set_rx_hash_dist failed\n");
+			return err;
 		}
 	}
 
 	return 0;
 }
 
-static int dpaa2_eth_set_dist_keys(struct dpaa2_eth_priv *priv)
+static int config_fs_key(struct dpaa2_eth_priv *priv, dma_addr_t key_iova)
+{
+	struct device *dev = priv->net_dev->dev.parent;
+	struct dpni_rx_dist_cfg dist_cfg;
+	int i, err;
+
+	if (!dpaa2_eth_fs_enabled(priv))
+		return -EOPNOTSUPP;
+
+	memset(&dist_cfg, 0, sizeof(dist_cfg));
+
+	dist_cfg.key_cfg_iova = key_iova;
+	dist_cfg.dist_size = dpaa2_eth_queue_count(priv);
+	dist_cfg.enable = true;
+
+	for (i = 0; i < dpaa2_eth_tc_count(priv); i++) {
+		dist_cfg.tc = i;
+
+		err = dpni_set_rx_fs_dist(priv->mc_io, 0,
+					  priv->mc_token, &dist_cfg);
+		if (err) {
+			dev_err(dev, "dpni_set_rx_fs_dist failed\n");
+			return err;
+		}
+	}
+
+	return 0;
+}
+
+static int dpaa2_eth_set_dist_key(struct dpaa2_eth_priv *priv,
+				  enum dpaa2_eth_rx_dist type)
 {
 	struct device *dev = priv->net_dev->dev.parent;
 	struct dpkg_profile_cfg cls_cfg;
+	struct dpkg_extract *key;
 	dma_addr_t key_iova;
 	u8 *key_mem;
 	int i, err;
@@ -2660,14 +2698,15 @@ static int dpaa2_eth_set_dist_keys(struct dpaa2_eth_priv *priv)
 	memset(&cls_cfg, 0, sizeof(cls_cfg));
 
 	for (i = 0; i < priv->num_dist_fields; i++) {
-		struct dpkg_extract *key =
-			&cls_cfg.extracts[cls_cfg.num_extracts];
-
+		key = &cls_cfg.extracts[cls_cfg.num_extracts];
 		key->type = DPKG_EXTRACT_FROM_HDR;
 		key->extract.from_hdr.prot = priv->dist_fields[i].cls_prot;
 		key->extract.from_hdr.type = DPKG_FULL_FIELD;
 		key->extract.from_hdr.field = priv->dist_fields[i].cls_field;
 		cls_cfg.num_extracts++;
+
+		if (type == DPAA2_ETH_RX_DIST_FS)
+			continue;
 
 		priv->rx_hash_fields |= priv->dist_fields[i].rxnfc_field;
 	}
@@ -2690,10 +2729,20 @@ static int dpaa2_eth_set_dist_keys(struct dpaa2_eth_priv *priv)
 		goto free_key;
 	}
 
-	if (dpaa2_eth_has_legacy_dist(priv))
+	switch (type) {
+	case DPAA2_ETH_RX_DIST_LEGACY:
 		err = legacy_config_dist_key(priv, key_iova);
-	else
-		err = config_dist_key(priv, key_iova);
+		break;
+	case DPAA2_ETH_RX_DIST_HASH:
+		err = config_hash_key(priv, key_iova);
+		break;
+	case DPAA2_ETH_RX_DIST_FS:
+		err = config_fs_key(priv, key_iova);
+		break;
+	default:
+		err = -EINVAL;
+		break;
+	}
 
 	dma_unmap_single(dev, key_iova, DPAA2_CLASSIFIER_DMA_SIZE,
 			 DMA_TO_DEVICE);
@@ -2736,14 +2785,15 @@ static int bind_dpni(struct dpaa2_eth_priv *priv)
 	check_cls_support(priv);
 
 	/* have the interface implicitly distribute traffic based on
-	 * a static hash key
+	 * a static hash key. Also configure flow steering key, if supported.
+	 * Errors here are not blocking, so just let the called function
+	 * print its error message and move along.
 	 */
-	if (dpaa2_eth_hash_enabled(priv)) {
-		err = dpaa2_eth_set_dist_keys(priv);
-		if (err) {
-			dev_err(dev, "Failed to configure hashing\n");
-			return err;
-		}
+	if (dpaa2_eth_has_legacy_dist(priv)) {
+		dpaa2_eth_set_dist_key(priv, DPAA2_ETH_RX_DIST_LEGACY);
+	} else {
+		dpaa2_eth_set_dist_key(priv, DPAA2_ETH_RX_DIST_HASH);
+		dpaa2_eth_set_dist_key(priv, DPAA2_ETH_RX_DIST_FS);
 	}
 
 	/* Configure handling of error frames */

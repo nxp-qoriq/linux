@@ -2593,8 +2593,8 @@ static struct dpaa2_eth_hash_fields default_hash_fields[] = {
 	},
 };
 
-/* Set RX hash options */
-static int config_dist_key(struct dpaa2_eth_priv *priv, dma_addr_t key_iova)
+static int legacy_config_dist_key(struct dpaa2_eth_priv *priv,
+				  dma_addr_t key_iova)
 {
 	struct dpni_rx_tc_dist_cfg dist_cfg;
 	int i, err;
@@ -2615,6 +2615,35 @@ static int config_dist_key(struct dpaa2_eth_priv *priv, dma_addr_t key_iova)
 					  &dist_cfg);
 		if (err)
 			return err;
+	}
+
+	return 0;
+}
+
+static int config_dist_key(struct dpaa2_eth_priv *priv, dma_addr_t key_iova)
+{
+	struct dpni_rx_dist_cfg dist_cfg;
+	int i, err;
+
+	memset(&dist_cfg, 0, sizeof(dist_cfg));
+
+	dist_cfg.key_cfg_iova = key_iova;
+	dist_cfg.dist_size = dpaa2_eth_queue_count(priv);
+	dist_cfg.enable = true;
+
+	for (i = 0; i < dpaa2_eth_tc_count(priv); i++) {
+		dist_cfg.tc = i;
+		err = dpni_set_rx_hash_dist(priv->mc_io, 0, priv->mc_token,
+					    &dist_cfg);
+		if (err)
+			return err;
+
+		if (dpaa2_eth_fs_enabled(priv)) {
+			err = dpni_set_rx_fs_dist(priv->mc_io, 0,
+						  priv->mc_token, &dist_cfg);
+			if (err)
+				return err;
+		}
 	}
 
 	return 0;
@@ -2661,7 +2690,10 @@ static int dpaa2_eth_set_hash(struct dpaa2_eth_priv *priv)
 		goto free_key;
 	}
 
-	err = config_dist_key(priv, key_iova);
+	if (dpaa2_eth_has_legacy_dist(priv))
+		err = legacy_config_dist_key(priv, key_iova);
+	else
+		err = config_dist_key(priv, key_iova);
 
 	dma_unmap_single(dev, key_iova, DPAA2_CLASSIFIER_DMA_SIZE,
 			 DMA_TO_DEVICE);

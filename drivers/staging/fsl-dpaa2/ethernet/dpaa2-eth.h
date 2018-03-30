@@ -468,6 +468,15 @@ static inline int dpaa2_eth_cmp_dpni_ver(struct dpaa2_eth_priv *priv,
 	return priv->dpni_ver_major - ver_major;
 }
 
+#define DPNI_DIST_KEY_VER_MAJOR			7
+#define DPNI_DIST_KEY_VER_MINOR			5
+
+static inline bool dpaa2_eth_has_legacy_dist(struct dpaa2_eth_priv *priv)
+{
+	return (dpaa2_eth_cmp_dpni_ver(priv, DPNI_DIST_KEY_VER_MAJOR,
+				       DPNI_DIST_KEY_VER_MINOR) < 0);
+}
+
 /* Hardware only sees DPAA2_ETH_RX_BUF_SIZE, but the skb built around
  * the buffer also needs space for its shared info struct, and we need
  * to allocate enough to accommodate hardware alignment restrictions

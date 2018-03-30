@@ -3,6 +3,7 @@
 /include/ "qoriq-fman3-0-sdk.dtsi"
 /include/ "qoriq-bman-portals-sdk.dtsi"
 /include/ "qoriq-qman3-portals-sdk.dtsi"
+/include/ "qoriq-qman3-ceetm0-32-sdk.dtsi"
 
 &soc {
 	fsldpaa: fsl,dpaa {

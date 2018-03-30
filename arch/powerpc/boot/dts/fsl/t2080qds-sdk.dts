@@ -4,3 +4,4 @@
 /include/ "qoriq-dpaa-eth.dtsi"
 /include/ "qoriq-bman-portals-sdk.dtsi"
 /include/ "qoriq-qman3-portals-sdk.dtsi"
+/include/ "qoriq-qman3-ceetm0-32-sdk.dtsi"

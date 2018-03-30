@@ -389,11 +389,11 @@ static int cls_key_off(struct dpaa2_eth_priv *priv, int prot, int field)
 {
 	int i, off = 0;
 
-	for (i = 0; i < priv->num_hash_fields; i++) {
-		if (priv->hash_fields[i].cls_prot == prot &&
-		    priv->hash_fields[i].cls_field == field)
+	for (i = 0; i < priv->num_dist_fields; i++) {
+		if (priv->dist_fields[i].cls_prot == prot &&
+		    priv->dist_fields[i].cls_field == field)
 			return off;
-		off += priv->hash_fields[i].size;
+		off += priv->dist_fields[i].size;
 	}
 
 	return -1;
@@ -403,8 +403,8 @@ static u8 cls_key_size(struct dpaa2_eth_priv *priv)
 {
 	u8 i, size = 0;
 
-	for (i = 0; i < priv->num_hash_fields; i++)
-		size += priv->hash_fields[i].size;
+	for (i = 0; i < priv->num_dist_fields; i++)
+		size += priv->dist_fields[i].size;
 
 	return size;
 }
@@ -421,7 +421,7 @@ void check_cls_support(struct dpaa2_eth_priv *priv)
 				 key_size);
 			goto disable_fs;
 		}
-		if (priv->num_hash_fields > DPKG_MAX_NUM_OF_EXTRACTS) {
+		if (priv->num_dist_fields > DPKG_MAX_NUM_OF_EXTRACTS) {
 			dev_info(dev, "Too many key fields (max = %d). Hashing and steering are disabled\n",
 				 DPKG_MAX_NUM_OF_EXTRACTS);
 			goto disable_fs;

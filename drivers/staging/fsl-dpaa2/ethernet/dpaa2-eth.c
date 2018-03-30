@@ -2536,7 +2536,7 @@ static int setup_rx_err_flow(struct dpaa2_eth_priv *priv,
 #endif
 
 /* default hash key fields */
-static struct dpaa2_eth_hash_fields default_hash_fields[] = {
+static struct dpaa2_eth_dist_fields default_dist_fields[] = {
 	{
 		/* L2 header */
 		.rxnfc_field = RXH_L2DA,
@@ -2649,7 +2649,7 @@ static int config_dist_key(struct dpaa2_eth_priv *priv, dma_addr_t key_iova)
 	return 0;
 }
 
-static int dpaa2_eth_set_hash(struct dpaa2_eth_priv *priv)
+static int dpaa2_eth_set_dist_keys(struct dpaa2_eth_priv *priv)
 {
 	struct device *dev = priv->net_dev->dev.parent;
 	struct dpkg_profile_cfg cls_cfg;
@@ -2659,17 +2659,17 @@ static int dpaa2_eth_set_hash(struct dpaa2_eth_priv *priv)
 
 	memset(&cls_cfg, 0, sizeof(cls_cfg));
 
-	for (i = 0; i < priv->num_hash_fields; i++) {
+	for (i = 0; i < priv->num_dist_fields; i++) {
 		struct dpkg_extract *key =
 			&cls_cfg.extracts[cls_cfg.num_extracts];
 
 		key->type = DPKG_EXTRACT_FROM_HDR;
-		key->extract.from_hdr.prot = priv->hash_fields[i].cls_prot;
+		key->extract.from_hdr.prot = priv->dist_fields[i].cls_prot;
 		key->extract.from_hdr.type = DPKG_FULL_FIELD;
-		key->extract.from_hdr.field = priv->hash_fields[i].cls_field;
+		key->extract.from_hdr.field = priv->dist_fields[i].cls_field;
 		cls_cfg.num_extracts++;
 
-		priv->rx_hash_fields |= priv->hash_fields[i].rxnfc_field;
+		priv->rx_hash_fields |= priv->dist_fields[i].rxnfc_field;
 	}
 
 	key_mem = kzalloc(DPAA2_CLASSIFIER_DMA_SIZE, GFP_KERNEL);
@@ -2731,15 +2731,15 @@ static int bind_dpni(struct dpaa2_eth_priv *priv)
 	/* Verify classification options and disable hashing and/or
 	 * flow steering support in case of invalid configuration values
 	 */
-	priv->hash_fields = default_hash_fields;
-	priv->num_hash_fields = ARRAY_SIZE(default_hash_fields);
+	priv->dist_fields = default_dist_fields;
+	priv->num_dist_fields = ARRAY_SIZE(default_dist_fields);
 	check_cls_support(priv);
 
 	/* have the interface implicitly distribute traffic based on
 	 * a static hash key
 	 */
 	if (dpaa2_eth_hash_enabled(priv)) {
-		err = dpaa2_eth_set_hash(priv);
+		err = dpaa2_eth_set_dist_keys(priv);
 		if (err) {
 			dev_err(dev, "Failed to configure hashing\n");
 			return err;

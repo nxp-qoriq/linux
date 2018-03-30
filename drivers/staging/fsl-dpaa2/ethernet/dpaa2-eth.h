@@ -370,7 +370,7 @@ struct dpaa2_eth_cls_rule {
 	bool in_use;
 };
 
-struct dpaa2_eth_hash_fields {
+struct dpaa2_eth_dist_fields {
 	u64 rxnfc_field;
 	enum net_prot cls_prot;
 	int cls_field;
@@ -423,8 +423,11 @@ struct dpaa2_eth_priv {
 	bool do_link_poll;
 	struct task_struct *poll_thread;
 
-	struct dpaa2_eth_hash_fields *hash_fields;
-	u8 num_hash_fields;
+	/* Rx distribution (hash and flow steering) header fields
+	 * supported by the driver
+	 */
+	struct dpaa2_eth_dist_fields *dist_fields;
+	u8 num_dist_fields;
 	/* enabled ethtool hashing bits */
 	u64 rx_hash_fields;
 #ifdef CONFIG_FSL_DPAA2_ETH_DEBUGFS

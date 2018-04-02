@@ -682,13 +682,14 @@
 
 		i2c0: i2c@2000000 {
 			status = "disabled";
-			compatible = "fsl,vf610-i2c";
+			compatible = "fsl,vf610-i2c", "fsl,ls208xa-vf610-i2c";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x0 0x2000000 0x0 0x10000>;
 			interrupts = <0 34 0x4>; /* Level high type */
 			clock-names = "i2c";
 			clocks = <&clockgen 4 1>;
+			fsl-scl-gpio = <&gpio3 10 0>;
 		};
 
 		i2c1: i2c@2010000 {

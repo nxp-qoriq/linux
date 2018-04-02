@@ -4,3 +4,13 @@
 /include/ "qoriq-dpaa-eth.dtsi"
 /include/ "qoriq-bman-portals-sdk.dtsi"
 /include/ "qoriq-qman1-portals-sdk.dtsi"
+
+&soc {
+	fsldpaa: fsl,dpaa {
+		compatible = "simple-bus", "fsl,dpaa";
+		ethernet@2 {
+			status = "disabled";
+		};
+	};
+};
+

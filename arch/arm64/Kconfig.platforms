@@ -233,4 +233,9 @@ config ARCH_LX2160A_SIMU
 	help
 	  This enables support for LX2160A SIMU
 
+config ARCH_LX2160A_CFP
+	bool "LX2160A CFP"
+	help
+	  This enables support for LX2160A CFP
+
 endmenu

@@ -5,6 +5,7 @@
 menuconfig MMC
 	tristate "MMC/SD/SDIO card support"
 	depends on HAS_IOMEM
+	depends on !ARCH_LX2160A_CFP
 	help
 	  This selects MultiMediaCard, Secure Digital and Secure
 	  Digital I/O support.

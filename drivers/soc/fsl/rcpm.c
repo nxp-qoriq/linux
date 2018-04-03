@@ -76,6 +76,7 @@ static void rcpm_wakeup_fixup(struct device *dev, void *data)
 static int rcpm_suspend_prepare(void)
 {
 	int i;
+	u32 val;
 
 	BUG_ON(!rcpm);
 
@@ -85,9 +86,12 @@ static int rcpm_suspend_prepare(void)
 	dpm_for_each_dev(NULL, rcpm_wakeup_fixup);
 
 	for (i = 0; i < rcpm->ipp_num; i++) {
-		rcpm_reg_write(rcpm->ippdexpcr_offset + 4 * i,
-			       rcpm->ippdexpcr[i]);
-		pr_debug("ippdexpcr%d = 0x%x\n", i, rcpm->ippdexpcr[i]);
+		if (rcpm->ippdexpcr[i]) {
+			val = rcpm_reg_read(rcpm->ippdexpcr_offset + 4 * i);
+			rcpm_reg_write(rcpm->ippdexpcr_offset + 4 * i,
+					       val | rcpm->ippdexpcr[i]);
+			pr_debug("ippdexpcr%d = 0x%x\n", i, rcpm->ippdexpcr[i]);
+		}
 	}
 
 	return 0;

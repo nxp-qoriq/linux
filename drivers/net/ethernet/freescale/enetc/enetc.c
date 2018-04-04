@@ -1073,7 +1073,7 @@ int enetc_setup_irqs(struct enetc_ndev_priv *priv)
 irq_err:
 	while (i-- > 0)
 		free_irq(pci_irq_vector(pdev, ENETC_BDR_INT_BASE_IDX + i),
-			 &priv->int_vector[i].napi);
+			 &priv->int_vector[i]);
 
 	return err;
 }
@@ -1085,7 +1085,7 @@ void enetc_free_irqs(struct enetc_ndev_priv *priv)
 
 	for (i = 0; i < priv->bdr_int_num; i++)
 		free_irq(pci_irq_vector(pdev, ENETC_BDR_INT_BASE_IDX + i),
-			 &priv->int_vector[i].napi);
+			 &priv->int_vector[i]);
 }
 
 static void enetc_enable_interrupts(struct enetc_ndev_priv *priv)

@@ -751,7 +751,6 @@ static int ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 	return 0;
 }
 
-#ifndef CONFIG_ARCH_LX2160A_SIMU
 static int xts_ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 				 const u8 *key, unsigned int keylen)
 {
@@ -786,7 +785,6 @@ static int xts_ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 
 	return 0;
 }
-#endif
 
 /*
  * aead_edesc - s/w-extended aead descriptor
@@ -2340,7 +2338,6 @@ static struct caam_alg_template driver_algs[] = {
 			},
 		.class1_alg_type = OP_ALG_ALGSEL_AES | OP_ALG_AAI_CTR_MOD128,
 	},
-#ifndef CONFIG_ARCH_LX2160A_SIMU
 	{
 		.name = "xts(aes)",
 		.driver_name = "xts-aes-caam",
@@ -2357,7 +2354,6 @@ static struct caam_alg_template driver_algs[] = {
 			},
 		.class1_alg_type = OP_ALG_ALGSEL_AES | OP_ALG_AAI_XTS,
 	},
-#endif
 };
 
 static struct caam_aead_alg driver_aeads[] = {

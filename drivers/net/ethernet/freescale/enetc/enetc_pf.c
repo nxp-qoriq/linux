@@ -612,7 +612,7 @@ static void enetc_pf_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 	priv->dev = &si->pdev->dev;
 	si->ndev = ndev;
 
-	priv->msg_enable = (NETIF_MSG_IFUP << 1) - 1; //TODO: netif_msg_init()
+	priv->msg_enable = (NETIF_MSG_WOL << 1) - 1; //TODO: netif_msg_init()
 	ndev->netdev_ops = ndev_ops;
 	enetc_set_ethtool_ops(ndev);
 	ndev->watchdog_timeo = 5 * HZ;

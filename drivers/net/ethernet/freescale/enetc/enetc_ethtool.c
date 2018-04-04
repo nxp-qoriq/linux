@@ -514,6 +514,30 @@ static int enetc_set_rxfh(struct net_device *ndev, const u32 *indir,
 	return err;
 }
 
+static void enetc_get_ringparam(struct net_device *ndev,
+				struct ethtool_ringparam *ring)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+
+	ring->rx_pending = priv->rx_bd_count;
+	ring->tx_pending = priv->tx_bd_count;
+
+	/* do some h/w sanity checks for BDR length */
+	if (netif_running(ndev))
+	{
+		struct enetc_hw *hw = &priv->si->hw;
+		u32 val = enetc_rxbdr_rd(hw, 0, ENETC_RBLENR);
+
+		if (val != priv->rx_bd_count)
+			netif_err(priv, hw, ndev, "RxBDR[RBLENR] = %d!\n", val);
+
+		val = enetc_txbdr_rd(hw, 0, ENETC_TBLENR);
+
+		if (val != priv->tx_bd_count)
+			netif_err(priv, hw, ndev, "TxBDR[TBLENR] = %d!\n", val);
+	}
+}
+
 const struct ethtool_ops enetc_pf_ethtool_ops = {
 	.get_regs_len = enetc_get_reglen,
 	.get_regs = enetc_get_regs,
@@ -526,6 +550,7 @@ const struct ethtool_ops enetc_pf_ethtool_ops = {
 	.get_rxfh_indir_size = enetc_get_rxfh_indir_size,
 	.get_rxfh = enetc_get_rxfh,
 	.set_rxfh = enetc_set_rxfh,
+	.get_ringparam = enetc_get_ringparam,
 };
 
 const struct ethtool_ops enetc_vf_ethtool_ops = {
@@ -534,6 +559,7 @@ const struct ethtool_ops enetc_vf_ethtool_ops = {
 	.get_sset_count = enetc_get_sset_count,
 	.get_strings = enetc_get_strings,
 	.get_ethtool_stats = enetc_get_ethtool_stats,
+	.get_ringparam = enetc_get_ringparam,
 };
 
 void enetc_set_ethtool_ops(struct net_device *ndev)

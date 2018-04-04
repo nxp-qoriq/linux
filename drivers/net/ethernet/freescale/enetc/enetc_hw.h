@@ -160,8 +160,7 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_TBICIR0	0xa8
 #define ENETC_TBICIR0_ICEN	BIT(31)
 
-//FIXME , BG 0.7: #define ENETC_RTBMR_RSIZE(n)  __ilog2_u32((n) >> 6)
-#define ENETC_RTBLENR_LEN(n)	(((n) >> 3) << 7)
+#define ENETC_RTBLENR_LEN(n)	((n) & ~0x7)
 #define ENETC_TBMR_EN	BIT(31)
 
 /* Port regs, offset: 1_0000h */

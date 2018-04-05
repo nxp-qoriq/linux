@@ -376,6 +376,7 @@ struct dpaa2_eth_dist_fields {
 	int cls_field;
 	int offset;
 	int size;
+	u32 id;
 };
 
 /* Driver private data */
@@ -450,6 +451,24 @@ enum dpaa2_eth_rx_dist {
 	DPAA2_ETH_RX_DIST_FS,
 	DPAA2_ETH_RX_DIST_LEGACY
 };
+
+/* Supported Rx distribution field ids */
+#define DPAA2_ETH_DIST_ETHSRC		BIT(0)
+#define DPAA2_ETH_DIST_ETHDST		BIT(1)
+#define DPAA2_ETH_DIST_ETHTYPE		BIT(2)
+#define DPAA2_ETH_DIST_VLAN		BIT(3)
+#define DPAA2_ETH_DIST_IPSRC		BIT(4)
+#define DPAA2_ETH_DIST_IPDST		BIT(5)
+#define DPAA2_ETH_DIST_IPPROTO		BIT(6)
+#define DPAA2_ETH_DIST_L4SRC		BIT(7)
+#define DPAA2_ETH_DIST_L4DST		BIT(8)
+#define DPAA2_ETH_DIST_ALL		(~0U)
+
+/* Default Rx hash key */
+#define DPAA2_ETH_DIST_DEFAULT_HASH \
+	(DPAA2_ETH_DIST_IPPROTO | \
+	 DPAA2_ETH_DIST_IPSRC | DPAA2_ETH_DIST_IPDST | \
+	 DPAA2_ETH_DIST_L4SRC | DPAA2_ETH_DIST_L4DST)
 
 #define dpaa2_eth_hash_enabled(priv)	\
 	((priv)->dpni_attrs.num_queues > 1)

@@ -2694,12 +2694,13 @@ static int config_fs_key(struct dpaa2_eth_priv *priv, dma_addr_t key_iova)
 	return 0;
 }
 
-static int dpaa2_eth_set_dist_key(struct dpaa2_eth_priv *priv,
-				  enum dpaa2_eth_rx_dist type, u32 key_fields)
+int dpaa2_eth_set_dist_key(struct dpaa2_eth_priv *priv,
+			   enum dpaa2_eth_rx_dist type, u32 key_fields)
 {
 	struct device *dev = priv->net_dev->dev.parent;
 	struct dpkg_profile_cfg cls_cfg;
 	struct dpkg_extract *key;
+	u32 hash_fields = 0;
 	dma_addr_t key_iova;
 	u8 *key_mem;
 	int i, err;
@@ -2717,10 +2718,7 @@ static int dpaa2_eth_set_dist_key(struct dpaa2_eth_priv *priv,
 		key->extract.from_hdr.field = priv->dist_fields[i].cls_field;
 		cls_cfg.num_extracts++;
 
-		if (type == DPAA2_ETH_RX_DIST_FS)
-			continue;
-
-		priv->rx_hash_fields |= priv->dist_fields[i].rxnfc_field;
+		hash_fields |= priv->dist_fields[i].rxnfc_field;
 	}
 
 	key_mem = kzalloc(DPAA2_CLASSIFIER_DMA_SIZE, GFP_KERNEL);
@@ -2758,8 +2756,13 @@ static int dpaa2_eth_set_dist_key(struct dpaa2_eth_priv *priv,
 
 	dma_unmap_single(dev, key_iova, DPAA2_CLASSIFIER_DMA_SIZE,
 			 DMA_TO_DEVICE);
-	if (err)
+	if (err) {
 		dev_err(dev, "Distribution key config failed\n");
+		goto free_key;
+	}
+
+	if (type != DPAA2_ETH_RX_DIST_FS)
+		priv->rx_hash_fields = hash_fields;
 
 free_key:
 	kfree(key_mem);

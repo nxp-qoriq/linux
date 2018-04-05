@@ -594,4 +594,7 @@ void check_cls_support(struct dpaa2_eth_priv *priv);
 
 int set_rx_taildrop(struct dpaa2_eth_priv *priv);
 
+int dpaa2_eth_set_dist_key(struct dpaa2_eth_priv *priv,
+			   enum dpaa2_eth_rx_dist type, u32 key_fields);
+
 #endif	/* __DPAA2_H */

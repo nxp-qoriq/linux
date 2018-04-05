@@ -773,6 +773,22 @@ static int del_cls(struct net_device *net_dev, int location)
 	return 0;
 }
 
+static int set_hash(struct net_device *net_dev, u64 data)
+{
+	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
+	u32 key = 0;
+	int i;
+
+	if (data & RXH_DISCARD)
+		return -EOPNOTSUPP;
+
+	for (i = 0; i < priv->num_dist_fields; i++)
+		if (priv->dist_fields[i].rxnfc_field & data)
+			key |= priv->dist_fields[i].id;
+
+	return dpaa2_eth_set_dist_key(priv, DPAA2_ETH_RX_DIST_HASH, key);
+}
+
 static int dpaa2_eth_set_rxnfc(struct net_device *net_dev,
 			       struct ethtool_rxnfc *rxnfc)
 {
@@ -782,11 +798,12 @@ static int dpaa2_eth_set_rxnfc(struct net_device *net_dev,
 	case ETHTOOL_SRXCLSRLINS:
 		err = add_cls(net_dev, &rxnfc->fs);
 		break;
-
 	case ETHTOOL_SRXCLSRLDEL:
 		err = del_cls(net_dev, rxnfc->fs.location);
 		break;
-
+	case ETHTOOL_SRXFH:
+		err = set_hash(net_dev, rxnfc->data);
+		break;
 	default:
 		err = -EOPNOTSUPP;
 	}

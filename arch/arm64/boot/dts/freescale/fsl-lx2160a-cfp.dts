@@ -1,5 +1,5 @@
 /*
- * Device Tree file for LX2160ARDB
+ * Device Tree file for LX2160A CFP Model
  *
  * Copyright 2018 NXP
  *
@@ -49,8 +49,8 @@
 #include "fsl-lx2160a.dtsi"
 
 / {
-	model = "NXP Layerscape LX2160ARDB";
-	compatible = "fsl,lx2160a-rdb", "fsl,lx2160a";
+	model = "NXP Layerscape LX2160A CFP Model";
+	compatible = "fsl,lx2160a-cfp", "fsl,lx2160a";
 
 	aliases {
 		crypto = &crypto;
@@ -111,64 +111,4 @@
 			};
 		};
 	};
-};
-
-&i2c1 {
-	status = "disabled";
-};
-
-&i2c2 {
-	status = "disabled";
-};
-
-&i2c3 {
-	status = "disabled";
-};
-
-&i2c4 {
-	status = "disabled";
-};
-
-&i2c5 {
-	status = "disabled";
-};
-
-&i2c6 {
-	status = "disabled";
-};
-
-&i2c7 {
-	status = "disabled";
-};
-
-&usb0 {
-	status = "okay";
-};
-
-&usb1 {
-	status = "okay";
-};
-
-&esdhc0 {
-	status = "okay";
-};
-
-&esdhc1 {
-	status = "okay";
-};
-
-&fspi {
-	status = "okay";
-	flash0: mt35xu512aba@0 {
-		#address-cells = <1>;
-		#size-cells = <1>;
-		compatible = "micron,m25p80";
-		m25p,fast-read;
-		spi-max-frequency = <20000000>;
-		reg = <0>;
-	};
-};
-
-&crypto {
-	status = "okay";
 };

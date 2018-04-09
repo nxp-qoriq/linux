@@ -334,6 +334,7 @@ config QORIQ_CPUFREQ
 	tristate "CPU frequency scaling driver for Freescale QorIQ SoCs"
 	depends on OF && COMMON_CLK && (PPC_E500MC || ARM || ARM64)
 	depends on !CPU_THERMAL || THERMAL
+	depends on !ARCH_LX2160A_CFP
 	select CLK_QORIQ
 	help
 	  This adds the CPUFreq driver support for Freescale QorIQ SoCs

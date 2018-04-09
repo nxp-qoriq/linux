@@ -315,6 +315,7 @@
 			reg = <0x00 0x8000000 0x0 0x100000>;
 			interrupts = <GIC_SPI 139 IRQ_TYPE_LEVEL_HIGH>;
 			dma-coherent;
+			status = "disabled";
 
 			sec_jr0: jr@10000 {
 				compatible = "fsl,sec-v5.0-job-ring",

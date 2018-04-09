@@ -30,6 +30,7 @@
 #include <linux/mtd/partitions.h>
 #include <linux/mtd/nand_ecc.h>
 #include <linux/fsl_ifc.h>
+#include <linux/delay.h>
 
 #define ERR_BYTE		0xFF /* Value returned for read
 					bytes when read failed	*/
@@ -234,9 +235,13 @@ static void fsl_ifc_run_command(struct mtd_info *mtd)
 	/* start read/write seq */
 	ifc_out32(IFC_NAND_SEQ_STRT_FIR_STRT, &ifc->ifc_nand.nandseq_strt);
 
-	/* wait for command complete flag or timeout */
-	wait_event_timeout(ctrl->nand_wait, ctrl->nand_stat,
-			   msecs_to_jiffies(IFC_TIMEOUT_MSECS));
+	/* Local irqs are disabled in panic logging path */
+	if (irqs_disabled())
+		mdelay(IFC_TIMEOUT_MSECS);
+	else
+		/* wait for command complete flag or timeout */
+		wait_event_timeout(ctrl->nand_wait, ctrl->nand_stat,
+				   msecs_to_jiffies(IFC_TIMEOUT_MSECS));
 
 	/* ctrl->nand_stat will be updated from IRQ context */
 	if (!ctrl->nand_stat)

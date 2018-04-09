@@ -64,19 +64,25 @@
 	| SUPPORTED_MII)
 
 static const char phy_str[][11] = {
+	[PHY_INTERFACE_MODE_NA]		= "na",
 	[PHY_INTERFACE_MODE_MII]	= "mii",
 	[PHY_INTERFACE_MODE_GMII]	= "gmii",
 	[PHY_INTERFACE_MODE_SGMII]	= "sgmii",
-	[PHY_INTERFACE_MODE_QSGMII]	= "qsgmii",
 	[PHY_INTERFACE_MODE_TBI]	= "tbi",
+	[PHY_INTERFACE_MODE_REVMII]	= "revmii",
 	[PHY_INTERFACE_MODE_RMII]	= "rmii",
 	[PHY_INTERFACE_MODE_RGMII]	= "rgmii",
 	[PHY_INTERFACE_MODE_RGMII_ID]	= "rgmii-id",
 	[PHY_INTERFACE_MODE_RGMII_RXID]	= "rgmii-rxid",
 	[PHY_INTERFACE_MODE_RGMII_TXID]	= "rgmii-txid",
 	[PHY_INTERFACE_MODE_RTBI]	= "rtbi",
+	[PHY_INTERFACE_MODE_SMII]	= "smii",
 	[PHY_INTERFACE_MODE_XGMII]	= "xgmii",
+	[PHY_INTERFACE_MODE_MOCA]	= "moca",
+	[PHY_INTERFACE_MODE_QSGMII]	= "qsgmii",
+	[PHY_INTERFACE_MODE_TRGMII]	= "trgmii",
 	[PHY_INTERFACE_MODE_2500SGMII] = "sgmii-2500",
+	[PHY_INTERFACE_MODE_MAX]	= "max",
 };
 
 static phy_interface_t __pure __attribute__((nonnull)) str2phy(const char *str)

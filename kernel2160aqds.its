@@ -25,7 +25,7 @@
 		};
 		fdt@1 {
 			description = "Flattened Device Tree blob";
-			data = /incbin/("./arch/arm64/boot/dts/freescale/fsl-lx2160a-rdb.dtb");
+			data = /incbin/("./arch/arm64/boot/dts/freescale/fsl-lx2160a-qds.dtb");
 			type = "flat_dt";
 			arch = "arm64";
 			compression = "none";

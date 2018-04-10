@@ -207,6 +207,9 @@ struct malidp_hw_device {
 	/* track the device PM state */
 	bool pm_suspended;
 
+	/* track the SE memory writeback state */
+	u8 mw_state;
+
 	/* size of memory used for rotating layers, up to two banks available */
 	u32 rotation_memory[2];
 };

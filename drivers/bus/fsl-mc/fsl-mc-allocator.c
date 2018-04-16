@@ -537,6 +537,7 @@ void fsl_mc_init_all_resource_pools(struct fsl_mc_device *mc_bus_dev)
 		mutex_init(&res_pool->mutex);
 	}
 }
+EXPORT_SYMBOL_GPL(fsl_mc_init_all_resource_pools);
 
 static void fsl_mc_cleanup_resource_pool(struct fsl_mc_device *mc_bus_dev,
 					 enum fsl_mc_pool_type pool_type)
@@ -561,6 +562,7 @@ void fsl_mc_cleanup_all_resource_pools(struct fsl_mc_device *mc_bus_dev)
 	for (pool_type = 0; pool_type < FSL_MC_NUM_POOL_TYPES; pool_type++)
 		fsl_mc_cleanup_resource_pool(mc_bus_dev, pool_type);
 }
+EXPORT_SYMBOL_GPL(fsl_mc_cleanup_all_resource_pools);
 
 /**
  * fsl_mc_allocator_probe - callback invoked when an allocatable device is

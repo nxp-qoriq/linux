@@ -5149,6 +5149,7 @@ static int __cold dpaa2_dpseci_dpio_setup(struct dpaa2_caam_priv *priv)
 						     dev);
 		if (unlikely(!ppriv->store)) {
 			dev_err(dev, "dpaa2_io_store_create() failed\n");
+			err = -ENOMEM;
 			goto err;
 		}
 
@@ -5630,12 +5631,13 @@ static int dpaa2_caam_probe(struct fsl_mc_device *dpseci_dev)
 	priv->ppriv = alloc_percpu(*priv->ppriv);
 	if (!priv->ppriv) {
 		dev_err(dev, "alloc_percpu() failed\n");
+		err = -ENOMEM;
 		goto err_alloc_ppriv;
 	}
 
 	/* DPSECI initialization */
 	err = dpaa2_dpseci_setup(dpseci_dev);
-	if (err < 0) {
+	if (err) {
 		dev_err(dev, "dpaa2_dpseci_setup() failed\n");
 		goto err_dpseci_setup;
 	}
@@ -5643,7 +5645,8 @@ static int dpaa2_caam_probe(struct fsl_mc_device *dpseci_dev)
 	/* DPIO */
 	err = dpaa2_dpseci_dpio_setup(priv);
 	if (err) {
-		dev_err(dev, "dpaa2_dpseci_dpio_setup() failed\n");
+		if (err != -EPROBE_DEFER)
+			dev_err(dev, "dpaa2_dpseci_dpio_setup() failed\n");
 		goto err_dpio_setup;
 	}
 
@@ -5910,7 +5913,7 @@ int dpaa2_caam_enqueue(struct device *dev, struct caam_request *req)
 	}
 	preempt_enable();
 
-	if (unlikely(err < 0)) {
+	if (unlikely(err)) {
 		dev_err(dev, "Error enqueuing frame: %d\n", err);
 		goto err_out;
 	}

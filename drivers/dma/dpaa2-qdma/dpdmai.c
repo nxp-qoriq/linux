@@ -33,15 +33,14 @@
 #include <linux/io.h>
 #include "fsl_dpdmai.h"
 #include "fsl_dpdmai_cmd.h"
-#include "../../../drivers/staging/fsl-mc/include/mc-sys.h"
-#include "../../../drivers/staging/fsl-mc/include/mc-cmd.h"
+#include <linux/fsl/mc.h>
 
 int dpdmai_open(struct fsl_mc_io *mc_io,
 		uint32_t cmd_flags,
 		int dpdmai_id,
 		uint16_t *token)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -65,7 +64,7 @@ int dpdmai_close(struct fsl_mc_io *mc_io,
 		 uint32_t cmd_flags,
 		 uint16_t token)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPDMAI_CMDID_CLOSE,
@@ -80,7 +79,7 @@ int dpdmai_create(struct fsl_mc_io *mc_io,
 		  const struct dpdmai_cfg *cfg,
 		  uint16_t *token)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -104,7 +103,7 @@ int dpdmai_destroy(struct fsl_mc_io *mc_io,
 		   uint32_t cmd_flags,
 		   uint16_t token)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPDMAI_CMDID_DESTROY,
@@ -119,7 +118,7 @@ int dpdmai_enable(struct fsl_mc_io *mc_io,
 		  uint32_t cmd_flags,
 		  uint16_t token)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPDMAI_CMDID_ENABLE,
@@ -134,7 +133,7 @@ int dpdmai_disable(struct fsl_mc_io *mc_io,
 		   uint32_t cmd_flags,
 		   uint16_t token)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPDMAI_CMDID_DISABLE,
@@ -150,7 +149,7 @@ int dpdmai_is_enabled(struct fsl_mc_io *mc_io,
 		      uint16_t token,
 		      int *en)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPDMAI_CMDID_IS_ENABLED,
@@ -172,7 +171,7 @@ int dpdmai_reset(struct fsl_mc_io *mc_io,
 		 uint32_t cmd_flags,
 		 uint16_t token)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPDMAI_CMDID_RESET,
@@ -190,7 +189,7 @@ int dpdmai_get_irq(struct fsl_mc_io *mc_io,
 		   int *type,
 		   struct dpdmai_irq_cfg	*irq_cfg)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -216,7 +215,7 @@ int dpdmai_set_irq(struct fsl_mc_io *mc_io,
 		   uint8_t irq_index,
 		   struct dpdmai_irq_cfg *irq_cfg)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPDMAI_CMDID_SET_IRQ,
@@ -234,7 +233,7 @@ int dpdmai_get_irq_enable(struct fsl_mc_io *mc_io,
 			  uint8_t irq_index,
 			  uint8_t *en)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -260,7 +259,7 @@ int dpdmai_set_irq_enable(struct fsl_mc_io *mc_io,
 			  uint8_t irq_index,
 			  uint8_t en)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPDMAI_CMDID_SET_IRQ_ENABLE,
@@ -278,7 +277,7 @@ int dpdmai_get_irq_mask(struct fsl_mc_io *mc_io,
 			uint8_t irq_index,
 			uint32_t *mask)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -304,7 +303,7 @@ int dpdmai_set_irq_mask(struct fsl_mc_io *mc_io,
 			uint8_t irq_index,
 			uint32_t mask)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPDMAI_CMDID_SET_IRQ_MASK,
@@ -322,7 +321,7 @@ int dpdmai_get_irq_status(struct fsl_mc_io *mc_io,
 			  uint8_t irq_index,
 			  uint32_t *status)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -348,7 +347,7 @@ int dpdmai_clear_irq_status(struct fsl_mc_io *mc_io,
 			    uint8_t irq_index,
 			    uint32_t status)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPDMAI_CMDID_CLEAR_IRQ_STATUS,
@@ -365,7 +364,7 @@ int dpdmai_get_attributes(struct fsl_mc_io *mc_io,
 			  uint16_t token,
 			  struct dpdmai_attr *attr)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -390,7 +389,7 @@ int dpdmai_set_rx_queue(struct fsl_mc_io *mc_io,
 			uint8_t priority,
 			const struct dpdmai_rx_queue_cfg *cfg)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPDMAI_CMDID_SET_RX_QUEUE,
@@ -407,7 +406,7 @@ int dpdmai_get_rx_queue(struct fsl_mc_io *mc_io,
 			uint16_t token,
 			uint8_t priority, struct dpdmai_rx_queue_attr *attr)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -433,7 +432,7 @@ int dpdmai_get_tx_queue(struct fsl_mc_io *mc_io,
 			uint8_t priority,
 			struct dpdmai_tx_queue_attr *attr)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */

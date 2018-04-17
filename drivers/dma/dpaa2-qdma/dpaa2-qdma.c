@@ -35,7 +35,7 @@
 
 #include "../virt-dma.h"
 
-#include "../../../drivers/staging/fsl-mc/include/mc.h"
+#include <linux/fsl/mc.h>
 #include "../../../drivers/staging/fsl-mc/include/dpaa2-io.h"
 #include "../../../drivers/staging/fsl-mc/include/dpaa2-fd.h"
 #include "fsl_dpdmai_cmd.h"

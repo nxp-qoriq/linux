@@ -33,7 +33,7 @@
 #include <linux/module.h>
 #include <linux/ptp_clock_kernel.h>
 
-#include "../../fsl-mc/include/mc.h"
+#include <linux/fsl/mc.h>
 
 #include "dprtc.h"
 #include "dprtc-cmd.h"

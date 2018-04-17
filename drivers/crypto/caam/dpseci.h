@@ -50,7 +50,7 @@ struct opr_qry;
 /**
  * Maximum number of Tx/Rx priorities per DPSECI object
  */
-#define DPSECI_PRIO_NUM		8
+#define DPSECI_MAX_QUEUE_NUM		16
 
 /**
  * All queues considered; see dpseci_set_rx_queue()
@@ -94,7 +94,7 @@ struct dpseci_cfg {
 	u32 options;
 	u8 num_tx_queues;
 	u8 num_rx_queues;
-	u8 priorities[DPSECI_PRIO_NUM];
+	u8 priorities[DPSECI_MAX_QUEUE_NUM];
 };
 
 int dpseci_create(struct fsl_mc_io *mc_io, u16 dprc_token, u32 cmd_flags,
@@ -288,6 +288,10 @@ int dpseci_get_tx_queue(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
  *	this version of SEC
  * @aes_acc_num: The number of copies of the AES module that are implemented in
  *	this version of SEC
+ * @ccha_acc_num: The number of copies of the ChaCha20 module that are
+ *	implemented in this version of SEC.
+ * @ptha_acc_num: The number of copies of the Poly1305 module that are
+ *	implemented in this version of SEC.
  **/
 struct dpseci_sec_attr {
 	u16 ip_id;
@@ -307,6 +311,8 @@ struct dpseci_sec_attr {
 	u8 arc4_acc_num;
 	u8 des_acc_num;
 	u8 aes_acc_num;
+	u8 ccha_acc_num;
+	u8 ptha_acc_num;
 };
 
 int dpseci_get_sec_attr(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
@@ -355,11 +361,43 @@ enum dpseci_congestion_unit {
 	DPSECI_CONGESTION_UNIT_FRAMES
 };
 
+/**
+ * CSCN message is written to message_iova once entering a
+ * congestion state (see 'threshold_entry')
+ */
 #define DPSECI_CGN_MODE_WRITE_MEM_ON_ENTER		0x00000001
+
+/**
+ * CSCN message is written to message_iova once exiting a
+ * congestion state (see 'threshold_exit')
+ */
 #define DPSECI_CGN_MODE_WRITE_MEM_ON_EXIT		0x00000002
+
+/**
+ * CSCN write will attempt to allocate into a cache (coherent write);
+ * valid only if 'DPSECI_CGN_MODE_WRITE_MEM_<X>' is selected
+ */
 #define DPSECI_CGN_MODE_COHERENT_WRITE			0x00000004
+
+/**
+ * if 'dpseci_dest_cfg.dest_type != DPSECI_DEST_NONE' CSCN message is sent to
+ * DPIO/DPCON's WQ channel once entering a congestion state
+ * (see 'threshold_entry')
+ */
 #define DPSECI_CGN_MODE_NOTIFY_DEST_ON_ENTER		0x00000008
+
+/**
+ * if 'dpseci_dest_cfg.dest_type != DPSECI_DEST_NONE' CSCN message is sent to
+ * DPIO/DPCON's WQ channel once exiting a congestion state
+ * (see 'threshold_exit')
+ */
 #define DPSECI_CGN_MODE_NOTIFY_DEST_ON_EXIT		0x00000010
+
+/**
+ * if 'dpseci_dest_cfg.dest_type != DPSECI_DEST_NONE' when the CSCN is written
+ * to the sw-portal's DQRR, the DQRI interrupt is asserted immediately
+ * (if enabled)
+ */
 #define DPSECI_CGN_MODE_INTR_COALESCING_DISABLED	0x00000020
 
 /**

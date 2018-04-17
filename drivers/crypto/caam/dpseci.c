@@ -131,6 +131,8 @@ int dpseci_create(struct fsl_mc_io *mc_io, u16 dprc_token, u32 cmd_flags,
 	cmd_params = (struct dpseci_cmd_create *)cmd.params;
 	for (i = 0; i < 8; i++)
 		cmd_params->priorities[i] = cfg->priorities[i];
+	for (i = 0; i < 8; i++)
+		cmd_params->priorities2[i] = cfg->priorities[8 + i];
 	cmd_params->num_tx_queues = cfg->num_tx_queues;
 	cmd_params->num_rx_queues = cfg->num_rx_queues;
 	cmd_params->options = cpu_to_le32(cfg->options);
@@ -234,7 +236,7 @@ int dpseci_is_enabled(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
 		return err;
 
 	rsp_params = (struct dpseci_rsp_is_enabled *)cmd.params;
-	*en = le32_to_cpu(rsp_params->is_enabled);
+	*en = dpseci_get_field(rsp_params->is_enabled, ENABLE);
 
 	return 0;
 }
@@ -507,11 +509,12 @@ int dpseci_set_rx_queue(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
 	cmd_params->dest_id = cpu_to_le32(cfg->dest_cfg.dest_id);
 	cmd_params->priority = cfg->dest_cfg.priority;
 	cmd_params->queue = queue;
-	cmd_params->dest_type = cfg->dest_cfg.dest_type;
+	dpseci_set_field(cmd_params->dest_type, DEST_TYPE,
+			 cfg->dest_cfg.dest_type);
 	cmd_params->user_ctx = cpu_to_le64(cfg->user_ctx);
 	cmd_params->options = cpu_to_le32(cfg->options);
-	cmd_params->order_preservation_en =
-		cpu_to_le32(cfg->order_preservation_en);
+	dpseci_set_field(cmd_params->order_preservation_en, ORDER_PRESERVATION,
+			 cfg->order_preservation_en);
 
 	return mc_send_command(mc_io, &cmd);
 }
@@ -545,11 +548,13 @@ int dpseci_get_rx_queue(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
 
 	attr->dest_cfg.dest_id = le32_to_cpu(cmd_params->dest_id);
 	attr->dest_cfg.priority = cmd_params->priority;
-	attr->dest_cfg.dest_type = cmd_params->dest_type;
+	attr->dest_cfg.dest_type = dpseci_get_field(cmd_params->dest_type,
+						    DEST_TYPE);
 	attr->user_ctx = le64_to_cpu(cmd_params->user_ctx);
 	attr->fqid = le32_to_cpu(cmd_params->fqid);
 	attr->order_preservation_en =
-		le32_to_cpu(cmd_params->order_preservation_en);
+		dpseci_get_field(cmd_params->order_preservation_en,
+				 ORDER_PRESERVATION);
 
 	return 0;
 }
@@ -630,6 +635,8 @@ int dpseci_get_sec_attr(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
 	attr->arc4_acc_num = rsp_params->arc4_acc_num;
 	attr->des_acc_num = rsp_params->des_acc_num;
 	attr->aes_acc_num = rsp_params->aes_acc_num;
+	attr->ccha_acc_num = rsp_params->ccha_acc_num;
+	attr->ptha_acc_num = rsp_params->ptha_acc_num;
 
 	return 0;
 }
@@ -762,8 +769,8 @@ int dpseci_get_opr(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token, u8 index,
 		return err;
 
 	rsp_params = (struct dpseci_rsp_get_opr *)cmd.params;
-	qry->rip = dpseci_get_field(rsp_params->rip_enable, OPR_RIP);
-	qry->enable = dpseci_get_field(rsp_params->rip_enable, OPR_ENABLE);
+	qry->rip = dpseci_get_field(rsp_params->flags, OPR_RIP);
+	qry->enable = dpseci_get_field(rsp_params->flags, OPR_ENABLE);
 	cfg->oloe = rsp_params->oloe;
 	cfg->oeane = rsp_params->oeane;
 	cfg->olws = rsp_params->olws;
@@ -774,7 +781,7 @@ int dpseci_get_opr(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token, u8 index,
 	qry->ea_tseq = le16_to_cpu(rsp_params->ea_tseq);
 	qry->tseq_nlis = dpseci_get_field(rsp_params->tseq_nlis, OPR_TSEQ_NLIS);
 	qry->ea_hseq = le16_to_cpu(rsp_params->ea_hseq);
-	qry->hseq_nlis = dpseci_get_field(rsp_params->tseq_nlis, OPR_HSEQ_NLIS);
+	qry->hseq_nlis = dpseci_get_field(rsp_params->hseq_nlis, OPR_HSEQ_NLIS);
 	qry->ea_hptr = le16_to_cpu(rsp_params->ea_hptr);
 	qry->ea_tptr = le16_to_cpu(rsp_params->ea_tptr);
 	qry->opr_vid = le16_to_cpu(rsp_params->opr_vid);

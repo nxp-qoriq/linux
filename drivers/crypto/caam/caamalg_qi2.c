@@ -5491,7 +5491,7 @@ static int __cold dpaa2_dpseci_setup(struct fsl_mc_device *ls_dev)
 
 	i = 0;
 	for_each_online_cpu(cpu) {
-		dev_info(dev, "prio %d: rx queue %d, tx queue %d\n", i,
+		dev_info(dev, "pair %d: rx queue %d, tx queue %d\n", i,
 			 priv->rx_queue_attr[i].fqid,
 			 priv->tx_queue_attr[i].fqid);
 

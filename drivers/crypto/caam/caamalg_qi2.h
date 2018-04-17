@@ -79,8 +79,8 @@ struct dpaa2_caam_priv {
 
 	struct dpseci_attr dpseci_attr;
 	struct dpseci_sec_attr sec_attr;
-	struct dpseci_rx_queue_attr rx_queue_attr[DPSECI_PRIO_NUM];
-	struct dpseci_tx_queue_attr tx_queue_attr[DPSECI_PRIO_NUM];
+	struct dpseci_rx_queue_attr rx_queue_attr[DPSECI_MAX_QUEUE_NUM];
+	struct dpseci_tx_queue_attr tx_queue_attr[DPSECI_MAX_QUEUE_NUM];
 	int num_pairs;
 
 	/* congestion */

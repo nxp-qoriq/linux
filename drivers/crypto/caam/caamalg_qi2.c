@@ -5665,11 +5665,6 @@ static int dpaa2_caam_probe(struct fsl_mc_device *dpseci_dev)
 		goto err_bind;
 	}
 
-	/* workaround for MC f/w reading for pre-Era 10 registers */
-	priv->sec_attr.des_acc_num = 16;
-	priv->sec_attr.aes_acc_num = 16;
-	priv->sec_attr.md_acc_num = 16;
-
 	/* register crypto algorithms the device supports */
 	INIT_LIST_HEAD(&alg_list);
 	for (i = 0; i < ARRAY_SIZE(driver_algs); i++) {

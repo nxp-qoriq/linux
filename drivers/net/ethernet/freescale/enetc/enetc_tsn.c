@@ -37,15 +37,18 @@
 
 #include <net/tsn.h>
 #include <linux/module.h>
+#include <linux/irqflags.h>
+#include <linux/preempt.h>
 
 void DUMP_CBDR(struct enetc_cbd *cbdr)
 {
 	int i;
+	char *data;
 
 	printk("addrl: %04x", cbdr->addr[0]);
 	printk("addrh: %04x\n", cbdr->addr[1]);
 
-	char *data = (char *)cbdr;
+	data = (char *)cbdr;
 
 	for (i = 0; i < 8; i++) {
 		printk("%02x %02x %02x %02x\n",
@@ -88,7 +91,7 @@ static int xmit_cbdr(struct enetc_si *si, int i)
 {
 	struct enetc_cbdr *ring = &si->cbd_ring;
 	struct enetc_cbd *dest_cbd;
-	int nc;
+	int nc, timeout;
 
 	i = (i + 1) % ring->bd_count;
 
@@ -96,7 +99,7 @@ static int xmit_cbdr(struct enetc_si *si, int i)
 	/* let H/W know BD ring has been updated */
 	enetc_wr_reg(ring->cir, i);
 
-	int timeout = ENETC_CBDR_TIMEOUT;
+	timeout = ENETC_CBDR_TIMEOUT;
 
 	do {
 		if (enetc_rd_reg(ring->cisr) == i)
@@ -125,32 +128,6 @@ static int xmit_cbdr(struct enetc_si *si, int i)
 	ring->next_to_clean = nc;
 
 	return ENETC_CMD_OK;
-}
-
-int enetc_qci_sgi_counters_get(struct net_device *ndev, u32 index,
-		struct sgi_query_stat_resp *counters)
-{
-	struct enetc_cbd *cbdr;
-	struct sgi_query_stat_resp *sgi_data;
-	int curr_cbd;
-	struct enetc_ndev_priv *priv = netdev_priv(ndev);
-
-	curr_cbd = alloc_cbdr(priv->si, &cbdr);
-
-	cbdr->index = cpu_to_le16(index);
-	cbdr->cmd = 4;
-	cbdr->cls = BDCR_CMD_STREAM_GCL;
-	cbdr->status_flags = 0x80;
-
-	DUMP_CBDR(cbdr);
-	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_CBDR(cbdr);
-
-	sgi_data = &cbdr->sgi_query_stat_resp;
-	memcpy(counters, sgi_data, sizeof(struct sgi_query_stat_resp));
-
-	memset(cbdr, 0, sizeof(*cbdr));
-	return 0;
 }
 
 /* Class 10: Flow Meter Instance Statistics Query Descriptor - Long Format */
@@ -206,64 +183,6 @@ u16 enetc_get_max_gcl_len(struct enetc_hw *hw)
 	return (enetc_rd(hw, QBV_PTGCAPR_OFFSET) & QBV_MAX_GCL_LEN_MASK);
 }
 
-void testcbdr(struct enetc_si *si)
-{
-	u16 *table;
-	struct enetc_cbd *cbd;
-	dma_addr_t dma;
-	int num;
-
-	table = (u16 *)kzalloc(0x80, __GFP_DMA | GFP_KERNEL);
-	table[0] = 0x10; table[1] = 0x11; table[2] = 0x12; table[3] = 0x13;
-	//enetc_set_rss_table(si, table, 0x80);
-
-	/* fill up the "set" descriptor */
-	num = alloc_cbdr(si, &cbd);
-
-	cbd->cmd = 1;
-	cbd->cls = 3;
-	cbd->length = cpu_to_le16(0x80);
-
-	dma = dma_map_single(&si->pdev->dev, table, 0x80, DMA_TO_DEVICE);
-	if (dma_mapping_error(&si->pdev->dev, dma)) {
-		netdev_err(si->ndev, "DMA mapping of RSS table failed!\n");
-		return;
-	}
-
-	cbd->addr[0] = lower_32_bits(dma);
-	cbd->addr[1] = upper_32_bits(dma);
-	DUMP_CBDR(cbd);
-	xmit_cbdr(si, num);
-	DUMP_CBDR(cbd);
-	DUMP_DATA((char *)table, 0x80);
-	dma_unmap_single(&si->pdev->dev, dma, 0x80, DMA_TO_DEVICE);
-	memset(cbd, 0, sizeof(*cbd));
-
-	memset(table, 0, 0x80);
-
-	/* fill up the "set" descriptor */
-	num = alloc_cbdr(si, &cbd);
-	cbd->cmd = 2;
-	cbd->cls = 3;
-	cbd->length = cpu_to_le16(0x80);
-	dma = dma_map_single(&si->pdev->dev, table, 0x80, DMA_FROM_DEVICE);
-	if (dma_mapping_error(&si->pdev->dev, dma)) {
-		netdev_err(si->ndev, "DMA mapping of RSS table failed!\n");
-		return;
-	}
-
-	cbd->addr[0] = lower_32_bits(dma);
-	cbd->addr[1] = upper_32_bits(dma);
-	DUMP_CBDR(cbd);
-	xmit_cbdr(si, num);
-	DUMP_CBDR(cbd);
-	DUMP_DATA((char *)table, 0x80);
-	dma_unmap_single(&si->pdev->dev, dma, 0x80, DMA_FROM_DEVICE);
-
-	memset(cbd, 0, sizeof(*cbd));
-	kfree(table);
-}
-
 /*
  * CBD Class 5: Time Gated Scheduling Gate Control List configuration
  * Descriptor - Long Format
@@ -290,7 +209,9 @@ int enetc_qbv_set(struct net_device *ndev, struct tsn_qbv_conf *admin_conf)
 
 	temp = enetc_rd(&priv->si->hw, QBV_PTGCR_OFFSET);
 	if (admin_conf->gate_enabled && !(temp & QBV_TGE)) {
-		enetc_wr(&priv->si->hw, QBV_PTGCR_OFFSET, temp | QBV_TGE);
+		enetc_wr(&priv->si->hw, QBV_PTGCR_OFFSET, temp & (~QBV_TGE));
+		udelay(10);
+		enetc_wr(&priv->si->hw, QBV_PTGCR_OFFSET, temp | QBV_TGE | QBV_TGDROP_DISABLE);
 	} else if (!admin_conf->gate_enabled) {
 		enetc_wr(&priv->si->hw, QBV_PTGCR_OFFSET, temp & (~QBV_TGE));
 		return 0;
@@ -332,8 +253,14 @@ int enetc_qbv_set(struct net_device *ndev, struct tsn_qbv_conf *admin_conf)
 	gcl_config->atc = admin_basic->gate_states;
 	gcl_config->acl_len = cpu_to_le16(gcl_len);
 
-	gcl_data->btl = cpu_to_le32(lower_32_bits(admin_basic->base_time));
-	gcl_data->bth = cpu_to_le32(upper_32_bits(admin_basic->base_time));
+	if (!admin_basic->base_time) {
+		gcl_data->btl = cpu_to_le32(enetc_rd(&priv->si->hw, ENETC_SICTRL));
+		gcl_data->bth = cpu_to_le32(enetc_rd(&priv->si->hw, ENETC_SICTRH));
+	} else {
+		gcl_data->btl = cpu_to_le32(lower_32_bits(admin_basic->base_time));
+		gcl_data->bth = cpu_to_le32(upper_32_bits(admin_basic->base_time));
+	}
+
 	gcl_data->ct = cpu_to_le32(admin_basic->cycle_time);
 	gcl_data->cte = cpu_to_le32(admin_basic->cycle_time_extension);
 
@@ -574,8 +501,8 @@ int enetc_qbv_get_status(struct net_device *ndev,
 	status->tick_granularity = enetc_rd(&priv->si->hw, ENETC_SITGTGR);
 
 	/* current time */
-	temp = ((u64)enetc_rd(&priv->si->hw, ENETC_SICTR + 4)) << 32;
-	status->current_time = enetc_rd(&priv->si->hw, ENETC_SICTR) + temp;
+	temp = ((u64)enetc_rd(&priv->si->hw, ENETC_SICTRH)) << 32;
+	status->current_time = enetc_rd(&priv->si->hw, ENETC_SICTRL) + temp;
 
 	status->supported_list_max = maxlen;
 
@@ -622,6 +549,7 @@ int enetc_cb_streamid_set(struct net_device *ndev, u32 index,
 	dma_addr_t dma;
 	u16 data_size, dma_size;
 	int curr_cbd;
+	u64 zero;
 
 	if (!ndev)
 		return -EINVAL;
@@ -637,7 +565,8 @@ int enetc_cb_streamid_set(struct net_device *ndev, u32 index,
 
 	if (!en) {
 		cbdr->length = cpu_to_le16(8);
-		u64 zero = 0x8000000000000000;
+
+		zero = 0x8000000000000000;
 
 		dma = dma_map_single(&priv->si->pdev->dev, &zero, 8, DMA_FROM_DEVICE);
 		if (dma_mapping_error(&priv->si->pdev->dev, dma)) {
@@ -650,7 +579,8 @@ int enetc_cb_streamid_set(struct net_device *ndev, u32 index,
 		cbdr->addr[1] = upper_32_bits(dma);
 
 		si_conf = &cbdr->sid_set;
-		si_conf->ifac_iports = 0xffff;
+		/* Only one port supported for one entry, set itself */
+		si_conf->iports = 1 << (priv->si->pdev->devfn & 0x7);
 		si_conf->id_type = 1;
 		si_conf->oui[2] = 0x0;
 		si_conf->oui[1] = 0x80;
@@ -666,10 +596,7 @@ int enetc_cb_streamid_set(struct net_device *ndev, u32 index,
 	si_conf = &cbdr->sid_set;
 	si_conf->en = 0x80;
 	si_conf->stream_handle = cpu_to_le32(streamid->handle);
-	if (streamid->ifac_iport)
-		si_conf->ifac_iports = cpu_to_le32(streamid->ifac_iport);
-	else
-		si_conf->ifac_iports = 0xffff;
+	si_conf->iports = 1 << (priv->si->pdev->devfn & 0x7);
 	si_conf->id_type = streamid->type;
 	si_conf->oui[2] = 0x0;
 	si_conf->oui[1] = 0x80;
@@ -827,68 +754,21 @@ int enetc_cb_streamid_get(struct net_device *ndev, u32 index,
 int enetc_cb_streamid_counters_get(struct net_device *ndev, u32 index,
 				struct tsn_cb_streamid_counters *counters)
 {
-	struct enetc_cbd *cbdr;
-	struct streamid_stat_query_resp *si_data;
-	struct streamid_stat_query *query;
-	struct enetc_ndev_priv *priv = netdev_priv(ndev);
-	dma_addr_t dma;
-	u16 data_size, dma_size;
-	int curr_cbd, i;
-
-	curr_cbd = alloc_cbdr(priv->si, &cbdr);
-
-	cbdr->index = cpu_to_le16(index);
-	cbdr->cmd = 2;
-	cbdr->cls = BDCR_CMD_STREAM_IDENTIFY;
-	cbdr->status_flags = 0;
-
-	query = &cbdr->sid_stat;
-
-	query->input_ports = 0xffff;
-
-	data_size = sizeof(struct streamid_stat_query_resp);
-	si_data = (struct streamid_stat_query_resp *)kzalloc(data_size, __GFP_DMA | GFP_KERNEL);
-	if (si_data == NULL)
-		return -ENOMEM;
-
-	dma_size = cpu_to_le16(data_size);
-	cbdr->length = dma_size;
-	cbdr->status_flags = 0; /* long format command no ie */
-
-	dma = dma_map_single(&priv->si->pdev->dev, si_data, data_size, DMA_FROM_DEVICE);
-	if (dma_mapping_error(&priv->si->pdev->dev, dma)) {
-		netdev_err(priv->si->ndev, "DMA mapping failed!\n");
-		memset(cbdr, 0, sizeof(*cbdr));
-		kfree(si_data);
-		return -ENOMEM;
-	}
-
-	cbdr->addr[0] = lower_32_bits(dma);
-	cbdr->addr[1] = upper_32_bits(dma);
-
-	DUMP_CBDR(cbdr);
-	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_CBDR(cbdr);
-
-	counters->per_stream.input = ((u64)le32_to_cpu(si_data->psinh) << 32)
-				+ le32_to_cpu(si_data->psinl);
-
-	for (i = 0; i < 16; i++)
-		counters->per_streamport[i].input = si_data->pspi[i];
-
-	memset(cbdr, 0, sizeof(*cbdr));
-	kfree(si_data);
 	return 0;
 }
 
 void enetc_qci_enable(struct enetc_hw *hw)
 {
-	enetc_wr(hw, ENETC_PPSFPMR, enetc_rd(hw, ENETC_PPSFPMR) | ENETC_PSFPEN);
+	enetc_wr(hw, ENETC_PPSFPMR, enetc_rd(hw, ENETC_PPSFPMR)
+					| ENETC_PPSFPMR_PSFPEN | ENETC_PPSFPMR_VS
+					| ENETC_PPSFPMR_PVC | ENETC_PPSFPMR_PVZC);
 }
 
 void enetc_qci_disable(struct enetc_hw *hw)
 {
-	enetc_wr(hw, ENETC_PPSFPMR, enetc_rd(hw, ENETC_PPSFPMR) & ~ENETC_PSFPEN);
+	enetc_wr(hw, ENETC_PPSFPMR, enetc_rd(hw, ENETC_PPSFPMR)
+					& ~ENETC_PPSFPMR_PSFPEN & ~ENETC_PPSFPMR_VS
+					& ~ENETC_PPSFPMR_PVC & ~ENETC_PPSFPMR_PVZC);
 }
 
 /* CBD Class 8: Stream Filter Instance Set Descriptor - Short Format */
@@ -921,7 +801,7 @@ int enetc_qci_sfi_set(struct net_device *ndev, u32 index, bool en,
 
 	sfi_config->sg_inst_table_index =
 		cpu_to_le16(tsn_qci_sfi->stream_gate_instance_id);
-	sfi_config->input_ports = 0xFFFF;
+	sfi_config->input_ports = 1 << (priv->si->pdev->devfn & 0x7);
 
 	/* The priority value which may be matched against the
 	 * frame’s priority value to determine a match for this entry.
@@ -1025,65 +905,6 @@ int enetc_qci_sfi_get(struct net_device *ndev, u32 index,
 	return 0;
 }
 
-#ifdef ENETC_BG_V86
-/* CBD Class 8: Stream Filter Instance Query Statistics
- * Descriptor - Short Format
- */
-int enetc_qci_sfi_counters_get(struct net_device *ndev, u32 index,
-								struct tsn_qci_psfp_sfi_counters *counters)
-{
-	struct enetc_cbd *cbdr;
-	struct enetc_ndev_priv *priv = netdev_priv(ndev);
-	struct tsn_qci_psfp_sfi_conf tsn_qci_sfi;
-	struct fmi_query_stat_resp fmi_counter;
-	struct sgi_query_stat_resp sgi_counter;
-	int curr_cbd;
-
-	curr_cbd = alloc_cbdr(priv->si, &cbdr);
-
-	cbdr->index = cpu_to_le16((u16)index);
-	cbdr->cmd = 2;
-	cbdr->cls = BDCR_CMD_STREAM_FILTER;
-	cbdr->status_flags = 0x80;
-
-	DUMP_CBDR(cbdr);
-	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_CBDR(cbdr);
-
-	memset(&tsn_qci_sfi, 0, sizeof(struct tsn_qci_psfp_sfi_conf));
-	enetc_qci_sfi_get(ndev, index, &tsn_qci_sfi);
-
-	counters->matching_frames_count =
-			((u64)le32_to_cpu(cbdr->sfi_query_stat_resp.match_filter_counth) << 32)
-			+ cbdr->sfi_query_stat_resp.match_filter_countl;
-	counters->not_passing_sdu_count =
-			((u64)le32_to_cpu(cbdr->sfi_query_stat_resp.sdu_filter_drop_counth) << 32)
-			+ cbdr->sfi_query_stat_resp.sdu_filter_drop_countl;
-	counters->passing_sdu_count =
-			((u64)le32_to_cpu(cbdr->sfi_query_stat_resp.sdu_filter_pass_counth) << 32)
-			+ cbdr->sfi_query_stat_resp.sdu_filter_pass_countl;
-
-	memset(&sgi_counter, 0, sizeof(struct sgi_query_stat_resp));
-	enetc_qci_sgi_counters_get(ndev,
-			tsn_qci_sfi.stream_gate_instance_id, &sgi_counter);
-
-	if (tsn_qci_sfi.stream_filter.flow_meter_instance_id >= 0) {
-		memset(&fmi_counter, 0, sizeof(struct fmi_query_stat_resp));
-		enetc_qci_fmi_counters_get(ndev,
-				tsn_qci_sfi.stream_filter.flow_meter_instance_id, &fmi_counter);
-	}
-
-	counters->not_passing_frames_count = ((u64)le32_to_cpu(sgi_counter.dgch) << 32) +
-					le32_to_cpu(sgi_counter.dgcl);
-	counters->passing_frames_count = ((u64)le32_to_cpu(sgi_counter.pgch) << 32) +
-					le32_to_cpu(sgi_counter.pgcl);
-	counters->red_frames_count = ((u64)le32_to_cpu(fmi_counter.rrfh) << 32) +
-					le32_to_cpu(fmi_counter.rrfl);
-
-	memset(cbdr, 0, sizeof(*cbdr));
-	return 0;
-}
-#else
 /* CBD Class 8: Stream Filter Instance Query Statistics
  * Descriptor - Long Format
  */
@@ -1129,15 +950,19 @@ int enetc_qci_sfi_counters_get(struct net_device *ndev, u32 index,
 	counters->matching_frames_count =
 			((u64)le32_to_cpu(sfi_counter_data->matchh) << 32)
 			+ sfi_counter_data->matchl;
+
 	counters->not_passing_sdu_count =
 			((u64)le32_to_cpu(sfi_counter_data->msdu_droph) << 32)
 			+ sfi_counter_data->msdu_dropl;
-	counters->passing_sdu_count = counters->matching_frames_count - counters->not_passing_sdu_count;
+
+	counters->passing_sdu_count = counters->matching_frames_count
+				- counters->not_passing_sdu_count;
 
 	counters->not_passing_frames_count = ((u64)le32_to_cpu(sfi_counter_data->stream_gate_droph) << 32)
 				+ le32_to_cpu(sfi_counter_data->stream_gate_dropl);
 
-	counters->passing_frames_count = counters->matching_frames_count - counters->not_passing_sdu_count
+	counters->passing_frames_count = counters->matching_frames_count
+				- counters->not_passing_sdu_count
 				- counters->not_passing_frames_count;
 
 	counters->red_frames_count = ((u64)le32_to_cpu(sfi_counter_data->flow_meter_droph) << 32)
@@ -1146,7 +971,7 @@ int enetc_qci_sfi_counters_get(struct net_device *ndev, u32 index,
 	memset(cbdr, 0, sizeof(*cbdr));
 	return 0;
 }
-#endif
+
 /*
  * CBD Class 9: Stream Gate Instance Table Entry Set
  * Descriptor - Short Format
@@ -1165,7 +990,25 @@ int enetc_qci_sgi_set(struct net_device *ndev, u32 index,
 	u16 data_size, dma_size;
 	int curr_cbd, i;
 
+	/* disable first */
 	curr_cbd = alloc_cbdr(priv->si, &cbdr);
+	memset(cbdr, 0, sizeof(*cbdr));
+
+	cbdr->index = cpu_to_le16(index);
+	cbdr->cmd = 0;
+	cbdr->cls = BDCR_CMD_STREAM_GCL;
+	cbdr->status_flags = 0x80;
+	DUMP_CBDR(cbdr);
+	xmit_cbdr(priv->si, curr_cbd);
+	DUMP_CBDR(cbdr);
+	if (!tsn_qci_sgi->gate_enabled) {
+		memset(cbdr, 0, sizeof(*cbdr));
+		return 0;
+	}
+
+	/* Re-enable */
+	curr_cbd = alloc_cbdr(priv->si, &cbdr);
+	memset(cbdr, 0, sizeof(*cbdr));
 
 	cbdr->index = cpu_to_le16(index);
 	cbdr->cmd = 0;
@@ -1173,13 +1016,14 @@ int enetc_qci_sgi_set(struct net_device *ndev, u32 index,
 	cbdr->status_flags = 0x80;
 
 	sgi_config = &cbdr->sgi_table;
-	sgi_config->ocgtst |= 0x80;
 
-	if (!tsn_qci_sgi->gate_enabled) {
-		xmit_cbdr(priv->si, curr_cbd);
-		memset(cbdr, 0, sizeof(*cbdr));
-		return 0;
-	}
+	sgi_config->ocgtst = tsn_qci_sgi->admin.control_list_length?
+			0x80 : (tsn_qci_sgi->admin.gate_states? 0x80 : 0x0);
+
+	sgi_config->oipv = tsn_qci_sgi->admin.control_list_length?
+			0x0 : ((tsn_qci_sgi->admin.init_ipv < 0)?
+					0x0 : ((tsn_qci_sgi->admin.init_ipv & 0x7) | 0x8));
+
 	sgi_config->en = 0x80;
 
 	if (tsn_qci_sgi->block_invalid_rx_enable)
@@ -1195,7 +1039,11 @@ int enetc_qci_sgi_set(struct net_device *ndev, u32 index,
 	xmit_cbdr(priv->si, curr_cbd);
 	DUMP_CBDR(cbdr);
 
+	if (tsn_qci_sgi->admin.control_list_length == 0)
+		goto exit;
+
 	curr_cbd = alloc_cbdr(priv->si, &cbdr_sgcl);
+	memset(cbdr, 0, sizeof(*cbdr));
 
 	cbdr_sgcl->index = cpu_to_le16(index);
 	cbdr_sgcl->cmd = 1;
@@ -1203,12 +1051,12 @@ int enetc_qci_sgi_set(struct net_device *ndev, u32 index,
 	cbdr_sgcl->status_flags = 0;
 
 	sgcl_config = &cbdr_sgcl->sgcl_conf;
+
+	/* tsn_qci_sgi->admin.control_list_length is not zero now */
 	if (tsn_qci_sgi->admin.control_list_length > 4)
 		return -EINVAL;
-	else if (tsn_qci_sgi->admin.control_list_length)
-		sgcl_config->acl_len = (tsn_qci_sgi->admin.control_list_length - 1) & 0x3;
 	else
-		sgcl_config->acl_len = 0;
+		sgcl_config->acl_len = (tsn_qci_sgi->admin.control_list_length - 1) & 0x3;
 
 	data_size = sizeof(struct sgcl_data) +
 		(sgcl_config->acl_len + 1) * sizeof(struct sgce);
@@ -1238,8 +1086,6 @@ int enetc_qci_sgi_set(struct net_device *ndev, u32 index,
 
 	sgcl_data->ct = cpu_to_le32(tsn_qci_sgi->admin.cycle_time);
 	sgcl_data->cte = cpu_to_le32(tsn_qci_sgi->admin.cycle_time_extension);
-	sgcl_data->bth = cpu_to_le32(upper_32_bits(tsn_qci_sgi->admin.base_time));
-	sgcl_data->btl = cpu_to_le32(lower_32_bits(tsn_qci_sgi->admin.base_time));
 
 	if (tsn_qci_sgi->admin.init_ipv >= 0)
 		sgcl_config->aipv = (tsn_qci_sgi->admin.init_ipv & 0x7) | 0x8;
@@ -1263,21 +1109,25 @@ int enetc_qci_sgi_set(struct net_device *ndev, u32 index,
 		temp_entry->msdu[2] = (temp_sgcl->octet_max >> 16) & 0xFF;
 	}
 
-	/* Workaround for length = 0, then period = 0 , then hang at simulator */
-	if (!tsn_qci_sgi->admin.control_list_length) {
-		sgce->interval = 10;
-		sgce->multi |= (sgcl_config->agtst >> 3);
-		sgcl_data->ct = 10;
+	if (!tsn_qci_sgi->admin.base_time) {
+		sgcl_data->btl = cpu_to_le32(enetc_rd(&priv->si->hw, ENETC_SICTRL));
+		sgcl_data->bth = cpu_to_le32(enetc_rd(&priv->si->hw, ENETC_SICTRH));
+	} else {
+		sgcl_data->bth = cpu_to_le32(upper_32_bits(tsn_qci_sgi->admin.base_time));
+		sgcl_data->btl = cpu_to_le32(lower_32_bits(tsn_qci_sgi->admin.base_time));
 	}
 
 	DUMP_CBDR(cbdr_sgcl);
 	DUMP_DATA((char *)sgcl_data, data_size);
 	xmit_cbdr(priv->si, curr_cbd);
 	DUMP_CBDR(cbdr_sgcl);
+	DUMP_DATA((char *)sgcl_data, data_size);
 
-	memset(cbdr, 0, sizeof(*cbdr));
 	memset(cbdr_sgcl, 0, sizeof(*cbdr_sgcl));
 	kfree(sgcl_data);
+
+exit:
+	memset(cbdr, 0, sizeof(*cbdr));
 	return 0;
 }
 
@@ -1311,6 +1161,29 @@ int enetc_qci_sgi_get(struct net_device *ndev, u32 index,
 
 	sgi_config = &cbdr->sgi_table;
 
+	tsn_qci_sgi->admin.gate_states = ((sgi_config->ocgtst & 0x80)? true : false);
+	if (sgi_config->oipv & 0x08)
+		tsn_qci_sgi->admin.init_ipv = sgi_config->oipv & 0x7;
+	else
+		tsn_qci_sgi->admin.init_ipv = -1;
+
+	if (sgi_config->en & 0x80)
+		tsn_qci_sgi->gate_enabled = true;
+	if (sgi_config->gset & 0x80)
+		tsn_qci_sgi->block_invalid_rx_enable = true;
+	if (sgi_config->gset & 0x40)
+		tsn_qci_sgi->block_invalid_rx = true;
+	if (sgi_config->gset & 0x20)
+		tsn_qci_sgi->block_octets_exceeded_enable = true;
+	if (sgi_config->gset & 0x10)
+		tsn_qci_sgi->block_octets_exceeded = true;
+
+	/* Check gate list length is zero? */
+	if (!(sgi_config->oacl_len & 0x30)) {
+		tsn_qci_sgi->admin.control_list_length = 0;
+		goto exit;
+	}
+
 	curr_cbd = alloc_cbdr(priv->si, &cbdr_sgcl);
 
 	cbdr_sgcl->index = cpu_to_le16(index);
@@ -1330,11 +1203,7 @@ int enetc_qci_sgi_get(struct net_device *ndev, u32 index,
 
 	sgcl_query = &cbdr_sgcl->sgcl_query;
 
-#ifdef ENETC_BG_V86
-	sgcl_query->oacl_len = 0x3; /* Get the admin control list */
-#else
 	sgcl_query->oacl_len = 0x10;
-#endif
 
 	dma = dma_map_single(&priv->si->pdev->dev, sgcl_data, data_size, DMA_FROM_DEVICE);
 	if (dma_mapping_error(&priv->si->pdev->dev, dma)) {
@@ -1352,19 +1221,8 @@ int enetc_qci_sgi_get(struct net_device *ndev, u32 index,
 	DUMP_CBDR(cbdr_sgcl);
 	DUMP_DATA((char *)sgcl_data, data_size);
 
-	if (sgi_config->en & 0x80)
-		tsn_qci_sgi->gate_enabled = true;
-	if (sgi_config->gset & 0x80)
-		tsn_qci_sgi->block_invalid_rx_enable = true;
-	if (sgi_config->gset & 0x40)
-		tsn_qci_sgi->block_invalid_rx = true;
-	if (sgi_config->gset & 0x20)
-		tsn_qci_sgi->block_octets_exceeded_enable = true;
-	if (sgi_config->gset & 0x10)
-		tsn_qci_sgi->block_octets_exceeded = true;
-
 	sgce = (struct sgce *)(sgcl_data + 1);
-#ifndef ENETC_BG_V86
+
 	gcl_data_stat = le16_to_cpu(sgcl_data->stat);
 	if (gcl_data_stat & 0x10)
 		tsn_qci_sgi->admin.gate_states = true;
@@ -1373,7 +1231,7 @@ int enetc_qci_sgi_get(struct net_device *ndev, u32 index,
 		tsn_qci_sgi->admin.init_ipv = gcl_data_stat & 0x7;
 	else
 		tsn_qci_sgi->admin.init_ipv = -1;
-#endif
+
 	/* admin_len can also get from gcl_data_stat bit 5,6 OR sgi_config->oacl_len */
 	admin_len = (sgcl_query->oacl_len & 0x3) + 1;
 	tsn_qci_sgi->admin.control_list_length = admin_len;
@@ -1411,10 +1269,11 @@ int enetc_qci_sgi_get(struct net_device *ndev, u32 index,
 			temp_sgcl->octet_max = 0;
 	}
 
-	memset(cbdr, 0, sizeof(*cbdr));
 	memset(cbdr_sgcl, 0, sizeof(*cbdr_sgcl));
-
 	kfree(sgcl_data);
+
+exit:
+	memset(cbdr, 0, sizeof(*cbdr));
 	return 0;
 }
 
@@ -1444,6 +1303,17 @@ int enetc_qci_sgi_status_get(struct net_device *ndev, u16 index,
 
 	sgi_config = &cbdr_sgi->sgi_table;
 
+	if (sgi_config->gset & 0x4)
+		status->config_pending = true;
+
+	status->oper.gate_states = ((sgi_config->ocgtst & 0x80)? true : false);
+
+	/* Check gate list length is zero? */
+	if (!(sgi_config->oacl_len & 0x30)) {
+		status->oper.control_list_length = 0;
+		goto cmd2quit;
+	}
+
 	DUMP_CBDR(cbdr_sgi);
 	xmit_cbdr(priv->si, curr_cbd);
 	DUMP_CBDR(cbdr_sgi);
@@ -1466,11 +1336,8 @@ int enetc_qci_sgi_status_get(struct net_device *ndev, u16 index,
 	cbdr_sgcl->status_flags = 0;
 
 	sgcl_query = &cbdr_sgcl->sgcl_query;
-#ifdef ENETC_BG_V86
-	sgcl_query->oacl_len = 0x0c; /* Get the oper control list */
-#else
+
 	sgcl_query->oacl_len = 0x20;
-#endif
 
 	dma = dma_map_single(&priv->si->pdev->dev, sgcl_data, data_size, DMA_FROM_DEVICE);
 	if (dma_mapping_error(&priv->si->pdev->dev, dma)) {
@@ -1498,7 +1365,7 @@ int enetc_qci_sgi_status_get(struct net_device *ndev, u16 index,
 	status->oper.cycle_time_extension = le32_to_cpu(sgcl_data->octe);
 	status->oper.base_time = le32_to_cpu(sgcl_data->obtl) + ((u64)le32_to_cpu(sgcl_data->obth) << 32);
 	status->oper.control_list_length = oper_len;
-#ifndef ENETC_BG_V86
+
 	gcl_data_stat = le16_to_cpu(sgcl_data->stat);
 	if (gcl_data_stat & 0x400)
 		status->oper.init_ipv = gcl_data_stat & 0x38 >> 7;
@@ -1507,7 +1374,7 @@ int enetc_qci_sgi_status_get(struct net_device *ndev, u16 index,
 
 	if (gcl_data_stat & 0x800)
 		status->oper.gate_states = true;
-#endif
+
 	status->oper.gcl =
 		kzalloc(oper_len * sizeof(struct tsn_qci_psfp_gcl), GFP_KERNEL);
 	if (status->oper.gcl == NULL) {
@@ -1539,26 +1406,26 @@ int enetc_qci_sgi_status_get(struct net_device *ndev, u16 index,
 			temp_sgcl->octet_max = 0;
 	}
 
-	if (sgi_config->gset & 0x4)
-		status->config_pending = true;
+	status->config_change_time = le32_to_cpu(sgcl_data->cctl) + ((u64)le32_to_cpu(sgcl_data->ccth) << 32);
 
+	memset(cbdr_sgcl, 0, sizeof(*cbdr_sgcl));
+	kfree(sgcl_data);
+
+cmd2quit:
 	/* changed to SITGTGR */
 	status->tick_granularity = enetc_rd(&priv->si->hw, ENETC_SITGTGR);
 
 	/* current time */
-	temp = ((u64)enetc_rd(&priv->si->hw, ENETC_SICTR + 4)) << 32;
-	status->current_time = enetc_rd(&priv->si->hw, ENETC_SICTR) + temp;
-
-	status->config_change_time = le32_to_cpu(sgcl_data->cctl) + ((u64)le32_to_cpu(sgcl_data->ccth) << 32);
+	temp = ((u64)enetc_rd(&priv->si->hw, ENETC_SICTRH)) << 32;
+	status->current_time = enetc_rd(&priv->si->hw, ENETC_SICTRL) + temp;
 
 	memset(cbdr_sgi, 0, sizeof(*cbdr_sgi));
-	memset(cbdr_sgcl, 0, sizeof(*cbdr_sgcl));
 
 	return 0;
 }
 
 /* CBD Class 10: Flow Meter Instance Set Descriptor - Short Format */
-int enetc_qci_fmi_set(struct net_device *ndev, u32 index,
+int enetc_qci_fmi_set(struct net_device *ndev, u32 index, bool enable,
 				struct tsn_qci_psfp_fmi *tsn_qci_fmi)
 {
 	struct enetc_cbd *cbdr;
@@ -1566,6 +1433,7 @@ int enetc_qci_fmi_set(struct net_device *ndev, u32 index,
 
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	int curr_cbd;
+	u64 temp = 0;
 
 	curr_cbd = alloc_cbdr(priv->si, &cbdr);
 
@@ -1573,17 +1441,37 @@ int enetc_qci_fmi_set(struct net_device *ndev, u32 index,
 	cbdr->cmd = 0;
 	cbdr->cls = BDCR_CMD_FLOW_METER;
 	cbdr->status_flags = 0x80;
+	DUMP_CBDR(cbdr);
+	xmit_cbdr(priv->si, curr_cbd);
+	DUMP_CBDR(cbdr);
+	if (!enable) {
+		memset(cbdr, 0, sizeof(*cbdr));
+		return 0;
+	}
+
+	/* Re-enable */
+	curr_cbd = alloc_cbdr(priv->si, &cbdr);
+	memset(cbdr, 0, sizeof(*cbdr));
+	cbdr->index = cpu_to_le16((u16)index);
+	cbdr->cmd = 0;
+	cbdr->cls = BDCR_CMD_FLOW_METER;
+	cbdr->status_flags = 0x80;
 
 	fmi_config = &cbdr->fmi_conf;
-	fmi_config->cir = cpu_to_le32(tsn_qci_fmi->cir);
+	fmi_config->en = 0x80;
+	if (tsn_qci_fmi->cir) {
+		temp = (u64)1000 * tsn_qci_fmi->cir;
+		temp = temp/3725;
+	}
+	fmi_config->cir = cpu_to_le32((u32)temp);
 	fmi_config->cbs = cpu_to_le32(tsn_qci_fmi->cbs);
-	fmi_config->eir = cpu_to_le32(tsn_qci_fmi->eir);
+	temp = 0;
+	if (tsn_qci_fmi->eir) {
+		temp = (u64)1000 * tsn_qci_fmi->eir;
+		temp = temp/3725;
+	}
+	fmi_config->eir = cpu_to_le32((u32)temp);
 	fmi_config->ebs = cpu_to_le32(tsn_qci_fmi->ebs);
-	if ((tsn_qci_fmi->cir == 0) && (tsn_qci_fmi->cbs == 0)
-			&& (tsn_qci_fmi->eir == 0) && (tsn_qci_fmi->ebs == 0))
-		fmi_config->en = 0;
-	else
-		fmi_config->en = 0x80;
 
 	if (tsn_qci_fmi->mark_red)
 		fmi_config->conf |= 0x1;
@@ -1616,6 +1504,10 @@ int enetc_qci_fmi_get(struct net_device *ndev, u32 index,
 	struct fmi_conf *fmi_config;
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	int curr_cbd;
+	u16 data_size, dma_size;
+	dma_addr_t dma;
+	struct fmi_query_stat_resp *fmi_counter_data;
+	u64 temp = 0;
 
 	curr_cbd = alloc_cbdr(priv->si, &cbdr);
 
@@ -1629,9 +1521,18 @@ int enetc_qci_fmi_get(struct net_device *ndev, u32 index,
 	DUMP_CBDR(cbdr);
 
 	fmi_config = &cbdr->fmi_conf;
-	tsn_qci_fmi->cir = le32_to_cpu(fmi_config->cir);
+	if (fmi_config->cir) {
+		temp = (u64)3725 * fmi_config->cir;
+		temp = temp/1000;
+	}
+	tsn_qci_fmi->cir = le32_to_cpu((u32)temp);
 	tsn_qci_fmi->cbs = le32_to_cpu(fmi_config->cbs);
-	tsn_qci_fmi->eir = le32_to_cpu(fmi_config->eir);
+	temp = 0;
+	if (fmi_config->eir) {
+		temp = (u64)3725 * fmi_config->eir;
+		temp = temp/1000;
+	}
+	tsn_qci_fmi->eir = le32_to_cpu((u32)temp);
 	tsn_qci_fmi->ebs = le32_to_cpu(fmi_config->ebs);
 
 	if (fmi_config->conf & 0x1)
@@ -1650,6 +1551,94 @@ int enetc_qci_fmi_get(struct net_device *ndev, u32 index,
 		tsn_qci_fmi->cf = true;
 
 	memset(cbdr, 0, sizeof(*cbdr));
+
+	/* Get counters */
+	curr_cbd = alloc_cbdr(priv->si, &cbdr);
+
+	cbdr->index = cpu_to_le16(index);
+	cbdr->cmd = 2;
+	cbdr->cls = BDCR_CMD_FLOW_METER;
+	cbdr->status_flags = 0x0;
+
+	data_size = sizeof(struct fmi_query_stat_resp);
+	fmi_counter_data = (struct fmi_query_stat_resp *)kzalloc(data_size, __GFP_DMA | GFP_KERNEL);
+	if (fmi_counter_data == NULL)
+		return -ENOMEM;
+
+	dma = dma_map_single(&priv->si->pdev->dev, fmi_counter_data, data_size, DMA_FROM_DEVICE);
+	if (dma_mapping_error(&priv->si->pdev->dev, dma)) {
+		netdev_err(priv->si->ndev, "DMA mapping failed!\n");
+		kfree(fmi_counter_data);
+		return -ENOMEM;
+	}
+	cbdr->addr[0] = lower_32_bits(dma);
+	cbdr->addr[1] = upper_32_bits(dma);
+
+	dma_size = cpu_to_le16(data_size);
+	cbdr->length = dma_size;
+
+	DUMP_CBDR(cbdr);
+	xmit_cbdr(priv->si, curr_cbd);
+	DUMP_CBDR(cbdr);
+	DUMP_DATA((char *)fmi_counter_data, data_size);
+
+	return 0;
+}
+
+int enetc_qbu_set(struct net_device *ndev, u8 ptvector)
+{
+	u32 temp;
+	int i;
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+
+	temp = enetc_port_rd(&priv->si->hw, ENETC_PFPMR);
+	enetc_port_wr(&priv->si->hw, ENETC_PFPMR,
+			temp|ENETC_PFPMR_PMACE|ENETC_PFPMR_MWLM);
+
+	temp = enetc_port_rd(&priv->si->hw, ENETC_MMCSR);
+	enetc_port_wr(&priv->si->hw, ENETC_MMCSR, temp|ENETC_MMCSR_ME);
+
+	temp = enetc_rd(&priv->si->hw, QBV_PTGCR_OFFSET);
+	if (temp & QBV_TGE)
+		enetc_wr(&priv->si->hw, QBV_PTGCR_OFFSET, temp & (~QBV_TGPE));
+
+	for (i = 0;i < 8;i++)
+		/* 1 Enabled. Traffic is transmitted on the preemptive MAC. */
+		if ((ptvector >> i) & 0x1) {
+			temp = enetc_port_rd(&priv->si->hw, ENETC_PTCFPR(i));
+			enetc_port_wr(&priv->si->hw, ENETC_PTCFPR(i), temp | ENETC_FPE);
+		}
+
+	return 0;
+}
+
+int enetc_qbu_get(struct net_device *ndev,
+		  struct tsn_preempt_status *preemptstat)
+{
+	int i;
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+
+	if (enetc_port_rd(&priv->si->hw, ENETC_PFPMR) & ENETC_PFPMR_PMACE)
+	{
+		preemptstat->preemption_active = true;
+		if (enetc_rd(&priv->si->hw, QBV_PTGCR_OFFSET) & QBV_TGE)
+			preemptstat->hold_request = 1;
+		else
+			preemptstat->hold_request = 2;
+	} else {
+		preemptstat->preemption_active = false;
+		return 0;
+	}
+
+	for (i = 0;i < 8;i++)
+		if(enetc_port_rd(&priv->si->hw, ENETC_PTCFPR(i)) & 0x80000000)
+			preemptstat->admin_state |= 1 << i;
+
+	preemptstat->hold_advance =
+		enetc_rd(&priv->si->hw, QBV_PTGCR_OFFSET) & 0xFFFF;
+	preemptstat->release_advance =
+		enetc_rd(&priv->si->hw, QBV_PTGCR_OFFSET) & 0xFFFF;
+
 	return 0;
 }
 
@@ -1680,7 +1669,31 @@ u32 enetc_tsn_get_capability(struct net_device *ndev)
 	return __enetc_tsn_get_cap(priv->si);
 }
 
+static int enetc_set_cbs(struct net_device *ndev, u8 tc, u8 bw)
+{
+	return 0;
+}
+
+static int enetc_get_cbs(struct net_device *ndev, u8 tc)
+{
+	return 0;
+}
+
+#define GET_CURRENT_TIME(si) (enetc_rd(&(si)->hw, ENETC_SICTR0) \
+							| ((u64)enetc_rd(&(si)->hw, ENETC_SICTR1) << 32))
+
+static int enetc_set_tsd(struct net_device *ndev, struct tsn_tsd *ttsd)
+{
+	return 0;
+}
+
+static int enetc_get_tsd(struct net_device *ndev, struct tsn_tsd_status *tts)
+{
+	return 0;
+}
+
 static struct tsn_ops enetc_tsn_ops = {
+	.get_capability = enetc_tsn_get_capability,
 	.qbv_set = enetc_qbv_set,
 	.qbv_get = enetc_qbv_get,
 	.qbv_get_status = enetc_qbv_get_status,
@@ -1695,16 +1708,65 @@ static struct tsn_ops enetc_tsn_ops = {
 	.qci_sgi_status_get = enetc_qci_sgi_status_get,
 	.qci_fmi_set = enetc_qci_fmi_set,
 	.qci_fmi_get = enetc_qci_fmi_get,
+	.qbu_set = enetc_qbu_set,
+	.qbu_get = enetc_qbu_get,
+	.cbs_set = enetc_set_cbs,
+	.cbs_get = enetc_get_cbs,
+	.tsd_set = enetc_set_tsd,
+	.tsd_get = enetc_get_tsd,
 };
+/*
+static u32 get_ndev_speed(struct net_device *netdev)
+{
+	struct ethtool_link_ksettings ksettings;
+	int rc = -1;
+	if (netdev->ethtool_ops->get_link_ksettings) {
+
+		if (netdev->ethtool_ops->begin) {
+			if ((rc = netdev->ethtool_ops->begin(netdev) < 0))
+				return 0;
+		}
+
+		memset(&ksettings, 0, sizeof(ksettings));
+
+		if (!netdev->ethtool_ops->get_link_ksettings)
+			return 0;
+
+		rc = netdev->ethtool_ops->get_link_ksettings(netdev, &ksettings);
+
+		if (netdev->ethtool_ops->complete)
+			netdev->ethtool_ops->complete(netdev);
+	}
+	return (rc < 0) ? 0 : ksettings.base.speed;
+}
+*/
+static void enetc_cbs_init(struct enetc_si *si)
+{
+	return;
+}
+
+static void enetc_qbv_init(struct enetc_hw *hw)
+{
+	/* Set PSPEED to be 1Gbps */
+	enetc_port_wr(hw, ENETC_PMR, (enetc_port_rd(hw, ENETC_PMR) & (~0xf00)) | 0x200);
+}
 
 void enetc_tsn_init(struct enetc_si *si)
 {
-	si->ndev->tsn_ops = &enetc_tsn_ops;
-#ifdef ENETC_BG_V86
-	enetc_wr(&si->hw, ENETC_SITGTGR, 0x1);
-#endif
+	u32 capability = 0;
 
-	enetc_qci_enable(&si->hw);
+	si->ndev->tsn_ops = &enetc_tsn_ops;
+
+	capability = __enetc_tsn_get_cap(si);
+
+	if (capability & TSN_CAP_CBS)
+		enetc_cbs_init(si);
+
+	if (capability & TSN_CAP_QBV)
+		enetc_qbv_init(&si->hw);
+
+	if (capability & TSN_CAP_QCI)
+		enetc_qci_enable(&si->hw);
 
 	dev_info(&si->pdev->dev, "%s: setup done\n", __func__);
 }

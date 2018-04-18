@@ -545,7 +545,7 @@ static inline void enetc_enable_txvlan(struct enetc_hw *hw, int si_idx,
 
 #ifdef CONFIG_ENETC_TSN
 
-#define ENETC_BG_V86
+#define ENETC_BG_V108
 enum bdcr_cmd_class {
 	BDCR_CMD_UNSPEC = 0,
 	BDCR_CMD_MAC_FILTER,
@@ -565,7 +565,7 @@ enum bdcr_cmd_class {
 /* class 7, command 0, Stream Identity Entry Configuration */
 struct streamid_conf {
 	__le32	stream_handle;	/* init gate value */
-	__le32	ifac_iports;
+	__le32	iports;
 		u8	id_type;
 		u8	oui[3];
 		u8	res[3];
@@ -664,6 +664,7 @@ struct sfi_query {
 /* command no need structure define */
 
 /* Stream Filter Instance Query Statistics Response data */
+#if 0
 struct sfi_query_stat_resp {
 	u32	match_filter_countl;
 	u32	match_filter_counth;
@@ -672,7 +673,7 @@ struct sfi_query_stat_resp {
 	u32	sdu_filter_pass_countl;
 	u32	sdu_filter_pass_counth;
 };
-
+#endif
 struct sfi_counter_data {
 	u32 matchl;
 	u32 matchh;
@@ -737,10 +738,6 @@ struct sgcl_data {
 	u32 bth;
 	u32	ct;
 	u32	cte;
-#ifdef ENETC_BG_V86
-	u32 cctl;
-	u32 ccth;
-#endif
 	/*struct sgce	*sgcl;*/
 };
 
@@ -768,10 +765,8 @@ struct sgcl_query {
 #define ENETC_CBDR_SGIQ_OCL_LEN_MASK 0x3000
 /* class 9, command 3 data space */
 struct sgcl_query_resp {
-#ifndef ENETC_BG_V86
 	u16 stat;
 	u16 res;
-#endif
 	u32	abtl;
 	u32 abth;
 	u32	act;
@@ -782,9 +777,6 @@ struct sgcl_query_resp {
 	u32 obth;
 	u32	oct;
 	u32	octe;
-/*	u32	ccel;
-	u32 cceh;
-	*/
 };
 
 /* class 9, command 4 Stream Gate Instance Table Query Statistics Response
@@ -886,10 +878,6 @@ struct tgs_gcl_data {
 	u32 bth;
 	u32 ct;
 	u32 cte;
-#ifdef ENETC_BG_V86
-	u32 cctl;
-	u32 ccth;
-#endif
 };
 
 /* class 5, command 1 */
@@ -928,7 +916,7 @@ struct tgs_gcl_resp {
 struct enetc_cbd {
 	union{
 		struct sfi_conf sfi_conf; /* Just for Stream Filter Instance Entry */
-		struct sfi_query_stat_resp sfi_query_stat_resp;
+	/*	struct sfi_query_stat_resp sfi_query_stat_resp;*/
 		struct sgi_table sgi_table; /* Just for Stream Gate Instance table set */
 	/*	struct sgi_query_resp sgi_query_resp;*/
 		struct sgi_query_stat_resp sgi_query_stat_resp;
@@ -956,10 +944,20 @@ struct enetc_cbd {
 	u8 status_flags;
 };
 
-#define ENETC_SICTR		0x18
+#define ENETC_SICTRL		0x18
+#define ENETC_SICTRH		0x1c
 #define ENETC_SIPCAPR0	0x20
 #define ENETC_SIPCAPR1	0x24
 #define ENETC_SITGTGR	0x30
+
+#define ENETC_MMCSR		0x1F00
+#define ENETC_MMCSR_ME		BIT(16)
+
+#define ENETC_PFPMR		0x1900
+#define ENETC_PFPMR_PMACE	BIT(1)
+#define ENETC_PFPMR_MWLM	BIT(0)
+#define ENETC_PTCFPR(n)		(0x1910 + (n) * 4) /* n = [0 ..7] */
+#define ENETC_FPE		BIT(31)
 
 /* Port capability register 0 */
 #define ENETC_PCAPR0_PSFPM BIT(10)
@@ -970,6 +968,8 @@ struct enetc_cbd {
 /* port time gating control register */
 #define QBV_PTGCR_OFFSET 0x11a00
 #define QBV_TGE		0x80000000
+#define QBV_TGPE	BIT(30)
+#define QBV_TGDROP_DISABLE BIT(29)
 
 /* Port time gating capability register */
 #define QBV_PTGCAPR_OFFSET 0x11a08
@@ -1037,5 +1037,9 @@ struct enetc_cbd {
 #define ENETC_MIN_LOOKAHEAD_MASK 0xffff
 
 #define ENETC_PPSFPMR 0x11b00
-#define ENETC_PSFPEN 0x1
+#define ENETC_PPSFPMR_PSFPEN BIT(0)
+#define ENETC_PPSFPMR_VS BIT(1)
+#define ENETC_PPSFPMR_PVC BIT(2)
+#define ENETC_PPSFPMR_PVZC BIT(3)
+
 #endif

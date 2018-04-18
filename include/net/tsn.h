@@ -68,13 +68,12 @@ struct tsn_ops {
 							struct tsn_qci_psfp_sgi_conf *sgiconf);
 	int (*qci_sgi_status_get)(struct net_device *ndev, u16 index,
 							struct tsn_psfp_sgi_status *sgistat);
-	int (*qci_fmi_set)(struct net_device *ndev, u32 index,
+	int (*qci_fmi_set)(struct net_device *ndev, u32 index, bool enable,
 							struct tsn_qci_psfp_fmi *fmi);
 	int (*qci_fmi_get)(struct net_device *ndev, u32 index,
 							struct tsn_qci_psfp_fmi *fmi);
-	int (*cbs_set)(struct net_device *ndev, bool enable, u8 qnumber, u8 bw);
-	int (*cbs_get)(struct net_device *ndev, u8 qnumber,
-								struct tx_queue *txqueue);
+	int (*cbs_set)(struct net_device *ndev, u8 tc, u8 bw);
+	int (*cbs_get)(struct net_device *ndev, u8 tc);
 	/* To set a 8 bits vector shows 8 traffic classes
 	 * preemtable(1) or express(0)
 	 */
@@ -82,6 +81,8 @@ struct tsn_ops {
 	/* To get port preemtion status */
 	int (*qbu_get)(struct net_device *ndev,
 						struct tsn_preempt_status *preemptstat);
+	int (*tsd_set)(struct net_device *, struct tsn_tsd *);
+	int (*tsd_get)(struct net_device *, struct tsn_tsd_status *);
 };
 
 #endif

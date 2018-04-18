@@ -81,6 +81,10 @@ enum {
 	TSN_CMD_CBS_GET,
 	TSN_CMD_QBU_SET,
 	TSN_CMD_QBU_GET_STATUS,
+	TSN_CMD_QAV_SET_CBS,
+	TSN_CMD_QAV_GET_CBS,
+	TSN_CMD_TSD_SET,
+	TSN_CMD_TSD_GET,
 	TSN_CMD_ECHO,			/* user->kernel request/get-response */
 	TSN_CMD_REPLY,			/* kernel->user event */
 	__TSN_CMD_MAX,
@@ -101,12 +105,14 @@ enum {
 	TSN_ATTR_QCI_SGI,		/* psfp stream gate instance */
 	TSN_ATTR_QCI_FMI,		/* psfp flow meter instance */
 	TSN_ATTR_CBS,			/* credit-based shaper */
+	TSN_ATTR_TSD,			/* Time Specific Departure */
 	TSN_ATTR_QBU,			/* preemption */
 	__TSN_CMD_ATTR_MAX,
 };
 #define TSN_CMD_ATTR_MAX (__TSN_CMD_ATTR_MAX - 1)
 
 enum {
+	TSN_QBU_ATTR_UNSPEC,
 	TSN_QBU_ATTR_ADMIN_STATE,
 	TSN_QBU_ATTR_HOLD_ADVANCE,
 	TSN_QBU_ATTR_RELEASE_ADVANCE,
@@ -118,22 +124,23 @@ enum {
 
 enum {
 	TSN_CBS_ATTR_UNSPEC,
-	TSN_CBS_ATTR_QUEUE_NUMBER,
-	TSN_CBS_ATTR_ENABLE,
-	TSN_CBS_ATTR_DISABLE,
-	TSN_CBS_ATTR_QUEUE_COUNT,
-	TSN_CBS_ATTR_QUEUE_MODE,
-	TSN_CBS_ATTR_QUEUE_CAPABILITY,
-	TSN_CBS_ATTR_QUEUE_PRIORITY,
-	TSN_CBS_ATTR_QUEUE_BW,
-	TSN_CBS_ATTR_IDLESLOPE,
-	TSN_CBS_ATTR_SENDSLOPE,
-	TSN_CBS_ATTR_MAXFRAMESIZE,
-	TSN_CBS_ATTR_HICREDIT,
-	TSN_CBS_ATTR_LOCREDIT,
-	TSN_CBS_ATTR_MAXINTERFERE,
+	TSN_CBS_ATTR_TC_INDEX,
+	TSN_CBS_ATTR_BW,
 	__TSN_CBS_ATTR_MAX,
 	TSN_CBS_ATTR_MAX = __TSN_CBS_ATTR_MAX - 1,
+};
+
+enum {
+	TSN_TSD_ATTR_UNSPEC,
+	TSN_TSD_ATTR_DISABLE,
+	TSN_TSD_ATTR_ENABLE,
+	TSN_TSD_ATTR_PERIOD,
+	TSN_TSD_ATTR_MAX_FRM_NUM,
+	TSN_TSD_ATTR_CYCLE_NUM,
+	TSN_TSD_ATTR_LOSS_STEPS,
+	TSN_TSD_ATTR_SYN_IMME,
+	__TSN_TSD_ATTR_MAX,
+	TSN_TSD_ATTR_MAX = __TSN_TSD_ATTR_MAX - 1,
 };
 
 enum {
@@ -238,6 +245,8 @@ enum {
 enum {
 	TSN_QCI_FMI_ATTR_UNSPEC = 0,
 	TSN_QCI_FMI_ATTR_INDEX,
+	TSN_QCI_FMI_ATTR_ENABLE,
+	TSN_QCI_FMI_ATTR_DISABLE,
 	TSN_QCI_FMI_ATTR_CIR,
 	TSN_QCI_FMI_ATTR_CBS,
 	TSN_QCI_FMI_ATTR_EIR,
@@ -959,6 +968,32 @@ struct tsn_qbv_status {
 
 	/* Operation settings parameters and Oper gate list */
 	struct tsn_qbv_basic oper;
+};
+
+/* Time Specific Departure parameters */
+struct tsn_tsd {
+	bool enable;
+
+	/* The cycle time, in units of microsecond(us)*/
+	uint32_t period;
+
+	/* The maximum number of frames which could be transmitted on one cycle.
+	 *  The exceeding frames will be transmitted on next cycle.*/
+	uint32_t maxFrameNum;
+
+	/* Specify the time of the first cycle begins.
+	 *      1:  begin when the queue get the first frame to transmit.
+	 *      2:  begin immediately at the end of setting function.*/
+	uint32_t syn_flag;
+};
+
+struct tsn_tsd_status {
+	bool enable;
+	uint32_t period;
+	uint32_t maxFrameNum;
+	uint32_t flag;
+	uint32_t cycleNum;
+	uint32_t loss_steps;
 };
 
 #endif /* _UAPI_GENL_TSN_H */

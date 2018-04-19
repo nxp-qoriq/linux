@@ -1702,7 +1702,8 @@ ethsw_probe(struct fsl_mc_device *sw_dev)
 	priv = netdev_priv(netdev);
 	priv->netdev = netdev;
 
-	err = fsl_mc_portal_allocate(sw_dev, 0, &priv->mc_io);
+	err = fsl_mc_portal_allocate(sw_dev, FSL_MC_IO_ATOMIC_CONTEXT_PORTAL,
+				     &priv->mc_io);
 	if (err) {
 		if (err == -ENXIO)
 			err = -EPROBE_DEFER;

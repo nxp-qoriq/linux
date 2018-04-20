@@ -491,6 +491,8 @@ static void enetc_port_si_configure(struct enetc_si *si)
 	/* Port level VLAN settings */
 	val = ENETC_PVCLCTR_OVTPIDL(ENETC_VLAN_TYPE_C | ENETC_VLAN_TYPE_S);
 	enetc_port_wr(hw, ENETC_PVCLCTR, val);
+	/* use outer tag for VLAN filtering */
+	enetc_port_wr(hw, ENETC_PSIVLANFMR, ENETC_PSIVLANFMR_VS);
 }
 
 static void enetc_configure_port_mac(struct enetc_hw *hw)

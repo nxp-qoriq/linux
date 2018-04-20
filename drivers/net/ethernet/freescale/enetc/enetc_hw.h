@@ -199,6 +199,9 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_RSSHASH_KEY_SIZE	40
 #define ENETC_PRSSK(n)		(0x01410 + (n) * 4) /* n = [0..9] */
 
+#define ENETC_PSIVLANFMR	0x01700
+#define ENETC_PSIVLANFMR_VS	BIT(0)
+
 #define ENETC_PRFSMR		0x01800
 #define ENETC_PRFSMR_RFSE	BIT(31)
 #define ENETC_PRFSCAPR		0x01804

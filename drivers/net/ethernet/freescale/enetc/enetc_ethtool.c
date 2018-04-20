@@ -219,6 +219,7 @@ static int enetc_get_sset_count(struct net_device *ndev, int sset)
 	switch (sset) {
 	case ETH_SS_STATS:
 		return ARRAY_SIZE(enetc_si_counters) +
+			priv->num_tx_rings + priv->num_rx_rings +
 			(enetc_si_is_pf(priv->si) ?
 			ARRAY_SIZE(enetc_port_counters) : 0);
 	default:
@@ -238,6 +239,15 @@ static void enetc_get_strings(struct net_device *ndev, u32 stringset, u8 *data)
 			strlcpy(p, enetc_si_counters[i].name, ETH_GSTRING_LEN);
 			p += ETH_GSTRING_LEN;
 		}
+		for (i = 0; i < priv->num_tx_rings; i++) {
+			sprintf(p, "Tx ring %2d frames", i);
+			p += ETH_GSTRING_LEN;
+		}
+		for (i = 0; i < priv->num_rx_rings; i++) {
+			sprintf(p, "Rx ring %2d frames", i);
+			p += ETH_GSTRING_LEN;
+		}
+
 		if (!enetc_si_is_pf(priv->si))
 			break;
 
@@ -259,6 +269,12 @@ static void enetc_get_ethtool_stats(struct net_device *ndev,
 
 	for (i = 0; i < ARRAY_SIZE(enetc_si_counters); i++)
 		data[o++] = enetc_rd64(hw, enetc_si_counters[i].reg);
+
+	for (i = 0; i < priv->num_tx_rings; i++)
+		data[o++] = priv->tx_ring[i]->stats.packets;
+
+	for (i = 0; i < priv->num_rx_rings; i++)
+		data[o++] = priv->rx_ring[i]->stats.packets;
 
 	if (!enetc_si_is_pf(priv->si))
 		return;

@@ -420,6 +420,28 @@
 			#interrupt-cells = <2>;
 		};
 
+		/* TODO: WRIOP (CCSR?) */
+		emdio1: mdio@0x8B96000 { /* WRIOP0: 0x8B8_0000, E-MDIO1: 0x1_6000 */
+			compatible = "fsl,fman-memac-mdio";
+			reg = <0x0 0x8B96000 0x0 0x1000>;
+			device_type = "mdio";			/* TODO: is this necessary? */
+			little-endian;	/* force the driver in LE mode */
+
+			/* Not necessary on the QDS, but needed on the RDB */
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
+		emdio2: mdio@0x8B97000 { /* WRIOP0: 0x8B8_0000, E-MDIO2: 0x1_7000 */
+			compatible = "fsl,fman-memac-mdio";
+			reg = <0x0 0x8B97000 0x0 0x1000>;
+			device_type = "mdio";			/* TODO: is this necessary? */
+			little-endian;	/* force the driver in LE mode */
+
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
 		dspi0: dspi@2100000 {
 			status = "disabled";
 			compatible = "fsl,ls2080a-dspi", "fsl,ls2085a-dspi";

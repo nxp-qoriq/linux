@@ -353,17 +353,15 @@ static void enetc_set_loopback(struct net_device *ndev, bool en)
 	struct enetc_hw *hw = &priv->si->hw;
 	u32 reg;
 
+	/* RGMII mode */
 	reg = enetc_port_rd(hw, ENETC_PM0_IF_MODE);
-	if (reg & ENETC_PMO_IFM_RG) {
-		/* RGMII mode */
-		reg = en ? reg | ENETC_PM0_IFM_RLP : reg & ~ENETC_PM0_IFM_RLP;
-		enetc_port_wr(hw, ENETC_PM0_IF_MODE, reg);
-	} else {
-		/* assume SGMII mode */
-		reg = enetc_port_rd(hw, ENETC_PM0_CMD_CFG);
-		reg = en ? reg | ENETC_PM0_CMD_XGLP : reg & ~ENETC_PM0_CMD_XGLP;
-		enetc_port_wr(hw, ENETC_PM0_CMD_CFG, reg);
-	}
+	reg = en ? reg | ENETC_PM0_IFM_RLP : reg & ~ENETC_PM0_IFM_RLP;
+	enetc_port_wr(hw, ENETC_PM0_IF_MODE, reg);
+
+	/* SGMII mode */
+	reg = enetc_port_rd(hw, ENETC_PM0_CMD_CFG);
+	reg = en ? reg | ENETC_PM0_CMD_XGLP : reg & ~ENETC_PM0_CMD_XGLP;
+	enetc_port_wr(hw, ENETC_PM0_CMD_CFG, reg);
 }
 
 static int enetc_pf_set_vf_mac(struct net_device *ndev, int vf, u8 *mac)

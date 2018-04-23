@@ -44,6 +44,11 @@ Optional Properties:
   Mark the corresponding energy efficient ethernet mode as broken and
   request the ethernet to stop advertising it.
 
+- dev-addr: If set, it indicates the device address of the PHY to be used
+  when accessing the C45 PHY registers over MDIO. It is used for vendor specific
+  register space addresses that do no conform to standard address for the MDIO
+  registers (e.g. MMD30)
+
 Example:
 
 ethernet-phy@0 {
@@ -51,4 +56,5 @@ ethernet-phy@0 {
 	interrupt-parent = <40000>;
 	interrupts = <35 1>;
 	reg = <0>;
+	dev-addr = <0x1e>;
 };

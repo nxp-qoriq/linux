@@ -2,6 +2,7 @@
  * OF helpers for the MDIO (Ethernet PHY) API
  *
  * Copyright (c) 2009 Secret Lab Technologies, Ltd.
+ * Copyright 2018 NXP
  *
  * This file is released under the GPLv2
  *
@@ -42,8 +43,47 @@ static int of_get_phy_id(struct device_node *device, u32 *phy_id)
 	return -EINVAL;
 }
 
+static int of_find_devaddr_in_pkg(struct mii_bus *bus, u32 addr, u32 dev_addr,
+				  struct phy_c45_device_ids *c45_ids)
+{
+	u32 *devs = &c45_ids->devices_in_package;
+	int phy_reg, reg_addr;
+
+	reg_addr = MII_ADDR_C45 | dev_addr << 16 | MDIO_DEVS2;
+	phy_reg = mdiobus_read(bus, addr, reg_addr);
+
+	if (phy_reg < 0)
+		return -EIO;
+
+	*devs = (phy_reg & 0xffff) << 16;
+
+	reg_addr = MII_ADDR_C45 | dev_addr << 16 | MDIO_DEVS1;
+	phy_reg = mdiobus_read(bus, addr, reg_addr);
+	if (phy_reg < 0)
+		return -EIO;
+
+	*devs |= (phy_reg & 0xffff);
+
+	return 0;
+}
+
+static void of_fill_c45ids_devaddr(u32 dev_addr,
+				   struct phy_c45_device_ids *c45_ids)
+{
+	int i;
+	const int num_ids = ARRAY_SIZE(c45_ids->device_ids);
+
+	/* Now probe Device Identifiers for each device present. */
+	for (i = 1; i < num_ids; i++) {
+		if (!(c45_ids->devices_in_package & (1 << i)))
+			continue;
+
+		c45_ids->devices_addrs[i] = dev_addr;
+	}
+}
 static void of_mdiobus_register_phy(struct mii_bus *mdio,
-				    struct device_node *child, u32 addr)
+				    struct device_node *child, u32 addr,
+				    struct phy_c45_device_ids *c45_ids)
 {
 	struct phy_device *phy;
 	bool is_c45;
@@ -56,6 +96,9 @@ static void of_mdiobus_register_phy(struct mii_bus *mdio,
 	if (!is_c45 && !of_get_phy_id(child, &phy_id))
 		phy = phy_device_create(mdio, addr, phy_id, 0, NULL);
 	else
+		if (c45_ids)
+			phy = get_static_phy_device(mdio, addr, is_c45, c45_ids);
+		else
 		phy = get_phy_device(mdio, addr, is_c45);
 	if (IS_ERR(phy))
 		return;
@@ -87,6 +130,24 @@ static void of_mdiobus_register_phy(struct mii_bus *mdio,
 
 	dev_dbg(&mdio->dev, "registered phy %s at address %i\n",
 		child->name, addr);
+}
+
+static void of_mdiobus_register_static_phy(struct mii_bus *mdio, struct device_node *child,
+				   u32 addr, u32 dev_addr)
+{
+	struct phy_c45_device_ids c45_ids = {0};
+	int dev_err = 0;
+
+	if (!dev_addr)
+		goto exit_register_phy;
+
+	dev_err = of_find_devaddr_in_pkg(mdio, addr, dev_addr, &c45_ids);
+
+	if (!dev_err)
+		of_fill_c45ids_devaddr(dev_addr, &c45_ids);
+
+exit_register_phy:
+	of_mdiobus_register_phy(mdio, child, addr, &c45_ids);
 }
 
 static void of_mdiobus_register_device(struct mii_bus *mdio,
@@ -208,7 +269,10 @@ int of_mdiobus_register(struct mii_bus *mdio, struct device_node *np)
 {
 	struct device_node *child;
 	bool scanphys = false;
+	bool dev_addr_found = true;
 	int addr, rc;
+	int dev_addr = 0;
+	int ret;
 
 	/* Do not continue if the node is disabled */
 	if (!of_device_is_available(np))
@@ -227,6 +291,13 @@ int of_mdiobus_register(struct mii_bus *mdio, struct device_node *np)
 
 	/* Loop over the child nodes and register a phy_device for each phy */
 	for_each_available_child_of_node(np, child) {
+		/* Check if dev-addr is set in the PHY node */
+		ret = of_property_read_u32(child, "dev-addr", &dev_addr);
+
+		if(ret < 0) {
+			/* either not set or invalid */
+			dev_addr_found = false;
+		}
 		addr = of_mdio_parse_addr(&mdio->dev, child);
 		if (addr < 0) {
 			scanphys = true;
@@ -234,7 +305,10 @@ int of_mdiobus_register(struct mii_bus *mdio, struct device_node *np)
 		}
 
 		if (of_mdiobus_child_is_phy(child))
-			of_mdiobus_register_phy(mdio, child, addr);
+			if (dev_addr_found)
+				of_mdiobus_register_static_phy(mdio, child, addr, dev_addr);
+			else
+				of_mdiobus_register_phy(mdio, child, addr, NULL);
 		else
 			of_mdiobus_register_device(mdio, child, addr);
 	}
@@ -242,8 +316,18 @@ int of_mdiobus_register(struct mii_bus *mdio, struct device_node *np)
 	if (!scanphys)
 		return 0;
 
+	dev_addr_found = true;
+
 	/* auto scan for PHYs with empty reg property */
 	for_each_available_child_of_node(np, child) {
+		/* Check if dev-addr is set in the PHY node */
+		ret = of_property_read_u32(child, "dev-addr", &dev_addr);
+
+		if(ret < 0) {
+			/* either not set or invalid */
+			dev_addr_found = false;
+		}
+
 		/* Skip PHYs with reg property set */
 		if (of_find_property(child, "reg", NULL))
 			continue;
@@ -257,8 +341,12 @@ int of_mdiobus_register(struct mii_bus *mdio, struct device_node *np)
 			dev_info(&mdio->dev, "scan phy %s at address %i\n",
 				 child->name, addr);
 
-			if (of_mdiobus_child_is_phy(child))
-				of_mdiobus_register_phy(mdio, child, addr);
+			if (of_mdiobus_child_is_phy(child)) {
+				if (dev_addr_found)
+					of_mdiobus_register_static_phy(mdio, child, addr, dev_addr);
+				else
+					of_mdiobus_register_phy(mdio, child, addr, NULL);
+			}
 		}
 	}
 

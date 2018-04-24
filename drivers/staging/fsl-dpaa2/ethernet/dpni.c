@@ -1949,7 +1949,7 @@ int dpni_get_api_version(struct fsl_mc_io *mc_io,
 			 u16 *minor_ver)
 {
 	struct dpni_rsp_get_api_version *rsp_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	cmd.header = mc_encode_cmd_header(DPNI_CMDID_GET_API_VERSION,

@@ -476,6 +476,7 @@ static void enetc_port_si_configure(struct enetc_si *si)
 
 	/* Configure the SIs for each available VF */
 	val = ENETC_PSICFGR0_SIVC(ENETC_VLAN_TYPE_C | ENETC_VLAN_TYPE_S);
+	val |= ENETC_PSICFGR0_VTE | ENETC_PSICFGR0_SIVIE;
 
 	if (num_rings) {
 		num_rings /= pf->total_vfs;

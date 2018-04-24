@@ -194,6 +194,8 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PSICFGR0(n)	(0x00940 + (n) * 0xc)  /* n = SI index */
 #define ENETC_PSICFGR0_SET_TXBDR(val)	((val) & 0xff)
 #define ENETC_PSICFGR0_SET_RXBDR(val)	(((val) & 0xff) << 16)
+#define ENETC_PSICFGR0_VTE	BIT(12)
+#define ENETC_PSICFGR0_SIVIE	BIT(14)
 #define ENETC_PSICFGR0_ASE	BIT(15)
 #define ENETC_PSICFGR0_SIVC(bmp)	(((bmp) & 0xff) << 24) /* VLAN_TYPE */
 

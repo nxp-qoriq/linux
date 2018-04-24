@@ -66,7 +66,7 @@ struct dpaa2_qdma_sd_d {
 #define QDMA_SD_CMD_RDTTYPE_COHERENT (0xb << 28)
 /* Destination descriptor command write transaction type for RBP=0:
  coherent copy of cacheable memory */
-#define QDMA_DD_CMD_WRTTYPE_COHERENT (0x6 << 28)
+#define QDMA_DD_CMD_WRTTYPE_COHERENT (0xb << 28)
 
 #define QDMA_SG_FMT_SDB		0x0 /* single data buffer */
 #define QDMA_SG_FMT_FDS		0x1 /* frame data section */

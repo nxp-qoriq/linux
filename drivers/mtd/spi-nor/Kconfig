@@ -78,7 +78,6 @@ config SPI_NXP_SPIFI
 
 config	SPI_NXP_FLEXSPI
 	 tristate "NXP Flex SPI controller"
-	 depends on !SPI_FSL_QUADSPI
 	 help
 	   This enables support for the Flex SPI controller in master mode.
 	   We only connect NOR flashes to this controller for now.

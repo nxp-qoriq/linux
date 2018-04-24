@@ -504,7 +504,8 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 	edesc->dst_nents = dst_nents;
 	edesc->iv_dma = iv_dma;
 
-	edesc->assoclen_dma = dma_map_single(dev, &req->assoclen, 4,
+	edesc->assoclen = cpu_to_caam32(req->assoclen);
+	edesc->assoclen_dma = dma_map_single(dev, &edesc->assoclen, 4,
 					     DMA_TO_DEVICE);
 	if (dma_mapping_error(dev, edesc->assoclen_dma)) {
 		dev_err(dev, "unable to map assoclen\n");

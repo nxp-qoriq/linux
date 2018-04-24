@@ -358,7 +358,8 @@ static int enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
 		if (is_eof) {
 			tx_frm_cnt++;
 			/* re-arm interrupt source */
-			enetc_wr_reg(tx_ring->idr, BIT(tx_ring->index));
+			enetc_wr_reg(tx_ring->idr, BIT(tx_ring->index) |
+				     BIT(16 + tx_ring->index));
 		}
 
 		if (unlikely(!bds_to_clean))

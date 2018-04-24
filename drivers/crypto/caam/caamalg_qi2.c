@@ -5880,7 +5880,7 @@ int dpaa2_caam_enqueue(struct device *dev, struct caam_request *req)
 	memset(&fd, 0, sizeof(fd));
 	dpaa2_fd_set_format(&fd, dpaa2_fd_list);
 	dpaa2_fd_set_addr(&fd, req->fd_flt_dma);
-	dpaa2_fd_set_len(&fd, req->fd_flt[1].len);
+	dpaa2_fd_set_len(&fd, dpaa2_fl_get_len(&req->fd_flt[1]));
 	dpaa2_fd_set_flc(&fd, req->flc_dma);
 
 	/*

@@ -1737,8 +1737,16 @@ int spi_nor_scan(struct spi_nor *nor, const char *name, enum read_mode mode)
 	else
 		mtd->_write = spi_nor_write;
 
-	if (info->flags & USE_FSR)
-		nor->flags |= SNOR_F_USE_FSR;
+	if (np) {
+		/* If we were instantiated by DT, check if USE_FSR to use*/
+		if (of_property_read_bool(np, "use_fsr"))
+			nor->flags |= SNOR_F_USE_FSR;
+	} else {
+		/* If we weren't instantiated by DT, default to USE_FSR, if defined */
+		if (info->flags & USE_FSR)
+			nor->flags |= SNOR_F_USE_FSR;
+	}
+
 	if (info->flags & SPI_NOR_HAS_TB)
 		nor->flags |= SNOR_F_HAS_SR_TB;
 	if (info->flags & NO_CHIP_ERASE)

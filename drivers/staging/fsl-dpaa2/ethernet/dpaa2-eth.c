@@ -42,7 +42,7 @@
 #include <linux/bpf.h>
 #include <linux/filter.h>
 #include <linux/atomic.h>
-
+#include <net/sock.h>
 #include <linux/fsl/mc.h>
 #include "dpaa2-eth.h"
 #include "dpaa2-eth-ceetm.h"
@@ -813,6 +813,8 @@ static netdev_tx_t dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 			goto err_alloc_headroom;
 		}
 		percpu_extras->tx_reallocs++;
+		if (skb->sk)
+			skb_set_owner_w(ns, skb->sk);
 		dev_kfree_skb(skb);
 		skb = ns;
 	}

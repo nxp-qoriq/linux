@@ -50,13 +50,94 @@
 				enetc_##t##bdr_off(i, ENETC_##NAME), \
 				enetc_##t##bdr_rd(hw, i, ENETC_##NAME))
 
+static const u32 enetc_si_regs[] = {
+	ENETC_SIMR, ENETC_SIPMAR0, ENETC_SIPMAR1, ENETC_SICBDRMR,
+	ENETC_SICBDRSR,	ENETC_SICBDRBAR0, ENETC_SICBDRBAR1, ENETC_SICBDRCIR,
+	ENETC_SICBDRCISR, ENETC_SICBDRLENR, ENETC_SICAPR0, ENETC_SICAPR1,
+	ENETC_PRFSCAPR
+};
+
+static const u32 enetc_txbdr_regs[] = {
+	ENETC_TBMR, ENETC_TBSR, ENETC_TBBAR0, ENETC_TBBAR1,
+	ENETC_TBCIR, ENETC_TBCISR, ENETC_TBLENR, ENETC_TBIER
+};
+
+static const u32 enetc_rxbdr_regs[] = {
+	ENETC_RBMR, ENETC_RBSR, ENETC_RBBSR, ENETC_RBCIR, ENETC_RBBAR0,
+	ENETC_RBBAR1, ENETC_RBPIR, ENETC_RBLENR, ENETC_RBICIR0, ENETC_RBIER
+};
+
+static const u32 enetc_port_regs[] = {
+	ENETC_PMR, ENETC_PSR, ENETC_PSIPMR, ENETC_PSIPMAR0(0),
+	ENETC_PSIPMAR1(0), ENETC_PCAPR0, ENETC_PCAPR1, ENETC_PSICFGR0(0),
+	ENETC_PM0_CMD_CFG, ENETC_PM0_MAXFRM
+};
+
 static int enetc_get_reglen(struct net_device *ndev)
 {
-	return 0;
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_hw *hw = &priv->si->hw;
+	int len;
+
+	len = ARRAY_SIZE(enetc_si_regs);
+	len += ARRAY_SIZE(enetc_txbdr_regs) * priv->num_tx_rings;
+	len += ARRAY_SIZE(enetc_rxbdr_regs) * priv->num_rx_rings;
+
+	if (hw->port)
+		len += ARRAY_SIZE(enetc_port_regs);
+
+	len *= sizeof(u32) * 2; /* store 2 etries per reg: addr and value */
+
+	return len;
 }
+
+static void enetc_get_regs_debug(struct net_device *ndev);
 
 static void enetc_get_regs(struct net_device *ndev, struct ethtool_regs *regs,
 			   void *regbuf)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_hw *hw = &priv->si->hw;
+	u32 *buf = (u32 *) regbuf;
+	int i, j;
+	u32 addr;
+
+	for (i = 0; i < ARRAY_SIZE(enetc_si_regs); i++) {
+		*buf++ = enetc_si_regs[i];
+		*buf++ = enetc_rd(hw, enetc_si_regs[i]);
+	}
+
+	for (i = 0; i < priv->num_tx_rings; i++) {
+		for (j = 0; j < ARRAY_SIZE(enetc_txbdr_regs); j++) {
+			addr = ENETC_BDR(TX, i, enetc_txbdr_regs[j]);
+
+			*buf++ = addr;
+			*buf++ = enetc_rd(hw, addr);
+		}
+	}
+
+	for (i = 0; i < priv->num_rx_rings; i++) {
+		for (j = 0; j < ARRAY_SIZE(enetc_rxbdr_regs); j++) {
+			addr = ENETC_BDR(RX, i, enetc_rxbdr_regs[j]);
+
+			*buf++ = addr;
+			*buf++ = enetc_rd(hw, addr);
+		}
+	}
+
+	if (!hw->port)
+		return;
+
+	for (i = 0; i < ARRAY_SIZE(enetc_port_regs); i++) {
+		addr = ENETC_PORT_BASE + enetc_port_regs[i];
+		*buf++ = addr;
+		*buf++ = enetc_rd(hw, addr);
+	}
+
+	enetc_get_regs_debug(ndev);
+}
+
+static void enetc_get_regs_debug(struct net_device *ndev)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	struct enetc_hw *hw = &priv->si->hw;

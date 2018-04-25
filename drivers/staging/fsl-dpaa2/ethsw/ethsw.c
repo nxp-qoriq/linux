@@ -38,7 +38,7 @@
 #include <linux/kthread.h>
 #include <linux/workqueue.h>
 
-#include "../../fsl-mc/include/mc.h"
+#include <linux/fsl/mc.h>
 
 #include "ethsw.h"
 

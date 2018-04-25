@@ -484,8 +484,8 @@ static void enetc_port_si_configure(struct enetc_si *si)
 		val |= ENETC_PSICFGR0_SET_RXBDR(num_rings);
 	}
 
-	for (i = 1; i < pf->total_vfs; i++)
-		enetc_port_wr(hw, ENETC_PSICFGR0(i), val);
+	for (i = 0; i < pf->total_vfs; i++)
+		enetc_port_wr(hw, ENETC_PSICFGR0(i+1), val);
 
 	/* Port level VLAN settings */
 	val = ENETC_PVCLCTR_OVTPIDL(ENETC_VLAN_TYPE_C | ENETC_VLAN_TYPE_S);

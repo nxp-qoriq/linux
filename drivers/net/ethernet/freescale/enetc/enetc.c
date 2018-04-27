@@ -921,6 +921,10 @@ static void enetc_setup_cbdr(struct enetc_hw *hw, struct enetc_cbdr *cbdr)
 {
 	WARN_ON(lower_32_bits(cbdr->bd_dma_base) & 0x7f);
 
+	/* set CBDR cache attributes */
+	enetc_wr(hw, ENETC_SICAR2,
+		 ENETC_SICAR_RD_COHERENT | ENETC_SICAR_WR_COHERENT);
+
 	enetc_wr(hw, ENETC_SICBDRBAR0, lower_32_bits(cbdr->bd_dma_base));
 	enetc_wr(hw, ENETC_SICBDRBAR1, upper_32_bits(cbdr->bd_dma_base));
 	enetc_wr(hw, ENETC_SICBDRLENR, ENETC_RTBLENR_LEN(cbdr->bd_count));
@@ -943,7 +947,7 @@ static void enetc_configure_si(struct enetc_si *si)
 	/* set SI cache attributes */
 	enetc_wr(hw, ENETC_SICAR0,
 		 ENETC_SICAR_RD_COHERENT | ENETC_SICAR_WR_COHERENT);
-	enetc_wr(hw, ENETC_SICAR1, ENETC_SICAR_WR_MSI);
+	enetc_wr(hw, ENETC_SICAR1, ENETC_SICAR_MSI);
 	/* enable SI, start RSS by default */
 	enetc_wr(hw, ENETC_SIMR, ENETC_SIMR_EN | ENETC_SIMR_RSSE);
 }

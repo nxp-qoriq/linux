@@ -93,13 +93,6 @@
 			#size-cells = <0>;
 			reg = <0x3>;
 
-			rtc@51 {
-				compatible = "nxp,pcf2129";
-				reg = <0x51>;
-				/* IRQ10_B */
-				interrupts = <0 150 0x4>;
-			};
-
 			sa56004@4c {
 				compatible = "nxp,sa56004";
 				reg = <0x4c>;
@@ -126,7 +119,15 @@
 };
 
 &i2c4 {
-	status = "disabled";
+	status = "okay";
+
+	rtc@51 {
+		compatible = "nxp,pcf2129";
+		reg = <0x51>;
+		/* IRQ10_B */
+		interrupts = <0 150 0x4>;
+	};
+
 };
 
 &i2c5 {

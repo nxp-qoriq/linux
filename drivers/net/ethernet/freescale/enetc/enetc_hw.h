@@ -121,6 +121,8 @@ static inline u32 enetc_vsi_set_msize(u32 size)
 #define ENETC_SIMSITRV(n) (0xB00 + (n) * 0x4)
 #define ENETC_SIMSIRRV(n) (0xB80 + (n) * 0x4)
 
+#define ENETC_SIUEFDCR	0xe28
+
 #define ENETC_SIRFSCAPR	0x1200
 
 /** SI BDR sub-blocks, n = 0..7 */

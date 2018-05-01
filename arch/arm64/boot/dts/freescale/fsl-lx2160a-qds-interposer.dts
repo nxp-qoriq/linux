@@ -76,20 +76,11 @@
 
 &i2c0 {
 	status = "okay";
-	pca9547@75 {
+	pca9547@77 {
 		compatible = "nxp,pca9547";
-		reg = <0x75>;
+		reg = <0x77>;
 		#address-cells = <1>;
 		#size-cells = <0>;
-		i2c@1 {
-			#address-cells = <1>;
-			#size-cells = <0>;
-			reg = <0x01>;
-			rtc@51 {
-				compatible = "nxp,pcf2129";
-				reg = <0x51>;
-			};
-		};
 
 		i2c@2 {
 			#address-cells = <1>;
@@ -108,6 +99,10 @@
 			#size-cells = <0>;
 			reg = <0x3>;
 
+			rtc@51 {
+				compatible = "nxp,pcf2129";
+				reg = <0x51>;
+			};
 			adt7481@4c {
 				compatible = "adi,adt7461";
 				reg = <0x4c>;

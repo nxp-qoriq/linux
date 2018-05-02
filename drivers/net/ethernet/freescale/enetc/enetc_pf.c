@@ -369,7 +369,7 @@ static int enetc_pf_set_vf_mac(struct net_device *ndev, int vf, u8 *mac)
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	struct enetc_pf *pf = enetc_si_priv(priv->si);
 
-	if (vf > pf->num_vfs)
+	if (vf >= pf->total_vfs)
 		return -EINVAL;
 
 	enetc_set_primary_mac_addr(&priv->si->hw, vf + 1, mac);
@@ -382,7 +382,7 @@ static int enetc_pf_set_vf_vlan(struct net_device *ndev, int vf, u16 vlan,
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	struct enetc_pf *pf = enetc_si_priv(priv->si);
 
-	if (vf > pf->num_vfs)
+	if (vf >= pf->total_vfs)
 		return -EINVAL;
 
 	if (proto != htons(0x8100))
@@ -399,7 +399,7 @@ static int enetc_pf_set_vf_spoofchk(struct net_device *ndev, int vf, bool en)
 	struct enetc_pf *pf = enetc_si_priv(priv->si);
 	u32 cfgr;
 
-	if (vf > pf->num_vfs)
+	if (vf >= pf->total_vfs)
 		return -EINVAL;
 
 	cfgr = enetc_port_rd(&priv->si->hw, ENETC_PSICFGR0(vf + 1));

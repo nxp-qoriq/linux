@@ -7,7 +7,7 @@
 
 &soc {
 	fsldpaa: fsl,dpaa {
-		compatible = "fsl,ls1043a-dpaa", "simple-bus", "fsl,dpaa";
+		compatible = "simple-bus", "fsl,dpaa";
 		ethernet@0 {
 			compatible = "fsl,dpa-ethernet";
 			fsl,fman-mac = <&enet0>;

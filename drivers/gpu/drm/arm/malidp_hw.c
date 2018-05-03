@@ -749,7 +749,8 @@ const struct malidp_hw_device malidp_device[MALIDP_MAX_DEVICES] = {
 			},
 			.se_irq_map = {
 				.irq_mask = MALIDP500_SE_IRQ_CONF_MODE |
-					    MALIDP500_SE_IRQ_CONF_VALID,
+					    MALIDP500_SE_IRQ_CONF_VALID |
+					    MALIDP500_SE_IRQ_GLOBAL,
 				.vsync_irq = MALIDP500_SE_IRQ_CONF_VALID,
 				.err_mask = MALIDP500_SE_IRQ_INIT_BUSY |
 					    MALIDP500_SE_IRQ_AXI_ERROR |

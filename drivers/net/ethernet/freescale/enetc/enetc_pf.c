@@ -47,7 +47,16 @@ static const char enetc_drv_name[] = ENETC_DRV_NAME_STR;
 /* PF driver params */
 module_param(debug, uint, 0);
 
-static void enetc_set_primary_mac_addr(struct enetc_hw *hw, int si,
+static void enetc_pf_get_primary_mac_addr(struct enetc_hw *hw, int si, u8 *addr)
+{
+	u16 upper = enetc_port_rd(hw, ENETC_PSIPMAR1(si)) >> 16;
+	u32 lower = enetc_port_rd(hw, ENETC_PSIPMAR0(si));
+
+	*(u16 *)addr = htons(upper);
+	*(u32 *)(addr + 2) = htonl(lower);
+}
+
+static void enetc_pf_set_primary_mac_addr(struct enetc_hw *hw, int si,
 				       const u8 *addr)
 {
 	u16 upper = ntohs(*(const u16 *)addr);
@@ -66,7 +75,7 @@ static int enetc_pf_set_mac_addr(struct net_device *ndev, void *addr)
 		return -EADDRNOTAVAIL;
 
 	memcpy(ndev->dev_addr, saddr->sa_data, ndev->addr_len);
-	enetc_set_primary_mac_addr(&priv->si->hw, 0, saddr->sa_data);
+	enetc_pf_set_primary_mac_addr(&priv->si->hw, 0, saddr->sa_data);
 
 	return 0;
 }
@@ -375,7 +384,7 @@ static int enetc_pf_set_vf_mac(struct net_device *ndev, int vf, u8 *mac)
 	if (vf >= pf->total_vfs)
 		return -EINVAL;
 
-	enetc_set_primary_mac_addr(&priv->si->hw, vf + 1, mac);
+	enetc_pf_set_primary_mac_addr(&priv->si->hw, vf + 1, mac);
 	return 0;
 }
 
@@ -415,14 +424,19 @@ static int enetc_pf_set_vf_spoofchk(struct net_device *ndev, int vf, bool en)
 static void enetc_port_setup_primary_mac_address(struct enetc_si *si)
 {
 	unsigned char mac_addr[MAX_ADDR_LEN];
+	struct enetc_pf *pf = enetc_si_priv(si);
 	struct enetc_hw *hw = &si->hw;
+	int i;
 
-	enetc_get_primary_mac_addr(hw, mac_addr);
-	if (is_zero_ether_addr(mac_addr)) {
+	/* check MAC addresses for PF and all VFs, if any is 0 set it ro rand */
+	for (i=0; i<pf->total_vfs + 1; i++) {
+		enetc_pf_get_primary_mac_addr(hw, i, mac_addr);
+		if (!is_zero_ether_addr(mac_addr))
+			continue;
 		eth_random_addr(mac_addr);
-		dev_info(&si->pdev->dev, "no MAC address specified, using %pM\n",
-			 mac_addr);
-		enetc_set_primary_mac_addr(hw, 0, mac_addr);
+		dev_info(&si->pdev->dev, "no MAC address specified for SI%d, using %pM\n",
+			 i, mac_addr);
+		enetc_pf_set_primary_mac_addr(hw, i, mac_addr);
 	}
 }
 

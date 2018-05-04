@@ -15,7 +15,7 @@
 #include <linux/eventfd.h>
 #include <linux/msi.h>
 
-#include "../../staging/fsl-mc/include/mc.h"
+#include "linux/fsl/mc.h"
 #include "vfio_fsl_mc_private.h"
 
 static irqreturn_t vfio_fsl_mc_irq_handler(int irq_num, void *arg)

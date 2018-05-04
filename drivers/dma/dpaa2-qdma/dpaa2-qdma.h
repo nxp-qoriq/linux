@@ -189,6 +189,7 @@ struct qdma_sg_blk {
 	dma_addr_t	blk_bus_addr;
 	void		*blk_virt_addr;
 	struct list_head	list;
+	uint32_t	offset;
 };
 
 struct dpaa2_qdma_comp {

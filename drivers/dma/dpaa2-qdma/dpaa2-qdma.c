@@ -242,8 +242,14 @@ static struct qdma_sg_blk *dpaa2_qdma_get_sg_blk(
 			spin_unlock_irqrestore(&dpaa2_chan->queue_lock, flags);
 			return sg_blk;
 		}
-		sg_blk->blk_virt_addr = (void *)(sg_blk + 1);
-		sg_blk->blk_bus_addr = phy_sgb + sizeof(*sg_blk);
+
+		sg_blk->offset = 0;
+		if ((phy_sgb + sizeof(*sg_blk)) % 0x10)
+			sg_blk->offset = 0x10 - (phy_sgb + sizeof(*sg_blk)) % 0x10;
+
+		sg_blk->blk_virt_addr = (void *)((uint8_t *)sg_blk +
+			sizeof(struct qdma_sg_blk) + sg_blk->offset);
+		sg_blk->blk_bus_addr = phy_sgb + sizeof(*sg_blk) + sg_blk->offset;
 	} else {
 		sg_blk = list_first_entry(&dpaa2_chan->sgb_free,
 			struct qdma_sg_blk, list);
@@ -737,10 +743,10 @@ static void __cold dpaa2_dpdmai_free_pool(struct dpaa2_qdma_chan *qchan,
 	struct qdma_sg_blk *sgb_tmp, *_sgb_tmp;
 	/* free the QDMA SG pool block */
 	list_for_each_entry_safe(sgb_tmp, _sgb_tmp, head, list) {
-		sgb_tmp->blk_virt_addr = (void *)((struct qdma_sg_blk *)
-						sgb_tmp->blk_virt_addr - 1);
+		sgb_tmp->blk_virt_addr = (void *)((uint8_t *)sgb_tmp->blk_virt_addr -
+				sizeof(struct qdma_sb_blk) - sgb_tmp->offset);
 		sgb_tmp->blk_bus_addr = sgb_tmp->blk_bus_addr
-							- sizeof(*sgb_tmp);
+				- sizeof(*sgb_tmp) - sgb_tmp->offset;
 		dma_pool_free(qchan->sg_blk_pool, sgb_tmp->blk_virt_addr,
 						sgb_tmp->blk_bus_addr);
 	}

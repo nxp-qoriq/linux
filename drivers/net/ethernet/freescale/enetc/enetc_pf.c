@@ -46,6 +46,8 @@ static const char enetc_drv_name[] = ENETC_DRV_NAME_STR;
 
 /* PF driver params */
 module_param(debug, uint, 0);
+static uint prune;
+module_param(prune, uint, 0);
 
 static void enetc_pf_get_primary_mac_addr(struct enetc_hw *hw, int si, u8 *addr)
 {
@@ -485,6 +487,8 @@ static void enetc_port_si_configure(struct enetc_si *si)
 
 	/* Add default one-time settings for SI0 (PF) */
 	val |= ENETC_PSICFGR0_SIVC(ENETC_VLAN_TYPE_C | ENETC_VLAN_TYPE_S);
+	if (prune)
+		val |= ENETC_PSICFGR0_SPE;
 
 	enetc_port_wr(hw, ENETC_PSICFGR0(0), val);
 
@@ -494,6 +498,8 @@ static void enetc_port_si_configure(struct enetc_si *si)
 	/* Configure the SIs for each available VF */
 	val = ENETC_PSICFGR0_SIVC(ENETC_VLAN_TYPE_C | ENETC_VLAN_TYPE_S);
 	val |= ENETC_PSICFGR0_VTE | ENETC_PSICFGR0_SIVIE;
+	if (prune)
+		val |= ENETC_PSICFGR0_SPE;
 
 	if (num_rings) {
 		num_rings /= pf->total_vfs;

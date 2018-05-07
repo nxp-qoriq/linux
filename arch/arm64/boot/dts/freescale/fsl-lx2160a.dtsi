@@ -353,8 +353,7 @@
 		};
 
 		esdhc0: esdhc@2140000 {
-			status = "disabled";
-			compatible = "fsl,ls2080a-esdhc", "fsl,esdhc";
+			compatible = "fsl,esdhc";
 			reg = <0x0 0x2140000 0x0 0x10000>;
 			interrupts = <0 28 0x4>; /* Level high type */
 			clocks = <&clockgen 4 1>;
@@ -362,18 +361,20 @@
 			sdhci,auto-cmd12;
 			little-endian;
 			bus-width = <4>;
+			status = "disabled";
 		};
 
 		esdhc1: esdhc@2150000 {
-			status = "disabled";
-			compatible = "fsl,ls2080a-esdhc", "fsl,esdhc";
+			compatible = "fsl,esdhc";
 			reg = <0x0 0x2150000 0x0 0x10000>;
-			interrupts = <0 28 0x4>; /* Level high type */
+			interrupts = <0 63 0x4>; /* Level high type */
 			clocks = <&clockgen 4 1>;
 			voltage-ranges = <1800 1800 3300 3300>;
 			sdhci,auto-cmd12;
+			broken-cd;
 			little-endian;
 			bus-width = <4>;
+			status = "disabled";
 		};
 
 		gpio0: gpio@2300000 {

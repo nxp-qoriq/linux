@@ -679,7 +679,7 @@
 		sata2: sata@3220000 {
 			status = "disabled";
 			compatible = "fsl,ls2080a-ahci";
-			reg = <0x0 0x3200000 0x0 0x10000>;
+			reg = <0x0 0x3220000 0x0 0x10000>;
 			interrupts = <0 97 0x4>; /* Level high type */
 			clocks = <&clockgen 4 3>;
 			dma-coherent;
@@ -688,7 +688,7 @@
 		sata3: sata@3230000 {
 			status = "disabled";
 			compatible = "fsl,ls2080a-ahci";
-			reg = <0x0 0x3210000 0x0 0x10000>;
+			reg = <0x0 0x3230000 0x0 0x10000>;
 			interrupts = <0 100 0x4>; /* Level high type */
 			clocks = <&clockgen 4 3>;
 			dma-coherent;

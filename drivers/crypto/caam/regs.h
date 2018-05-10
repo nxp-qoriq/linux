@@ -919,12 +919,18 @@ struct caam_deco {
 	u32 rsvd29[48];
 	u32 descbuf[64];	/* DxDESB - Descriptor buffer */
 	u32 rscvd30[193];
-#define DESC_DBG_DECO_STAT_HOST_ERR	0x00D00000
 #define DESC_DBG_DECO_STAT_VALID	0x80000000
 #define DESC_DBG_DECO_STAT_MASK		0x00F00000
+#define DESC_DBG_DECO_STAT_SHIFT	20
 	u32 desc_dbg;		/* DxDDR - DECO Debug Register */
-	u32 rsvd31[126];
+	u32 rsvd31[13];
+#define DESC_DER_DECO_STAT_MASK		0x000F0000
+#define DESC_DER_DECO_STAT_SHIFT	16
+	u32 dbg_exec;		/* DxDER - DECO Debug Exec Register */
+	u32 rsvd32[112];
 };
+
+#define DECO_STAT_HOST_ERR	0xD
 
 #define DECO_JQCR_WHL		0x20000000
 #define DECO_JQCR_FOUR		0x10000000

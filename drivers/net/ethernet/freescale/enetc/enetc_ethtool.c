@@ -54,7 +54,7 @@ static const u32 enetc_rxbdr_regs[] = {
 static const u32 enetc_port_regs[] = {
 	ENETC_PMR, ENETC_PSR, ENETC_PSIPMR, ENETC_PSIPMAR0(0),
 	ENETC_PSIPMAR1(0), ENETC_PCAPR0, ENETC_PCAPR1, ENETC_PSICFGR0(0),
-	ENETC_PRFSCAPR, ENETC_PM0_CMD_CFG, ENETC_PM0_MAXFRM
+	ENETC_PRFSCAPR, ENETC_PM0_CMD_CFG, ENETC_PM0_MAXFRM, ENETC_PM0_IF_MODE
 };
 
 static int enetc_get_reglen(struct net_device *ndev)

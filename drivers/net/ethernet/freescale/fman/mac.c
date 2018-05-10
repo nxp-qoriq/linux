@@ -818,8 +818,10 @@ static int mac_probe(struct platform_device *_of_dev)
 
 		mac_dev->phy_node = of_node_get(mac_node);
 		phy = of_phy_find_device(mac_dev->phy_node);
-		if (!phy)
+		if (!phy) {
+			of_node_put(mac_dev->phy_node);
 			goto _return_of_get_parent;
+		}
 
 		priv->fixed_link->link = phy->link;
 		priv->fixed_link->speed = phy->speed;

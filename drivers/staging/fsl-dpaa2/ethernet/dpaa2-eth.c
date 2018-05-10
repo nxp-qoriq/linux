@@ -363,7 +363,7 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 				release_fd_buf(priv, ch, addr);
 				goto drop_cnt;
 			case XDP_TX:
-				if (dpaa2_eth_xdp_tx(priv, fd, vaddr,
+				if (dpaa2_eth_xdp_tx(priv, (struct dpaa2_fd *)fd, vaddr,
 						     queue_id)) {
 					dma_unmap_single(dev, addr,
 							 DPAA2_ETH_RX_BUF_SIZE,
@@ -716,7 +716,7 @@ static void free_tx_fd(struct dpaa2_eth_priv *priv,
 {
 	struct device *dev = priv->net_dev->dev.parent;
 	dma_addr_t fd_addr;
-	struct sk_buff *skb;
+	struct sk_buff *skb = NULL;
 	unsigned char *buffer_start;
 	int unmap_size;
 	struct scatterlist *scl;

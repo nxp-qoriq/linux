@@ -30,7 +30,7 @@
 #include <linux/swiotlb.h>
 
 #include <asm/cacheflush.h>
-#include <../../../drivers/staging/fsl-mc/include/mc-bus.h>
+#include <linux/fsl/mc.h>
 
 static int swiotlb __ro_after_init;
 

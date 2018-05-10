@@ -32,6 +32,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <linux/fsl/mc.h>
 #include "compat.h"
 #include "regs.h"
 #include "caamalg_qi2.h"
@@ -43,7 +44,6 @@
 #include "key_gen.h"
 #include "caamalg_desc.h"
 #include "caamhash_desc.h"
-#include "../../../drivers/staging/fsl-mc/include/mc.h"
 #include "../../../drivers/staging/fsl-mc/include/dpaa2-io.h"
 #include "../../../drivers/staging/fsl-mc/include/dpaa2-fd.h"
 

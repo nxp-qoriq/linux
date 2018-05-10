@@ -408,6 +408,9 @@ int __must_check fsl_mc_allocate_irqs(struct fsl_mc_device *mc_dev);
 
 void fsl_mc_free_irqs(struct fsl_mc_device *mc_dev);
 
+void fsl_mc_dma_configure(struct fsl_mc_device *mc_dev,
+	struct device_node *fsl_mc_platform_node, int coherent);
+
 extern struct bus_type fsl_mc_bus_type;
 
 extern struct device_type fsl_mc_bus_dprc_type;
@@ -785,6 +788,8 @@ enum dprc_region_type {
 	DPRC_REGION_TYPE_MC_PORTAL,
 	DPRC_REGION_TYPE_QBMAN_PORTAL
 };
+
+#define DPRC_OBJ_FLAG_NO_MEM_SHAREABILITY       0x0001
 
 /**
  * struct dprc_region_desc - Mappable region descriptor

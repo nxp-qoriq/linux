@@ -18,6 +18,7 @@
 #include <linux/bitops.h>
 #include <linux/msi.h>
 #include <linux/dma-mapping.h>
+#include <linux/fsl/mc.h>
 
 #include "fsl-mc-private.h"
 
@@ -693,6 +694,8 @@ int fsl_mc_device_add(struct fsl_mc_obj_desc *obj_desc,
 	struct fsl_mc_device *mc_dev = NULL;
 	struct fsl_mc_bus *mc_bus = NULL;
 	struct fsl_mc_device *parent_mc_dev;
+	struct device *fsl_mc_platform_dev;
+	struct device_node *fsl_mc_platform_node;
 
 	if (dev_is_fsl_mc(parent_dev))
 		parent_mc_dev = to_fsl_mc_device(parent_dev);
@@ -804,6 +807,15 @@ int fsl_mc_device_add(struct fsl_mc_obj_desc *obj_desc,
 		if (error < 0)
 			goto error_cleanup_dev;
 	}
+
+	fsl_mc_platform_dev = &mc_dev->dev;
+	while (dev_is_fsl_mc(fsl_mc_platform_dev))
+		fsl_mc_platform_dev = fsl_mc_platform_dev->parent;
+	fsl_mc_platform_node = fsl_mc_platform_dev->of_node;
+
+	/* Set up the iommu configuration for the devices. */
+	fsl_mc_dma_configure(mc_dev, fsl_mc_platform_node,
+		!(obj_desc->flags & DPRC_OBJ_FLAG_NO_MEM_SHAREABILITY));
 
 	/*
 	 * The device-specific probe callback will get invoked by device_add()

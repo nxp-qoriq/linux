@@ -15,7 +15,8 @@ mc-bus-driver-objs := fsl-mc-bus.o \
 		      dprc-driver.o \
 		      fsl-mc-allocator.o \
 		      fsl-mc-msi.o \
-		      dpmcp.o
+		      dpmcp.o \
+		      fsl-mc-iommu.o
 
 # MC restool kernel support
 obj-$(CONFIG_FSL_MC_RESTOOL) += fsl-mc-restool.o

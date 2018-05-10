@@ -74,6 +74,12 @@
 		interrupts = <0 189 0x4>;
 	};
 
+	bman-portal@90000 {
+		compatible = "fsl,bman-portal";
+		reg = <0x90000 0x4000 0x4090000 0x4000>;
+		interrupts = <0 191 0x4>;
+	};
+
 	 bman-bpids@0 {
 		compatible = "fsl,bpid-range";
 		fsl,bpid-range = <32 32>;

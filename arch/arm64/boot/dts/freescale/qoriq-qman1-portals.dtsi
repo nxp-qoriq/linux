@@ -74,6 +74,13 @@
 		cell-index = <8>;
 	};
 
+	qportal9: qman-portal@90000 {
+		compatible = "fsl,qman-portal";
+		reg = <0x90000 0x4000 0x4090000 0x4000>;
+		interrupts = <0 190 0x4>;
+		cell-index = <9>;
+	};
+
 	qman-fqids@0 {
 		compatible = "fsl,fqid-range";
 		fsl,fqid-range = <256 256>;

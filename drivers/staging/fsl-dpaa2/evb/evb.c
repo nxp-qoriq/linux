@@ -531,7 +531,7 @@ static int evb_setlink(struct net_device *netdev,
 	attr = nlmsg_find_attr(nlh, sizeof(struct ifinfomsg), IFLA_AF_SPEC);
 	if (attr) {
 		err = nla_parse_nested(tb, IFLA_BRIDGE_MAX, attr,
-				       ifla_br_policy, NULL);
+				       ifla_br_policy);
 		if (unlikely(err)) {
 			netdev_err(netdev,
 				   "nla_parse_nested for br_policy err %d\n",
@@ -737,7 +737,7 @@ static int evb_dellink(struct net_device *netdev,
 	if (!spec)
 		return 0;
 
-	err = nla_parse_nested(tb, IFLA_BRIDGE_MAX, spec, ifla_br_policy, NULL);
+	err = nla_parse_nested(tb, IFLA_BRIDGE_MAX, spec, ifla_br_policy);
 	if (unlikely(err))
 		return err;
 
@@ -1269,7 +1269,7 @@ static int evb_probe(struct fsl_mc_device *evb_dev)
 
 			rtnl_lock();
 			err = netdev_master_upper_dev_link(port_netdev, netdev,
-							   NULL, NULL, NULL);
+							   NULL, NULL);
 			if (unlikely(err)) {
 				dev_err(dev, "netdev_master_upper_dev_link err %d\n",
 					err);

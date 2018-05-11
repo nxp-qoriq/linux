@@ -802,5 +802,5 @@
 	};
 };
 
-#include "qoriq-qman1-portals.dtsi"
-#include "qoriq-bman1-portals.dtsi"
+#include "qoriq-qman-portals.dtsi"
+#include "qoriq-bman-portals.dtsi"

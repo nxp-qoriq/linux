@@ -827,10 +827,10 @@ static netdev_tx_t dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 	percpu_stats = this_cpu_ptr(priv->percpu_stats);
 	percpu_extras = this_cpu_ptr(priv->percpu_extras);
 
-	if (unlikely(skb_headroom(skb) < DPAA2_ETH_NEEDED_HEADROOM(priv))) {
+	if (unlikely(skb_headroom(skb) < dpaa2_eth_needed_headroom(priv))) {
 		struct sk_buff *ns;
 
-		ns = skb_realloc_headroom(skb, DPAA2_ETH_NEEDED_HEADROOM(priv));
+		ns = skb_realloc_headroom(skb, dpaa2_eth_needed_headroom(priv));
 		if (unlikely(!ns)) {
 			percpu_stats->tx_dropped++;
 			goto err_alloc_headroom;
@@ -1008,7 +1008,7 @@ static int add_bufs(struct dpaa2_eth_priv *priv, u16 bpid)
 		/* Allocate buffer visible to WRIOP + skb shared info +
 		 * alignment padding
 		 */
-		buf = napi_alloc_frag(DPAA2_ETH_BUF_RAW_SIZE(priv));
+		buf = napi_alloc_frag(dpaa2_eth_buf_raw_size(priv));
 		if (unlikely(!buf))
 			goto err_alloc;
 
@@ -1023,7 +1023,7 @@ static int add_bufs(struct dpaa2_eth_priv *priv, u16 bpid)
 
 		/* tracing point */
 		trace_dpaa2_eth_buf_seed(priv->net_dev,
-					 buf, DPAA2_ETH_BUF_RAW_SIZE(priv),
+					 buf, dpaa2_eth_buf_raw_size(priv),
 					 addr, DPAA2_ETH_RX_BUF_SIZE,
 					 bpid);
 	}
@@ -2151,35 +2151,20 @@ static int set_buffer_layout(struct dpaa2_eth_priv *priv)
 	struct dpni_buffer_layout buf_layout = {0};
 	int err;
 
-	/* We need to check for WRIOP version 1.0.0, but MC does not provide
-	 * this number correctly on rev1, so only read the last two digits;
-	 * if they're zero, we're on rev1, otherwise rev2 or above.
+	/* We need to check for WRIOP version 1.0.0, but depending on the MC
+	 * version, this number is not always provided correctly on rev1.
+	 * We need to check for both alternatives in this situation.
 	 */
-	priv->rx_buf_align = priv->dpni_attrs.wriop_version & 0x3FF ?
-			     DPAA2_ETH_RX_BUF_ALIGN :
-			     DPAA2_ETH_RX_BUF_ALIGN_REV1;
+	if (priv->dpni_attrs.wriop_version == DPAA2_WRIOP_VERSION(0, 0, 0) ||
+	    priv->dpni_attrs.wriop_version == DPAA2_WRIOP_VERSION(1, 0, 0))
+		priv->rx_buf_align = DPAA2_ETH_RX_BUF_ALIGN_REV1;
+	else
+		priv->rx_buf_align = DPAA2_ETH_RX_BUF_ALIGN;
 
-	/* rx buffer */
-	buf_layout.pass_parser_result = true;
+	/* tx buffer */
 	buf_layout.pass_frame_status = true;
 	buf_layout.pass_timestamp = true;
 	buf_layout.private_data_size = DPAA2_ETH_SWA_SIZE;
-	buf_layout.data_align = priv->rx_buf_align;
-	buf_layout.data_head_room = DPAA2_ETH_RX_HEAD_ROOM;
-	buf_layout.options = DPNI_BUF_LAYOUT_OPT_PARSER_RESULT |
-			     DPNI_BUF_LAYOUT_OPT_FRAME_STATUS |
-			     DPNI_BUF_LAYOUT_OPT_PRIVATE_DATA_SIZE |
-			     DPNI_BUF_LAYOUT_OPT_DATA_ALIGN |
-			     DPNI_BUF_LAYOUT_OPT_DATA_HEAD_ROOM |
-			     DPNI_BUF_LAYOUT_OPT_TIMESTAMP;
-	err = dpni_set_buffer_layout(priv->mc_io, 0, priv->mc_token,
-				     DPNI_QUEUE_RX, &buf_layout);
-	if (err) {
-		dev_err(dev, "dpni_set_buffer_layout(RX) failed\n");
-		return err;
-	}
-
-	/* tx buffer */
 	buf_layout.options = DPNI_BUF_LAYOUT_OPT_FRAME_STATUS |
 			     DPNI_BUF_LAYOUT_OPT_TIMESTAMP |
 			     DPNI_BUF_LAYOUT_OPT_PRIVATE_DATA_SIZE;
@@ -2197,6 +2182,37 @@ static int set_buffer_layout(struct dpaa2_eth_priv *priv)
 				     DPNI_QUEUE_TX_CONFIRM, &buf_layout);
 	if (err) {
 		dev_err(dev, "dpni_set_buffer_layout(TX_CONF) failed\n");
+		return err;
+	}
+
+	/* Now that we've set our tx buffer layout, retrieve the minimum
+	 * required tx data offset.
+	 */
+	err = dpni_get_tx_data_offset(priv->mc_io, 0, priv->mc_token,
+				      &priv->tx_data_offset);
+	if (err) {
+		dev_err(dev, "dpni_get_tx_data_offset() failed\n");
+		return err;
+	}
+
+	if ((priv->tx_data_offset % 64) != 0)
+		dev_warn(dev, "Tx data offset (%d) not a multiple of 64B\n",
+			 priv->tx_data_offset);
+
+	/* rx buffer */
+	buf_layout.pass_parser_result = true;
+	buf_layout.data_align = priv->rx_buf_align;
+	buf_layout.data_head_room = dpaa2_eth_rx_head_room(priv);
+	buf_layout.options = DPNI_BUF_LAYOUT_OPT_PARSER_RESULT |
+			     DPNI_BUF_LAYOUT_OPT_FRAME_STATUS |
+			     DPNI_BUF_LAYOUT_OPT_PRIVATE_DATA_SIZE |
+			     DPNI_BUF_LAYOUT_OPT_DATA_ALIGN |
+			     DPNI_BUF_LAYOUT_OPT_DATA_HEAD_ROOM |
+			     DPNI_BUF_LAYOUT_OPT_TIMESTAMP;
+	err = dpni_set_buffer_layout(priv->mc_io, 0, priv->mc_token,
+				     DPNI_QUEUE_RX, &buf_layout);
+	if (err) {
+		dev_err(dev, "dpni_set_buffer_layout(RX) failed\n");
 		return err;
 	}
 
@@ -2241,20 +2257,6 @@ static int setup_dpni(struct fsl_mc_device *ls_dev)
 	err = set_buffer_layout(priv);
 	if (err)
 		goto close;
-
-	/* Now that we've set our tx buffer layout, retrieve the minimum
-	 * required tx data offset.
-	 */
-	err = dpni_get_tx_data_offset(priv->mc_io, 0, priv->mc_token,
-				      &priv->tx_data_offset);
-	if (err) {
-		dev_err(dev, "dpni_get_tx_data_offset() failed\n");
-		goto close;
-	}
-
-	if ((priv->tx_data_offset % 64) != 0)
-		dev_warn(dev, "Tx data offset (%d) not a multiple of 64B\n",
-			 priv->tx_data_offset);
 
 	/* Enable congestion notifications for Tx queues */
 	err = setup_tx_congestion(priv);
@@ -2866,7 +2868,7 @@ static int netdev_init(struct net_device *net_dev)
 	/* Reserve enough space to align buffer as per hardware requirement;
 	 * NOTE: priv->tx_data_offset MUST be initialized at this point.
 	 */
-	net_dev->needed_headroom = DPAA2_ETH_NEEDED_HEADROOM(priv);
+	net_dev->needed_headroom = dpaa2_eth_needed_headroom(priv);
 
 	/* If headroom guaranteed by hardware in the Rx frame buffer is
 	 * smaller than the Tx headroom required by the stack, issue a
@@ -2876,7 +2878,7 @@ static int netdev_init(struct net_device *net_dev)
 	 */
 	req_headroom = LL_RESERVED_SPACE(net_dev) - ETH_HLEN;
 	rx_headroom = ALIGN(DPAA2_ETH_RX_HWA_SIZE + DPAA2_ETH_SWA_SIZE +
-			    DPAA2_ETH_RX_HEAD_ROOM, priv->rx_buf_align);
+			    dpaa2_eth_rx_head_room(priv), priv->rx_buf_align);
 	if (req_headroom > rx_headroom)
 		dev_info_once(dev, "Required headroom (%d) greater than available (%d)\n",
 			      req_headroom, rx_headroom);

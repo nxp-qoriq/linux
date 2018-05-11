@@ -47,6 +47,8 @@
 #include "dpaa2-eth-trace.h"
 #include "dpaa2-eth-debugfs.h"
 
+#define DPAA2_WRIOP_VERSION(x, y, z) ((x) << 10 | (y) << 5 | (z) << 0)
+
 #define DPAA2_ETH_STORE_SIZE		16
 
 /* We set a max threshold for how many Tx confirmations we should process
@@ -102,38 +104,21 @@
 #define DPAA2_ETH_RX_BUF_ALIGN_REV1	256
 #define DPAA2_ETH_RX_BUF_ALIGN		64
 
-#define DPAA2_ETH_NEEDED_HEADROOM(p_priv) \
-	((p_priv)->tx_data_offset + DPAA2_ETH_TX_BUF_ALIGN - HH_DATA_MOD)
-
-/* Hardware only sees DPAA2_ETH_RX_BUF_SIZE, but the skb built around
- * the buffer also needs space for its shared info struct, and we need
- * to allocate enough to accommodate hardware alignment restrictions
- */
 #define DPAA2_ETH_RX_BUF_SIZE		2048
 #define DPAA2_ETH_SKB_SIZE \
 	(DPAA2_ETH_RX_BUF_SIZE + SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
-#define DPAA2_ETH_BUF_RAW_SIZE(priv) \
-	(DPAA2_ETH_SKB_SIZE + (priv)->rx_buf_align)
 
 /* PTP nominal frequency 1GHz */
 #define DPAA2_PTP_NOMINAL_FREQ_PERIOD_NS 1
 
-/* Hardware annotation area in RX / TX  buffers */
+/* Hardware annotation area in RX buffers */
 #define DPAA2_ETH_RX_HWA_SIZE		64
-#define DPAA2_ETH_TX_HWA_SIZE		128
 
 /* We are accommodating a skb backpointer and some S/G info
  * in the frame's software annotation. The hardware
  * options are either 0 or 64, so we choose the latter.
  */
 #define DPAA2_ETH_SWA_SIZE		64
-
-/* Extra headroom space requested to hardware, in order to make sure there's
- * no realloc'ing in forwarding scenarios
- */
-#define DPAA2_ETH_RX_HEAD_ROOM \
-	(DPAA2_ETH_TX_HWA_SIZE - DPAA2_ETH_RX_HWA_SIZE + \
-	 DPAA2_ETH_TX_BUF_ALIGN)
 
 /* We store different information in the software annotation area of a Tx frame
  * based on what type of frame it is
@@ -471,6 +456,30 @@ struct dpaa2_eth_priv {
 
 extern const struct ethtool_ops dpaa2_ethtool_ops;
 extern const char dpaa2_eth_drv_version[];
+
+/* Hardware only sees DPAA2_ETH_RX_BUF_SIZE, but the skb built around
+ * the buffer also needs space for its shared info struct, and we need
+ * to allocate enough to accommodate hardware alignment restrictions
+ */
+static inline unsigned int dpaa2_eth_buf_raw_size(struct dpaa2_eth_priv *priv)
+{
+	return DPAA2_ETH_SKB_SIZE + priv->rx_buf_align;
+}
+
+static inline
+unsigned int dpaa2_eth_needed_headroom(struct dpaa2_eth_priv *priv)
+{
+	return priv->tx_data_offset + DPAA2_ETH_TX_BUF_ALIGN - HH_DATA_MOD;
+}
+
+/* Extra headroom space requested to hardware, in order to make sure there's
+ * no realloc'ing in forwarding scenarios
+ */
+static inline unsigned int dpaa2_eth_rx_head_room(struct dpaa2_eth_priv *priv)
+{
+	return dpaa2_eth_needed_headroom(priv) -
+	       (DPAA2_ETH_SWA_SIZE + DPAA2_ETH_RX_HWA_SIZE);
+}
 
 static inline int dpaa2_eth_queue_count(struct dpaa2_eth_priv *priv)
 {

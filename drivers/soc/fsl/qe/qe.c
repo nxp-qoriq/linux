@@ -179,11 +179,15 @@ EXPORT_SYMBOL(qe_issue_cmd);
  */
 static unsigned int brg_clk = 0;
 
+#define CLK_GRAN	(1000)
+#define CLK_GRAN_LIMIT	(5)
+
 unsigned int qe_get_brg_clk(void)
 {
 	struct device_node *qe;
 	u32 val;
 	int ret;
+	unsigned int mod;
 
 	if (brg_clk)
 		return brg_clk;
@@ -200,6 +204,15 @@ unsigned int qe_get_brg_clk(void)
 		brg_clk = val;
 
 	of_node_put(qe);
+
+	/* round this if near to a multiple of CLK_GRAN */
+	mod = brg_clk % CLK_GRAN;
+	if (mod) {
+		if (mod < CLK_GRAN_LIMIT)
+			brg_clk -= mod;
+		else if (mod > (CLK_GRAN - CLK_GRAN_LIMIT))
+			brg_clk += CLK_GRAN - mod;
+	}
 
 	return brg_clk;
 }

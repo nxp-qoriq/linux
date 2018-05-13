@@ -863,7 +863,6 @@
 			#address-cells = <3>;
 			#size-cells = <2>;
 			device_type = "pci";
-			dma-coherent;
 			apio-wins = <3>;
 			ppio-wins-rc = <3>;
 			bus-range = <0x0 0xff>;
@@ -889,7 +888,6 @@
 			#address-cells = <3>;
 			#size-cells = <2>;
 			device_type = "pci";
-			dma-coherent;
 			apio-wins = <3>;
 			ppio-wins-rc = <3>;
 			bus-range = <0x0 0xff>;
@@ -915,7 +913,6 @@
 			#address-cells = <3>;
 			#size-cells = <2>;
 			device_type = "pci";
-			dma-coherent;
 			apio-wins = <3>;
 			ppio-wins-rc = <3>;
 			bus-range = <0x0 0xff>;
@@ -941,7 +938,6 @@
 			#address-cells = <3>;
 			#size-cells = <2>;
 			device_type = "pci";
-			dma-coherent;
 			apio-wins = <3>;
 			ppio-wins-rc = <3>;
 			bus-range = <0x0 0xff>;
@@ -967,7 +963,6 @@
 			#address-cells = <3>;
 			#size-cells = <2>;
 			device_type = "pci";
-			dma-coherent;
 			apio-wins = <3>;
 			ppio-wins-rc = <3>;
 			bus-range = <0x0 0xff>;
@@ -993,7 +988,6 @@
 			#address-cells = <3>;
 			#size-cells = <2>;
 			device_type = "pci";
-			dma-coherent;
 			apio-wins = <3>;
 			ppio-wins-rc = <3>;
 			bus-range = <0x0 0xff>;

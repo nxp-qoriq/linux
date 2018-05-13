@@ -138,16 +138,6 @@ int mv_pcie_outbound_win_setup(struct mv_pcie *pci, int idx, int type,
 	size_l = lower_32_bits(~(size - 1));
 	size_h = upper_32_bits(~(size - 1));
 
-	mv_pcie_writel_csr(pci, PAB_AXI_AMAP_AXI_WIN(idx),
-			   lower_32_bits(cpu_addr));
-	mv_pcie_writel_csr(pci, PAB_EXT_AXI_AMAP_AXI_WIN(idx),
-			   upper_32_bits(cpu_addr));
-	mv_pcie_writel_csr(pci, PAB_AXI_AMAP_PEX_WIN_L(idx),
-			   lower_32_bits(pci_addr));
-	mv_pcie_writel_csr(pci, PAB_AXI_AMAP_PEX_WIN_H(idx),
-			   upper_32_bits(pci_addr));
-	mv_pcie_writel_csr(pci, PAB_EXT_AXI_AMAP_SIZE(idx), size_h);
-
 	val = mv_pcie_readl_csr(pci, PAB_AXI_AMAP_CTRL(idx));
 	val &= ~((AXI_AMAP_CTRL_TYPE_MASK << AXI_AMAP_CTRL_TYPE_SHIFT) |
 		(AXI_AMAP_CTRL_SIZE_MASK << AXI_AMAP_CTRL_SIZE_SHIFT) |
@@ -157,6 +147,16 @@ int mv_pcie_outbound_win_setup(struct mv_pcie *pci, int idx, int type,
 		AXI_AMAP_CTRL_SIZE_SHIFT) | AXI_AMAP_CTRL_EN;
 
 	mv_pcie_writel_csr(pci, PAB_AXI_AMAP_CTRL(idx), val);
+
+	mv_pcie_writel_csr(pci, PAB_AXI_AMAP_AXI_WIN(idx),
+			   lower_32_bits(cpu_addr));
+	mv_pcie_writel_csr(pci, PAB_EXT_AXI_AMAP_AXI_WIN(idx),
+			   upper_32_bits(cpu_addr));
+	mv_pcie_writel_csr(pci, PAB_AXI_AMAP_PEX_WIN_L(idx),
+			   lower_32_bits(pci_addr));
+	mv_pcie_writel_csr(pci, PAB_AXI_AMAP_PEX_WIN_H(idx),
+			   upper_32_bits(pci_addr));
+	mv_pcie_writel_csr(pci, PAB_EXT_AXI_AMAP_SIZE(idx), size_h);
 
 	return 0;
 }

@@ -175,7 +175,7 @@ void mv_pcie_setup_rp_hw(struct root_port *rp)
 		mv_pcie_outbound_win_setup(pci, 2, TYPE_IO, rp->io_base,
 					   rp->io_bus_addr, rp->io_size);
 
-	mv_pcie_inbound_win_setup_rc(pci, 0, IB_TYPE_MEM_NF, 0, 0, 1ULL << 40);
+	mv_pcie_inbound_win_setup_rc(pci, 0, IB_TYPE_MEM_F, 0, 0, 1ULL << 40);
 
 	/* program correct class for RC */
 	mv_pcie_read_own_conf(rp, GPEX_CLASSCODE, 4, &val);

@@ -119,13 +119,17 @@ static int lx_pcie_read_other_conf(struct root_port *rp, int where,
 	struct lx_pcie *pcie = to_lx_pcie(mv_pci);
 	int ret;
 
-	if (where == PCI_VENDOR_ID)
+	if (where == PCI_VENDOR_ID) {
 		lx_pcie_lut_writel(pcie, PCIE_LUT_GCR, 0 << PCIE_LUT_GCR_RRE);
+		lx_pcie_lut_readl(pcie, PCIE_LUT_GCR);
+	}
 
 	ret = mv_pcie_read(rp->va_cfg_base + where, size, val);
 
-	if (where == PCI_VENDOR_ID)
+	if (where == PCI_VENDOR_ID) {
 		lx_pcie_lut_writel(pcie, PCIE_LUT_GCR, 1 << PCIE_LUT_GCR_RRE);
+		lx_pcie_lut_readl(pcie, PCIE_LUT_GCR);
+	}
 
 	return ret;
 }

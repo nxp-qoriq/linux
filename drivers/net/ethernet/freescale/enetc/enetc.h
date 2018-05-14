@@ -40,12 +40,14 @@
 #include <linux/skbuff.h>
 #include <linux/ethtool.h>
 #include <linux/if_vlan.h>
+#include <net/tsn.h>
 
 #include "enetc_hw.h"
 
 #define ENETC_MAC_MAXFRM_SIZE	9600
 #define ENETC_MAX_MTU		(ENETC_MAC_MAXFRM_SIZE - \
 				(ETH_FCS_LEN + ETH_HLEN + VLAN_HLEN))
+#define ENETC_CLK  400000000
 
 struct enetc_tx_swbd {
 	struct sk_buff *skb;
@@ -134,6 +136,28 @@ struct enetc_msg_swbd {
 	int size;
 };
 
+#ifdef CONFIG_ENETC_TSN
+/* Credit-Based Shaper parameters */
+struct cbs {
+	u8 tc;
+	bool enable;
+	u8 bw;
+	u32 hi_credit;
+	u32 lo_credit;
+	u32 idle_slope;
+	u32 send_slope;
+	u32 tc_max_sized_frame;
+	u32 max_interfrence_size;
+};
+
+struct enetc_cbs {
+	u32 port_transmit_rate;
+	u32 port_max_size_frame;
+	u8 tc_nums;
+	struct cbs cbs[0];
+};
+#endif
+
 /* PCI IEP device data */
 struct enetc_si {
 	struct pci_dev *pdev;
@@ -147,6 +171,10 @@ struct enetc_si {
 	int num_tx_rings;
 	int num_fs_entries;
 	unsigned short pad;
+#ifdef CONFIG_ENETC_TSN
+	 struct enetc_cbs *ecbs;
+#endif
+
 };
 
 #define ENETC_SI_ALIGN	32

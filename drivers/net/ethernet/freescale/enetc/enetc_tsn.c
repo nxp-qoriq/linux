@@ -1686,16 +1686,149 @@ u32 enetc_tsn_get_capability(struct net_device *ndev)
 
 static int enetc_set_cbs(struct net_device *ndev, u8 tc, u8 bw)
 {
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_si *si = priv->si;
+	struct enetc_cbs *ecbs = si->ecbs;
+	struct cbs *cbs;
+
+	int bw_sum = 0;
+	u32 port_transmit_rate;
+	u32 port_frame_max_size;
+	u8 tc_nums;
+	int i;
+
+	u32 max_interfrence_size;
+	u32 send_slope;
+	u32 hi_credit;
+
+	if (!ecbs)
+		return -ENOMEM;
+
+	port_transmit_rate = ecbs->port_transmit_rate;
+	port_frame_max_size = ecbs->port_max_size_frame;
+	tc_nums = ecbs->tc_nums;
+	cbs = ecbs->cbs;
+
+	if (tc >= tc_nums) {
+		dev_err(&ndev->dev, "Make sure the TC less than %d\n", tc_nums);
+		return -EINVAL;
+	}
+
+	if (!bw) {
+		if (cbs[tc].enable) {
+			/* Make sure the other TC that are numerically
+			 * lower than this TC have been disabled.
+			 */
+			for (i = 0; i < tc; i++) {
+				if (cbs[i].enable)
+					break;
+			}
+			if (i < tc) {
+				dev_err(&ndev->dev,
+					"TC%d has been disabled first\n", i);
+				return -EINVAL;
+			}
+			memset(&cbs[tc], 0, sizeof(*cbs));
+			cbs[tc].enable = false;
+			enetc_port_wr(&si->hw, ENETC_PTCCBSR1(tc), 0);
+			enetc_port_wr(&si->hw, ENETC_PTCCBSR0(tc), 0);
+		}
+		return 0;
+	}
+
+	/* Make sure the other TC that are numerically
+	 * higher than this TC have been enabled.
+	 */
+	for (i = tc_nums - 1; i > tc; i--) {
+		if (!cbs[i].enable) {
+			dev_err(&ndev->dev,
+				"TC%d has been enabled first\n", i);
+			return -EINVAL;
+		}
+		bw_sum += cbs[i].bw;
+	}
+
+	if (bw_sum + bw >= 100) {
+		dev_err(&ndev->dev,
+			"The sum of all CBS Bandwidth cann't exceed 100\n");
+		return -EINVAL;
+	}
+
+	cbs[tc].bw = bw;
+	cbs[tc].tc_max_sized_frame = enetc_port_rd(&si->hw, ENETC_PTCMSDUR(tc));
+	cbs[tc].idle_slope = port_transmit_rate / 100 * bw;
+	cbs[tc].send_slope = port_transmit_rate - cbs[tc].idle_slope;
+
+	/* For TC7, the max_interfrence_size is ENETC_MAC_MAXFRM_SIZE.
+	 * For TC6, the max_interfrence_size is calculated as below:
+	 *
+	 *      max_interfrence_size = (M0 + Ma + Ra * M0 / (R0 - Ra))
+	 *
+	 * For other traffic class, for example SR class Q:
+	 *
+	 *                            R0 * (M0 + Ma + ... + Mp)
+	 *      max_interfrence_size =  ------------------------------
+	 *                            (R0 - Ra) + ... + (R0 - Rp)
+	 *
+	 */
+
+	if (tc == tc_nums - 1) {
+		cbs[tc].max_interfrence_size = port_frame_max_size * 8;
+
+	} else if (tc == tc_nums - 2) {
+		cbs[tc].max_interfrence_size = (port_frame_max_size
+				+ cbs[tc + 1].tc_max_sized_frame
+				+ port_frame_max_size * (cbs[tc + 1].idle_slope
+				/ cbs[tc + 1].send_slope)) * 8;
+	} else {
+		max_interfrence_size = port_frame_max_size;
+		send_slope = 0;
+		for (i = tc + 1; i < tc_nums; i++) {
+			send_slope += cbs[i].send_slope;
+			max_interfrence_size += cbs[i].tc_max_sized_frame;
+		}
+		max_interfrence_size = ((u64)port_transmit_rate
+				* max_interfrence_size) / send_slope;
+		cbs[tc].max_interfrence_size = max_interfrence_size * 8;
+	}
+
+	cbs[tc].hi_credit = cbs[tc].max_interfrence_size * cbs[tc].bw / 100;
+	cbs[tc].lo_credit = cbs[tc].tc_max_sized_frame * (cbs[tc].send_slope
+			/ port_transmit_rate);
+	cbs[tc].tc = tc;
+
+	hi_credit = (ENETC_CLK * 100L) * (u64)cbs[tc].hi_credit
+			/ port_transmit_rate;
+	enetc_port_wr(&si->hw, ENETC_PTCCBSR1(tc), hi_credit);
+
+	/* Set bw register and enable this traffic class*/
+	enetc_port_wr(&si->hw, ENETC_PTCCBSR0(tc),
+		      (cbs[tc].bw & 0x7F) | (1 << 31));
+	cbs[tc].enable = true;
+
 	return 0;
 }
 
 static int enetc_get_cbs(struct net_device *ndev, u8 tc)
 {
-	return 0;
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_si *si = priv->si;
+	struct enetc_cbs *ecbs = si->ecbs;
+	struct cbs *cbs;
+
+	if (!ecbs)
+		return -ENOMEM;
+	cbs = ecbs->cbs;
+	if (tc >= ecbs->tc_nums) {
+		dev_err(&ndev->dev, "The maximum of TC is %d\n", ecbs->tc_nums);
+		return -EINVAL;
+	}
+
+	return cbs[tc].bw;
 }
 
 #define GET_CURRENT_TIME(si) (enetc_rd(&(si)->hw, ENETC_SICTR0) \
-							| ((u64)enetc_rd(&(si)->hw, ENETC_SICTR1) << 32))
+		| ((u64)enetc_rd(&(si)->hw, ENETC_SICTR1) << 32))
 
 static int enetc_set_tsd(struct net_device *ndev, struct tsn_tsd *ttsd)
 {
@@ -1730,7 +1863,7 @@ static struct tsn_ops enetc_tsn_ops = {
 	.tsd_set = enetc_set_tsd,
 	.tsd_get = enetc_get_tsd,
 };
-/*
+
 static u32 get_ndev_speed(struct net_device *netdev)
 {
 	struct ethtool_link_ksettings ksettings;
@@ -1754,9 +1887,33 @@ static u32 get_ndev_speed(struct net_device *netdev)
 	}
 	return (rc < 0) ? 0 : ksettings.base.speed;
 }
-*/
+
 static void enetc_cbs_init(struct enetc_si *si)
 {
+	u8 tc_nums;
+
+	tc_nums = ((enetc_port_rd(&si->hw, ENETC_PCAPR1) >> 4) & 0x7) + 1;
+	si->ecbs = kzalloc(sizeof(*si->ecbs) +
+			   sizeof(struct cbs) * tc_nums, GFP_KERNEL);
+	if (!si->ecbs)
+		return;
+
+	si->ecbs->port_max_size_frame = si->ndev->mtu + ETH_HLEN
+						+ VLAN_HLEN + ETH_FCS_LEN;
+	si->ecbs->tc_nums = tc_nums;
+	si->ecbs->port_transmit_rate = get_ndev_speed(si->ndev);
+
+	/*This trick is used only for CFP*/
+#ifdef CONFIG_CFP
+	if (!si->ecbs->port_transmit_rate)
+		si->ecbs->port_transmit_rate = 1000000000;
+#endif
+	if (!si->ecbs->port_transmit_rate) {
+		dev_err(&si->pdev->dev, "Failure to get port speed for CBS\n");
+		kfree(si->ecbs);
+		si->ecbs = NULL;
+	}
+
 	return;
 }
 

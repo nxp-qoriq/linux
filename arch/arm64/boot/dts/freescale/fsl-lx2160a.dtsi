@@ -491,6 +491,7 @@
 			interrupts = <0 34 0x4>; /* Level high type */
 			clock-names = "i2c";
 			clocks = <&clockgen 4 3>;
+			fsl-scl-gpio = <&gpio2 15 0>;
 			status = "disabled";
 		};
 
@@ -535,6 +536,7 @@
 			interrupts = <0 74 0x4>; /* Level high type */
 			clock-names = "i2c";
 			clocks = <&clockgen 4 3>;
+			fsl-scl-gpio = <&gpio2 16 0>;
 			status = "disabled";
 		};
 

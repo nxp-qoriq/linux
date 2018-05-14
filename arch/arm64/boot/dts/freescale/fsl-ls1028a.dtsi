@@ -609,6 +609,48 @@
 			 <&aclk>, <&pclk>;
 		clock-names = "pxlclk", "mclk", "aclk", "pclk";
 		arm,malidp-output-port-lines = /bits/ 8 <8 8 8>;
+
+		port {
+			dp0_out: endpoint {
+				remote-endpoint = <&ip8501_out>;
+			};
+		};
+	};
+
+	ip8501: dp@f200000 {
+		compatible = "fsl,ls1028a-dp";
+		reg = <0x0 0xf200000 0x0 0x100000>;
+		interrupts = <0 221 0x4>;
+		clocks = <&pclk>,
+			 <&pclk>,
+			 <&pclk>,
+			 <&pclk>,
+			 <&dpclk>,
+			 <&dpclk>,
+			 <&dpclk>,
+			 <&pclk>,
+			 <&pclk>,
+			 <&pclk>,
+			 <&pclk>,
+			 <&pclk>,
+			 <&pclk>,
+			 <&pclk>,
+			 <&pclk>,
+			 <&dpclk>,
+			 <&pclk>,
+			 <&pclk>;
+		clock-names = "dig_pll", "av_pll", "clk_ipg",
+			      "clk_core", "clk_pxl", "clk_pxl_mux",
+			      "clk_pxl_link", "clk_hdp", "clk_phy",
+			      "clk_apb", "clk_lis","clk_msi",
+			      "clk_lpcg", "clk_even","clk_dbl",
+			      "clk_vif", "clk_apb_csr","clk_apb_ctrl";
+
+		port {
+			ip8501_out: endpoint {
+				remote-endpoint = <&dp0_out>;
+			};
+		};
 	};
 };
 

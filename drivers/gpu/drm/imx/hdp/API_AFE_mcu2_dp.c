@@ -501,8 +501,17 @@ void AFE_init(state_struct *state, int num_lanes,
 
 	val = Afe_read(state, PHY_PMA_CMN_CTRL1);
 	val = val & 0xFF8F;
+	Afe_write(state, PHY_PMA_CMN_CTRL1, val);
+	val = Afe_read(state, CMN_DIAG_ACYA);
+	Afe_write(state, CMN_DIAG_ACYA, 0x0100);
+
+	/* signal-ended reference clock */
+	/*
+	val = Afe_read(state, PHY_PMA_CMN_CTRL1);
+	val = val & 0xFF8F;
 	val = val | 0x0030;
 	Afe_write(state, PHY_PMA_CMN_CTRL1, val);
+	*/
 
 	if (state->edp != 0)
 		Afe_write(state, CMN_DIAG_CAL_CTRL, 0x0001);

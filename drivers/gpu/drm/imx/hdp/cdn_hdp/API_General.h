@@ -211,4 +211,18 @@ CDN_API_STATUS CDN_API_General_Phy_Test_Access(state_struct *state, u8 *resp);
 CDN_API_STATUS CDN_API_General_Phy_Test_Access_blocking(state_struct *state,
 							u8 *resp);
 
+/**
+ * Read HPD state to check if plug is inserted or not.
+ * @param state [out] Pointer to variable where state will be stored.
+ *  Bit 0: 0 - plug not inserted, 1 - plug inserted.
+ *  Bits 1..7: reserved.
+ * @return status
+ */
+CDN_API_STATUS CDN_API_General_GetHpdState(state_struct *state, u8 *hpd_state);
+
+/**
+ * \breif blocking version of #CDN_API_General_GetHpdState
+ */
+CDN_API_STATUS CDN_API_General_GetHpdState_blocking(state_struct *state, u8 *hpd_state);
+
 #endif

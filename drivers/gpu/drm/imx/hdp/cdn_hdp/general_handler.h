@@ -38,6 +38,7 @@
 #define GENERAL_WRITE_REGISTER          0x05
 #define GENERAL_WRITE_FIELD             0x06
 #define GENERAL_READ_REGISTER           0x07
+#define GENERAL_GET_HPD_STATE           0x11
 
 #define GENERAL_TEST_TRNG_SIMPLE        0xF0
 

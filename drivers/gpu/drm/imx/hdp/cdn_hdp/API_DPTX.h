@@ -17,8 +17,9 @@
 #ifndef _API_DPTX_H_
 #define _API_DPTX_H_
 
-# include "API_General.h"
-# include "vic_table.h"
+#include "API_General.h"
+#include "vic_table.h"
+#include "API_AFE.h"
 
 #define MAX_NUM_OF_EVENTS 4
 
@@ -243,6 +244,34 @@ CDN_API_STATUS CDN_API_DPTX_Control(state_struct *state, u32 mode);
  * blocking version of #CDN_API_DPTX_Control
  */
 CDN_API_STATUS CDN_API_DPTX_Control_blocking(state_struct *state, u32 mode);
+
+/**
+  * \brief Performs Fast Link Training, using LINK_RATE_SET DPCD register.
+  * \param [in] mode - 0 to stop training, 1 to start it, 2 to restart it.
+  * \param [in] linkRate - Link Rate to be used for training.
+  * \param [in] rateId - index of selected Link Rate in DPCd registers.
+  *
+  * Performs Fast Link Training, selecting Link Rate using LINK_RATE_SET DPCD
+  * register, characteristic to Embedded DisplayPort (eDP) v1.4 standard.
+  * If requested link rate is not supported by DPTX, function will return error
+  * code CDN_ERROR_NOT_SUPPORTED, and will take no further action.
+  * rateId is used to select, which Link Rate supported by sink (enumerated in
+  * SUPPORTED_LINK_RATES DPCD registers) is equal to rate requested. This value
+  * will be written to first 3 bits of LINK_RATE_SET DPCD registers. Allowed
+  * range is 0-7. If it is not known beforehand, SUPPORTED_LINK_RATES DPCD
+  * registers may be read by an upper layer, and then used to determine the
+  * correct value to use.
+  */
+CDN_API_STATUS CDN_API_DPTX_EDP_Training(state_struct *state, u8 mode,
+					 ENUM_AFE_LINK_RATE linkRate,
+					 u8 rateId);
+
+/**
+ * blocking version of #CDN_API_DPTX_EDP_Training
+ */
+CDN_API_STATUS CDN_API_DPTX_EDP_Training_blocking(state_struct *state, u8 mode,
+						  ENUM_AFE_LINK_RATE linkRate,
+						  u8 rateId);
 
 /**
   * \brief send DPX_ENABLE_EVENT command

@@ -22,6 +22,7 @@
 #include "address.h"
 #include "source_car.h"
 #include "source_vif.h"
+#include "general_handler.h"
 
 CDN_API_STATUS CDN_API_HDMITX_DDC_READ(state_struct *state,
 				       HDMITX_TRANS_DATA *data_in,

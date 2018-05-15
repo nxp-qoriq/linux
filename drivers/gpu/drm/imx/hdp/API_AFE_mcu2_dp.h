@@ -73,6 +73,7 @@
 #define CMN_DIAG_PER_CAL_ADJ            0x01EC
 #define CMN_DIAG_CAL_CTRL               0x01ED
 #define CMN_DIAG_PLL0_LF_PROG           0x01C7
+#define CMN_DIAG_ACYA			0x01FF
 #define CMN_PLL0_VCOCAL_INIT_TMR        0x0084
 #define CMN_PLL0_VCOCAL_ITER_TMR        0x0085
 #define CMN_PLL0_INTDIV                 0x0094

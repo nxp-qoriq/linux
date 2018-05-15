@@ -851,7 +851,7 @@ static int hpd_det_worker(void *_dp)
 		} else if (evt & 0xf)
 			printk(KERN_DEBUG "evt=0x%x\n", evt);
 
-		schedule_timeout_idle(200);
+		schedule_timeout_idle(1);
 	}
 
 	return 0;

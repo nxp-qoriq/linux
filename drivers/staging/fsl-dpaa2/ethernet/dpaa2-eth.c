@@ -258,7 +258,8 @@ static int dpaa2_eth_xdp_tx(struct dpaa2_eth_priv *priv,
 
 	fq = &priv->fq[queue_id];
 	for (i = 0; i < DPAA2_ETH_ENQUEUE_RETRIES; i++) {
-		err = dpaa2_io_service_enqueue_qd(NULL, priv->tx_qdid, 0,
+		err = dpaa2_io_service_enqueue_qd(fq->channel->dpio,
+						  priv->tx_qdid, 0,
 						  fq->tx_qdbin, fd);
 		if (err != -EBUSY)
 			break;
@@ -300,12 +301,12 @@ static void release_fd_buf(struct dpaa2_eth_priv *priv,
 	if (likely(ch->rel_buf_cnt < DPAA2_ETH_BUFS_PER_CMD))
 		return;
 
-	while ((err = dpaa2_io_service_release(NULL, priv->bpid,
+	while ((err = dpaa2_io_service_release(ch->dpio, priv->bpid,
 					       ch->rel_buf_array,
 					       ch->rel_buf_cnt)) == -EBUSY)
 		cpu_relax();
 
-	if (unlikely(err))
+	if (err)
 		free_bufs(priv, ch->rel_buf_array, ch->rel_buf_cnt);
 
 	ch->rel_buf_cnt = 0;
@@ -755,6 +756,9 @@ static void free_tx_fd(struct dpaa2_eth_priv *priv,
 		/* Unmap the SGT buffer */
 		dma_unmap_single(dev, fd_addr, swa->sg.sgt_size,
 				 DMA_BIDIRECTIONAL);
+	} else {
+		netdev_dbg(priv->net_dev, "Invalid FD format\n");
+		return;
 	}
 
 	/* Get the timestamp value */
@@ -1018,7 +1022,7 @@ release_bufs:
 	/* If release command failed, clean up and bail out; not much
 	 * else we can do about it
 	 */
-	if (unlikely(err)) {
+	if (err) {
 		free_bufs(priv, buf_array, i);
 		return 0;
 	}
@@ -3664,10 +3668,10 @@ static int dpaa2_eth_remove(struct fsl_mc_device *ls_dev)
 #endif
 	dpaa2_eth_sysfs_remove(&net_dev->dev);
 
+	unregister_netdev(net_dev);
+
 	disable_ch_napi(priv);
 	del_ch_napi(priv);
-
-	unregister_netdev(net_dev);
 
 	if (priv->do_link_poll)
 		kthread_stop(priv->poll_thread);
@@ -3686,7 +3690,7 @@ static int dpaa2_eth_remove(struct fsl_mc_device *ls_dev)
 	dev_set_drvdata(dev, NULL);
 	free_netdev(net_dev);
 
-	dev_info(net_dev->dev.parent, "Removed interface %s\n", net_dev->name);
+	dev_dbg(net_dev->dev.parent, "Removed interface %s\n", net_dev->name);
 
 	return 0;
 }

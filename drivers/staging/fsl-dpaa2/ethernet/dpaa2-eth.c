@@ -2763,7 +2763,8 @@ int dpaa2_eth_set_dist_key(struct dpaa2_eth_priv *priv,
 	dma_unmap_single(dev, key_iova, DPAA2_CLASSIFIER_DMA_SIZE,
 			 DMA_TO_DEVICE);
 	if (err) {
-		dev_err(dev, "Distribution key config failed\n");
+		if (err != -EOPNOTSUPP)
+			dev_err(dev, "Distribution key config failed\n");
 		goto free_key;
 	}
 

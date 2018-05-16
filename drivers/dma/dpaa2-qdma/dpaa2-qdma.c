@@ -744,7 +744,7 @@ static void __cold dpaa2_dpdmai_free_pool(struct dpaa2_qdma_chan *qchan,
 	/* free the QDMA SG pool block */
 	list_for_each_entry_safe(sgb_tmp, _sgb_tmp, head, list) {
 		sgb_tmp->blk_virt_addr = (void *)((uint8_t *)sgb_tmp->blk_virt_addr -
-				sizeof(struct qdma_sb_blk) - sgb_tmp->offset);
+				sizeof(struct qdma_sg_blk) - sgb_tmp->offset);
 		sgb_tmp->blk_bus_addr = sgb_tmp->blk_bus_addr
 				- sizeof(*sgb_tmp) - sgb_tmp->offset;
 		dma_pool_free(qchan->sg_blk_pool, sgb_tmp->blk_virt_addr,

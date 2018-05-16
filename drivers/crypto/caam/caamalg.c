@@ -2363,7 +2363,6 @@ static struct caam_aead_alg driver_aeads[] = {
 			.class1_alg_type = OP_ALG_ALGSEL_AES | OP_ALG_AAI_GCM,
 		},
 	},
-#if 0
 	{
 		.aead = {
 			.base = {
@@ -2382,7 +2381,6 @@ static struct caam_aead_alg driver_aeads[] = {
 			.class1_alg_type = OP_ALG_ALGSEL_AES | OP_ALG_AAI_GCM,
 		},
 	},
-#endif
 	/* Galois Counter Mode */
 	{
 		.aead = {
@@ -3646,7 +3644,6 @@ static struct caam_aead_alg driver_aeads[] = {
 					   OP_ALG_AAI_AEAD,
 		},
 	},
-#if 0
 	{
 		.aead = {
 			.base = {
@@ -3668,7 +3665,6 @@ static struct caam_aead_alg driver_aeads[] = {
 					   OP_ALG_AAI_AEAD,
 		},
 	},
-#endif
 };
 
 struct caam_crypto_alg {

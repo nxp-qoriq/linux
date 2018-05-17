@@ -37,6 +37,9 @@
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 
+/* See hook_usdpaa_tlb1() */
+#include <linux/fsl_usdpaa.h>
+
 #include <asm/pgalloc.h>
 #include <asm/prom.h>
 #include <asm/io.h>
@@ -491,12 +494,38 @@ void flush_icache_user_range(struct vm_area_struct *vma, struct page *page,
 }
 EXPORT_SYMBOL(flush_icache_user_range);
 
+#ifdef CONFIG_FSL_USDPAA
+/*
+ * NB: this 'usdpaa' check+hack is to create TLB1 entries to cover the buffer
+ * memory used by run-to-completion UIO-based apps ("User-Space DataPath
+ * Acceleration Architecture"). It is expected to be phased out once HugeTLB
+ * support is hooked up with support for physical address conversion. The other
+ * half of this hack is in drivers/misc/fsl_usdpaa.c.
+ */
+static inline void hook_usdpaa_tlb1(struct vm_area_struct *vma,
+				    unsigned long address, pte_t *ptep)
+{
+	unsigned long pfn = pte_pfn(*ptep);
+	u64 phys_addr;
+	u64 size;
+	int tlb_idx = usdpaa_test_fault(pfn, &phys_addr, &size);
+	if (tlb_idx != -1) {
+		unsigned long va = address & ~(size - 1);
+		flush_tlb_mm(vma->vm_mm);
+		settlbcam(tlb_idx, va, phys_addr, size, pte_val(*ptep),
+			  mfspr(SPRN_PID));
+	}
+}
+#else
+#define hook_usdpaa_tlb1(a, b, c) do { } while (0)
+#endif
+
 /*
  * This is called at the end of handling a user page fault, when the
  * fault has been handled by updating a PTE in the linux page tables.
  * We use it to preload an HPTE into the hash table corresponding to
  * the updated linux PTE.
- * 
+ *
  * This must always be called with the pte lock held.
  */
 void update_mmu_cache(struct vm_area_struct *vma, unsigned long address,
@@ -537,6 +566,8 @@ void update_mmu_cache(struct vm_area_struct *vma, unsigned long address,
 	}
 
 	hash_preload(vma->vm_mm, address, access, trap);
+#elif defined(CONFIG_FSL_USDPAA)
+	hook_usdpaa_tlb1(vma, address, ptep);
 #endif /* CONFIG_PPC_STD_MMU */
 #if (defined(CONFIG_PPC_BOOK3E_64) || defined(CONFIG_PPC_FSL_BOOK3E)) \
 	&& defined(CONFIG_HUGETLB_PAGE)

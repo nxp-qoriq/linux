@@ -154,6 +154,7 @@ struct dpaa2_caam_priv_per_cpu {
  * @iv_dma: dma address of iv for checking continuity and link table
  * @qm_sg_bytes: length of dma mapped h/w link table
  * @qm_sg_dma: bus physical mapped address of h/w link table
+ * @assoclen: associated data length, in CAAM endianness
  * @assoclen_dma: bus physical mapped address of req->assoclen
  * @sgt: the h/w link table
  */
@@ -163,6 +164,7 @@ struct aead_edesc {
 	dma_addr_t iv_dma;
 	int qm_sg_bytes;
 	dma_addr_t qm_sg_dma;
+	unsigned int assoclen;
 	dma_addr_t assoclen_dma;
 #define CAAM_QI_MAX_AEAD_SG						\
 	((CAAM_QI_MEMCACHE_SIZE - offsetof(struct aead_edesc, sgt)) /	\

@@ -45,6 +45,8 @@
  */
 
 #include "fsl-ls1043a-rdb.dts"
+#include "qoriq-qman-portals-sdk.dtsi"
+#include "qoriq-bman-portals-sdk.dtsi"
 
 &bman_fbpr {
 	compatible = "fsl,bman-fbpr";

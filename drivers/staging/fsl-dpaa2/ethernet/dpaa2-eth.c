@@ -2108,19 +2108,8 @@ static int setup_dpni(struct fsl_mc_device *ls_dev)
 	if (!priv->cls_rule)
 		goto err_cls_rule;
 
-	/* Enable flow control */
-	cfg.options = DPNI_LINK_OPT_AUTONEG | DPNI_LINK_OPT_PAUSE;
-	priv->tx_pause_frames = 1;
-
-	err = dpni_set_link_cfg(priv->mc_io, 0, priv->mc_token, &cfg);
-	if (err) {
-		netdev_err(net_dev, "ERROR %d setting link cfg", err);
-		goto err_set_link_cfg;
-	}
-
 	return 0;
 
-err_set_link_cfg:
 err_cls_rule:
 err_tx_cong:
 err_data_offset:

@@ -1183,25 +1183,10 @@ static void init_chapoly_enc_job(struct aead_request *req,
 
 	append_seq_fifo_store(desc, assoclen, FIFOST_TYPE_MESSAGE_DATA);
 
-	/*
-	 * ... but we still have to write it at the output. We just don't copy
-	 * it from input, but write it from the context register since it is
-	 * already there
-	 */
-	if (ivsize == 8) {
-		/*
-		 * Write IV to memory from the context register instead of
-		 * copying it from the input - one less DMA access
-		 */
-		append_seq_store(desc, ivsize,
-			LDST_SRCDST_BYTE_CONTEXT | LDST_CLASS_1_CCB |
-			ctx_reg_offset << LDST_OFFSET_SHIFT);
-		/*
-		 * And skip reading past the IV in the input since we don't
-		 * need it for processing. (IV is not even authenticated?)
-		 */
-		append_seq_fifo_load(desc, ivsize, FIFOLD_CLASS_SKIP);
-	}
+	/* ... but we still have to write IV at the output */
+	if (ivsize == 8)
+		append_seq_fifo_store(desc, ivsize,
+				      FIFOST_TYPE_METADATA | (0x2 << 25));
 
 	jump_cmd = append_jump(desc, JUMP_JSL | JUMP_TYPE_LOCAL |
 			JUMP_COND_NOP | JUMP_TEST_ALL);
@@ -1315,21 +1300,10 @@ static void init_chapoly_dec_job(struct aead_request *req,
 
 	append_seq_fifo_store(desc, assoclen, FIFOST_TYPE_MESSAGE_DATA);
 
-	/* IPsec */
-	if (ivsize == 8) {
-		/*
-		 * Write IV to memory from the context register instead of
-		 * copying it from the input - one less DMA access
-		 */
-		append_seq_store(desc, ivsize,
-			LDST_SRCDST_BYTE_CONTEXT | LDST_CLASS_1_CCB |
-			ctx_reg_offset << LDST_OFFSET_SHIFT);
-		/*
-		 * And skip reading past the IV in the input since we don't
-		 * need it for processing. (IV is not even authenticated?)
-		 */
-		append_seq_fifo_load(desc, ivsize, FIFOLD_CLASS_SKIP);
-	}
+	/* IPsec - copy IV at the output */
+	if (ivsize == 8)
+		append_seq_fifo_store(desc, ivsize,
+				      FIFOST_TYPE_METADATA | (0x2 << 25));
 
 	jump_cmd = append_jump(desc, JUMP_JSL | JUMP_TYPE_LOCAL |
 			JUMP_COND_NOP | JUMP_TEST_ALL);
@@ -1339,7 +1313,7 @@ static void init_chapoly_dec_job(struct aead_request *req,
 			FIFOST_TYPE_MESSAGE_DATA);
 
 	append_seq_fifo_load(desc, req->cryptlen - ctx->authsize,
-		FIFOLD_TYPE_MSG | FIFOLD_TYPE_LAST1 | FIFOLD_CLASS_BOTH);
+		FIFOLD_TYPE_MSG | FIFOLD_TYPE_LASTBOTH | FIFOLD_CLASS_BOTH);
 
 	/* Load ICV for verification */
 	append_seq_fifo_load(desc, ctx->authsize, FIFOLD_CLASS_CLASS2 |

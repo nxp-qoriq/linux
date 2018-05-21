@@ -210,6 +210,12 @@ config ARCH_LAYERSCAPE
 	help
 	  This enables support for the Freescale Layerscape SoC family.
 
+config LS104XA_BAREMETAL
+	bool "NXP LS1043A/LS1046A baremetal support"
+	select BAREMETAL
+	help
+	  This enables support for Freescale LS1043A and LS1046A baremetal.
+
 config ARCH_MXC
 	bool "NXP i.MX SoC family"
 	select ARM64_ERRATUM_843419

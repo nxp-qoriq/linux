@@ -474,8 +474,8 @@ struct enetc_cmd_rfse {
 
 static inline void enetc_get_primary_mac_addr(struct enetc_hw *hw, u8 *addr)
 {
-	*(u32 *)(addr + 2) = htonl((u32)enetc_rd(hw, ENETC_SIPMAR0));
-	*(u16 *)addr = htons(enetc_rd(hw, ENETC_SIPMAR1) >> 16);
+	*(u32 *)addr = enetc_rd(hw, ENETC_SIPMAR0);
+	*(u16 *)(addr + 4) = enetc_rd(hw, ENETC_SIPMAR1);
 }
 
 #define ENETC_SI_INT_IDX	0

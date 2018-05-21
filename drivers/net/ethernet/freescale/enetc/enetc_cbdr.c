@@ -131,8 +131,8 @@ void enetc_set_mac_flt_entry(struct enetc_si *si, int index,
 {
 	struct enetc_cbd cbd;
 	bool async = false;
-	u16 upper;
-	u32 lower;
+	u32 upper;
+	u16 lower;
 	int ret;
 
 	memset(&cbd, 0, sizeof(cbd));
@@ -148,10 +148,10 @@ void enetc_set_mac_flt_entry(struct enetc_si *si, int index,
 	/* enable entry */
 	cbd.opt[0] = cpu_to_le32(BIT(31));
 
-	upper = ntohs(*(const u16 *)mac_addr);
-	lower = ntohl(*(const u32 *)(mac_addr + 2));
-	cbd.addr[0] = cpu_to_le32(lower);
-	cbd.addr[1] = cpu_to_le16(upper);
+	upper = *(const u32 *)mac_addr;
+	lower = *(const u16 *)(mac_addr + 4);
+	cbd.addr[0] = upper;
+	cbd.addr[1] = lower;
 
 	ret = enetc_send_cmd(si, &cbd, async);
 	if (ret) {

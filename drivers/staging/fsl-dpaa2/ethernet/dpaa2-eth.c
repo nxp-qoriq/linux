@@ -637,7 +637,7 @@ static int build_sg_fd(struct dpaa2_eth_priv *priv,
 	swa->sg.skb = skb;
 	swa->sg.scl = scl;
 	swa->sg.num_sg = num_sg;
-	swa->sg.num_dma_bufs = num_dma_bufs;
+	swa->sg.sgt_size = sgt_buf_size;
 
 	/* Separately map the SGT buffer */
 	addr = dma_map_single(dev, sgt_buf, sgt_buf_size, DMA_BIDIRECTIONAL);
@@ -728,9 +728,6 @@ static void free_tx_fd(struct dpaa2_eth_priv *priv,
 	dma_addr_t fd_addr;
 	struct sk_buff *skb = NULL;
 	unsigned char *buffer_start;
-	int unmap_size;
-	struct scatterlist *scl;
-	int num_sg, num_dma_bufs;
 	struct dpaa2_eth_swa *swa;
 	u8 fd_format = dpaa2_fd_get_format(fd);
 
@@ -748,18 +745,14 @@ static void free_tx_fd(struct dpaa2_eth_priv *priv,
 				 DMA_BIDIRECTIONAL);
 	} else if (fd_format == dpaa2_fd_sg) {
 		skb = swa->sg.skb;
-		scl = swa->sg.scl;
-		num_sg = swa->sg.num_sg;
-		num_dma_bufs = swa->sg.num_dma_bufs;
 
 		/* Unmap the scatterlist */
-		dma_unmap_sg(dev, scl, num_sg, DMA_BIDIRECTIONAL);
-		kfree(scl);
+		dma_unmap_sg(dev, swa->sg.scl, swa->sg.num_sg, DMA_BIDIRECTIONAL);
+		kfree(swa->sg.scl);
 
 		/* Unmap the SGT buffer */
-		unmap_size = priv->tx_data_offset +
-		       sizeof(struct dpaa2_sg_entry) * (1 + num_dma_bufs);
-		dma_unmap_single(dev, fd_addr, unmap_size, DMA_BIDIRECTIONAL);
+		dma_unmap_single(dev, fd_addr, swa->sg.sgt_size,
+				 DMA_BIDIRECTIONAL);
 	}
 
 	/* Get the timestamp value */

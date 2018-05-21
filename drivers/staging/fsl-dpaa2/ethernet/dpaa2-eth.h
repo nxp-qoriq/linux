@@ -139,7 +139,7 @@ struct dpaa2_eth_swa {
 			struct sk_buff *skb;
 			struct scatterlist *scl;
 			int num_sg;
-			int num_dma_bufs;
+			int sgt_size;
 		} sg;
 	};
 };

@@ -948,8 +948,8 @@ static void enetc_configure_si(struct enetc_si *si)
 	enetc_wr(hw, ENETC_SICAR0,
 		 ENETC_SICAR_RD_COHERENT | ENETC_SICAR_WR_COHERENT);
 	enetc_wr(hw, ENETC_SICAR1, ENETC_SICAR_MSI);
-	/* enable SI, start RSS by default */
-	enetc_wr(hw, ENETC_SIMR, ENETC_SIMR_EN | ENETC_SIMR_RSSE);
+	/* enable SI, TODO: start RSS by default */
+	enetc_wr(hw, ENETC_SIMR, ENETC_SIMR_EN /*| ENETC_SIMR_RSSE*/);
 }
 
 int enetc_alloc_si_resources(struct enetc_ndev_priv *priv)

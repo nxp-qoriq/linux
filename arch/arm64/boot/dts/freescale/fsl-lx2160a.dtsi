@@ -461,12 +461,12 @@
 			compatible = "fsl,ls2080a-dspi", "fsl,ls2085a-dspi";
 			#address-cells = <1>;
 			#size-cells = <0>;
-			reg = <0x0 0x2120000 0x0 0x10000>;
+			reg = <0x0 0x2110000 0x0 0x10000>;
 			interrupts = <0 240 0x4>; /* Level high type */
 			clocks = <&clockgen 4 3>;
 			clock-names = "dspi";
 			spi-num-chipselects = <5>;
-			bus-num = <0>;
+			bus-num = <1>;
 		};
 
 		dspi2: dspi@2120000 {
@@ -479,7 +479,7 @@
 			clocks = <&clockgen 4 3>;
 			clock-names = "dspi";
 			spi-num-chipselects = <5>;
-			bus-num = <0>;
+			bus-num = <2>;
 		};
 
 

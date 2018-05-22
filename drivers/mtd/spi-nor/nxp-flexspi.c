@@ -97,6 +97,8 @@
 #define FSPI_MCR2_ABR_CMD_MASK		(1 << FSPI_MCR2_ABR_CMD_SHIFT)
 
 #define FSPI_AHBCR			0x0c
+#define FSPI_AHBCR_RDADDROPT_SHIFT	6
+#define FSPI_AHBCR_RDADDROPT_MASK	(1 << FSPI_AHBCR_RDADDROPT_SHIFT)
 #define FSPI_AHBCR_PREF_EN_SHIFT	5
 #define FSPI_AHBCR_PREF_EN_MASK		(1 << FSPI_AHBCR_PREF_EN_SHIFT)
 #define FSPI_AHBCR_BUFF_EN_SHIFT	4
@@ -515,10 +517,10 @@ static void nxp_fspi_init_lut(struct nxp_fspi *fspi)
 		writel(LUT0(DUMMY, PAD1, dm) | LUT1(FSL_READ, PAD1, 0),
 			base + FSPI_LUT(lut_base + 1));
 	} else if (nor->flash_read == SPI_NOR_QUAD) {
-		dev_dbg(nor->dev, "Unsupported opcode : 0x%.2x\n", op);
+		dev_info(nor->dev, "Unsupported opcode : 0x%.2x\n", op);
 		/* TODO Add support for other Read ops. */
 	} else {
-		dev_dbg(nor->dev, "Unsupported opcode : 0x%.2x\n", op);
+		dev_info(nor->dev, "Unsupported opcode : 0x%.2x\n", op);
 	}
 
 	/* Write enable */
@@ -678,7 +680,7 @@ nxp_fspi_runcmd(struct nxp_fspi *fspi, u8 cmd, unsigned int addr, int len)
 		    (reg & FSPI_STS0_SEQ_IDLE_MASK))
 			break;
 		udelay(1);
-		dev_err(fspi->dev, "The controller is busy, 0x%x\n", reg);
+		dev_dbg(fspi->dev, "The controller is busy, 0x%x\n", reg);
 	} while (1);
 
 	/* trigger the LUT now */
@@ -765,10 +767,17 @@ static void nxp_fspi_read_data(struct nxp_fspi *fspi, int len, u8 *rxbuf)
 
 static inline void nxp_fspi_invalid(struct nxp_fspi *fspi)
 {
+	u32 reg;
+
+	reg = readl(fspi->iobase + FSPI_MCR0);
+	writel(reg | FSPI_MCR0_SWRST_MASK, fspi->iobase + FSPI_MCR0);
+
 	/*
-	 * TODO: Add invalidation later.
-	 * Required for AHB read ops.
+	 * The minimum delay : 1 AHB + 2 SFCK clocks.
+	 * Delay 1 us is enough.
 	 */
+	while (readl(fspi->iobase + FSPI_MCR0) & FSPI_MCR0_SWRST_MASK)
+		;
 }
 
 static ssize_t nxp_fspi_nor_write(struct nxp_fspi *fspi,
@@ -850,10 +859,30 @@ static void nxp_fspi_set_map_addr(struct nxp_fspi *fspi)
 
 static void nxp_fspi_init_ahb_read(struct nxp_fspi *fspi)
 {
+	void __iomem *base = fspi->iobase;
+	struct spi_nor *nor = &fspi->nor[0];
+	int i = 0;
+	int seqid;
+
+	/* AHB configuration for access buffer 0~7. */
+	for (i = 0; i < 7; i++)
+		writel(0, base + FSPI_AHBRX_BUF0CR0 + 4 * i);
+
 	/*
-	 * TODO: Add AHB init.
-	 * Required for AHB read ops.
+	 * Set ADATSZ with the maximum AHB buffer size to improve the read
+	 * performance.
 	 */
+	writel((fspi->devtype_data->ahb_buf_size / 8 |
+		FSPI_AHBRXBUF0CR7_PREF_MASK), base + FSPI_AHBRX_BUF7CR0);
+
+	/* prefetch and no start address alignment limitation */
+	writel(FSPI_AHBCR_PREF_EN_MASK | FSPI_AHBCR_RDADDROPT_MASK,
+		    base + FSPI_AHBCR);
+
+
+	/* Set the default lut sequence for AHB Read. */
+	seqid = nxp_fspi_get_seqid(fspi, nor->read_opcode);
+	writel(seqid, base + FSPI_FLSHA1CR2);
 }
 
 /* This function was used to prepare and enable FSPI clock */
@@ -1009,30 +1038,48 @@ static ssize_t nxp_fspi_write(struct spi_nor *nor, loff_t to,
 static ssize_t nxp_fspi_read(struct spi_nor *nor, loff_t from,
 		size_t len, u_char *buf)
 {
-	int ret, rx_size;
 	struct nxp_fspi *fspi = nor->priv;
-	int act_len = len;
 
-	while (len > 0) {
-		rx_size = (len > RX_IPBUF_SIZE) ? RX_IPBUF_SIZE : len;
+	/* if necessary, ioremap buffer before AHB read, */
+	if (!fspi->ahb_addr) {
+		fspi->memmap_offs = fspi->chip_base_addr + from;
+		fspi->memmap_len = len > FSPI_MIN_IOMAP ?
+				   len : FSPI_MIN_IOMAP;
 
-		/* IP Read */
-		ret = nxp_fspi_runcmd(fspi, nor->read_opcode, from, rx_size);
-		if (ret)
-			return ret;
+		fspi->ahb_addr = ioremap_nocache(
+					fspi->memmap_phy + fspi->memmap_offs,
+					fspi->memmap_len);
+		if (!fspi->ahb_addr) {
+			dev_err(fspi->dev, "ioremap failed\n");
+			return -ENOMEM;
+		}
+	/* ioremap if the data requested is out of range */
+	} else if (fspi->chip_base_addr + from < fspi->memmap_offs
+			|| fspi->chip_base_addr + from + len >
+			fspi->memmap_offs + fspi->memmap_len) {
+		iounmap(fspi->ahb_addr);
 
-		nxp_fspi_read_data(fspi, rx_size, buf);
-
-		len -= rx_size;
-		from += rx_size;
+		fspi->memmap_offs = fspi->chip_base_addr + from;
+		fspi->memmap_len = len > FSPI_MIN_IOMAP ?
+				   len : FSPI_MIN_IOMAP;
+		fspi->ahb_addr = ioremap_nocache(
+					fspi->memmap_phy + fspi->memmap_offs,
+					fspi->memmap_len);
+		if (!fspi->ahb_addr) {
+			dev_err(fspi->dev, "ioremap failed\n");
+			return -ENOMEM;
+		}
 	}
 
-	if (ret == 0)
-		return act_len;
-	else
-		return 0;
+	dev_dbg(fspi->dev, "cmd [%x],read from %p, len:%zd\n",
+		nor->read_opcode, fspi->ahb_addr + fspi->chip_base_addr
+		+ from - fspi->memmap_offs, len);
 
-	/* TODO AHB read to be mapped here. */
+	/* Read out the data directly from the AHB buffer.*/
+	memcpy_toio(buf, fspi->ahb_addr + fspi->chip_base_addr
+		+ from - fspi->memmap_offs, len);
+
+	return len;
 }
 
 static int nxp_fspi_erase(struct spi_nor *nor, loff_t offs)

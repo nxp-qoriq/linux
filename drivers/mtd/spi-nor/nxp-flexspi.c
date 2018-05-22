@@ -614,6 +614,7 @@ static int nxp_fspi_get_seqid(struct nxp_fspi *fspi, u8 cmd)
 	case SPINOR_OP_BE_4K:
 	case SPINOR_OP_SE:
 	case SPINOR_OP_SE_4B:
+	case SPINOR_OP_BE_4K_4B:
 		return SEQID_SE;
 	case SPINOR_OP_CHIP_ERASE:
 		return SEQID_CHIP_ERASE;

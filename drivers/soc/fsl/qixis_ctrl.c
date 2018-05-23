@@ -153,10 +153,19 @@ static const struct i2c_device_id fsl_qixis_id[] = {
 };
 MODULE_DEVICE_TABLE(i2c, fsl_qixis_id);
 
+#ifdef CONFIG_OF
+static const struct of_device_id fsl_qixis_of_match[] = {
+	{ .compatible = "fsl,fpga-qixis-i2c" },
+	{}
+};
+MODULE_DEVICE_TABLE(of, fsl_qixis_of_match);
+#endif
+
 static struct i2c_driver fsl_qixis_i2c_driver = {
 	.driver = {
 		.name	= "fpga-qixis-i2c",
 		.owner	= THIS_MODULE,
+		.of_match_table = of_match_ptr(fsl_qixis_of_match),
 	},
 	.probe		= fsl_qixis_i2c_probe,
 	.remove		= fsl_qixis_i2c_remove,

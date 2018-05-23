@@ -851,6 +851,16 @@
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x10>;
 				};
+
+				dpmac17: dpmac@11 {
+					compatible = "fsl,qoriq-mc-dpmac";
+					reg = <0x11>;
+				};
+
+				dpmac18: dpmac@12 {
+					compatible = "fsl,qoriq-mc-dpmac";
+					reg = <0x12>;
+				};
 			};
 		};
 

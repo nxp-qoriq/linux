@@ -310,6 +310,7 @@ static int restool_bus_notifier(struct notifier_block *nb,
 	case BUS_NOTIFY_BOUND_DRIVER:
 	case BUS_NOTIFY_UNBIND_DRIVER:
 	case BUS_NOTIFY_UNBOUND_DRIVER:
+	case BUS_NOTIFY_DRIVER_NOT_BOUND:
 		break;
 	default:
 		pr_err("%s: unrecognized device action from %s\n", __func__,

@@ -119,6 +119,140 @@
 			};
 		};
 	};
+	fpga: fpga@66 {
+		compatible = "fsl,lx2160aqds-fpga", "fsl,fpga-qixis-i2c";
+		reg = <0x66>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		mdio0_mux@54 {
+			compatible = "mdio-mux-i2creg", "mdio-mux";
+			mdio-parent-bus = <&emdio1>;
+			reg = <0x54>;		 /* BRDCFG4 */
+			mux-mask = <0xf8>;      /* EMI1_MDIO */
+
+			#address-cells=<1>;
+			#size-cells = <0>;
+
+			mdio0_ioslot1@c0 {
+				reg = <0xc0>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+			};
+			mdio0_ioslot2@c8 {
+				reg = <0xc8>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+			};
+			mdio0_ioslot3@d0 {
+				reg = <0xd0>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+			};
+			mdio0_ioslot4@d8 {
+				reg = <0xd8>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+			};
+			mdio0_ioslot5@e0 {
+				reg = <0xe0>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+			};
+			mdio0_ioslot6@e8 {
+				reg = <0xe8>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+			};
+			mdio0_ioslot7@f0 {
+				reg = <0xf0>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+			};
+			mdio0_ioslot8@f8 {
+				reg = <0xf8>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+			};
+			mdio0_rgmii1@0 {
+				reg = <0x00>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+			};
+			mdio0_rgmii2@40 {
+				reg = <0x40>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+			};
+		};
+		mdio1_mux@54 {
+			compatible = "mdio-mux-i2creg", "mdio-mux";
+			mdio-parent-bus = <&emdio1>;
+			reg = <0x54>;		 /* BRDCFG4 */
+			mux-mask = <0x07>;      /* EMI2_MDIO */
+
+			#address-cells=<1>;
+			#size-cells = <0>;
+
+			mdio1_ioslot1@0 {
+				reg = <0x00>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+			};
+			mdio1_ioslot2@1 {
+				reg = <0x01>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+			};
+			mdio1_ioslot3@2 {
+				reg = <0x02>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+			};
+			mdio1_ioslot4@3 {
+				reg = <0x03>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+			};
+			mdio1_ioslot5@4 {
+				reg = <0x04>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+			};
+			mdio1_ioslot6@5 {
+				reg = <0x05>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+			};
+			mdio1_ioslot7@6 {
+				reg = <0x06>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+			};
+			mdio1_ioslot8@7 {
+				reg = <0x07>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+			};
+		};
+	};
 };
 
 &sata0 {

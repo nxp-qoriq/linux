@@ -86,6 +86,17 @@ config MDIO_BUS_MUX_MMIOREG
 
 	  Currently, only 8-bit registers are supported.
 
+config MDIO_BUS_MUX_I2CREG
+	tristate "I2C device-controlled MDIO bus multiplexers"
+	depends on OF_MDIO && I2C
+	select MDIO_BUS_MUX
+	help
+	  This module provides a driver for MDIO bus multiplexers that
+	  are controlled via a simple i2c device, like an FPGA.
+	  The multiplexer connects one of several child MDIO busses to a
+	  parent bus.  Child bus selection is under the control of one of
+	  the FPGA's registers.
+
 config MDIO_CAVIUM
 	tristate
 

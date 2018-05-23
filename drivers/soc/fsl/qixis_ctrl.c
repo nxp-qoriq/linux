@@ -16,6 +16,7 @@
 #include <linux/i2c.h>
 #include <linux/module.h>
 #include <linux/of_address.h>
+#include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/pm.h>
 #include <linux/regmap.h>
@@ -123,6 +124,8 @@ static int fsl_qixis_i2c_probe(struct i2c_client *client,
 			       const struct i2c_device_id *id)
 {
 	u32 qver;
+	struct platform_device *pdev;
+	struct device_node *child;
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_SMBUS_BYTE_DATA))
 		return -EOPNOTSUPP;
@@ -130,6 +133,10 @@ static int fsl_qixis_i2c_probe(struct i2c_client *client,
 	qixis_regmap = regmap_init_i2c(client, &qixis_regmap_config);
 
 	fsl_qixis_pm_init();
+
+	for_each_child_of_node(client->dev.of_node, child) {
+		pdev = of_platform_device_create (child, NULL, &client->dev);
+	};
 
 	regmap_read(qixis_regmap, offsetof(struct fsl_qixis_regs, qixis_ver),
 		    &qver);

@@ -1986,7 +1986,6 @@ static int setup_dpni(struct fsl_mc_device *ls_dev)
 	struct dpaa2_eth_priv *priv;
 	struct net_device *net_dev;
 	struct dpni_buffer_layout buf_layout;
-	struct dpni_link_cfg cfg = {0};
 	int err;
 
 	net_dev = dev_get_drvdata(dev);

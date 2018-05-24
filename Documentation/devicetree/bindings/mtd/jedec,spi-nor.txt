@@ -65,8 +65,6 @@ Optional properties:
                    all chips and support for it can not be detected at runtime.
                    Refer to your chips' datasheet to check if this is supported
                    by your chip.
-- use_fsr :    Use the "Flag Status Register" FSR command [0x70] to read the
-               status of last execute command.
 
 Example:
 

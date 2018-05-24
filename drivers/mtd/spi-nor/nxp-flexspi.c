@@ -344,8 +344,8 @@
 #define LUT_MODE2		0x05
 #define LUT_MODE4		0x06
 #define LUT_MODE8		0x07
-#define LUT_FSL_WRITE		0x08
-#define LUT_FSL_READ		0x09
+#define LUT_NXP_WRITE		0x08
+#define LUT_NXP_READ		0x09
 #define LUT_LEARN_SDR		0x0A
 #define LUT_DATSZ_SDR		0x0B
 #define LUT_DUMMY		0x0C
@@ -441,9 +441,9 @@ struct nxp_fspi_devtype_data {
 
 static struct nxp_fspi_devtype_data lx2160a_data = {
 	.devtype = NXP_FSPI_LX2160A,
-	.rxfifo = 512,
-	.txfifo = 1024,
-	.ahb_buf_size = 2048,
+	.rxfifo = RX_IPBUF_SIZE,
+	.txfifo = TX_IPBUF_SIZE,
+	.ahb_buf_size = RX_AHBBUF_SIZE,
 	.driver_data = 0,
 };
 
@@ -521,7 +521,7 @@ static void nxp_fspi_init_lut(struct nxp_fspi *fspi)
 		op = FSPINOR_OP_READ_1_1_8_4B;
 		writel(LUT0(CMD, PAD1, op) | LUT1(ADDR, PAD1, addrlen),
 				base + FSPI_LUT(lut_base));
-		writel(LUT0(DUMMY, PAD8, dm) | LUT1(FSL_READ, PAD8, 0),
+		writel(LUT0(DUMMY, PAD8, dm) | LUT1(NXP_READ, PAD8, 0),
 				base + FSPI_LUT(lut_base + 1));
 	} else {
 		if ((op == SPINOR_OP_READ4_FAST) ||
@@ -531,13 +531,13 @@ static void nxp_fspi_init_lut(struct nxp_fspi *fspi)
 			dm = 8;
 			writel(LUT0(CMD, PAD1, op) | LUT1(ADDR, PAD1, addrlen),
 					base + FSPI_LUT(lut_base));
-			writel(LUT0(DUMMY, PAD1, dm) | LUT1(FSL_READ, PAD1, 0),
+			writel(LUT0(DUMMY, PAD1, dm) | LUT1(NXP_READ, PAD1, 0),
 					base + FSPI_LUT(lut_base + 1));
 		} else if (nor->flash_read == SPI_NOR_QUAD) {
-			dev_info(nor->dev, "Unsupported opcode : 0x%.2x\n", op);
+			dev_dbg(nor->dev, "Unsupported opcode : 0x%.2x\n", op);
 			/* TODO Add support for other Read ops. */
 		} else {
-			dev_info(nor->dev, "Unsupported opcode : 0x%.2x\n", op);
+			dev_dbg(nor->dev, "Unsupported opcode : 0x%.2x\n", op);
 		}
 	}
 
@@ -549,11 +549,11 @@ static void nxp_fspi_init_lut(struct nxp_fspi *fspi)
 	lut_base = SEQID_PP * 4;
 	writel(LUT0(CMD, PAD1, nor->program_opcode) | LUT1(ADDR, PAD1, addrlen),
 			base + FSPI_LUT(lut_base));
-	writel(LUT0(FSL_WRITE, PAD1, 0), base + FSPI_LUT(lut_base + 1));
+	writel(LUT0(NXP_WRITE, PAD1, 0), base + FSPI_LUT(lut_base + 1));
 
 	/* Read Status */
 	lut_base = SEQID_RDSR * 4;
-	writel(LUT0(CMD, PAD1, SPINOR_OP_RDSR) | LUT1(FSL_READ, PAD1, 0x1),
+	writel(LUT0(CMD, PAD1, SPINOR_OP_RDSR) | LUT1(NXP_READ, PAD1, 0x1),
 			base + FSPI_LUT(lut_base));
 
 	/* Erase a sector */
@@ -568,17 +568,17 @@ static void nxp_fspi_init_lut(struct nxp_fspi *fspi)
 
 	/* READ ID */
 	lut_base = SEQID_RDID * 4;
-	writel(LUT0(CMD, PAD1, SPINOR_OP_RDID) | LUT1(FSL_READ, PAD1, 0x8),
+	writel(LUT0(CMD, PAD1, SPINOR_OP_RDID) | LUT1(NXP_READ, PAD1, 0x8),
 			base + FSPI_LUT(lut_base));
 
 	/* Write Register */
 	lut_base = SEQID_WRSR * 4;
-	writel(LUT0(CMD, PAD1, SPINOR_OP_WRSR) | LUT1(FSL_WRITE, PAD1, 0x2),
+	writel(LUT0(CMD, PAD1, SPINOR_OP_WRSR) | LUT1(NXP_WRITE, PAD1, 0x2),
 			base + FSPI_LUT(lut_base));
 
 	/* Read Configuration Register */
 	lut_base = SEQID_RDCR * 4;
-	writel(LUT0(CMD, PAD1, SPINOR_OP_RDCR) | LUT1(FSL_READ, PAD1, 0x1),
+	writel(LUT0(CMD, PAD1, SPINOR_OP_RDCR) | LUT1(NXP_READ, PAD1, 0x1),
 			base + FSPI_LUT(lut_base));
 
 	/* Write disable */
@@ -605,7 +605,7 @@ static void nxp_fspi_init_lut(struct nxp_fspi *fspi)
 
 	/* Read Flag Status */
 	lut_base = SEQID_RDFSR * 4;
-	writel(LUT0(CMD, PAD1, SPINOR_OP_RDFSR) | LUT1(FSL_READ, PAD1, 0x1),
+	writel(LUT0(CMD, PAD1, SPINOR_OP_RDFSR) | LUT1(NXP_READ, PAD1, 0x1),
 			base + FSPI_LUT(lut_base));
 
 	nxp_fspi_lock_lut(fspi);
@@ -869,10 +869,18 @@ static void nxp_fspi_set_map_addr(struct nxp_fspi *fspi)
 	int nor_size = fspi->nor_size >> 10;
 	void __iomem *base = fspi->iobase;
 
+	/*
+	 * Supporting same flash device as slaves on different chip-select.
+	 * As SAMEDEVICEEN bit set, by default, in mcr2 reg then need not to
+	 * configure FLSHA2CRx/FLSHB1CRx/FLSHB2CRx register as setting for
+	 * these would be ignored.
+	 * Need to Reset SAMEDEVICEEN bit in mcr2 reg, when require to add
+	 * support for different flashes.
+	 */
 	writel(nor_size, base + FSPI_FLSHA1CR0);
-	writel(nor_size * 2, base + FSPI_FLSHA2CR0);
-	writel(nor_size * 3, base + FSPI_FLSHB1CR0);
-	writel(nor_size * 4, base + FSPI_FLSHB2CR0);
+	writel(0, base + FSPI_FLSHA2CR0);
+	writel(0, base + FSPI_FLSHB1CR0);
+	writel(0, base + FSPI_FLSHB2CR0);
 }
 
 static void nxp_fspi_init_ahb_read(struct nxp_fspi *fspi)
@@ -1242,7 +1250,6 @@ static int nxp_fspi_probe(struct platform_device *pdev)
 	/* iterate the subnodes. */
 	for_each_available_child_of_node(dev->of_node, np) {
 		enum read_mode mode = SPI_NOR_FAST;
-		u32 dummy = 0;
 
 		/* skip the holes */
 		if (!fspi->has_second_chip)
@@ -1280,12 +1287,6 @@ static int nxp_fspi_probe(struct platform_device *pdev)
 		if (ret < 0)
 			fspi->spi_tx_bus_width = FSPI_SINGLE_MODE;
 
-		/* Can we enable the DDR Quad Read? */
-		ret = of_property_read_u32(np, "spi-nor,ddr-quad-read-dummy",
-					&dummy);
-		if (!ret && dummy > 0)
-			mode = SPI_NOR_FAST;
-
 		/* set the chip address for READID */
 		nxp_fspi_set_base_addr(fspi, nor);
 
@@ -1306,10 +1307,8 @@ static int nxp_fspi_probe(struct platform_device *pdev)
 		}
 
 		/*
-		 * The TX FIFO is 64 bytes in the Vybrid, but the Page Program
-		 * may writes 265 bytes per time. The write is working in the
-		 * unit of the TX FIFO, not in the unit of the SPI NOR's page
-		 * size.
+		 * The write is working in the  unit of the TX FIFO,
+		 * not in the unit of the SPI NOR's page size.
 		 *
 		 * So shrink the spi_nor->page_size if it is larger then the
 		 * TX FIFO.

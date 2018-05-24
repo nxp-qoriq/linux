@@ -46,6 +46,8 @@
 #define ENETC_SIMR_EN	BIT(31)
 #define ENETC_SIMR_RSSE	BIT(0)
 
+#define ENETC_SIRBGCR	0x38
+
 /* Cache attribute registers for transactions initiated by ENETC */
 #define ENETC_SICAR0	0x40
 #define ENETC_SICAR1	0x44

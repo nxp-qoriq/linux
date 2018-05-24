@@ -236,7 +236,8 @@ int enetc_open(struct net_device *ndev);
 int enetc_close(struct net_device *ndev);
 netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev);
 struct net_device_stats *enetc_get_stats(struct net_device *ndev);
-
+int enetc_set_features(struct net_device *ndev,
+		       netdev_features_t features);
 /* ethtool */
 void enetc_set_ethtool_ops(struct net_device *ndev);
 

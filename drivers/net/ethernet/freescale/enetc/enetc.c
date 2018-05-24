@@ -1250,6 +1250,35 @@ struct net_device_stats *enetc_get_stats(struct net_device *ndev)
 	return stats;
 }
 
+static int enetc_set_rss(struct net_device *ndev, int en)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_hw *hw = &priv->si->hw;
+	int cpus;
+	u32 reg;
+
+	cpus = min_t(int, num_online_cpus(), priv->si->num_rx_rings);
+	enetc_wr(hw, ENETC_SIRBGCR, cpus);
+
+	reg = enetc_rd(hw, ENETC_SIMR);
+	reg &= ~ENETC_SIMR_RSSE;
+	reg |= (en) ? ENETC_SIMR_RSSE : 0;
+	enetc_wr(hw, ENETC_SIMR, reg);
+
+	return 0;
+}
+
+int enetc_set_features(struct net_device *ndev,
+		       netdev_features_t features)
+{
+	netdev_features_t changed = ndev->features ^ features;
+
+	if (changed & NETIF_F_RXHASH)
+		enetc_set_rss(ndev, !!(features & NETIF_F_RXHASH));
+
+	return 0;
+}
+
 int enetc_alloc_msix(struct enetc_ndev_priv *priv)
 {
 	struct pci_dev *pdev = priv->si->pdev;

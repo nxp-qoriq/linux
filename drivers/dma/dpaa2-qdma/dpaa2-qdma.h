@@ -99,7 +99,7 @@ struct dpaa2_qdma_sg {
 	} ctrl;
 } __attribute__((__packed__));
 
-#define QMAN_FD_FMT_ENABLE (1 << 12) /* frame list table enable */
+#define QMAN_FD_FMT_ENABLE (1) /* frame list table enable */
 #define QMAN_FD_BMT_ENABLE (1 << 15) /* bypass memory translation */
 #define QMAN_FD_BMT_DISABLE (0 << 15) /* bypass memory translation */
 #define QMAN_FD_SL_DISABLE (0 << 14) /* short lengthe disabled */
@@ -124,49 +124,14 @@ struct dpaa2_qdma_sg {
 #define QMAN_FD_CBMT_DISABLE (0 << 15) /* Flow Context: 64bit virtual address */
 #define QMAN_FD_SC_DISABLE (0 << 27) /* stashing control */
 
-#define QDMA_FL_FMT_SBF 0x0	/* Single buffer frame */
+#define QDMA_FL_FMT_SBF (0x0) /* Single buffer frame */
 #define QDMA_FL_FMT_SGE 0x2 /* Scatter gather frame */
-#define QDMA_FL_BMT_ENABLE 0x1 /* enable bypass memory translation */
+#define QDMA_FL_BMT_ENABLE (0x1 << 15)/* enable bypass memory translation */
 #define QDMA_FL_BMT_DISABLE 0x0 /* enable bypass memory translation */
-#define QDMA_FL_SL_LONG 0x0 /* long length */
+#define QDMA_FL_SL_LONG (0x0 << 2)/* long length */
 #define QDMA_FL_SL_SHORT 0x1 /* short length */
-#define QDMA_FL_F 0x1 /* last frame list bit */
+#define QDMA_FL_F (0x1)/* last frame list bit */
 /*Description of Frame list table structure*/
-struct dpaa2_frame_list  {
-	uint32_t addr_lo;	/* lower 32 bits of address */
-	uint32_t addr_hi:17; /* upper 17 bits of address */
-	uint32_t resrvd:15;
-	union {
-		uint32_t data_len_sl0; /* If SL=0, then data length is 32 */
-		struct {
-			uint32_t data_len:18; /* IF SL=1; length is 18bit */
-			uint32_t resrvd:2;
-			uint32_t mem:12; /* Valid only when SL=1 */
-		} data_len_sl1;
-	} data_len;
-	/* word 4 */
-	uint32_t bpid:14; /* Frame buffer pool ID */
-	uint32_t ivp:1; /* Invalid Pool ID. */
-	uint32_t bmt:1; /* Bypass Memory Translation */
-	uint32_t offset:12; /* Frame offset */
-	uint32_t fmt:2; /* Frame Format */
-	uint32_t sl:1; /* Short Length */
-	uint32_t f:1; /* Final bit */
-
-	uint32_t frc; /* Frame Context */
-	/* word 6 */
-	uint32_t err:8; /* Frame errors */
-	uint32_t resrvd0:8;
-	uint32_t asal:4; /* accelerator-specific annotation length */
-	uint32_t resrvd1:1;
-	uint32_t ptv2:1;
-	uint32_t ptv1:1;
-	uint32_t pta:1; /* pass-through annotation */
-	uint32_t resrvd2:8;
-
-	uint32_t flc_lo; /* lower 32 bits fo flow context */
-	uint32_t flc_hi; /* higher 32 bits fo flow context */
-} __attribute__((__packed__));
 
 struct dpaa2_qdma_chan {
 	struct virt_dma_chan		vchan;
@@ -253,7 +218,7 @@ struct dpaa2_qdma_priv_per_prio {
 
 /* FD pool size: one FD + 3 Frame list + 2 source/destination descriptor */
 #define FD_POOL_SIZE (sizeof(struct dpaa2_fd) + \
-		sizeof(struct dpaa2_frame_list) * 3 + \
+		sizeof(struct dpaa2_fl_entry) * 3 + \
 		sizeof(struct dpaa2_qdma_sd_d) * 2)
 
 /* qdma_sg_blk + 16 SGs */

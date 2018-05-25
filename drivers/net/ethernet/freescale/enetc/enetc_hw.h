@@ -114,11 +114,7 @@ static inline u32 enetc_vsi_set_msize(u32 size)
 #define ENETC_PSIIER	0xa00
 #define ENETC_PSIIER_MR_MASK	GENMASK(2, 1)
 #define ENETC_PSIIDR	0xa08
-#define ENETC_SITXIER	0xa10
-#define ENETC_SITXIER_TX0IE	BIT(0)
 #define ENETC_SITXIDR	0xa18
-#define ENETC_SIRXIER	0xa20
-#define ENETC_SIRXIER_RX0IE	BIT(0)
 #define ENETC_SIRXIDR	0xa28
 #define ENETC_SIMSIVR	0xa30
 

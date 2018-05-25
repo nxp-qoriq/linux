@@ -40,7 +40,6 @@
 #include <linux/skbuff.h>
 #include <linux/ethtool.h>
 #include <linux/if_vlan.h>
-#include <linux/spinlock.h>
 
 #include "enetc_hw.h"
 
@@ -172,7 +171,6 @@ struct enetc_int_vector {
 
 	struct enetc_bdr tx_ring ____cacheline_aligned_in_smp;
 	struct enetc_bdr rx_ring;
-	struct enetc_ndev_priv *priv;
 };
 
 struct enetc_cls_rule {
@@ -181,7 +179,6 @@ struct enetc_cls_rule {
 };
 
 struct enetc_ndev_priv {
-	spinlock_t rtxint_lock; /* FIXME: should be temporary for early emu models */
 	struct net_device *ndev;
 	struct device *dev; /* dma-mapping device */
 	struct enetc_si *si;

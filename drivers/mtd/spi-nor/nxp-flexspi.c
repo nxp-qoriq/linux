@@ -422,6 +422,11 @@
 #define RX_AHBBUF_SIZE		FSPI_RX_MAX_AHBBUF_SIZE
 #define TX_AHBBUF_SIZE		FSPI_TX_MAX_AHBBUF_SIZE
 
+#define FSPI_SINGLE_MODE	1
+#define FSPI_OCTAL_MODE		8
+
+#define FSPINOR_OP_READ_1_1_8_4B	0x7c
+
 enum nxp_fspi_devtype {
 	NXP_FSPI_LX2160A,
 };
@@ -458,6 +463,8 @@ struct nxp_fspi {
 	u32 nor_size;
 	u32 nor_num;
 	u32 clk_rate;
+	u32 spi_rx_bus_width;
+	u32 spi_tx_bus_width;
 	unsigned int chip_base_addr; /* We may support two chips. */
 	bool has_second_chip;
 	struct mutex lock;
@@ -509,18 +516,29 @@ static void nxp_fspi_init_lut(struct nxp_fspi *fspi)
 	op = nor->read_opcode;
 	dm = nor->read_dummy;
 
-	if ((op == SPINOR_OP_READ4_FAST) || (op == SPINOR_OP_READ_FAST) ||
-		(op == SPINOR_OP_READ) || (op == SPINOR_OP_READ_4B)) {
+	if (fspi->spi_rx_bus_width == FSPI_OCTAL_MODE) {
 		dm = 8;
+		op = FSPINOR_OP_READ_1_1_8_4B;
 		writel(LUT0(CMD, PAD1, op) | LUT1(ADDR, PAD1, addrlen),
-			base + FSPI_LUT(lut_base));
-		writel(LUT0(DUMMY, PAD1, dm) | LUT1(FSL_READ, PAD1, 0),
-			base + FSPI_LUT(lut_base + 1));
-	} else if (nor->flash_read == SPI_NOR_QUAD) {
-		dev_info(nor->dev, "Unsupported opcode : 0x%.2x\n", op);
-		/* TODO Add support for other Read ops. */
+				base + FSPI_LUT(lut_base));
+		writel(LUT0(DUMMY, PAD8, dm) | LUT1(FSL_READ, PAD8, 0),
+				base + FSPI_LUT(lut_base + 1));
 	} else {
-		dev_info(nor->dev, "Unsupported opcode : 0x%.2x\n", op);
+		if ((op == SPINOR_OP_READ4_FAST) ||
+		     (op == SPINOR_OP_READ_FAST) ||
+		     (op == SPINOR_OP_READ) ||
+		     (op == SPINOR_OP_READ_4B)) {
+			dm = 8;
+			writel(LUT0(CMD, PAD1, op) | LUT1(ADDR, PAD1, addrlen),
+					base + FSPI_LUT(lut_base));
+			writel(LUT0(DUMMY, PAD1, dm) | LUT1(FSL_READ, PAD1, 0),
+					base + FSPI_LUT(lut_base + 1));
+		} else if (nor->flash_read == SPI_NOR_QUAD) {
+			dev_info(nor->dev, "Unsupported opcode : 0x%.2x\n", op);
+			/* TODO Add support for other Read ops. */
+		} else {
+			dev_info(nor->dev, "Unsupported opcode : 0x%.2x\n", op);
+		}
 	}
 
 	/* Write enable */
@@ -1251,6 +1269,16 @@ static int nxp_fspi_probe(struct platform_device *pdev)
 				&fspi->clk_rate);
 		if (ret < 0)
 			goto mutex_failed;
+
+		ret = of_property_read_u32(np, "spi-rx-bus-width",
+				&fspi->spi_rx_bus_width);
+		if (ret < 0)
+			fspi->spi_rx_bus_width = FSPI_SINGLE_MODE;
+
+		ret = of_property_read_u32(np, "spi-tx-bus-width",
+				&fspi->spi_tx_bus_width);
+		if (ret < 0)
+			fspi->spi_tx_bus_width = FSPI_SINGLE_MODE;
 
 		/* Can we enable the DDR Quad Read? */
 		ret = of_property_read_u32(np, "spi-nor,ddr-quad-read-dummy",

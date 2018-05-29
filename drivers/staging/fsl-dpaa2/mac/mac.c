@@ -77,6 +77,7 @@ static phy_interface_t dpaa2_mac_iface_mode[] =  {
 	PHY_INTERFACE_MODE_QSGMII,	/* DPMAC_ETH_IF_QSGMII */
 	PHY_INTERFACE_MODE_XGMII,	/* DPMAC_ETH_IF_XAUI */
 	PHY_INTERFACE_MODE_XGMII,	/* DPMAC_ETH_IF_XFI */
+	PHY_INTERFACE_MODE_CAUI,	/* DPMAC_ETH_IF_CAUI */
 };
 
 static void dpaa2_mac_link_changed(struct net_device *netdev)

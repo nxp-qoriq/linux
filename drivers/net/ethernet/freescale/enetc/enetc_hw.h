@@ -188,6 +188,9 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PSIVLANR(n)	(0x00240 + (n) * 4) /* n = SI index */
 #define ENETC_PSIVLAN_EN	BIT(31)
 #define ENETC_PSIVLAN_SET_QOS(val)	((u32)(val) << 12)
+
+#define ENETC_PTXMBAR	0x00608
+
 #define ENETC_PCAPR0	0x00900
 #define ENETC_PCAPR0_RXBDR(val)	((val) >> 24)
 #define ENETC_PCAPR0_TXBDR(val)	(((val) >> 16) & 0xff)
@@ -212,6 +215,8 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PRFSMR_RFSE	BIT(31)
 #define ENETC_PRFSCAPR		0x01804
 #define ENETC_PSIRFSCFGR(n)	(0x01814 + (n) * 4) /* n = SI index */
+
+#define ENETC_PTCMSDUR(n)	(0x02020 + (n) * 4) /* n = TC index [0..7] */
 
 #define ENETC_PM0_CMD_CFG	0x08008
 #define ENETC_PM0_TX_EN		BIT(0)

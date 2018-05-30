@@ -31,6 +31,7 @@
 #define PAB_CTRL_PAGE_SEL_MASK			0x3f
 #define PAB_CTRL_FUNC_SEL_SHIFT			19
 #define PAB_CTRL_FUNC_SEL_MASK			0x1ff
+#define PAB_CTRL_MSI_SW_CTRL_EN			(1 << 29)
 
 #define PAB_RST_CTRL				0x820
 #define PAB_BR_STAT				0x80c
@@ -108,8 +109,17 @@
 #define PEX_AMAP_CTRL_EN_MASK			0x1
 
 /* PPIO WINs EP mode */
-#define PAB_PEX_BAR_AMAP(func, bar)		(0x1ba0 + 0x4 * func * bar)
-#define PAB_EXT_PEX_BAR_AMAP(func, bar)		(0x84a0 + 0x4 * func * bar)
+#define PAB_PEX_BAR_AMAP(func, bar)		(0x1ba0 + 0x20 * func + 4 * bar)
+#define PAB_EXT_PEX_BAR_AMAP(func, bar)		(0x84a0 + 0x20 * func + 4 * bar)
+
+#define PAB_AXI_AMAP_PCI_HDR_PARAM(idx)		(0x5ba0 + 0x04 * idx)
+#define PCI_BAR_ENABLE                          0x4D4
+#define PCI_BAR_BAR_SIZE_LDW                    0x4D8
+#define PCI_BAR_BAR_SIZE_UDW                    0x4DC
+#define PCI_BAR_SELECT                          0x4E0
+#define PAB_MSIX_TABLE_PBA_ACCESS		0xD000
+#define SRIOV_INIT_VFS_TOTAL_VF(vf)		(0x644 + vf * 4)
+#define PEX_PF_VF(func)                         (0x407f8 + func * 0x10000)
 
 #define PEX_BAR_AMAP_EN_SHIFT			(0)
 #define PEX_BAR_AMAP_EN_MASK			(1)

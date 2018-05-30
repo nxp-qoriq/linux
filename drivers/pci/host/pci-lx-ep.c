@@ -1,0 +1,363 @@
+/*
+ * PCIe Endpoint driver for Freescale Layerscape SoCs
+ *
+ * Copyright 2018 NXP.
+ *
+ * Author: Xiaowei Bao <xiaowei.bao@nxp.com>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
+
+#include <linux/kernel.h>
+#include <linux/delay.h>
+#include <linux/interrupt.h>
+#include <linux/module.h>
+#include <linux/of_pci.h>
+#include <linux/of_platform.h>
+#include <linux/of_irq.h>
+#include <linux/of_address.h>
+#include <linux/pci.h>
+#include <linux/platform_device.h>
+#include <linux/resource.h>
+#include <linux/debugfs.h>
+#include <linux/time.h>
+#include <linux/uaccess.h>
+
+#include "pci-lx-ep.h"
+
+static int lx_pcie_link_up(struct mv_pcie *pci)
+{
+	return 0;
+}
+
+struct lx_ep_dev *
+lx_pci_ep_find(struct lx_pcie *pcie, int dev_id)
+{
+	struct lx_ep_dev *ep;
+
+	list_for_each_entry(ep, &pcie->ep_list, node) {
+		if (ep->dev_id == dev_id)
+			return ep;
+	}
+
+	return NULL;
+}
+
+static void lx_pcie_try_cfg2(struct lx_pcie *pcie, int pf, int vf)
+{
+	struct mv_pcie *mv_pci = pcie->pci;
+
+	mv_pcie_writel_csr(mv_pci, PCIE_CFG_READY, PCIE_CONFIG_READY);
+}
+
+static bool lx_pcie_is_bridge(struct lx_pcie *pcie)
+{
+	struct mv_pcie *mv_pci = pcie->pci;
+	u32 header_type;
+
+	header_type = mv_pcie_readb_csr(mv_pci, PCI_HEADER_TYPE);
+	header_type &= 0x7f;
+
+	return header_type == PCI_HEADER_TYPE_BRIDGE;
+}
+
+int lx_pcie_ep_outbound_win_set(struct lx_pcie *pcie, int idx, int type,
+				u64 phys, u64 bus_addr, u32 func, u64 size)
+{
+	u32 val;
+	u32 size_h, size_l;
+	struct mv_pcie *mv_pci = pcie->pci;
+
+	size_h = upper_32_bits(~((u64)size - 1));
+	size_l = lower_32_bits(~((u64)size - 1));
+
+	val = mv_pcie_readl_csr(mv_pci, PAB_AXI_AMAP_CTRL(idx));
+	val &= ~((AXI_AMAP_CTRL_TYPE_MASK << AXI_AMAP_CTRL_TYPE_SHIFT) |
+		(AXI_AMAP_CTRL_SIZE_MASK << AXI_AMAP_CTRL_SIZE_SHIFT) |
+		AXI_AMAP_CTRL_EN);
+	val |= ((type & AXI_AMAP_CTRL_TYPE_MASK) << AXI_AMAP_CTRL_TYPE_SHIFT) |
+		((size_l >> AXI_AMAP_CTRL_SIZE_SHIFT) <<
+		AXI_AMAP_CTRL_SIZE_SHIFT) | AXI_AMAP_CTRL_EN;
+
+	mv_pcie_writel_csr(mv_pci, PAB_AXI_AMAP_CTRL(idx), val);
+
+	mv_pcie_writel_csr(mv_pci, PAB_AXI_AMAP_PCI_HDR_PARAM(idx), func);
+	mv_pcie_writel_csr(mv_pci, PAB_AXI_AMAP_AXI_WIN(idx),
+			lower_32_bits(phys));
+	mv_pcie_writel_csr(mv_pci, PAB_EXT_AXI_AMAP_AXI_WIN(idx),
+			upper_32_bits(phys));
+	mv_pcie_writel_csr(mv_pci, PAB_AXI_AMAP_PEX_WIN_L(idx),
+			lower_32_bits(bus_addr));
+	mv_pcie_writel_csr(mv_pci, PAB_AXI_AMAP_PEX_WIN_H(idx),
+			upper_32_bits(bus_addr));
+	mv_pcie_writel_csr(mv_pci, PAB_EXT_AXI_AMAP_SIZE(idx), size_h);
+
+	return 0;
+}
+
+void lx_pcie_ep_inbound_win_set(struct lx_pcie *pcie, int func,
+			int bar, u64 phys)
+{
+	struct mv_pcie *mv_pci = pcie->pci;
+
+	mv_pcie_writel_csr(mv_pci, PAB_EXT_PEX_BAR_AMAP(func, bar),
+			upper_32_bits(phys));
+	mv_pcie_writel_csr(mv_pci, PAB_PEX_BAR_AMAP(func, bar),
+			lower_32_bits(phys) | 1);
+}
+
+void lx_pcie_ep_dev_cfg_enable(struct lx_ep_dev *ep)
+{
+	lx_pcie_try_cfg2(ep->pcie, ep->pf_idx, ep->vf_idx);
+}
+
+static void lx_pcie_ep_setup_wins(struct lx_pcie *pcie, int bar_num, int pf)
+{
+	int bar;
+	dma_addr_t buf_addr;
+
+	for (bar = 0; bar < bar_num; bar++) {
+		if (pcie->sriov) {
+			if (bar < PCIE_BAR_NUM)
+				buf_addr = pcie->buf_addr_pf +
+					bar * PCIE_BAR_SIZE +
+					pf * PCIE_BAR_NUM * PCIE_BAR_SIZE;
+			else
+				buf_addr = pcie->buf_addr_vf +
+					(bar - PCIE_BAR_NUM) *
+					PCIE_BAR_SIZE * PCIE_VF_NUM +
+					pf * PCIE_BAR_NUM * PCIE_BAR_SIZE *
+					PCIE_VF_NUM;
+		} else
+			buf_addr = pcie->buf_addr_pf + bar * PCIE_BAR_SIZE +
+				pf * PCIE_BAR_NUM * PCIE_BAR_SIZE;
+
+		lx_pcie_ep_inbound_win_set(pcie, pf, bar, buf_addr);
+	}
+}
+
+static void lx_pcie_setup_ep(struct lx_pcie *pcie)
+{
+	u32 pf;
+
+	if (pcie->sriov) {
+		pcie->buf_pf = dma_alloc_coherent(pcie->dev,
+				PCIE_BAR_SIZE * PCIE_PF_NUM * PCIE_BAR_NUM,
+				&pcie->buf_addr_pf,
+				GFP_KERNEL);
+		pcie->buf_vf = dma_alloc_coherent(pcie->dev,
+				PCIE_BAR_SIZE * PCIE_VF_NUM * PCIE_PF_NUM *
+				PCIE_BAR_NUM,
+				&pcie->buf_addr_vf,
+				GFP_KERNEL);
+
+		for (pf = 0; pf < PCIE_PF_NUM; pf++)
+			lx_pcie_ep_setup_wins(pcie, PCIE_BAR_NUM_SRIOV, pf);
+	} else {
+		pcie->buf_pf = dma_alloc_coherent(pcie->dev,
+					PCIE_BAR_SIZE * PCIE_BAR_NUM,
+					&pcie->buf_addr_pf,
+					GFP_KERNEL);
+		lx_pcie_ep_setup_wins(pcie, PCIE_BAR_NUM, 0);
+	}
+
+}
+
+static int lx_pcie_ep_dev_init(struct lx_pcie *pcie, int pf_idx, int vf_idx)
+{
+	struct lx_ep_dev *ep;
+
+	ep = devm_kzalloc(pcie->dev, sizeof(*ep), GFP_KERNEL);
+	if (!ep)
+		return -ENOMEM;
+
+	ep->pcie = pcie;
+	ep->pf_idx = pf_idx;
+	ep->vf_idx = vf_idx;
+
+	if (vf_idx)
+		ep->dev_id = 2 + pf_idx * PCIE_VF_NUM  + (vf_idx - 1);
+	else
+		ep->dev_id = pf_idx;
+
+	if (vf_idx)
+		dev_set_name(&ep->dev, "pf%d-vf%d",
+			     ep->pf_idx,
+			     ep->vf_idx);
+	else
+		dev_set_name(&ep->dev, "pf%d",
+			     ep->pf_idx);
+
+	list_add_tail(&ep->node, &pcie->ep_list);
+
+	return 0;
+}
+
+static void lx_pcie_set_sriov(struct lx_pcie *pcie, int func)
+{
+	unsigned int val;
+
+	val = ioread32(pcie->lut + PEX_PF_VF(func));
+}
+
+static int lx_pcie_ep_init(struct lx_pcie *pcie)
+{
+	u32 sriov_header;
+	int pf, vf, i, j;
+	struct mv_pcie *mv_pci = pcie->pci;
+
+	sriov_header = mv_pcie_readl_csr(mv_pci, PCIE_SRIOV_CAPABILITY);
+	if (PCI_EXT_CAP_ID(sriov_header) == PCI_EXT_CAP_ID_SRIOV) {
+		pcie->sriov = PCIE_SRIOV_POS;
+		pf = PCIE_PF_NUM;
+		vf = PCIE_VF_NUM;
+	} else {
+		pcie->sriov = 0;
+		pf = 1;
+		vf = 0;
+	}
+
+	for (i = 0; i < pf; i++) {
+		lx_pcie_set_sriov(pcie, pf);
+		for (j = 0; j <= vf; j++)
+			lx_pcie_ep_dev_init(pcie, i, j);
+	}
+
+	lx_pcie_setup_ep(pcie);
+
+	return 0;
+}
+
+static const struct mv_pcie_pab_ops lx_pcie_pab_ops = {
+	.link_up = lx_pcie_link_up,
+};
+
+static struct lx_pcie_ep_drvdata lx2160_drvdata = {
+	.lut_offset = 0x80000,
+	.lut_big_endian = false,
+	.lut_dbg = 0x407fc,
+	.ltssm_shift = 0,
+	.ltssm_mask = 0x3f,
+	.pab_ops = &lx_pcie_pab_ops,
+};
+
+static const struct of_device_id lx_pcie_ep_of_match[] = {
+	{ .compatible = "fsl,lx2160a-pcie", .data = &lx2160_drvdata },
+	{ },
+};
+MODULE_DEVICE_TABLE(of, lx_pcie_ep_of_match);
+
+static int lx_pcie_ep_probe(struct platform_device *pdev)
+{
+	struct lx_pcie *pcie;
+	struct mv_pcie *mv_pci;
+	struct resource *csr_base, *cfg_res;
+	const struct of_device_id *match;
+	int ret, val;
+
+	match = of_match_device(lx_pcie_ep_of_match, &pdev->dev);
+	if (!match)
+		return -ENODEV;
+
+	pcie = devm_kzalloc(&pdev->dev, sizeof(*pcie), GFP_KERNEL);
+	if (!pcie)
+		return -ENOMEM;
+
+	mv_pci = devm_kzalloc(&pdev->dev, sizeof(*mv_pci), GFP_KERNEL);
+	if (!mv_pci)
+		return -ENOMEM;
+
+	pcie->pci = mv_pci;
+	pcie->dev = &pdev->dev;
+	INIT_LIST_HEAD(&pcie->ep_list);
+
+	csr_base = platform_get_resource_byname(pdev, IORESOURCE_MEM, "regs");
+	mv_pci->csr_base = devm_ioremap_resource(&pdev->dev, csr_base);
+	if (IS_ERR(mv_pci->csr_base))
+		return PTR_ERR(mv_pci->csr_base);
+
+	pcie->drvdata = match->data;
+	mv_pci->ops = pcie->drvdata->pab_ops;
+	pcie->lut = mv_pci->csr_base + pcie->drvdata->lut_offset;
+
+
+	cfg_res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "config");
+	if (cfg_res)
+		pcie->out_base = cfg_res->start;
+	else {
+		dev_err(&pdev->dev, "missing *config* space\n");
+		return -ENODEV;
+	}
+
+	if (lx_pcie_is_bridge(pcie))
+		return -ENODEV;
+
+	dev_info(pcie->dev, "in EP mode\n");
+
+	val =  mv_pcie_readl_csr(mv_pci, PAB_CTRL);
+	val |= PAB_CTRL_MSI_SW_CTRL_EN;
+	mv_pcie_writel_csr(mv_pci, PAB_CTRL, val);
+
+	val =  mv_pcie_readl_csr(mv_pci, PAB_INTP_AXI_MISC_ENB);
+	val |= 1 << 0;
+	mv_pcie_writel_csr(mv_pci, PAB_INTP_AXI_MISC_ENB, val);
+
+	ret = lx_pcie_ep_init(pcie);
+	if (ret)
+		return ret;
+
+	lx_pcie_ep_dbgfs_init(pcie);
+
+	platform_set_drvdata(pdev, pcie);
+
+	return 0;
+}
+
+static int lx_pcie_ep_dev_remove(struct lx_ep_dev *ep)
+{
+	list_del(&ep->node);
+
+	return 0;
+}
+
+static int lx_pcie_ep_remove(struct platform_device *pdev)
+{
+	struct lx_pcie *pcie = platform_get_drvdata(pdev);
+	struct lx_ep_dev *ep, *tmp;
+
+	if (!pcie)
+		return 0;
+
+	lx_pcie_ep_dbgfs_remove(pcie);
+
+	if (pcie->buf_pf)
+		free_pages((unsigned long)pcie->buf_pf,
+			PCIE_BAR_SIZE * PCIE_PF_NUM * 4);
+
+	if (pcie->buf_vf)
+		free_pages((unsigned long)pcie->buf_vf,
+				PCIE_BAR_SIZE * PCIE_VF_NUM * PCIE_PF_NUM * 4);
+
+	list_for_each_entry_safe(ep, tmp, &pcie->ep_list, node)
+		lx_pcie_ep_dev_remove(ep);
+
+	return 0;
+}
+
+static struct platform_driver lx_pcie_ep_driver = {
+	.driver = {
+		.name = "lx-pcie-ep",
+		.owner = THIS_MODULE,
+		.of_match_table = lx_pcie_ep_of_match,
+	},
+	.probe = lx_pcie_ep_probe,
+	.remove = lx_pcie_ep_remove,
+};
+
+module_platform_driver(lx_pcie_ep_driver);
+
+MODULE_AUTHOR("Xiaowei Bao <xiaowei.bao@nxp.com>");
+MODULE_DESCRIPTION("Freescale Layerscape PCIe EP driver");
+MODULE_LICENSE("GPL v2");

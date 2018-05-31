@@ -1039,6 +1039,30 @@ out:
 	return ret;
 }
 
+#ifdef ARM64
+static pgprot_t stage1_to_stage2_pgprot(pgprot_t prot)
+{
+	switch (pgprot_val(prot) & PTE_ATTRINDX_MASK) {
+		case PTE_ATTRINDX(MT_DEVICE_nGnRE):
+		case PTE_ATTRINDX(MT_DEVICE_nGnRnE):
+		case PTE_ATTRINDX(MT_DEVICE_GRE):
+			return PAGE_S2_DEVICE;
+		case PTE_ATTRINDX(MT_NORMAL_NC):
+		case PTE_ATTRINDX(MT_NORMAL):
+			return (pgprot_val(prot) & PTE_SHARED)
+				? PAGE_S2
+				: PAGE_S2_NS;
+	}
+
+	return PAGE_S2_DEVICE;
+}
+#else
+static pgprot_t stage1_to_stage2_pgprot(pgprot_t prot)
+{
+	return PAGE_S2_DEVICE;
+}
+#endif
+
 static bool transparent_hugepage_adjust(kvm_pfn_t *pfnp, phys_addr_t *ipap)
 {
 	kvm_pfn_t pfn = *pfnp;
@@ -1290,6 +1314,19 @@ static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,
 		hugetlb = true;
 		gfn = (fault_ipa & PMD_MASK) >> PAGE_SHIFT;
 	} else {
+		if (!is_vm_hugetlb_page(vma)) {
+			pte_t *pte;
+			spinlock_t *ptl;
+			pgprot_t prot;
+
+			pte = get_locked_pte(current->mm, memslot->userspace_addr, &ptl);
+			prot = stage1_to_stage2_pgprot(__pgprot(pte_val(*pte)));
+			pte_unmap_unlock(pte, ptl);
+#ifdef ARM64
+			if (pgprot_val(prot) == pgprot_val(PAGE_S2_NS))
+				mem_type = PAGE_S2_NS;
+#endif
+		}
 		/*
 		 * Pages belonging to memslots that don't have the same
 		 * alignment for userspace and IPA cannot be mapped using
@@ -1327,6 +1364,11 @@ static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,
 	if (is_error_noslot_pfn(pfn))
 		return -EFAULT;
 
+#ifdef ARM64
+	if (pgprot_val(mem_type) == pgprot_val(PAGE_S2_NS)) {
+		flags |= KVM_S2PTE_FLAG_IS_IOMAP;
+	} else
+#endif
 	if (kvm_is_device_pfn(pfn)) {
 		mem_type = PAGE_S2_DEVICE;
 		flags |= KVM_S2PTE_FLAG_IS_IOMAP;
@@ -1860,6 +1902,9 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
 			gpa_t gpa = mem->guest_phys_addr +
 				    (vm_start - mem->userspace_addr);
 			phys_addr_t pa;
+			pgprot_t prot;
+			pte_t *pte;
+			spinlock_t *ptl;
 
 			pa = (phys_addr_t)vma->vm_pgoff << PAGE_SHIFT;
 			pa += vm_start - vma->vm_start;
@@ -1869,10 +1914,13 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
 				ret = -EINVAL;
 				goto out;
 			}
+			pte = get_locked_pte(current->mm, mem->userspace_addr, &ptl);
+			prot = stage1_to_stage2_pgprot(__pgprot(pte_val(*pte)));
+			pte_unmap_unlock(pte, ptl);
 
 			ret = kvm_phys_addr_ioremap(kvm, gpa, pa,
 						    vm_end - vm_start,
-						    writable, PAGE_S2_DEVICE);
+						    writable, prot);
 			if (ret)
 				break;
 		}

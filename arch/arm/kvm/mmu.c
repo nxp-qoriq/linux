@@ -1039,7 +1039,7 @@ out:
 	return ret;
 }
 
-#ifdef ARM64
+#ifdef CONFIG_ARM64
 static pgprot_t stage1_to_stage2_pgprot(pgprot_t prot)
 {
 	switch (pgprot_val(prot) & PTE_ATTRINDX_MASK) {
@@ -1322,7 +1322,7 @@ static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,
 			pte = get_locked_pte(current->mm, memslot->userspace_addr, &ptl);
 			prot = stage1_to_stage2_pgprot(__pgprot(pte_val(*pte)));
 			pte_unmap_unlock(pte, ptl);
-#ifdef ARM64
+#ifdef CONFIG_ARM64
 			if (pgprot_val(prot) == pgprot_val(PAGE_S2_NS))
 				mem_type = PAGE_S2_NS;
 #endif
@@ -1364,7 +1364,7 @@ static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,
 	if (is_error_noslot_pfn(pfn))
 		return -EFAULT;
 
-#ifdef ARM64
+#ifdef CONFIG_ARM64
 	if (pgprot_val(mem_type) == pgprot_val(PAGE_S2_NS)) {
 		flags |= KVM_S2PTE_FLAG_IS_IOMAP;
 	} else

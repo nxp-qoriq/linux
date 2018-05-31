@@ -55,11 +55,11 @@ struct fsl_mc_io;
 /**
  * Maximum number of senders
  */
-#define DPNI_MAX_SENDERS			8
+#define DPNI_MAX_SENDERS			16
 /**
  * Maximum distribution size
  */
-#define DPNI_MAX_DIST_SIZE			8
+#define DPNI_MAX_DIST_SIZE			16
 
 /**
  * All traffic classes considered; see dpni_set_queue()
@@ -486,6 +486,24 @@ union dpni_statistics {
 		u64 egress_confirmed_frames;
 	} page_2;
 	/**
+	 * struct page_3 - Page_3 statistics structure with values for the
+	 *		   selected TC
+	 * @ceetm_dequeue_bytes: Cumulative count of the number of bytes
+	 *			 dequeued
+	 * @ceetm_dequeue_frames: Cumulative count of the number of frames
+	 *			  dequeued
+	 * @ceetm_reject_bytes: Cumulative count of the number of bytes in all
+	 *			frames whose enqueue was rejected
+	 * @ceetm_reject_frames: Cumulative count of all frame enqueues
+	 *			 rejected
+	 */
+	struct {
+		u64 ceetm_dequeue_bytes;
+		u64 ceetm_dequeue_frames;
+		u64 ceetm_reject_bytes;
+		u64 ceetm_reject_frames;
+	} page_3;
+	/**
 	 * struct raw - raw statistics structure
 	 */
 	struct {
@@ -497,6 +515,7 @@ int dpni_get_statistics(struct fsl_mc_io	*mc_io,
 			u32			cmd_flags,
 			u16			token,
 			u8			page,
+			u8			param,
 			union dpni_statistics	*stat);
 
 int dpni_reset_statistics(struct fsl_mc_io *mc_io,
@@ -562,14 +581,16 @@ int dpni_get_link_state(struct fsl_mc_io	*mc_io,
  * @max_burst_size: burst size in bytes (up to 64KB)
  */
 struct dpni_tx_shaping_cfg {
-	u32     rate_limit;
-	u16     max_burst_size;
+	u32	rate_limit;
+	u16	max_burst_size;
 };
 
-int dpni_set_tx_shaping(struct fsl_mc_io                       *mc_io,
-			u32                                     cmd_flags,
-			u16                                     token,
-			const struct dpni_tx_shaping_cfg        *tx_shaper);
+int dpni_set_tx_shaping(struct fsl_mc_io *mc_io,
+			u32 cmd_flags,
+			u16 token,
+			const struct dpni_tx_shaping_cfg *tx_cr_shaper,
+			const struct dpni_tx_shaping_cfg *tx_er_shaper,
+			int coupled);
 
 int dpni_set_max_frame_length(struct fsl_mc_io	*mc_io,
 			      u32		cmd_flags,
@@ -690,6 +711,50 @@ int dpni_set_qos_table(struct fsl_mc_io *mc_io,
 		       u32 cmd_flags,
 		       u16 token,
 		       const struct dpni_qos_tbl_cfg *cfg);
+
+/**
+ * enum dpni_tx_schedule_mode - DPNI Tx scheduling mode
+ * @DPNI_TX_SCHED_STRICT_PRIORITY: strict priority
+ * @DPNI_TX_SCHED_WEIGHTED_A: weighted based scheduling in group A
+ * @DPNI_TX_SCHED_WEIGHTED_B: weighted based scheduling in group B
+ */
+enum dpni_tx_schedule_mode {
+	DPNI_TX_SCHED_STRICT_PRIORITY = 0,
+	DPNI_TX_SCHED_WEIGHTED_A,
+	DPNI_TX_SCHED_WEIGHTED_B,
+};
+
+/**
+ * struct dpni_tx_schedule_cfg - Structure representing Tx scheduling conf
+ * @mode:		Scheduling mode
+ * @delta_bandwidth:	Bandwidth represented in weights from 100 to 10000;
+ *	not applicable for 'strict-priority' mode;
+ */
+struct dpni_tx_schedule_cfg {
+	enum dpni_tx_schedule_mode mode;
+	u16 delta_bandwidth;
+};
+
+/**
+ * struct dpni_tx_priorities_cfg - Structure representing transmission
+ *					priorities for DPNI TCs
+ * @tc_sched:	An array of traffic-classes
+ * @prio_group_A: Priority of group A
+ * @prio_group_B: Priority of group B
+ * @separate_groups: Treat A and B groups as separate
+ * @ceetm_ch_idx: ceetm channel index to apply the changes
+ */
+struct dpni_tx_priorities_cfg {
+	struct dpni_tx_schedule_cfg tc_sched[DPNI_MAX_TC];
+	u8 prio_group_A;
+	u8 prio_group_B;
+	u8 separate_groups;
+};
+
+int dpni_set_tx_priorities(struct fsl_mc_io *mc_io,
+			   u32 cmd_flags,
+			   u16 token,
+			   const struct dpni_tx_priorities_cfg *cfg);
 
 /**
  * struct dpni_rx_tc_dist_cfg - Rx traffic class distribution configuration
@@ -838,11 +903,11 @@ enum dpni_congestion_point {
 
 /**
  * struct dpni_dest_cfg - Structure representing DPNI destination parameters
- * @dest_type: Destination type
- * @dest_id: Either DPIO ID or DPCON ID, depending on the destination type
- * @priority: Priority selection within the DPIO or DPCON channel; valid values
- *		are 0-1 or 0-7, depending on the number of priorities in that
- *		channel; not relevant for 'DPNI_DEST_NONE' option
+ * @dest_type:	Destination type
+ * @dest_id:	Either DPIO ID or DPCON ID, depending on the destination type
+ * @priority:	Priority selection within the DPIO or DPCON channel; valid
+ *		values are 0-1 or 0-7, depending on the number of priorities
+ *		in that channel; not relevant for 'DPNI_DEST_NONE' option
  */
 struct dpni_dest_cfg {
 	enum dpni_dest dest_type;
@@ -856,34 +921,34 @@ struct dpni_dest_cfg {
  * CSCN message is written to message_iova once entering a
  * congestion state (see 'threshold_entry')
  */
-#define DPNI_CONG_OPT_WRITE_MEM_ON_ENTER	0x00000001
+#define DPNI_CONG_OPT_WRITE_MEM_ON_ENTER        0x00000001
 /**
  * CSCN message is written to message_iova once exiting a
  * congestion state (see 'threshold_exit')
  */
-#define DPNI_CONG_OPT_WRITE_MEM_ON_EXIT		0x00000002
+#define DPNI_CONG_OPT_WRITE_MEM_ON_EXIT         0x00000002
 /**
  * CSCN write will attempt to allocate into a cache (coherent write);
  * valid only if 'DPNI_CONG_OPT_WRITE_MEM_<X>' is selected
  */
-#define DPNI_CONG_OPT_COHERENT_WRITE		0x00000004
+#define DPNI_CONG_OPT_COHERENT_WRITE            0x00000004
 /**
  * if 'dest_cfg.dest_type != DPNI_DEST_NONE' CSCN message is sent to
  * DPIO/DPCON's WQ channel once entering a congestion state
  * (see 'threshold_entry')
  */
-#define DPNI_CONG_OPT_NOTIFY_DEST_ON_ENTER	0x00000008
+#define DPNI_CONG_OPT_NOTIFY_DEST_ON_ENTER      0x00000008
 /**
  * if 'dest_cfg.dest_type != DPNI_DEST_NONE' CSCN message is sent to
  * DPIO/DPCON's WQ channel once exiting a congestion state
  * (see 'threshold_exit')
  */
-#define DPNI_CONG_OPT_NOTIFY_DEST_ON_EXIT	0x00000010
+#define DPNI_CONG_OPT_NOTIFY_DEST_ON_EXIT       0x00000010
 /**
  * if 'dest_cfg.dest_type != DPNI_DEST_NONE' when the CSCN is written to the
  * sw-portal's DQRR, the DQRI interrupt is asserted immediately (if enabled)
  */
-#define DPNI_CONG_OPT_INTR_COALESCING_DISABLED	0x00000020
+#define DPNI_CONG_OPT_INTR_COALESCING_DISABLED  0x00000020
 /**
  * This congestion will trigger flow control or priority flow control.
  * This will have effect only if flow control is enabled with
@@ -893,15 +958,15 @@ struct dpni_dest_cfg {
 
 /**
  * struct dpni_congestion_notification_cfg - congestion notification
- *		configuration
- * @units: units type
- * @threshold_entry: above this threshold we enter a congestion state.
- *	set it to '0' to disable it
- * @threshold_exit: below this threshold we exit the congestion state.
+ *					configuration
+ * @units: Units type
+ * @threshold_entry: Above this threshold we enter a congestion state.
+ *		set it to '0' to disable it
+ * @threshold_exit: Below this threshold we exit the congestion state.
  * @message_ctx: The context that will be part of the CSCN message
  * @message_iova: I/O virtual address (must be in DMA-able memory),
- *	must be 16B aligned; valid only if 'DPNI_CONG_OPT_WRITE_MEM_<X>' is
- *	contained in 'options'
+ *		must be 16B aligned; valid only if 'DPNI_CONG_OPT_WRITE_MEM_<X>'
+ *		is contained in 'options'
  * @dest_cfg: CSCN can be send to either DPIO or DPCON WQ channel
  * @notification_mode: Mask of available options; use 'DPNI_CONG_OPT_<X>' values
  */
@@ -916,7 +981,14 @@ struct dpni_congestion_notification_cfg {
 	u16 notification_mode;
 };
 
-int dpni_set_congestion_notification(struct fsl_mc_io *mc_io,
+/** Compose TC parameter for function dpni_set_congestion_notification()
+ * and dpni_get_congestion_notification().
+ */
+#define DPNI_BUILD_CH_TC(ceetm_ch_idx, tc) \
+	((((ceetm_ch_idx) & 0x0F) << 4) | ((tc) & 0x0F))
+
+int dpni_set_congestion_notification(
+			struct fsl_mc_io *mc_io,
 			u32 cmd_flags,
 			u16 token,
 			enum dpni_queue_type qtype,
@@ -977,6 +1049,11 @@ struct dpni_rule_cfg {
 	u8	key_size;
 };
 
+int dpni_get_api_version(struct fsl_mc_io *mc_io,
+			 u32 cmd_flags,
+			 u16 *major_ver,
+			 u16 *minor_ver);
+
 int dpni_add_qos_entry(struct fsl_mc_io *mc_io,
 		       u32 cmd_flags,
 		       u16 token,
@@ -994,13 +1071,13 @@ int dpni_clear_qos_table(struct fsl_mc_io *mc_io,
 			 u16 token);
 
 /**
- * Discard matching traffic.  If set, this takes precedence over any other
+ * Discard matching traffic. If set, this takes precedence over any other
  * configuration and matching traffic is always discarded.
  */
  #define DPNI_FS_OPT_DISCARD            0x1
 
 /**
- * Set FLC value.  If set, flc member of truct dpni_fs_action_cfg is used to
+ * Set FLC value. If set, flc member of struct dpni_fs_action_cfg is used to
  * override the FLC value set per queue.
  * For more details check the Frame Descriptor section in the hardware
  * documentation.
@@ -1009,26 +1086,27 @@ int dpni_clear_qos_table(struct fsl_mc_io *mc_io,
 
 /*
  * Indicates whether the 6 lowest significant bits of FLC are used for stash
- * control.  If set, the 6 least significant bits in value are interpreted as
+ * control. If set, the 6 least significant bits in value are interpreted as
  * follows:
  *     - bits 0-1: indicates the number of 64 byte units of context that are
- *     stashed.  FLC value is interpreted as a memory address in this case,
+ *     stashed. FLC value is interpreted as a memory address in this case,
  *     excluding the 6 LS bits.
  *     - bits 2-3: indicates the number of 64 byte units of frame annotation
- *     to be stashed.  Annotation is placed at FD[ADDR].
+ *     to be stashed. Annotation is placed at FD[ADDR].
  *     - bits 4-5: indicates the number of 64 byte units of frame data to be
- *     stashed.  Frame data is placed at FD[ADDR] + FD[OFFSET].
+ *     stashed. Frame data is placed at FD[ADDR] + FD[OFFSET].
  * This flag is ignored if DPNI_FS_OPT_SET_FLC is not specified.
  */
 #define DPNI_FS_OPT_SET_STASH_CONTROL  0x4
 
 /**
  * struct dpni_fs_action_cfg - Action configuration for table look-up
- * @flc: FLC value for traffic matching this rule.  Please check the Frame
- * Descriptor section in the hardware documentation for more information.
- * @flow_id: Identifies the Rx queue used for matching traffic.  Supported
- *     values are in range 0 to num_queue-1.
- * @options: Any combination of DPNI_FS_OPT_ values.
+ * @flc:	FLC value for traffic matching this rule. Please check the
+ *		Frame Descriptor section in the hardware documentation for
+ *		more information.
+ * @flow_id:	Identifies the Rx queue used for matching traffic. Supported
+ *		values are in range 0 to num_queue-1.
+ * @options:	Any combination of DPNI_FS_OPT_ values.
  */
 struct dpni_fs_action_cfg {
 	u64 flc;
@@ -1049,5 +1127,46 @@ int dpni_remove_fs_entry(struct fsl_mc_io *mc_io,
 			 u16 token,
 			 u8 tc_id,
 			 const struct dpni_rule_cfg *cfg);
+
+/**
+ * When used for queue_idx in function dpni_set_rx_dist_default_queue
+ * will signal to dpni to drop all unclassified frames
+ */
+#define DPNI_FS_MISS_DROP		((uint16_t)-1)
+
+/**
+ * struct dpni_rx_dist_cfg - distribution configuration
+ * @dist_size:	distribution size; supported values: 1,2,3,4,6,7,8,
+ *		12,14,16,24,28,32,48,56,64,96,112,128,192,224,256,384,448,
+ *		512,768,896,1024
+ * @key_cfg_iova: I/O virtual address of 256 bytes DMA-able memory filled with
+ *		the extractions to be used for the distribution key by calling
+ *		dpkg_prepare_key_cfg() relevant only when enable!=0 otherwise
+ *		it can be '0'
+ * @enable: enable/disable the distribution.
+ * @tc: TC id for which distribution is set
+ * @fs_miss_flow_id: when packet misses all rules from flow steering table and
+ *		hash is disabled it will be put into this queue id; use
+ *		DPNI_FS_MISS_DROP to drop frames. The value of this field is
+ *		used only when flow steering distribution is enabled and hash
+ *		distribution is disabled
+ */
+struct dpni_rx_dist_cfg {
+	u16 dist_size;
+	u64 key_cfg_iova;
+	u8 enable;
+	u8 tc;
+	u16 fs_miss_flow_id;
+};
+
+int dpni_set_rx_fs_dist(struct fsl_mc_io *mc_io,
+			u32 cmd_flags,
+			u16 token,
+			const struct dpni_rx_dist_cfg *cfg);
+
+int dpni_set_rx_hash_dist(struct fsl_mc_io *mc_io,
+			  u32 cmd_flags,
+			  u16 token,
+			  const struct dpni_rx_dist_cfg *cfg);
 
 #endif /* __FSL_DPNI_H */

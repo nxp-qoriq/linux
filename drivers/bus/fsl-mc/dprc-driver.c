@@ -1,51 +1,49 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Freescale data path resource container (DPRC) driver
  *
  * Copyright (C) 2014-2016 Freescale Semiconductor, Inc.
  * Author: German Rivera <German.Rivera@freescale.com>
  *
- * This file is licensed under the terms of the GNU General Public
- * License version 2. This program is licensed "as is" without any
- * warranty of any kind, whether express or implied.
  */
 
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/interrupt.h>
 #include <linux/msi.h>
-#include "../include/mc-bus.h"
-#include "../include/mc-sys.h"
+#include <linux/fsl/mc.h>
 
-#include "dprc-cmd.h"
 #include "fsl-mc-private.h"
 
 #define FSL_MC_DPRC_DRIVER_NAME    "fsl_mc_dprc"
 
-#define FSL_MC_DEVICE_MATCH(_mc_dev, _obj_desc) \
-	(strcmp((_mc_dev)->obj_desc.type, (_obj_desc)->type) == 0 && \
-	 (_mc_dev)->obj_desc.id == (_obj_desc)->id)
-
-struct dprc_child_objs {
+struct fsl_mc_child_objs {
 	int child_count;
-	struct dprc_obj_desc *child_array;
+	struct fsl_mc_obj_desc *child_array;
 };
+
+static bool fsl_mc_device_match(struct fsl_mc_device *mc_dev,
+				struct fsl_mc_obj_desc *obj_desc)
+{
+	return mc_dev->obj_desc.id == obj_desc->id &&
+	       strcmp(mc_dev->obj_desc.type, obj_desc->type) == 0;
+
+}
 
 static int __fsl_mc_device_remove_if_not_in_mc(struct device *dev, void *data)
 {
 	int i;
-	struct dprc_child_objs *objs;
+	struct fsl_mc_child_objs *objs;
 	struct fsl_mc_device *mc_dev;
 
-	WARN_ON(!dev);
-	WARN_ON(!data);
 	mc_dev = to_fsl_mc_device(dev);
 	objs = data;
 
 	for (i = 0; i < objs->child_count; i++) {
-		struct dprc_obj_desc *obj_desc = &objs->child_array[i];
+		struct fsl_mc_obj_desc *obj_desc = &objs->child_array[i];
 
 		if (strlen(obj_desc->type) != 0 &&
-		    FSL_MC_DEVICE_MATCH(mc_dev, obj_desc))
+		    fsl_mc_device_match(mc_dev, obj_desc))
 			break;
 	}
 
@@ -57,8 +55,6 @@ static int __fsl_mc_device_remove_if_not_in_mc(struct device *dev, void *data)
 
 static int __fsl_mc_device_remove(struct device *dev, void *data)
 {
-	WARN_ON(!dev);
-	WARN_ON(data);
 	fsl_mc_device_remove(to_fsl_mc_device(dev));
 	return 0;
 }
@@ -76,7 +72,7 @@ static int __fsl_mc_device_remove(struct device *dev, void *data)
  * been dynamically removed in the physical DPRC.
  */
 static void dprc_remove_devices(struct fsl_mc_device *mc_bus_dev,
-				struct dprc_obj_desc *obj_desc_array,
+				struct fsl_mc_obj_desc *obj_desc_array,
 				int num_child_objects_in_mc)
 {
 	if (num_child_objects_in_mc != 0) {
@@ -84,7 +80,7 @@ static void dprc_remove_devices(struct fsl_mc_device *mc_bus_dev,
 		 * Remove child objects that are in the DPRC in Linux,
 		 * but not in the MC:
 		 */
-		struct dprc_child_objs objs;
+		struct fsl_mc_child_objs objs;
 
 		objs.child_count = num_child_objects_in_mc;
 		objs.child_array = obj_desc_array;
@@ -102,13 +98,13 @@ static void dprc_remove_devices(struct fsl_mc_device *mc_bus_dev,
 
 static int __fsl_mc_device_match(struct device *dev, void *data)
 {
-	struct dprc_obj_desc *obj_desc = data;
+	struct fsl_mc_obj_desc *obj_desc = data;
 	struct fsl_mc_device *mc_dev = to_fsl_mc_device(dev);
 
-	return FSL_MC_DEVICE_MATCH(mc_dev, obj_desc);
+	return fsl_mc_device_match(mc_dev, obj_desc);
 }
 
-static struct fsl_mc_device *fsl_mc_device_lookup(struct dprc_obj_desc
+static struct fsl_mc_device *fsl_mc_device_lookup(struct fsl_mc_obj_desc
 								*obj_desc,
 						  struct fsl_mc_device
 								*mc_bus_dev)
@@ -133,16 +129,16 @@ static struct fsl_mc_device *fsl_mc_device_lookup(struct dprc_obj_desc
  * device is unbound from the corresponding device driver.
  */
 static void check_plugged_state_change(struct fsl_mc_device *mc_dev,
-				       struct dprc_obj_desc *obj_desc)
+				       struct fsl_mc_obj_desc *obj_desc)
 {
 	int error;
 	u32 plugged_flag_at_mc =
-			obj_desc->state & DPRC_OBJ_STATE_PLUGGED;
+			obj_desc->state & FSL_MC_OBJ_STATE_PLUGGED;
 
 	if (plugged_flag_at_mc !=
-	    (mc_dev->obj_desc.state & DPRC_OBJ_STATE_PLUGGED)) {
+	    (mc_dev->obj_desc.state & FSL_MC_OBJ_STATE_PLUGGED)) {
 		if (plugged_flag_at_mc) {
-			mc_dev->obj_desc.state |= DPRC_OBJ_STATE_PLUGGED;
+			mc_dev->obj_desc.state |= FSL_MC_OBJ_STATE_PLUGGED;
 			error = device_attach(&mc_dev->dev);
 			if (error < 0) {
 				dev_err(&mc_dev->dev,
@@ -150,7 +146,7 @@ static void check_plugged_state_change(struct fsl_mc_device *mc_dev,
 					error);
 			}
 		} else {
-			mc_dev->obj_desc.state &= ~DPRC_OBJ_STATE_PLUGGED;
+			mc_dev->obj_desc.state &= ~FSL_MC_OBJ_STATE_PLUGGED;
 			device_release_driver(&mc_dev->dev);
 		}
 	}
@@ -172,7 +168,7 @@ static void check_plugged_state_change(struct fsl_mc_device *mc_dev,
  */
 static void dprc_add_new_devices(struct fsl_mc_device *mc_bus_dev,
 				 const char *driver_override,
-				 struct dprc_obj_desc *obj_desc_array,
+				 struct fsl_mc_obj_desc *obj_desc_array,
 				 int num_child_objects_in_mc)
 {
 	int error;
@@ -180,7 +176,7 @@ static void dprc_add_new_devices(struct fsl_mc_device *mc_bus_dev,
 
 	for (i = 0; i < num_child_objects_in_mc; i++) {
 		struct fsl_mc_device *child_dev;
-		struct dprc_obj_desc *obj_desc = &obj_desc_array[i];
+		struct fsl_mc_obj_desc *obj_desc = &obj_desc_array[i];
 
 		if (strlen(obj_desc->type) == 0)
 			continue;
@@ -208,7 +204,8 @@ static void dprc_add_new_devices(struct fsl_mc_device *mc_bus_dev,
  * @mc_bus_dev: pointer to the fsl-mc device that represents a DPRC object
  * @driver_override: driver override to apply to new objects found in the
  * DPRC, or NULL, if none.
- * @total_irq_count: total number of IRQs needed by objects in the DPRC.
+ * @total_irq_count: If argument is provided the function populates the
+ * total number of IRQs created by objects in the DPRC.
  *
  * Detects objects added and removed from a DPRC and synchronizes the
  * state of the Linux bus driver, MC by adding and removing
@@ -230,7 +227,8 @@ int dprc_scan_objects(struct fsl_mc_device *mc_bus_dev,
 	int dprc_get_obj_failures;
 	int error;
 	unsigned int irq_count = mc_bus_dev->obj_desc.irq_count;
-	struct dprc_obj_desc *child_obj_desc_array = NULL;
+	struct fsl_mc_obj_desc *child_obj_desc_array = NULL;
+	struct fsl_mc_bus *mc_bus = to_fsl_mc_bus(mc_bus_dev);
 
 	error = dprc_get_obj_count(mc_bus_dev->mc_io,
 				   0,
@@ -257,7 +255,7 @@ int dprc_scan_objects(struct fsl_mc_device *mc_bus_dev,
 		 */
 		dprc_get_obj_failures = 0;
 		for (i = 0; i < num_child_objects; i++) {
-			struct dprc_obj_desc *obj_desc =
+			struct fsl_mc_obj_desc *obj_desc =
 			    &child_obj_desc_array[i];
 
 			error = dprc_get_obj(mc_bus_dev->mc_io,
@@ -285,7 +283,7 @@ int dprc_scan_objects(struct fsl_mc_device *mc_bus_dev,
 			if ((strcmp(obj_desc->type, "dpseci") == 0) &&
 			    (obj_desc->ver_major < 4))
 				obj_desc->flags |=
-					DPRC_OBJ_FLAG_NO_MEM_SHAREABILITY;
+					FSL_MC_OBJ_FLAG_NO_MEM_SHAREABILITY;
 
 			irq_count += obj_desc->irq_count;
 			dev_dbg(&mc_bus_dev->dev,
@@ -300,7 +298,26 @@ int dprc_scan_objects(struct fsl_mc_device *mc_bus_dev,
 		}
 	}
 
-	*total_irq_count = irq_count;
+	/*
+	 * Allocate IRQ's before binding the scanned devices with their
+	 * respective drivers.
+	 */
+	if (dev_get_msi_domain(&mc_bus_dev->dev) && !mc_bus->irq_resources) {
+		if (irq_count > FSL_MC_IRQ_POOL_MAX_TOTAL_IRQS) {
+			dev_warn(&mc_bus_dev->dev,
+				 "IRQs needed (%u) exceed IRQs preallocated (%u)\n",
+				 irq_count, FSL_MC_IRQ_POOL_MAX_TOTAL_IRQS);
+		}
+
+		error = fsl_mc_populate_irq_pool(mc_bus,
+				FSL_MC_IRQ_POOL_MAX_TOTAL_IRQS);
+		if (error < 0)
+			return error;
+	}
+
+	if (total_irq_count)
+		*total_irq_count = irq_count;
+
 	dprc_remove_devices(mc_bus_dev, child_obj_desc_array,
 			    num_child_objects);
 
@@ -312,7 +329,6 @@ int dprc_scan_objects(struct fsl_mc_device *mc_bus_dev,
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(dprc_scan_objects);
 
 /**
  * dprc_scan_container - Scans a physical DPRC and synchronizes Linux bus state
@@ -323,10 +339,9 @@ EXPORT_SYMBOL_GPL(dprc_scan_objects);
  * bus driver with the actual state of the MC by adding and removing
  * devices as appropriate.
  */
-int dprc_scan_container(struct fsl_mc_device *mc_bus_dev)
+static int dprc_scan_container(struct fsl_mc_device *mc_bus_dev)
 {
 	int error;
-	unsigned int irq_count;
 	struct fsl_mc_bus *mc_bus = to_fsl_mc_bus(mc_bus_dev);
 
 	fsl_mc_init_all_resource_pools(mc_bus_dev);
@@ -335,31 +350,15 @@ int dprc_scan_container(struct fsl_mc_device *mc_bus_dev)
 	 * Discover objects in the DPRC:
 	 */
 	mutex_lock(&mc_bus->scan_mutex);
-	error = dprc_scan_objects(mc_bus_dev, NULL, &irq_count);
+	error = dprc_scan_objects(mc_bus_dev, NULL, NULL);
 	mutex_unlock(&mc_bus->scan_mutex);
-	if (error < 0)
-		goto error;
-
-	if (dev_get_msi_domain(&mc_bus_dev->dev) && !mc_bus->irq_resources) {
-		if (irq_count > FSL_MC_IRQ_POOL_MAX_TOTAL_IRQS) {
-			dev_warn(&mc_bus_dev->dev,
-				 "IRQs needed (%u) exceed IRQs preallocated (%u)\n",
-				 irq_count, FSL_MC_IRQ_POOL_MAX_TOTAL_IRQS);
-		}
-
-		error = fsl_mc_populate_irq_pool(
-				mc_bus,
-				FSL_MC_IRQ_POOL_MAX_TOTAL_IRQS);
-		if (error < 0)
-			goto error;
+	if (error < 0) {
+		fsl_mc_cleanup_all_resource_pools(mc_bus_dev);
+		return error;
 	}
 
 	return 0;
-error:
-	fsl_mc_cleanup_all_resource_pools(mc_bus_dev);
-	return error;
 }
-EXPORT_SYMBOL_GPL(dprc_scan_container);
 
 /**
  * dprc_irq0_handler - Regular ISR for DPRC interrupt 0
@@ -391,11 +390,11 @@ static irqreturn_t dprc_irq0_handler_thread(int irq_num, void *arg)
 	dev_dbg(dev, "DPRC IRQ %d triggered on CPU %u\n",
 		irq_num, smp_processor_id());
 
-	if (WARN_ON(!(mc_dev->flags & FSL_MC_IS_DPRC)))
+	if (!(mc_dev->flags & FSL_MC_IS_DPRC))
 		return IRQ_HANDLED;
 
 	mutex_lock(&mc_bus->scan_mutex);
-	if (WARN_ON(!msi_desc || msi_desc->irq != (u32)irq_num))
+	if (!msi_desc || msi_desc->irq != (u32)irq_num)
 		goto out;
 
 	status = 0;
@@ -458,8 +457,6 @@ static int disable_dprc_irq(struct fsl_mc_device *mc_dev)
 	int error;
 	struct fsl_mc_io *mc_io = mc_dev->mc_io;
 
-	WARN_ON(mc_dev->obj_desc.irq_count != 1);
-
 	/*
 	 * Disable generation of interrupt, while we configure it:
 	 */
@@ -500,8 +497,6 @@ static int register_dprc_irq_handler(struct fsl_mc_device *mc_dev)
 {
 	int error;
 	struct fsl_mc_device_irq *irq = mc_dev->irqs[0];
-
-	WARN_ON(mc_dev->obj_desc.irq_count != 1);
 
 	/*
 	 * NOTE: devm_request_threaded_irq() invokes the device-specific
@@ -606,24 +601,23 @@ static int dprc_probe(struct fsl_mc_device *mc_dev)
 	bool msi_domain_set = false;
 	u16 major_ver, minor_ver;
 
-	if (WARN_ON(strcmp(mc_dev->obj_desc.type, "dprc") != 0))
+	if (!is_fsl_mc_bus_dprc(mc_dev))
 		return -EINVAL;
 
-	if (WARN_ON(dev_get_msi_domain(&mc_dev->dev)))
+	if (dev_get_msi_domain(&mc_dev->dev))
 		return -EINVAL;
 
 	if (!mc_dev->mc_io) {
 		/*
 		 * This is a child DPRC:
 		 */
-		if (WARN_ON(!dev_is_fsl_mc(parent_dev)))
+		if (!dev_is_fsl_mc(parent_dev))
 			return -EINVAL;
 
-		if (WARN_ON(mc_dev->obj_desc.region_count == 0))
+		if (mc_dev->obj_desc.region_count == 0)
 			return -EINVAL;
 
-		region_size = mc_dev->regions[0].end -
-			      mc_dev->regions[0].start + 1;
+		region_size = resource_size(mc_dev->regions);
 
 		error = fsl_create_mc_io(&mc_dev->dev,
 					 mc_dev->regions[0].start,
@@ -648,7 +642,7 @@ static int dprc_probe(struct fsl_mc_device *mc_dev)
 		 */
 		struct irq_domain *mc_msi_domain;
 
-		if (WARN_ON(dev_is_fsl_mc(parent_dev)))
+		if (dev_is_fsl_mc(parent_dev))
 			return -EINVAL;
 
 		error = fsl_mc_find_msi_domain(parent_dev,
@@ -687,8 +681,8 @@ static int dprc_probe(struct fsl_mc_device *mc_dev)
 	}
 
 	if (major_ver < DPRC_MIN_VER_MAJOR ||
-	   (major_ver == DPRC_MIN_VER_MAJOR &&
-	    minor_ver < DPRC_MIN_VER_MINOR)) {
+	    (major_ver == DPRC_MIN_VER_MAJOR &&
+	     minor_ver < DPRC_MIN_VER_MINOR)) {
 		dev_err(&mc_dev->dev,
 			"ERROR: DPRC version %d.%d not supported\n",
 			major_ver, minor_ver);
@@ -759,12 +753,12 @@ static int dprc_remove(struct fsl_mc_device *mc_dev)
 	int error;
 	struct fsl_mc_bus *mc_bus = to_fsl_mc_bus(mc_dev);
 
-	if (WARN_ON(strcmp(mc_dev->obj_desc.type, "dprc") != 0))
+	if (!is_fsl_mc_bus_dprc(mc_dev))
 		return -EINVAL;
-	if (WARN_ON(!mc_dev->mc_io))
+	if (!mc_dev->mc_io)
 		return -EINVAL;
 
-	if (WARN_ON(!mc_bus->irq_resources))
+	if (!mc_bus->irq_resources)
 		return -EINVAL;
 
 	if (dev_get_msi_domain(&mc_dev->dev))

@@ -1,0 +1,13 @@
+What:		/sys/bus/fsl-mc/devices/dprc.*/rescan
+Date:		March. 2018
+KernelVersion:	4.16
+Contact:	Ioana Ciornei <ioana.ciornei@nxp.com>
+Description:	Root dprc rescan attribute
+Users:		Userspace drivers and management tools
+
+What:		/sys/bus/fsl-mc/rescan
+Date:		March. 2018
+KernelVersion:	4.16
+Contact:	Ioana Ciornei <ioana.ciornei@nxp.com>
+Description:	Bus rescan attribute
+Users:		Userspace drivers and management tools

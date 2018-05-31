@@ -1,39 +1,13 @@
-/* Copyright 2013-2016 Freescale Semiconductor Inc.
+// SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
+/*
+ * Copyright 2013-2016 Freescale Semiconductor Inc.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- * * Redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer.
- * * Redistributions in binary form must reproduce the above copyright
- * notice, this list of conditions and the following disclaimer in the
- * documentation and/or other materials provided with the distribution.
- * * Neither the name of the above-listed copyright holders nor the
- * names of any contributors may be used to endorse or promote products
- * derived from this software without specific prior written permission.
- *
- *
- * ALTERNATIVELY, this software may be distributed under the terms of the
- * GNU General Public License ("GPL") as published by the Free Software
- * Foundation, either version 2 of that License or (at your option) any
- * later version.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
  */
-#include "../include/mc-sys.h"
-#include "../include/mc-cmd.h"
-#include "../include/dpcon.h"
+#include <linux/kernel.h>
+#include <linux/fsl/mc.h>
+#include <linux/fsl/mc.h>
 
-#include "dpcon-cmd.h"
+#include "fsl-mc-private.h"
 
 /**
  * dpcon_open() - Open a control session for the specified object
@@ -57,7 +31,7 @@ int dpcon_open(struct fsl_mc_io *mc_io,
 	       int dpcon_id,
 	       u16 *token)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	struct dpcon_cmd_open *dpcon_cmd;
 	int err;
 
@@ -78,7 +52,7 @@ int dpcon_open(struct fsl_mc_io *mc_io,
 
 	return 0;
 }
-EXPORT_SYMBOL(dpcon_open);
+EXPORT_SYMBOL_GPL(dpcon_open);
 
 /**
  * dpcon_close() - Close the control session of the object
@@ -95,7 +69,7 @@ int dpcon_close(struct fsl_mc_io *mc_io,
 		u32 cmd_flags,
 		u16 token)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPCON_CMDID_CLOSE,
@@ -105,7 +79,7 @@ int dpcon_close(struct fsl_mc_io *mc_io,
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
-EXPORT_SYMBOL(dpcon_close);
+EXPORT_SYMBOL_GPL(dpcon_close);
 
 /**
  * dpcon_enable() - Enable the DPCON
@@ -119,7 +93,7 @@ int dpcon_enable(struct fsl_mc_io *mc_io,
 		 u32 cmd_flags,
 		 u16 token)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPCON_CMDID_ENABLE,
@@ -129,7 +103,7 @@ int dpcon_enable(struct fsl_mc_io *mc_io,
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
-EXPORT_SYMBOL(dpcon_enable);
+EXPORT_SYMBOL_GPL(dpcon_enable);
 
 /**
  * dpcon_disable() - Disable the DPCON
@@ -143,7 +117,7 @@ int dpcon_disable(struct fsl_mc_io *mc_io,
 		  u32 cmd_flags,
 		  u16 token)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPCON_CMDID_DISABLE,
@@ -153,43 +127,7 @@ int dpcon_disable(struct fsl_mc_io *mc_io,
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
-EXPORT_SYMBOL(dpcon_disable);
-
-/**
- * dpcon_is_enabled() -	Check if the DPCON is enabled.
- * @mc_io:	Pointer to MC portal's I/O object
- * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
- * @token:	Token of DPCON object
- * @en:		Returns '1' if object is enabled; '0' otherwise
- *
- * Return:	'0' on Success; Error code otherwise.
- */
-int dpcon_is_enabled(struct fsl_mc_io *mc_io,
-		     u32 cmd_flags,
-		     u16 token,
-		     int *en)
-{
-	struct mc_command cmd = { 0 };
-	struct dpcon_rsp_is_enabled *dpcon_rsp;
-	int err;
-
-	/* prepare command */
-	cmd.header = mc_encode_cmd_header(DPCON_CMDID_IS_ENABLED,
-					  cmd_flags,
-					  token);
-
-	/* send command to mc*/
-	err = mc_send_command(mc_io, &cmd);
-	if (err)
-		return err;
-
-	/* retrieve response parameters */
-	dpcon_rsp = (struct dpcon_rsp_is_enabled *)cmd.params;
-	*en = dpcon_rsp->enabled & DPCON_ENABLE;
-
-	return 0;
-}
-EXPORT_SYMBOL(dpcon_is_enabled);
+EXPORT_SYMBOL_GPL(dpcon_disable);
 
 /**
  * dpcon_reset() - Reset the DPCON, returns the object to initial state.
@@ -203,7 +141,7 @@ int dpcon_reset(struct fsl_mc_io *mc_io,
 		u32 cmd_flags,
 		u16 token)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPCON_CMDID_RESET,
@@ -212,7 +150,7 @@ int dpcon_reset(struct fsl_mc_io *mc_io,
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
-EXPORT_SYMBOL(dpcon_reset);
+EXPORT_SYMBOL_GPL(dpcon_reset);
 
 /**
  * dpcon_get_attributes() - Retrieve DPCON attributes.
@@ -228,7 +166,7 @@ int dpcon_get_attributes(struct fsl_mc_io *mc_io,
 			 u16 token,
 			 struct dpcon_attr *attr)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	struct dpcon_rsp_get_attr *dpcon_rsp;
 	int err;
 
@@ -250,7 +188,7 @@ int dpcon_get_attributes(struct fsl_mc_io *mc_io,
 
 	return 0;
 }
-EXPORT_SYMBOL(dpcon_get_attributes);
+EXPORT_SYMBOL_GPL(dpcon_get_attributes);
 
 /**
  * dpcon_set_notification() - Set DPCON notification destination
@@ -266,7 +204,7 @@ int dpcon_set_notification(struct fsl_mc_io *mc_io,
 			   u16 token,
 			   struct dpcon_notification_cfg *cfg)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	struct dpcon_cmd_set_notification *dpcon_cmd;
 
 	/* prepare command */
@@ -281,37 +219,4 @@ int dpcon_set_notification(struct fsl_mc_io *mc_io,
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
-EXPORT_SYMBOL(dpcon_set_notification);
-
-/**
- * dpcon_get_api_version - Get Data Path Concentrator API version
- * @mc_io:	Pointer to MC portal's DPCON object
- * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
- * @major_ver:	Major version of DPCON API
- * @minor_ver:	Minor version of DPCON API
- *
- * Return:	'0' on Success; Error code otherwise
- */
-int dpcon_get_api_version(struct fsl_mc_io *mc_io,
-			  u32 cmd_flags,
-			  u16 *major_ver,
-			  u16 *minor_ver)
-{
-	struct mc_command cmd = { 0 };
-	int err;
-
-	/* prepare command */
-	cmd.header = mc_encode_cmd_header(DPCON_CMDID_GET_API_VERSION,
-					  cmd_flags, 0);
-
-	/* send command to mc */
-	err = mc_send_command(mc_io, &cmd);
-	if (err)
-		return err;
-
-	/* retrieve response parameters */
-	mc_cmd_read_api_version(&cmd, major_ver, minor_ver);
-
-	return 0;
-}
-EXPORT_SYMBOL(dpcon_get_api_version);
+EXPORT_SYMBOL_GPL(dpcon_set_notification);

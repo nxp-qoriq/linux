@@ -1,4 +1,5 @@
-/* Copyright 2014-2015 Freescale Semiconductor Inc.
+/* Copyright 2014-2016 Freescale Semiconductor Inc.
+ * Copyright 2016 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -32,14 +33,16 @@
 #ifndef __DPAA2_ETH_H
 #define __DPAA2_ETH_H
 
-#include <linux/atomic.h>
 #include <linux/dcbnl.h>
 #include <linux/netdevice.h>
 #include <linux/if_vlan.h>
-#include "../../fsl-mc/include/dpaa2-io.h"
-#include "dpni.h"
-#include "net.h"
 
+#include "../../fsl-mc/include/dpaa2-io.h"
+#include "../../fsl-mc/include/dpaa2-fd.h"
+#include "dpni.h"
+#include "dpni-cmd.h"
+
+#include "dpaa2-eth-trace.h"
 #include "dpaa2-eth-debugfs.h"
 
 #define DPAA2_WRIOP_VERSION(x, y, z) ((x) << 10 | (y) << 5 | (z) << 0)
@@ -84,28 +87,32 @@
  * to accommodate the buffer refill delay.
  */
 #define DPAA2_ETH_MAX_FRAMES_PER_QUEUE	(DPAA2_ETH_TAILDROP_THRESH / 64)
-#define DPAA2_ETH_NUM_BUFS_TD		(DPAA2_ETH_MAX_FRAMES_PER_QUEUE + 256)
-#define DPAA2_ETH_REFILL_THRESH_TD	\
-	(DPAA2_ETH_NUM_BUFS_TD - DPAA2_ETH_BUFS_PER_CMD)
+#define DPAA2_ETH_NUM_BUFS_PER_CH	(DPAA2_ETH_MAX_FRAMES_PER_QUEUE + 256)
+#define DPAA2_ETH_REFILL_THRESH(priv)	\
+	((priv)->max_bufs_per_ch - DPAA2_ETH_BUFS_PER_CMD)
 
-/* Buffer quota per queue to use when flow control is active. */
+/* Global buffer quota in case flow control is enabled */
 #define DPAA2_ETH_NUM_BUFS_FC		256
 
-/* Hardware requires alignment for ingress/egress buffer addresses
- * and ingress buffer lengths.
- */
-#define DPAA2_ETH_RX_BUF_SIZE		2048
+/* Hardware requires alignment for ingress/egress buffer addresses */
 #define DPAA2_ETH_TX_BUF_ALIGN		64
-#define DPAA2_ETH_RX_BUF_ALIGN		64
-#define DPAA2_ETH_RX_BUF_ALIGN_V1	256
 
-/* rx_extra_head prevents reallocations in L3 processing. */
+/* Due to a limitation in WRIOP 1.0.0, the RX buffer data must be aligned
+ * to 256B. For newer revisions, the requirement is only for 64B alignment
+ */
+#define DPAA2_ETH_RX_BUF_ALIGN_REV1	256
+#define DPAA2_ETH_RX_BUF_ALIGN		64
+
+#define DPAA2_ETH_RX_BUF_SIZE		2048
 #define DPAA2_ETH_SKB_SIZE \
-	(DPAA2_ETH_RX_BUF_SIZE + \
-	 SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
+	(DPAA2_ETH_RX_BUF_SIZE + SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
 
 /* PTP nominal frequency 1GHz */
 #define DPAA2_PTP_NOMINAL_FREQ_PERIOD_NS 1
+
+/* Hardware annotation area in RX/TX buffers */
+#define DPAA2_ETH_RX_HWA_SIZE		64
+#define DPAA2_ETH_TX_HWA_SIZE		128
 
 /* We are accommodating a skb backpointer and some S/G info
  * in the frame's software annotation. The hardware
@@ -132,7 +139,7 @@ struct dpaa2_eth_swa {
 			struct sk_buff *skb;
 			struct scatterlist *scl;
 			int num_sg;
-			int num_dma_bufs;
+			int sgt_size;
 		} sg;
 	};
 };
@@ -154,20 +161,16 @@ struct dpaa2_eth_swa {
 /* Annotation bits in FD CTRL */
 #define DPAA2_FD_CTRL_ASAL		0x00020000	/* ASAL = 128 */
 
-/* Hardware annotation area in RX/TX buffers */
-#define DPAA2_ETH_RX_HWA_SIZE		64
-#define DPAA2_ETH_TX_HWA_SIZE		128
-
 /* Frame annotation status */
 struct dpaa2_fas {
 	u8 reserved;
 	u8 ppid;
 	__le16 ifpid;
 	__le32 status;
-} __packed;
+};
 
 /* Frame annotation status word is located in the first 8 bytes
- * of the buffer's hardware annotation area
+ * of the buffer's hardware annoatation area
  */
 #define DPAA2_FAS_OFFSET		0
 #define DPAA2_FAS_SIZE			(sizeof(struct dpaa2_fas))
@@ -191,25 +194,25 @@ struct dpaa2_faead {
 #define DPAA2_FAEAD_EBDDV		0x00002000
 #define DPAA2_FAEAD_UPD			0x00000010
 
-/* accessors for the hardware annotation fields that we use */
-static inline void *dpaa2_eth_get_hwa(void *buf_addr, bool swa)
+/* Accessors for the hardware annotation fields that we use */
+static inline void *dpaa2_get_hwa(void *buf_addr, bool swa)
 {
 	return buf_addr + (swa ? DPAA2_ETH_SWA_SIZE : 0);
 }
 
-static inline struct dpaa2_fas *dpaa2_eth_get_fas(void *buf_addr, bool swa)
+static inline struct dpaa2_fas *dpaa2_get_fas(void *buf_addr, bool swa)
 {
-	return dpaa2_eth_get_hwa(buf_addr, swa) + DPAA2_FAS_OFFSET;
+	return dpaa2_get_hwa(buf_addr, swa) + DPAA2_FAS_OFFSET;
 }
 
-static inline u64 *dpaa2_eth_get_ts(void *buf_addr, bool swa)
+static inline u64 *dpaa2_get_ts(void *buf_addr, bool swa)
 {
-	return dpaa2_eth_get_hwa(buf_addr, swa) + DPAA2_TS_OFFSET;
+	return dpaa2_get_hwa(buf_addr, swa) + DPAA2_TS_OFFSET;
 }
 
-static inline struct dpaa2_faead *dpaa2_eth_get_faead(void *buf_addr, bool swa)
+static inline struct dpaa2_faead *dpaa2_get_faead(void *buf_addr, bool swa)
 {
-	return dpaa2_eth_get_hwa(buf_addr, swa) + DPAA2_FAEAD_OFFSET;
+	return dpaa2_get_hwa(buf_addr, swa) + DPAA2_FAEAD_OFFSET;
 }
 
 /* Error and status bits in the frame annotation status word */
@@ -244,19 +247,19 @@ static inline struct dpaa2_faead *dpaa2_eth_get_faead(void *buf_addr, bool swa)
 /* L4 csum error */
 #define DPAA2_FAS_L4CE			0x00000001
 /* Possible errors on the ingress path */
-#define DPAA2_FAS_RX_ERR_MASK		((DPAA2_FAS_KSE)	| \
-					 (DPAA2_FAS_EOFHE)	| \
-					 (DPAA2_FAS_MNLE)	| \
-					 (DPAA2_FAS_TIDE)	| \
-					 (DPAA2_FAS_PIEE)	| \
-					 (DPAA2_FAS_FLE)	| \
-					 (DPAA2_FAS_FPE)	| \
-					 (DPAA2_FAS_PTE)	| \
-					 (DPAA2_FAS_ISP)	| \
-					 (DPAA2_FAS_PHE)	| \
-					 (DPAA2_FAS_BLE)	| \
-					 (DPAA2_FAS_L3CE)	| \
-					 (DPAA2_FAS_L4CE))
+#define DPAA2_FAS_RX_ERR_MASK		(DPAA2_FAS_KSE		| \
+					 DPAA2_FAS_EOFHE	| \
+					 DPAA2_FAS_MNLE		| \
+					 DPAA2_FAS_TIDE		| \
+					 DPAA2_FAS_PIEE		| \
+					 DPAA2_FAS_FLE		| \
+					 DPAA2_FAS_FPE		| \
+					 DPAA2_FAS_PTE		| \
+					 DPAA2_FAS_ISP		| \
+					 DPAA2_FAS_PHE		| \
+					 DPAA2_FAS_BLE		| \
+					 DPAA2_FAS_L3CE		| \
+					 DPAA2_FAS_L4CE)
 
 /* Time in milliseconds between link state updates */
 #define DPAA2_ETH_LINK_STATE_REFRESH	1000
@@ -265,14 +268,15 @@ static inline struct dpaa2_faead *dpaa2_eth_get_faead(void *buf_addr, bool swa)
  * Value determined empirically, in order to minimize the number
  * of frames dropped on Tx
  */
-#define DPAA2_ETH_ENQUEUE_RETRIES      10
+#define DPAA2_ETH_ENQUEUE_RETRIES	10
 
 /* Tx congestion entry & exit thresholds, in number of bytes.
  * We allow a maximum of 512KB worth of frames pending processing on the Tx
  * queues of an interface
  */
-#define DPAA2_ETH_TX_CONG_ENTRY_THRESH	(512 * 1024)
-#define DPAA2_ETH_TX_CONG_EXIT_THRESH	(DPAA2_ETH_TX_CONG_ENTRY_THRESH * 9/10)
+#define DPAA2_ETH_TX_CONG_ENTRY_THRESH  (512 * 1024)
+#define DPAA2_ETH_TX_CONG_EXIT_THRESH	\
+	(DPAA2_ETH_TX_CONG_ENTRY_THRESH * 9 / 10)
 
 /* Driver statistics, other than those in struct rtnl_link_stats64.
  * These are usually collected per-CPU and aggregated by ethtool.
@@ -309,7 +313,6 @@ struct dpaa2_eth_ch_stats {
 	__u64 pull_err;
 };
 
-#define DPAA2_ETH_MAX_DPCONS		NR_CPUS
 #define DPAA2_ETH_MAX_TCS		8
 
 /* Maximum number of queues associated with a DPNI */
@@ -319,6 +322,8 @@ struct dpaa2_eth_ch_stats {
 #define DPAA2_ETH_MAX_QUEUES		(DPAA2_ETH_MAX_RX_QUEUES + \
 					DPAA2_ETH_MAX_TX_QUEUES + \
 					DPAA2_ETH_MAX_RX_ERR_QUEUES)
+
+#define DPAA2_ETH_MAX_DPCONS		16
 
 enum dpaa2_eth_fq_type {
 	DPAA2_RX_FQ = 0,
@@ -350,8 +355,8 @@ struct dpaa2_eth_channel {
 	struct fsl_mc_device *dpcon;
 	int dpcon_id;
 	int ch_id;
-	int dpio_id;
 	struct napi_struct napi;
+	struct dpaa2_io *dpio;
 	struct dpaa2_io_store *store;
 	struct dpaa2_eth_priv *priv;
 	int buf_count;
@@ -366,61 +371,51 @@ struct dpaa2_eth_cls_rule {
 	bool in_use;
 };
 
-struct dpaa2_eth_hash_fields {
+struct dpaa2_eth_dist_fields {
 	u64 rxnfc_field;
 	enum net_prot cls_prot;
 	int cls_field;
 	int offset;
 	int size;
+	u32 id;
 };
 
 /* Driver private data */
 struct dpaa2_eth_priv {
 	struct net_device *net_dev;
-
 	/* Standard statistics */
 	struct rtnl_link_stats64 __percpu *percpu_stats;
 	/* Extra stats, in addition to the ones known by the kernel */
 	struct dpaa2_eth_drv_stats __percpu *percpu_extras;
-	struct iommu_domain *iommu_domain;
-
 	bool ts_tx_en; /* Tx timestamping enabled */
 	bool ts_rx_en; /* Rx timestamping enabled */
-
 	u16 tx_data_offset;
-	u16 rx_buf_align;
-
 	u16 bpid;
 	u16 tx_qdid;
-
-	int tx_pause_frames;
-	int num_bufs;
+	u16 rx_buf_align;
+	struct iommu_domain *iommu_domain;
+	int max_bufs_per_ch;
 	int refill_thresh;
 	bool has_xdp_prog;
 
-	/* Tx congestion notifications are written here */
-	void *cscn_mem;
+	void *cscn_mem;	/* Tx congestion notifications are written here */
 	void *cscn_unaligned;
 	dma_addr_t cscn_dma;
 
 	u8 num_fqs;
-	/* Tx queues are at the beginning of the array */
 	struct dpaa2_eth_fq fq[DPAA2_ETH_MAX_QUEUES];
 
 	u8 num_channels;
 	struct dpaa2_eth_channel *channel[DPAA2_ETH_MAX_DPCONS];
 
-	int dpni_id;
 	struct dpni_attr dpni_attrs;
+	u16 dpni_ver_major;
+	u16 dpni_ver_minor;
 	struct fsl_mc_device *dpbp_dev;
 
 	struct fsl_mc_io *mc_io;
-	/* SysFS-controlled affinity mask for TxConf FQs */
-	struct cpumask txconf_cpumask;
 	/* Cores which have an affine DPIO/DPCON.
-	 * This is the cpu set on which Rx frames are processed;
-	 * Tx confirmation frames are processed on a subset of this,
-	 * depending on user settings.
+	 * This is the cpu set on which Rx and Tx conf frames are processed
 	 */
 	struct cpumask dpio_cpumask;
 
@@ -430,24 +425,51 @@ struct dpaa2_eth_priv {
 	bool do_link_poll;
 	struct task_struct *poll_thread;
 
-	struct dpaa2_eth_hash_fields *hash_fields;
-	u8 num_hash_fields;
+	/* Rx distribution (hash and flow steering) header fields
+	 * supported by the driver
+	 */
+	struct dpaa2_eth_dist_fields *dist_fields;
+	u8 num_dist_fields;
 	/* enabled ethtool hashing bits */
-	u64 rx_flow_hash;
-
+	u64 rx_hash_fields;
 #ifdef CONFIG_FSL_DPAA2_ETH_DEBUGFS
 	struct dpaa2_debugfs dbg;
 #endif
-
 	/* array of classification rules */
 	struct dpaa2_eth_cls_rule *cls_rule;
-
 	struct dpni_tx_shaping_cfg shaping_cfg;
 
 	u8 dcbx_mode;
 	struct ieee_pfc pfc;
 	bool vlan_clsf_set;
+	bool tx_pause_frames;
+
+	bool ceetm_en;
 };
+
+enum dpaa2_eth_rx_dist {
+	DPAA2_ETH_RX_DIST_HASH,
+	DPAA2_ETH_RX_DIST_FS,
+	DPAA2_ETH_RX_DIST_LEGACY
+};
+
+/* Supported Rx distribution field ids */
+#define DPAA2_ETH_DIST_ETHSRC		BIT(0)
+#define DPAA2_ETH_DIST_ETHDST		BIT(1)
+#define DPAA2_ETH_DIST_ETHTYPE		BIT(2)
+#define DPAA2_ETH_DIST_VLAN		BIT(3)
+#define DPAA2_ETH_DIST_IPSRC		BIT(4)
+#define DPAA2_ETH_DIST_IPDST		BIT(5)
+#define DPAA2_ETH_DIST_IPPROTO		BIT(6)
+#define DPAA2_ETH_DIST_L4SRC		BIT(7)
+#define DPAA2_ETH_DIST_L4DST		BIT(8)
+#define DPAA2_ETH_DIST_ALL		(~0U)
+
+/* Default Rx hash key */
+#define DPAA2_ETH_DIST_DEFAULT_HASH \
+	(DPAA2_ETH_DIST_IPPROTO | \
+	 DPAA2_ETH_DIST_IPSRC | DPAA2_ETH_DIST_IPDST | \
+	 DPAA2_ETH_DIST_L4SRC | DPAA2_ETH_DIST_L4DST)
 
 #define dpaa2_eth_hash_enabled(priv)	\
 	((priv)->dpni_attrs.num_queues > 1)
@@ -461,11 +483,28 @@ struct dpaa2_eth_priv {
 #define dpaa2_eth_fs_count(priv)	\
 	((priv)->dpni_attrs.fs_entries)
 
-/* size of DMA memory used to pass configuration to classifier, in bytes */
+/* Required by struct dpni_rx_tc_dist_cfg::key_cfg_iova */
 #define DPAA2_CLASSIFIER_DMA_SIZE 256
 
 extern const struct ethtool_ops dpaa2_ethtool_ops;
 extern const char dpaa2_eth_drv_version[];
+
+static inline int dpaa2_eth_cmp_dpni_ver(struct dpaa2_eth_priv *priv,
+					 u16 ver_major, u16 ver_minor)
+{
+	if (priv->dpni_ver_major == ver_major)
+		return priv->dpni_ver_minor - ver_minor;
+	return priv->dpni_ver_major - ver_major;
+}
+
+#define DPNI_DIST_KEY_VER_MAJOR			7
+#define DPNI_DIST_KEY_VER_MINOR			5
+
+static inline bool dpaa2_eth_has_legacy_dist(struct dpaa2_eth_priv *priv)
+{
+	return (dpaa2_eth_cmp_dpni_ver(priv, DPNI_DIST_KEY_VER_MAJOR,
+				       DPNI_DIST_KEY_VER_MINOR) < 0);
+}
 
 /* Hardware only sees DPAA2_ETH_RX_BUF_SIZE, but the skb built around
  * the buffer also needs space for its shared info struct, and we need
@@ -547,7 +586,16 @@ dpaa2_eth_get_td_type(struct dpaa2_eth_priv *priv)
 		return DPAA2_ETH_TD_QUEUE;
 }
 
+static inline int dpaa2_eth_ch_count(struct dpaa2_eth_priv *priv)
+{
+	return 1;
+}
+
 void check_cls_support(struct dpaa2_eth_priv *priv);
 
 int set_rx_taildrop(struct dpaa2_eth_priv *priv);
+
+int dpaa2_eth_set_dist_key(struct dpaa2_eth_priv *priv,
+			   enum dpaa2_eth_rx_dist type, u32 key_fields);
+
 #endif	/* __DPAA2_H */

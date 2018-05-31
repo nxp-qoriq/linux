@@ -46,8 +46,7 @@
 #include <linux/phy.h>
 #include <linux/phy_fixed.h>
 
-#include "../../fsl-mc/include/mc.h"
-#include "../../fsl-mc/include/mc-sys.h"
+#include <linux/fsl/mc.h>
 
 #include "dpmac.h"
 #include "dpmac-cmd.h"
@@ -152,16 +151,18 @@ static netdev_tx_t dpaa2_mac_drop_frame(struct sk_buff *skb,
 	return NETDEV_TX_OK;
 }
 
-static int dpaa2_mac_get_settings(struct net_device *netdev,
-				  struct ethtool_cmd *cmd)
+static int dpaa2_mac_get_link_ksettings(struct net_device *netdev,
+					struct ethtool_link_ksettings *ks)
 {
-	return phy_ethtool_gset(netdev->phydev, cmd);
+	phy_ethtool_ksettings_get(netdev->phydev, ks);
+
+	return 0;
 }
 
-static int dpaa2_mac_set_settings(struct net_device *netdev,
-				  struct ethtool_cmd *cmd)
+static int dpaa2_mac_set_link_ksettings(struct net_device *netdev,
+					const struct ethtool_link_ksettings *ks)
 {
-	return phy_ethtool_sset(netdev->phydev, cmd);
+	return phy_ethtool_ksettings_set(netdev->phydev, ks);
 }
 
 static void dpaa2_mac_get_stats(struct net_device *netdev,
@@ -319,8 +320,8 @@ static const struct net_device_ops dpaa2_mac_ndo_ops = {
 };
 
 static const struct ethtool_ops dpaa2_mac_ethtool_ops = {
-	.get_settings		= &dpaa2_mac_get_settings,
-	.set_settings		= &dpaa2_mac_set_settings,
+	.get_link_ksettings	= &dpaa2_mac_get_link_ksettings,
+	.set_link_ksettings	= &dpaa2_mac_set_link_ksettings,
 	.get_strings		= &dpaa2_mac_get_strings,
 	.get_ethtool_stats	= &dpaa2_mac_get_ethtool_stats,
 	.get_sset_count		= &dpaa2_mac_get_sset_count,
@@ -489,10 +490,12 @@ static int dpaa2_mac_probe(struct fsl_mc_device *mc_dev)
 
 	dev_set_drvdata(dev, priv);
 
-	err = fsl_mc_portal_allocate(mc_dev, 0, &mc_dev->mc_io);
+	/* We may need to issue MC commands while in atomic context */
+	err = fsl_mc_portal_allocate(mc_dev, FSL_MC_IO_ATOMIC_CONTEXT_PORTAL,
+				     &mc_dev->mc_io);
 	if (err || !mc_dev->mc_io) {
-		dev_err(dev, "fsl_mc_portal_allocate error: %d\n", err);
-		err = -ENODEV;
+		dev_dbg(dev, "fsl_mc_portal_allocate error: %d\n", err);
+		err = -EPROBE_DEFER;
 		goto err_free_netdev;
 	}
 

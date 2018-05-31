@@ -1,4 +1,5 @@
-/* Copyright 2014-2015 Freescale Semiconductor Inc.
+/* Copyright 2014-2016 Freescale Semiconductor Inc.
+ * Copyright 2016-2017 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -32,50 +33,44 @@
 #include "dpni.h"	/* DPNI_LINK_OPT_* */
 #include "dpaa2-eth.h"
 
-/* To be kept in sync with dpni_statistics */
+/* To be kept in sync with DPNI statistics */
 static char dpaa2_ethtool_stats[][ETH_GSTRING_LEN] = {
-	"rx frames",
-	"rx bytes",
-	"rx mcast frames",
-	"rx mcast bytes",
-	"rx bcast frames",
-	"rx bcast bytes",
-	"tx frames",
-	"tx bytes",
-	"tx mcast frames",
-	"tx mcast bytes",
-	"tx bcast frames",
-	"tx bcast bytes",
-	"rx filtered frames",
-	"rx discarded frames",
-	"rx nobuffer discards",
-	"tx discarded frames",
-	"tx confirmed frames",
+	"[hw] rx frames",
+	"[hw] rx bytes",
+	"[hw] rx mcast frames",
+	"[hw] rx mcast bytes",
+	"[hw] rx bcast frames",
+	"[hw] rx bcast bytes",
+	"[hw] tx frames",
+	"[hw] tx bytes",
+	"[hw] tx mcast frames",
+	"[hw] tx mcast bytes",
+	"[hw] tx bcast frames",
+	"[hw] tx bcast bytes",
+	"[hw] rx filtered frames",
+	"[hw] rx discarded frames",
+	"[hw] rx nobuffer discards",
+	"[hw] tx discarded frames",
+	"[hw] tx confirmed frames",
 };
 
 #define DPAA2_ETH_NUM_STATS	ARRAY_SIZE(dpaa2_ethtool_stats)
 
-/* To be kept in sync with 'struct dpaa2_eth_drv_stats' */
 static char dpaa2_ethtool_extras[][ETH_GSTRING_LEN] = {
 	/* per-cpu stats */
-
-	"tx conf frames",
-	"tx conf bytes",
-	"tx sg frames",
-	"tx sg bytes",
-	"tx realloc frames",
-	"rx sg frames",
-	"rx sg bytes",
-	/* how many times we had to retry the enqueue command */
-	"enqueue portal busy",
-
+	"[drv] tx conf frames",
+	"[drv] tx conf bytes",
+	"[drv] tx sg frames",
+	"[drv] tx sg bytes",
+	"[drv] tx realloc frames",
+	"[drv] rx sg frames",
+	"[drv] rx sg bytes",
+	"[drv] enqueue portal busy",
 	/* Channel stats */
-	/* How many times we had to retry the volatile dequeue command */
-	"dequeue portal busy",
-	"channel pull errors",
-	/* Number of notifications received */
-	"cdan",
-	"tx congestion state",
+	"[drv] dequeue portal busy",
+	"[drv] channel pull errors",
+	"[drv] cdan",
+	"[drv] tx congestion state",
 #ifdef CONFIG_FSL_QBMAN_DEBUG
 	/* FQ stats */
 	"rx pending frames",
@@ -91,16 +86,22 @@ static char dpaa2_ethtool_extras[][ETH_GSTRING_LEN] = {
 static void dpaa2_eth_get_drvinfo(struct net_device *net_dev,
 				  struct ethtool_drvinfo *drvinfo)
 {
+	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
+
 	strlcpy(drvinfo->driver, KBUILD_MODNAME, sizeof(drvinfo->driver));
 	strlcpy(drvinfo->version, dpaa2_eth_drv_version,
 		sizeof(drvinfo->version));
-	strlcpy(drvinfo->fw_version, "N/A", sizeof(drvinfo->fw_version));
+
+	snprintf(drvinfo->fw_version, sizeof(drvinfo->fw_version),
+		 "%u.%u", priv->dpni_ver_major, priv->dpni_ver_minor);
+
 	strlcpy(drvinfo->bus_info, dev_name(net_dev->dev.parent->parent),
 		sizeof(drvinfo->bus_info));
 }
 
-static int dpaa2_eth_get_settings(struct net_device *net_dev,
-				  struct ethtool_cmd *cmd)
+static int
+dpaa2_eth_get_link_ksettings(struct net_device *net_dev,
+			     struct ethtool_link_ksettings *link_settings)
 {
 	struct dpni_link_state state = {0};
 	int err = 0;
@@ -108,7 +109,7 @@ static int dpaa2_eth_get_settings(struct net_device *net_dev,
 
 	err = dpni_get_link_state(priv->mc_io, 0, priv->mc_token, &state);
 	if (err) {
-		netdev_err(net_dev, "ERROR %d getting link state", err);
+		netdev_err(net_dev, "ERROR %d getting link state\n", err);
 		goto out;
 	}
 
@@ -118,39 +119,52 @@ static int dpaa2_eth_get_settings(struct net_device *net_dev,
 	 * beyond the DPNI attributes.
 	 */
 	if (state.options & DPNI_LINK_OPT_AUTONEG)
-		cmd->autoneg = AUTONEG_ENABLE;
+		link_settings->base.autoneg = AUTONEG_ENABLE;
 	if (!(state.options & DPNI_LINK_OPT_HALF_DUPLEX))
-		cmd->duplex = DUPLEX_FULL;
-	ethtool_cmd_speed_set(cmd, state.rate);
+		link_settings->base.duplex = DUPLEX_FULL;
+	link_settings->base.speed = state.rate;
 
 out:
 	return err;
 }
 
-static int dpaa2_eth_set_settings(struct net_device *net_dev,
-				  struct ethtool_cmd *cmd)
+#define DPNI_DYNAMIC_LINK_SET_VER_MAJOR		7
+#define DPNI_DYNAMIC_LINK_SET_VER_MINOR		1
+static int
+dpaa2_eth_set_link_ksettings(struct net_device *net_dev,
+			     const struct ethtool_link_ksettings *link_settings)
 {
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 	struct dpni_link_state state = {0};
 	struct dpni_link_cfg cfg = {0};
 	int err = 0;
 
-	netdev_dbg(net_dev, "Setting link parameters...");
+	/* If using an older MC version, the DPNI must be down
+ 	 * in order to be able to change link settings. Taking steps to let
+ 	 * the user know that.
+ 	 */
+	if (dpaa2_eth_cmp_dpni_ver(priv, DPNI_DYNAMIC_LINK_SET_VER_MAJOR,
+				   DPNI_DYNAMIC_LINK_SET_VER_MINOR) < 0) {
+		if (netif_running(net_dev)) {
+			netdev_info(net_dev, "Interface must be brought down first.\n");
+			return -EACCES;
+		}
+	}
 
-	/* Need to interrogate on link state to get flow control params */
+	/* Need to interrogate link state to get flow control params */
 	err = dpni_get_link_state(priv->mc_io, 0, priv->mc_token, &state);
 	if (err) {
-		netdev_err(net_dev, "ERROR %d getting link state", err);
+		netdev_err(net_dev, "Error getting link state\n");
 		goto out;
 	}
 
 	cfg.options = state.options;
-	cfg.rate = ethtool_cmd_speed(cmd);
-	if (cmd->autoneg == AUTONEG_ENABLE)
+	cfg.rate = link_settings->base.speed;
+	if (link_settings->base.autoneg == AUTONEG_ENABLE)
 		cfg.options |= DPNI_LINK_OPT_AUTONEG;
 	else
 		cfg.options &= ~DPNI_LINK_OPT_AUTONEG;
-	if (cmd->duplex  == DUPLEX_HALF)
+	if (link_settings->base.duplex  == DUPLEX_HALF)
 		cfg.options |= DPNI_LINK_OPT_HALF_DUPLEX;
 	else
 		cfg.options &= ~DPNI_LINK_OPT_HALF_DUPLEX;
@@ -160,7 +174,7 @@ static int dpaa2_eth_set_settings(struct net_device *net_dev,
 		/* ethtool will be loud enough if we return an error; no point
 		 * in putting our own error message on the console by default
 		 */
-		netdev_dbg(net_dev, "ERROR %d setting link cfg", err);
+		netdev_dbg(net_dev, "ERROR %d setting link cfg\n", err);
 
 out:
 	return err;
@@ -175,13 +189,13 @@ static void dpaa2_eth_get_pauseparam(struct net_device *net_dev,
 
 	err = dpni_get_link_state(priv->mc_io, 0, priv->mc_token, &state);
 	if (err)
-		netdev_dbg(net_dev, "ERROR %d getting link state", err);
+		netdev_dbg(net_dev, "Error getting link state\n");
 
-	/* for now, pause frames autonegotiation is not separate */
+	/* Report general port autonegotiation status */
 	pause->autoneg = !!(state.options & DPNI_LINK_OPT_AUTONEG);
 	pause->rx_pause = !!(state.options & DPNI_LINK_OPT_PAUSE);
 	pause->tx_pause = pause->rx_pause ^
-		!!(state.options & DPNI_LINK_OPT_ASYM_PAUSE);
+			  !!(state.options & DPNI_LINK_OPT_ASYM_PAUSE);
 }
 
 static int dpaa2_eth_set_pauseparam(struct net_device *net_dev,
@@ -195,7 +209,7 @@ static int dpaa2_eth_set_pauseparam(struct net_device *net_dev,
 
 	err = dpni_get_link_state(priv->mc_io, 0, priv->mc_token, &state);
 	if (err) {
-		netdev_dbg(net_dev, "ERROR %d getting link state", err);
+		netdev_dbg(net_dev, "Error getting link state\n");
 		goto out;
 	}
 
@@ -204,9 +218,12 @@ static int dpaa2_eth_set_pauseparam(struct net_device *net_dev,
 	current_tx_pause = !!(cfg.options & DPNI_LINK_OPT_PAUSE) ^
 			   !!(cfg.options & DPNI_LINK_OPT_ASYM_PAUSE);
 
+	/* We don't support changing pause frame autonegotiation separately
+	 * from general port autoneg
+	 */
 	if (pause->autoneg != !!(state.options & DPNI_LINK_OPT_AUTONEG))
 		netdev_warn(net_dev,
-			"WARN: Can't change pause frames autoneg separately\n");
+			    "Cannot change pause frame autoneg separately\n");
 
 	if (pause->rx_pause)
 		cfg.options |= DPNI_LINK_OPT_PAUSE;
@@ -220,23 +237,19 @@ static int dpaa2_eth_set_pauseparam(struct net_device *net_dev,
 
 	err = dpni_set_link_cfg(priv->mc_io, 0, priv->mc_token, &cfg);
 	if (err) {
-		/* ethtool will be loud enough if we return an error; no point
-		 * in putting our own error message on the console by default
-		 */
-		netdev_dbg(net_dev, "ERROR %d setting link cfg", err);
+		netdev_dbg(net_dev, "Error setting link\n");
 		goto out;
 	}
 
-	/* Enable / disable taildrops if Tx pause frames have changed */
+	/* Enable/disable Rx FQ taildrop if Tx pause frames have changed */
 	if (current_tx_pause == pause->tx_pause)
 		goto out;
 
 	priv->tx_pause_frames = pause->tx_pause;
 	err = set_rx_taildrop(priv);
 	if (err)
-		netdev_dbg(net_dev, "ERROR %d configuring taildrop", err);
+		netdev_dbg(net_dev, "Error configuring taildrop\n");
 
-	priv->tx_pause_frames = pause->tx_pause;
 out:
 	return err;
 }
@@ -277,8 +290,9 @@ static void dpaa2_eth_get_ethtool_stats(struct net_device *net_dev,
 					struct ethtool_stats *stats,
 					u64 *data)
 {
-	int i = 0; /* Current index in the data array */
-	int j = 0, k, err;
+	int i = 0;
+	int j, k, err;
+	int num_cnt;
 	union dpni_statistics dpni_stats;
 
 #ifdef CONFIG_FSL_QBMAN_DEBUG
@@ -299,38 +313,22 @@ static void dpaa2_eth_get_ethtool_stats(struct net_device *net_dev,
 	/* Print standard counters, from DPNI statistics */
 	for (j = 0; j <= 2; j++) {
 		err = dpni_get_statistics(priv->mc_io, 0, priv->mc_token,
-					  j, &dpni_stats);
+					  j, 0, &dpni_stats);
 		if (err != 0)
-			netdev_warn(net_dev, "Err %d getting DPNI stats page %d",
-				    err, j);
-
+			netdev_warn(net_dev, "dpni_get_stats(%d) failed\n", j);
 		switch (j) {
 		case 0:
-		*(data + i++) = dpni_stats.page_0.ingress_all_frames;
-		*(data + i++) = dpni_stats.page_0.ingress_all_bytes;
-		*(data + i++) = dpni_stats.page_0.ingress_multicast_frames;
-		*(data + i++) = dpni_stats.page_0.ingress_multicast_bytes;
-		*(data + i++) = dpni_stats.page_0.ingress_broadcast_frames;
-		*(data + i++) = dpni_stats.page_0.ingress_broadcast_bytes;
-		break;
+			num_cnt = sizeof(dpni_stats.page_0) / sizeof(u64);
+			break;
 		case 1:
-		*(data + i++) = dpni_stats.page_1.egress_all_frames;
-		*(data + i++) = dpni_stats.page_1.egress_all_bytes;
-		*(data + i++) = dpni_stats.page_1.egress_multicast_frames;
-		*(data + i++) = dpni_stats.page_1.egress_multicast_bytes;
-		*(data + i++) = dpni_stats.page_1.egress_broadcast_frames;
-		*(data + i++) = dpni_stats.page_1.egress_broadcast_bytes;
-		break;
+			num_cnt = sizeof(dpni_stats.page_1) / sizeof(u64);
+			break;
 		case 2:
-		*(data + i++) = dpni_stats.page_2.ingress_filtered_frames;
-		*(data + i++) = dpni_stats.page_2.ingress_discarded_frames;
-		*(data + i++) = dpni_stats.page_2.ingress_nobuffer_discards;
-		*(data + i++) = dpni_stats.page_2.egress_discarded_frames;
-		*(data + i++) = dpni_stats.page_2.egress_confirmed_frames;
-		break;
-		default:
-		break;
+			num_cnt = sizeof(dpni_stats.page_2) / sizeof(u64);
+			break;
 		}
+		for (k = 0; k < num_cnt; k++)
+			*(data + i++) = dpni_stats.raw.counter[k];
 	}
 
 	/* Print per-cpu extra stats */
@@ -339,10 +337,8 @@ static void dpaa2_eth_get_ethtool_stats(struct net_device *net_dev,
 		for (j = 0; j < sizeof(*extras) / sizeof(__u64); j++)
 			*((__u64 *)data + i + j) += *((__u64 *)extras + j);
 	}
-
 	i += j;
 
-	/* We may be using fewer DPIOs than actual CPUs */
 	for (j = 0; j < priv->num_channels; j++) {
 		ch_stats = &priv->channel[j]->stats;
 		cdan += ch_stats->cdan;
@@ -393,11 +389,11 @@ static int cls_key_off(struct dpaa2_eth_priv *priv, int prot, int field)
 {
 	int i, off = 0;
 
-	for (i = 0; i < priv->num_hash_fields; i++) {
-		if (priv->hash_fields[i].cls_prot == prot &&
-		    priv->hash_fields[i].cls_field == field)
+	for (i = 0; i < priv->num_dist_fields; i++) {
+		if (priv->dist_fields[i].cls_prot == prot &&
+		    priv->dist_fields[i].cls_field == field)
 			return off;
-		off += priv->hash_fields[i].size;
+		off += priv->dist_fields[i].size;
 	}
 
 	return -1;
@@ -407,8 +403,8 @@ static u8 cls_key_size(struct dpaa2_eth_priv *priv)
 {
 	u8 i, size = 0;
 
-	for (i = 0; i < priv->num_hash_fields; i++)
-		size += priv->hash_fields[i].size;
+	for (i = 0; i < priv->num_dist_fields; i++)
+		size += priv->dist_fields[i].size;
 
 	return size;
 }
@@ -425,7 +421,7 @@ void check_cls_support(struct dpaa2_eth_priv *priv)
 				 key_size);
 			goto disable_fs;
 		}
-		if (priv->num_hash_fields > DPKG_MAX_NUM_OF_EXTRACTS) {
+		if (priv->num_dist_fields > DPKG_MAX_NUM_OF_EXTRACTS) {
 			dev_info(dev, "Too many key fields (max = %d). Hashing and steering are disabled\n",
 				 DPKG_MAX_NUM_OF_EXTRACTS);
 			goto disable_fs;
@@ -691,8 +687,8 @@ static int do_cls(struct net_device *net_dev,
 	     fs->location >= rule_cnt)
 		return -EINVAL;
 
-	/* When adding a new rule, check if location if available,
-	 * and if not free the existing table entry before inserting
+	/* When adding a new rule, check if location if available
+	 * and if not, free the existing table entry before inserting
 	 * the new one
 	 */
 	if (add && (priv->cls_rule[fs->location].in_use == true))
@@ -777,6 +773,22 @@ static int del_cls(struct net_device *net_dev, int location)
 	return 0;
 }
 
+static int set_hash(struct net_device *net_dev, u64 data)
+{
+	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
+	u32 key = 0;
+	int i;
+
+	if (data & RXH_DISCARD)
+		return -EOPNOTSUPP;
+
+	for (i = 0; i < priv->num_dist_fields; i++)
+		if (priv->dist_fields[i].rxnfc_field & data)
+			key |= priv->dist_fields[i].id;
+
+	return dpaa2_eth_set_dist_key(priv, DPAA2_ETH_RX_DIST_HASH, key);
+}
+
 static int dpaa2_eth_set_rxnfc(struct net_device *net_dev,
 			       struct ethtool_rxnfc *rxnfc)
 {
@@ -786,11 +798,12 @@ static int dpaa2_eth_set_rxnfc(struct net_device *net_dev,
 	case ETHTOOL_SRXCLSRLINS:
 		err = add_cls(net_dev, &rxnfc->fs);
 		break;
-
 	case ETHTOOL_SRXCLSRLDEL:
 		err = del_cls(net_dev, rxnfc->fs.location);
 		break;
-
+	case ETHTOOL_SRXFH:
+		err = set_hash(net_dev, rxnfc->data);
+		break;
 	default:
 		err = -EOPNOTSUPP;
 	}
@@ -807,12 +820,12 @@ static int dpaa2_eth_get_rxnfc(struct net_device *net_dev,
 
 	switch (rxnfc->cmd) {
 	case ETHTOOL_GRXFH:
-		/* we purposely ignore cmd->flow_type, because the hashing key
-		 * is the same (and fixed) for all protocols
+		/* we purposely ignore cmd->flow_type for now, because the
+		 * classifier only supports a single set of fields for all
+		 * protocols
 		 */
-		rxnfc->data = priv->rx_flow_hash;
+		rxnfc->data = priv->rx_hash_fields;
 		break;
-
 	case ETHTOOL_GRXRINGS:
 		rxnfc->data = dpaa2_eth_queue_count(priv);
 		break;
@@ -853,8 +866,8 @@ static int dpaa2_eth_get_rxnfc(struct net_device *net_dev,
 const struct ethtool_ops dpaa2_ethtool_ops = {
 	.get_drvinfo = dpaa2_eth_get_drvinfo,
 	.get_link = ethtool_op_get_link,
-	.get_settings = dpaa2_eth_get_settings,
-	.set_settings = dpaa2_eth_set_settings,
+	.get_link_ksettings = dpaa2_eth_get_link_ksettings,
+	.set_link_ksettings = dpaa2_eth_set_link_ksettings,
 	.get_pauseparam = dpaa2_eth_get_pauseparam,
 	.set_pauseparam = dpaa2_eth_set_pauseparam,
 	.get_sset_count = dpaa2_eth_get_sset_count,

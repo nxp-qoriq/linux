@@ -518,12 +518,13 @@
 		};
 
 		i2c0: i2c@2000000 {
-			compatible = "fsl,vf610-i2c";
+			compatible = "fsl,vf610-i2c", "fsl,ls1088a-vf610-i2c";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x0 0x2000000 0x0 0x10000>;
 			interrupts = <0 34 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clockgen 4 7>;
+			fsl-scl-gpio = <&gpio3 30 0>;
 			status = "disabled";
 		};
 

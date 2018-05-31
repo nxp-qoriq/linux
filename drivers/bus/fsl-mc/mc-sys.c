@@ -1,35 +1,9 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
 /*
  * Copyright 2013-2016 Freescale Semiconductor Inc.
  *
  * I/O services to send MC commands to the MC hardware
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
- *     * Neither the name of the above-listed copyright holders nor the
- *       names of any contributors may be used to endorse or promote products
- *       derived from this software without specific prior written permission.
- *
- * ALTERNATIVELY, this software may be distributed under the terms of the
- * GNU General Public License ("GPL") as published by the Free Software
- * Foundation, either version 2 of that License or (at your option) any
- * later version.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include <linux/delay.h>
@@ -37,11 +11,10 @@
 #include <linux/ioport.h>
 #include <linux/device.h>
 #include <linux/io.h>
-#include "../include/mc-sys.h"
-#include "../include/mc-cmd.h"
-#include "../include/mc.h"
+#include <linux/io-64-nonatomic-hi-lo.h>
+#include <linux/fsl/mc.h>
 
-#include "dpmcp.h"
+#include "fsl-mc-private.h"
 
 /**
  * Timeout in milliseconds to wait for the completion of an MC command
@@ -55,14 +28,14 @@
 #define MC_CMD_COMPLETION_POLLING_MIN_SLEEP_USECS    10
 #define MC_CMD_COMPLETION_POLLING_MAX_SLEEP_USECS    500
 
-static enum mc_cmd_status mc_cmd_hdr_read_status(struct mc_command *cmd)
+static enum mc_cmd_status mc_cmd_hdr_read_status(struct fsl_mc_command *cmd)
 {
 	struct mc_cmd_header *hdr = (struct mc_cmd_header *)&cmd->header;
 
 	return (enum mc_cmd_status)hdr->status;
 }
 
-static u16 mc_cmd_hdr_read_cmdid(struct mc_command *cmd)
+static u16 mc_cmd_hdr_read_cmdid(struct fsl_mc_command *cmd)
 {
 	struct mc_cmd_header *hdr = (struct mc_cmd_header *)&cmd->header;
 	u16 cmd_id = le16_to_cpu(hdr->cmd_id);
@@ -86,7 +59,7 @@ static int mc_status_to_error(enum mc_cmd_status status)
 		[MC_CMD_STATUS_INVALID_STATE] = -ENODEV,
 	};
 
-	if (WARN_ON((u32)status >= ARRAY_SIZE(mc_status_to_error_map)))
+	if ((u32)status >= ARRAY_SIZE(mc_status_to_error_map))
 		return -EINVAL;
 
 	return mc_status_to_error_map[status];
@@ -121,18 +94,22 @@ static const char *mc_status_to_string(enum mc_cmd_status status)
  * @portal: pointer to an MC portal
  * @cmd: pointer to a filled command
  */
-static inline void mc_write_command(struct mc_command __iomem *portal,
-				    struct mc_command *cmd)
+static inline void mc_write_command(struct fsl_mc_command __iomem *portal,
+				    struct fsl_mc_command *cmd)
 {
 	int i;
 
 	/* copy command parameters into the portal */
 	for (i = 0; i < MC_CMD_NUM_OF_PARAMS; i++)
-		__raw_writeq(cmd->params[i], &portal->params[i]);
-	__iowmb();
+		/*
+		 * Data is already in the expected LE byte-order. Do an
+		 * extra LE -> CPU conversion so that the CPU -> LE done in
+		 * the device io write api puts it back in the right order.
+		 */
+		writeq_relaxed(le64_to_cpu(cmd->params[i]), &portal->params[i]);
 
 	/* submit the command by writing the header */
-	__raw_writeq(cmd->header, &portal->header);
+	writeq(le64_to_cpu(cmd->header), &portal->header);
 }
 
 /**
@@ -144,25 +121,28 @@ static inline void mc_write_command(struct mc_command __iomem *portal,
  *
  * Returns MC_CMD_STATUS_OK on Success; Error code otherwise.
  */
-static inline enum mc_cmd_status mc_read_response(struct mc_command __iomem *
-						  portal,
-						  struct mc_command *resp)
+static inline enum mc_cmd_status mc_read_response(struct fsl_mc_command __iomem
+						  *portal,
+						  struct fsl_mc_command *resp)
 {
 	int i;
 	enum mc_cmd_status status;
 
 	/* Copy command response header from MC portal: */
-	__iormb();
-	resp->header = __raw_readq(&portal->header);
-	__iormb();
+	resp->header = cpu_to_le64(readq_relaxed(&portal->header));
 	status = mc_cmd_hdr_read_status(resp);
 	if (status != MC_CMD_STATUS_OK)
 		return status;
 
 	/* Copy command response data from MC portal: */
 	for (i = 0; i < MC_CMD_NUM_OF_PARAMS; i++)
-		resp->params[i] = __raw_readq(&portal->params[i]);
-	__iormb();
+		/*
+		 * Data is expected to be in LE byte-order. Do an
+		 * extra CPU -> LE to revert the LE -> CPU done in
+		 * the device io read api.
+		 */
+		resp->params[i] =
+			cpu_to_le64(readq_relaxed(&portal->params[i]));
 
 	return status;
 }
@@ -176,7 +156,7 @@ static inline enum mc_cmd_status mc_read_response(struct mc_command __iomem *
  * @mc_status: MC command completion status
  */
 static int mc_polling_wait_preemptible(struct fsl_mc_io *mc_io,
-				       struct mc_command *cmd,
+				       struct fsl_mc_command *cmd,
 				       enum mc_cmd_status *mc_status)
 {
 	enum mc_cmd_status status;
@@ -200,8 +180,8 @@ static int mc_polling_wait_preemptible(struct fsl_mc_io *mc_io,
 
 		if (time_after_eq(jiffies, jiffies_until_timeout)) {
 			dev_dbg(mc_io->dev,
-				"MC command timed out (portal: %#llx, dprc handle: %#x, command: %#x)\n",
-				 mc_io->portal_phys_addr,
+				"MC command timed out (portal: %pa, dprc handle: %#x, command: %#x)\n",
+				 &mc_io->portal_phys_addr,
 				 (unsigned int)mc_cmd_hdr_read_token(cmd),
 				 (unsigned int)mc_cmd_hdr_read_cmdid(cmd));
 
@@ -222,7 +202,7 @@ static int mc_polling_wait_preemptible(struct fsl_mc_io *mc_io,
  * @mc_status: MC command completion status
  */
 static int mc_polling_wait_atomic(struct fsl_mc_io *mc_io,
-				  struct mc_command *cmd,
+				  struct fsl_mc_command *cmd,
 				  enum mc_cmd_status *mc_status)
 {
 	enum mc_cmd_status status;
@@ -240,8 +220,8 @@ static int mc_polling_wait_atomic(struct fsl_mc_io *mc_io,
 		timeout_usecs -= MC_CMD_COMPLETION_POLLING_MAX_SLEEP_USECS;
 		if (timeout_usecs == 0) {
 			dev_dbg(mc_io->dev,
-				"MC command timed out (portal: %#llx, dprc handle: %#x, command: %#x)\n",
-				 mc_io->portal_phys_addr,
+				"MC command timed out (portal: %pa, dprc handle: %#x, command: %#x)\n",
+				 &mc_io->portal_phys_addr,
 				 (unsigned int)mc_cmd_hdr_read_token(cmd),
 				 (unsigned int)mc_cmd_hdr_read_cmdid(cmd));
 
@@ -261,14 +241,13 @@ static int mc_polling_wait_atomic(struct fsl_mc_io *mc_io,
  *
  * Returns '0' on Success; Error code otherwise.
  */
-int mc_send_command(struct fsl_mc_io *mc_io, struct mc_command *cmd)
+int mc_send_command(struct fsl_mc_io *mc_io, struct fsl_mc_command *cmd)
 {
 	int error;
 	enum mc_cmd_status status;
 	unsigned long irq_flags = 0;
 
-	if (WARN_ON(in_irq() &&
-		    !(mc_io->flags & FSL_MC_IO_ATOMIC_CONTEXT_PORTAL)))
+	if (in_irq() && !(mc_io->flags & FSL_MC_IO_ATOMIC_CONTEXT_PORTAL))
 		return -EINVAL;
 
 	if (mc_io->flags & FSL_MC_IO_ATOMIC_CONTEXT_PORTAL)
@@ -294,8 +273,8 @@ int mc_send_command(struct fsl_mc_io *mc_io, struct mc_command *cmd)
 
 	if (status != MC_CMD_STATUS_OK) {
 		dev_dbg(mc_io->dev,
-			"MC command failed: portal: %#llx, dprc handle: %#x, command: %#x, status: %s (%#x)\n",
-			 mc_io->portal_phys_addr,
+			"MC command failed: portal: %pa, dprc handle: %#x, command: %#x, status: %s (%#x)\n",
+			 &mc_io->portal_phys_addr,
 			 (unsigned int)mc_cmd_hdr_read_token(cmd),
 			 (unsigned int)mc_cmd_hdr_read_cmdid(cmd),
 			 mc_status_to_string(status),
@@ -314,4 +293,4 @@ common_exit:
 
 	return error;
 }
-EXPORT_SYMBOL(mc_send_command);
+EXPORT_SYMBOL_GPL(mc_send_command);

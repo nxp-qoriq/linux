@@ -38,7 +38,7 @@
 #include <uapi/linux/if_bridge.h>
 #include <net/netlink.h>
 
-#include "../../fsl-mc/include/mc.h"
+#include <linux/fsl/mc.h>
 
 #include "dpdmux.h"
 #include "dpdmux-cmd.h"
@@ -1202,11 +1202,16 @@ static int evb_probe(struct fsl_mc_device *evb_dev)
 
 	priv = netdev_priv(netdev);
 
-	err = fsl_mc_portal_allocate(evb_dev, 0, &priv->mc_io);
-	if (unlikely(err)) {
-		dev_err(dev, "fsl_mc_portal_allocate err %d\n", err);
+	err = fsl_mc_portal_allocate(evb_dev, FSL_MC_IO_ATOMIC_CONTEXT_PORTAL,
+				     &priv->mc_io);
+	if (err) {
+		if (err == -ENXIO)
+			err = -EPROBE_DEFER;
+		else
+			dev_err(dev, "fsl_mc_portal_allocate err %d\n", err);
 		goto err_free_netdev;
 	}
+
 	if (!priv->mc_io) {
 		dev_err(dev, "fsl_mc_portal_allocate returned null handle but no error\n");
 		err = -EFAULT;

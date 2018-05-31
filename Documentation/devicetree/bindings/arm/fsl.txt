@@ -147,6 +147,10 @@ LS1012A ARMv8 based RDB Board
 Required root node properties:
     - compatible = "fsl,ls1012a-rdb", "fsl,ls1012a";
 
+LS1012A ARMv8 based FRWY Board
+Required root node properties:
+    - compatible = "fsl,ls1012a-frwy", "fsl,ls1012a";
+
 LS1012A ARMv8 based FRDM Board
 Required root node properties:
     - compatible = "fsl,ls1012a-frdm", "fsl,ls1012a";

@@ -110,7 +110,7 @@ static int dpaa2_dbg_fqs_show(struct seq_file *file, void *offset)
 	u32 fcnt, bcnt;
 	int i, err;
 
-	seq_printf(file, "FQ stats for %s:\n", priv->net_dev->name);
+	seq_printf(file, "non-zero FQ stats for %s:\n", priv->net_dev->name);
 	seq_printf(file, "%s%16s%16s%16s%16s%16s%16s\n",
 		   "VFQID", "CPU", "Traffic Class", "Type", "Frames",
 		   "Pending frames", "Congestion");
@@ -120,6 +120,10 @@ static int dpaa2_dbg_fqs_show(struct seq_file *file, void *offset)
 		err = dpaa2_io_query_fq_count(NULL, fq->fqid, &fcnt, &bcnt);
 		if (err)
 			fcnt = 0;
+
+		/* A lot of queues, no use displaying zero traffic ones */
+		if (!fq->stats.frames && !fcnt)
+			continue;
 
 		seq_printf(file, "%5d%16d%16d%16s%16llu%16u%16llu\n",
 			   fq->fqid,

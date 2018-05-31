@@ -11,7 +11,7 @@
 #include <linux/iommu.h>
 #include <linux/of.h>
 #include <linux/of_iommu.h>
-#include "../include/mc.h"
+#include <linux/fsl/mc.h>
 
 /* Setup the IOMMU for the DPRC container */
 static const struct iommu_ops
@@ -75,31 +75,4 @@ void fsl_mc_dma_configure(struct fsl_mc_device *mc_dev,
 	mc_dev->dev.dma_mask = &mc_dev->dev.coherent_dma_mask;
 	arch_setup_dma_ops(&mc_dev->dev, 0,
 		mc_dev->dev.coherent_dma_mask + 1, ops, coherent);
-}
-
-/* Macro to get the container device of a MC device */
-#define fsl_mc_cont_dev(_dev) ((to_fsl_mc_device(_dev)->flags & \
-	FSL_MC_IS_DPRC) ? (_dev) : ((_dev)->parent))
-
-/* Macro to check if a device is a container device */
-#define is_cont_dev(_dev) (to_fsl_mc_device(_dev)->flags & FSL_MC_IS_DPRC)
-
-/* Get the IOMMU group for device on fsl-mc bus */
-struct iommu_group *fsl_mc_device_group(struct device *dev)
-{
-	struct device *cont_dev = fsl_mc_cont_dev(dev);
-	struct iommu_group *group;
-
-	/* Container device is responsible for creating the iommu group */
-	if (is_cont_dev(dev)) {
-		group = iommu_group_alloc();
-		if (IS_ERR(group))
-			return NULL;
-	} else {
-		get_device(cont_dev);
-		group = iommu_group_get(cont_dev);
-		put_device(cont_dev);
-	}
-
-	return group;
 }

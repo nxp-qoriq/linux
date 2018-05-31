@@ -29,8 +29,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include "../../fsl-mc/include/mc-sys.h"
-#include "../../fsl-mc/include/mc-cmd.h"
+#include <linux/fsl/mc.h>
 #include "dpmac.h"
 #include "dpmac-cmd.h"
 
@@ -57,7 +56,7 @@ int dpmac_open(struct fsl_mc_io *mc_io,
 	       u16 *token)
 {
 	struct dpmac_cmd_open *cmd_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -93,7 +92,7 @@ int dpmac_close(struct fsl_mc_io *mc_io,
 		u32 cmd_flags,
 		u16 token)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPMAC_CMDID_CLOSE, cmd_flags,
@@ -129,7 +128,7 @@ int dpmac_create(struct fsl_mc_io *mc_io,
 		 u32 *obj_id)
 {
 	struct dpmac_cmd_create *cmd_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -171,7 +170,7 @@ int dpmac_destroy(struct fsl_mc_io *mc_io,
 		  u32 object_id)
 {
 	struct dpmac_cmd_destroy *cmd_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPMAC_CMDID_DESTROY,
@@ -206,7 +205,7 @@ int dpmac_set_irq_enable(struct fsl_mc_io *mc_io,
 			 u8 en)
 {
 	struct dpmac_cmd_set_irq_enable *cmd_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPMAC_CMDID_SET_IRQ_ENABLE,
@@ -238,7 +237,7 @@ int dpmac_get_irq_enable(struct fsl_mc_io *mc_io,
 {
 	struct dpmac_cmd_get_irq_enable *cmd_params;
 	struct dpmac_rsp_get_irq_enable *rsp_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -283,7 +282,7 @@ int dpmac_set_irq_mask(struct fsl_mc_io *mc_io,
 		       u32 mask)
 {
 	struct dpmac_cmd_set_irq_mask *cmd_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPMAC_CMDID_SET_IRQ_MASK,
@@ -318,7 +317,7 @@ int dpmac_get_irq_mask(struct fsl_mc_io *mc_io,
 {
 	struct dpmac_cmd_get_irq_mask *cmd_params;
 	struct dpmac_rsp_get_irq_mask *rsp_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -361,7 +360,7 @@ int dpmac_get_irq_status(struct fsl_mc_io *mc_io,
 {
 	struct dpmac_cmd_get_irq_status *cmd_params;
 	struct dpmac_rsp_get_irq_status *rsp_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -404,7 +403,7 @@ int dpmac_clear_irq_status(struct fsl_mc_io *mc_io,
 			   u32 status)
 {
 	struct dpmac_cmd_clear_irq_status *cmd_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPMAC_CMDID_CLEAR_IRQ_STATUS,
@@ -434,7 +433,7 @@ int dpmac_get_attributes(struct fsl_mc_io *mc_io,
 			 struct dpmac_attr *attr)
 {
 	struct dpmac_rsp_get_attributes *rsp_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -472,7 +471,7 @@ int dpmac_get_link_cfg(struct fsl_mc_io *mc_io,
 		       struct dpmac_link_cfg *cfg)
 {
 	struct dpmac_rsp_get_link_cfg *rsp_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err = 0;
 
 	/* prepare command */
@@ -507,7 +506,7 @@ int dpmac_set_link_state(struct fsl_mc_io *mc_io,
 			 struct dpmac_link_state *link_state)
 {
 	struct dpmac_cmd_set_link_state *cmd_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPMAC_CMDID_SET_LINK_STATE,
@@ -540,7 +539,7 @@ int dpmac_get_counter(struct fsl_mc_io *mc_io,
 {
 	struct dpmac_cmd_get_counter *dpmac_cmd;
 	struct dpmac_rsp_get_counter *dpmac_rsp;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err = 0;
 
 	/* prepare command */
@@ -568,7 +567,7 @@ int dpmac_set_port_mac_addr(struct fsl_mc_io *mc_io,
 			    const u8 addr[6])
 {
 	struct dpmac_cmd_set_port_mac_addr *dpmac_cmd;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPMAC_CMDID_SET_PORT_MAC_ADDR,
@@ -601,7 +600,7 @@ int dpmac_get_api_version(struct fsl_mc_io *mc_io,
 			  u16 *minor_ver)
 {
 	struct dpmac_rsp_get_api_version *rsp_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	cmd.header = mc_encode_cmd_header(DPMAC_CMDID_GET_API_VERSION,

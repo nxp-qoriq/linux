@@ -31,6 +31,14 @@ struct irqchip_fwid {
 	void *data;
 };
 
+#ifdef CONFIG_GENERIC_IRQ_DEBUGFS
+static void debugfs_add_domain_dir(struct irq_domain *d);
+static void debugfs_remove_domain_dir(struct irq_domain *d);
+#else
+static inline void debugfs_add_domain_dir(struct irq_domain *d) { }
+static inline void debugfs_remove_domain_dir(struct irq_domain *d) { }
+#endif
+
 /**
  * irq_domain_alloc_fwnode - Allocate a fwnode_handle suitable for
  *                           identifying an irq domain
@@ -117,6 +125,7 @@ struct irq_domain *__irq_domain_add(struct fwnode_handle *fwnode, int size,
 	irq_domain_check_hierarchy(domain);
 
 	mutex_lock(&irq_domain_mutex);
+	debugfs_add_domain_dir(domain);
 	list_add(&domain->link, &irq_domain_list);
 	mutex_unlock(&irq_domain_mutex);
 
@@ -136,6 +145,7 @@ EXPORT_SYMBOL_GPL(__irq_domain_add);
 void irq_domain_remove(struct irq_domain *domain)
 {
 	mutex_lock(&irq_domain_mutex);
+	debugfs_remove_domain_dir(domain);
 
 	WARN_ON(!radix_tree_empty(&domain->revmap_tree));
 
@@ -155,6 +165,37 @@ void irq_domain_remove(struct irq_domain *domain)
 	kfree(domain);
 }
 EXPORT_SYMBOL_GPL(irq_domain_remove);
+
+void irq_domain_update_bus_token(struct irq_domain *domain,
+				 enum irq_domain_bus_token bus_token)
+{
+	char *name;
+
+	if (domain->bus_token == bus_token)
+		return;
+
+	mutex_lock(&irq_domain_mutex);
+
+	domain->bus_token = bus_token;
+
+	name = kasprintf(GFP_KERNEL, "%s-%d", domain->name, bus_token);
+	if (!name) {
+		mutex_unlock(&irq_domain_mutex);
+		return;
+	}
+
+	debugfs_remove_domain_dir(domain);
+
+	if (domain->flags & IRQ_DOMAIN_NAME_ALLOCATED)
+		kfree(domain->name);
+	else
+		domain->flags |= IRQ_DOMAIN_NAME_ALLOCATED;
+
+	domain->name = name;
+	debugfs_add_domain_dir(domain);
+
+	mutex_unlock(&irq_domain_mutex);
+}
 
 /**
  * irq_domain_add_simple() - Register an irq_domain and optionally map a range of irqs
@@ -1189,43 +1230,18 @@ void irq_domain_free_irqs_top(struct irq_domain *domain, unsigned int virq,
 	irq_domain_free_irqs_common(domain, virq, nr_irqs);
 }
 
-static bool irq_domain_is_auto_recursive(struct irq_domain *domain)
-{
-	return domain->flags & IRQ_DOMAIN_FLAG_AUTO_RECURSIVE;
-}
-
-static void irq_domain_free_irqs_recursive(struct irq_domain *domain,
+static void irq_domain_free_irqs_hierarchy(struct irq_domain *domain,
 					   unsigned int irq_base,
 					   unsigned int nr_irqs)
 {
 	domain->ops->free(domain, irq_base, nr_irqs);
-	if (irq_domain_is_auto_recursive(domain)) {
-		BUG_ON(!domain->parent);
-		irq_domain_free_irqs_recursive(domain->parent, irq_base,
-					       nr_irqs);
-	}
 }
 
-int irq_domain_alloc_irqs_recursive(struct irq_domain *domain,
+int irq_domain_alloc_irqs_hierarchy(struct irq_domain *domain,
 				    unsigned int irq_base,
 				    unsigned int nr_irqs, void *arg)
 {
-	int ret = 0;
-	struct irq_domain *parent = domain->parent;
-	bool recursive = irq_domain_is_auto_recursive(domain);
-
-	BUG_ON(recursive && !parent);
-	if (recursive)
-		ret = irq_domain_alloc_irqs_recursive(parent, irq_base,
-						      nr_irqs, arg);
-	if (ret < 0)
-		return ret;
-
-	ret = domain->ops->alloc(domain, irq_base, nr_irqs, arg);
-	if (ret < 0 && recursive)
-		irq_domain_free_irqs_recursive(parent, irq_base, nr_irqs);
-
-	return ret;
+	return domain->ops->alloc(domain, irq_base, nr_irqs, arg);
 }
 
 /**
@@ -1286,7 +1302,7 @@ int __irq_domain_alloc_irqs(struct irq_domain *domain, int irq_base,
 	}
 
 	mutex_lock(&irq_domain_mutex);
-	ret = irq_domain_alloc_irqs_recursive(domain, virq, nr_irqs, arg);
+	ret = irq_domain_alloc_irqs_hierarchy(domain, virq, nr_irqs, arg);
 	if (ret < 0) {
 		mutex_unlock(&irq_domain_mutex);
 		goto out_free_irq_data;
@@ -1321,7 +1337,7 @@ void irq_domain_free_irqs(unsigned int virq, unsigned int nr_irqs)
 	mutex_lock(&irq_domain_mutex);
 	for (i = 0; i < nr_irqs; i++)
 		irq_domain_remove_irq(virq + i);
-	irq_domain_free_irqs_recursive(data->domain, virq, nr_irqs);
+	irq_domain_free_irqs_hierarchy(data->domain, virq, nr_irqs);
 	mutex_unlock(&irq_domain_mutex);
 
 	irq_domain_free_irq_data(virq, nr_irqs);
@@ -1341,15 +1357,11 @@ int irq_domain_alloc_irqs_parent(struct irq_domain *domain,
 				 unsigned int irq_base, unsigned int nr_irqs,
 				 void *arg)
 {
-	/* irq_domain_alloc_irqs_recursive() has called parent's alloc() */
-	if (irq_domain_is_auto_recursive(domain))
-		return 0;
+	if (!domain->parent)
+		return -ENOSYS;
 
-	domain = domain->parent;
-	if (domain)
-		return irq_domain_alloc_irqs_recursive(domain, irq_base,
-						       nr_irqs, arg);
-	return -ENOSYS;
+	return irq_domain_alloc_irqs_hierarchy(domain->parent, irq_base,
+					       nr_irqs, arg);
 }
 EXPORT_SYMBOL_GPL(irq_domain_alloc_irqs_parent);
 
@@ -1364,10 +1376,10 @@ EXPORT_SYMBOL_GPL(irq_domain_alloc_irqs_parent);
 void irq_domain_free_irqs_parent(struct irq_domain *domain,
 				 unsigned int irq_base, unsigned int nr_irqs)
 {
-	/* irq_domain_free_irqs_recursive() will call parent's free */
-	if (!irq_domain_is_auto_recursive(domain) && domain->parent)
-		irq_domain_free_irqs_recursive(domain->parent, irq_base,
-					       nr_irqs);
+	if (!domain->parent)
+		return;
+
+	irq_domain_free_irqs_hierarchy(domain->parent, irq_base, nr_irqs);
 }
 EXPORT_SYMBOL_GPL(irq_domain_free_irqs_parent);
 
@@ -1487,3 +1499,78 @@ static void irq_domain_check_hierarchy(struct irq_domain *domain)
 {
 }
 #endif	/* CONFIG_IRQ_DOMAIN_HIERARCHY */
+
+#ifdef CONFIG_GENERIC_IRQ_DEBUGFS
+static struct dentry *domain_dir;
+
+static void
+irq_domain_debug_show_one(struct seq_file *m, struct irq_domain *d, int ind)
+{
+	seq_printf(m, "%*sname:   %s\n", ind, "", d->name);
+	seq_printf(m, "%*ssize:   %u\n", ind + 1, "",
+		   d->revmap_size + d->revmap_direct_max_irq);
+	seq_printf(m, "%*smapped: %u\n", ind + 1, "", d->mapcount);
+	seq_printf(m, "%*sflags:  0x%08x\n", ind +1 , "", d->flags);
+#ifdef	CONFIG_IRQ_DOMAIN_HIERARCHY
+	if (!d->parent)
+		return;
+	seq_printf(m, "%*sparent: %s\n", ind + 1, "", d->parent->name);
+	irq_domain_debug_show_one(m, d->parent, ind + 4);
+#endif
+}
+
+static int irq_domain_debug_show(struct seq_file *m, void *p)
+{
+	struct irq_domain *d = m->private;
+
+	/* Default domain? Might be NULL */
+	if (!d) {
+		if (!irq_default_domain)
+			return 0;
+		d = irq_default_domain;
+	}
+	irq_domain_debug_show_one(m, d, 0);
+	return 0;
+}
+
+static int irq_domain_debug_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, irq_domain_debug_show, inode->i_private);
+}
+
+static const struct file_operations dfs_domain_ops = {
+	.open		= irq_domain_debug_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
+static void debugfs_add_domain_dir(struct irq_domain *d)
+{
+	if (!d->name || !domain_dir || d->debugfs_file)
+		return;
+	d->debugfs_file = debugfs_create_file(d->name, 0444, domain_dir, d,
+					      &dfs_domain_ops);
+}
+
+static void debugfs_remove_domain_dir(struct irq_domain *d)
+{
+	if (d->debugfs_file)
+		debugfs_remove(d->debugfs_file);
+}
+
+void __init irq_domain_debugfs_init(struct dentry *root)
+{
+	struct irq_domain *d;
+
+	domain_dir = debugfs_create_dir("domains", root);
+	if (!domain_dir)
+		return;
+
+	debugfs_create_file("default", 0444, domain_dir, NULL, &dfs_domain_ops);
+	mutex_lock(&irq_domain_mutex);
+	list_for_each_entry(d, &irq_domain_list, link)
+		debugfs_add_domain_dir(d);
+	mutex_unlock(&irq_domain_mutex);
+}
+#endif

@@ -138,6 +138,7 @@ struct irq_domain_chip_generic;
  *      setting up one or more generic chips for interrupt controllers
  *      drivers using the generic chip library which uses this pointer.
  * @parent: Pointer to parent irq_domain to support hierarchy irq_domains
+ * @debugfs_file: dentry for the domain debugfs file
  *
  * Revmap data, used internally by irq_domain
  * @revmap_direct_max_irq: The largest hwirq that can be set for controllers that
@@ -160,6 +161,9 @@ struct irq_domain {
 #ifdef	CONFIG_IRQ_DOMAIN_HIERARCHY
 	struct irq_domain *parent;
 #endif
+#ifdef CONFIG_GENERIC_IRQ_DEBUGFS
+	struct dentry		*debugfs_file;
+#endif
 
 	/* reverse map data. The linear map gets appended to the irq_domain */
 	irq_hw_number_t hwirq_max;
@@ -174,8 +178,8 @@ enum {
 	/* Irq domain is hierarchical */
 	IRQ_DOMAIN_FLAG_HIERARCHY	= (1 << 0),
 
-	/* Core calls alloc/free recursive through the domain hierarchy. */
-	IRQ_DOMAIN_FLAG_AUTO_RECURSIVE	= (1 << 1),
+	/* Irq domain name was allocated in __irq_domain_add() */
+	IRQ_DOMAIN_NAME_ALLOCATED	= (1 << 6),
 
 	/* Irq domain is an IPI domain with virq per cpu */
 	IRQ_DOMAIN_FLAG_IPI_PER_CPU	= (1 << 2),
@@ -237,6 +241,9 @@ static inline bool is_fwnode_irqchip(struct fwnode_handle *fwnode)
 {
 	return fwnode && fwnode->type == FWNODE_IRQCHIP;
 }
+
+extern void irq_domain_update_bus_token(struct irq_domain *domain,
+					enum irq_domain_bus_token bus_token);
 
 static inline
 struct irq_domain *irq_find_matching_fwnode(struct fwnode_handle *fwnode,
@@ -410,7 +417,7 @@ static inline int irq_domain_alloc_irqs(struct irq_domain *domain,
 				       NULL);
 }
 
-extern int irq_domain_alloc_irqs_recursive(struct irq_domain *domain,
+extern int irq_domain_alloc_irqs_hierarchy(struct irq_domain *domain,
 					   unsigned int irq_base,
 					   unsigned int nr_irqs, void *arg);
 extern int irq_domain_set_hwirq_and_chip(struct irq_domain *domain,

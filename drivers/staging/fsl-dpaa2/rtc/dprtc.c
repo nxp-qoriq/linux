@@ -29,8 +29,8 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include "../../fsl-mc/include/mc-sys.h"
-#include "../../fsl-mc/include/mc-cmd.h"
+#include <linux/fsl/mc.h>
+
 #include "dprtc.h"
 #include "dprtc-cmd.h"
 
@@ -57,7 +57,7 @@ int dprtc_open(struct fsl_mc_io *mc_io,
 	       uint16_t *token)
 {
 	struct dprtc_cmd_open *cmd_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -93,7 +93,7 @@ int dprtc_close(struct fsl_mc_io *mc_io,
 		uint32_t cmd_flags,
 		uint16_t token)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_CLOSE, cmd_flags,
@@ -128,7 +128,7 @@ int dprtc_create(struct fsl_mc_io *mc_io,
 		 const struct dprtc_cfg *cfg,
 		 uint32_t *obj_id)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	(void)(cfg); /* unused */
@@ -170,7 +170,7 @@ int dprtc_destroy(struct fsl_mc_io *mc_io,
 		  uint32_t object_id)
 {
 	struct dprtc_cmd_destroy *cmd_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_DESTROY,
@@ -187,7 +187,7 @@ int dprtc_enable(struct fsl_mc_io *mc_io,
 		 uint32_t cmd_flags,
 		 uint16_t token)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_ENABLE, cmd_flags,
@@ -201,7 +201,7 @@ int dprtc_disable(struct fsl_mc_io *mc_io,
 		  uint32_t cmd_flags,
 		  uint16_t token)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_DISABLE,
@@ -218,7 +218,7 @@ int dprtc_is_enabled(struct fsl_mc_io *mc_io,
 		     int *en)
 {
 	struct dprtc_rsp_is_enabled *rsp_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -241,7 +241,7 @@ int dprtc_reset(struct fsl_mc_io *mc_io,
 		uint32_t cmd_flags,
 		uint16_t token)
 {
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_RESET,
@@ -274,7 +274,7 @@ int dprtc_set_irq_enable(struct fsl_mc_io *mc_io,
 			 uint8_t en)
 {
 	struct dprtc_cmd_set_irq_enable *cmd_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_SET_IRQ_ENABLE,
@@ -306,7 +306,7 @@ int dprtc_get_irq_enable(struct fsl_mc_io *mc_io,
 {
 	struct dprtc_rsp_get_irq_enable *rsp_params;
 	struct dprtc_cmd_get_irq *cmd_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -351,7 +351,7 @@ int dprtc_set_irq_mask(struct fsl_mc_io *mc_io,
 		       uint32_t mask)
 {
 	struct dprtc_cmd_set_irq_mask *cmd_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_SET_IRQ_MASK,
@@ -386,7 +386,7 @@ int dprtc_get_irq_mask(struct fsl_mc_io *mc_io,
 {
 	struct dprtc_rsp_get_irq_mask *rsp_params;
 	struct dprtc_cmd_get_irq *cmd_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -429,7 +429,7 @@ int dprtc_get_irq_status(struct fsl_mc_io *mc_io,
 {
 	struct dprtc_cmd_get_irq_status *cmd_params;
 	struct dprtc_rsp_get_irq_status *rsp_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -472,7 +472,7 @@ int dprtc_clear_irq_status(struct fsl_mc_io *mc_io,
 			   uint32_t status)
 {
 	struct dprtc_cmd_clear_irq_status *cmd_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_CLEAR_IRQ_STATUS,
@@ -502,7 +502,7 @@ int dprtc_get_attributes(struct fsl_mc_io *mc_io,
 			 struct dprtc_attr *attr)
 {
 	struct dprtc_rsp_get_attributes *rsp_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -539,7 +539,7 @@ int dprtc_set_clock_offset(struct fsl_mc_io *mc_io,
 			   int64_t offset)
 {
 	struct dprtc_cmd_set_clock_offset *cmd_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_SET_CLOCK_OFFSET,
@@ -568,7 +568,7 @@ int dprtc_set_freq_compensation(struct fsl_mc_io *mc_io,
 				uint32_t freq_compensation)
 {
 	struct dprtc_get_freq_compensation *cmd_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_SET_FREQ_COMPENSATION,
@@ -597,7 +597,7 @@ int dprtc_get_freq_compensation(struct fsl_mc_io *mc_io,
 				uint32_t *freq_compensation)
 {
 	struct dprtc_get_freq_compensation *rsp_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -633,7 +633,7 @@ int dprtc_get_time(struct fsl_mc_io *mc_io,
 		   uint64_t *time)
 {
 	struct dprtc_time *rsp_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	/* prepare command */
@@ -669,7 +669,7 @@ int dprtc_set_time(struct fsl_mc_io *mc_io,
 		   uint64_t time)
 {
 	struct dprtc_time *cmd_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_SET_TIME,
@@ -699,7 +699,7 @@ int dprtc_set_alarm(struct fsl_mc_io *mc_io,
 		    uint16_t token, uint64_t time)
 {
 	struct dprtc_time *cmd_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_SET_ALARM,
@@ -727,7 +727,7 @@ int dprtc_get_api_version(struct fsl_mc_io *mc_io,
 			  uint16_t *minor_ver)
 {
 	struct dprtc_rsp_get_api_version *rsp_params;
-	struct mc_command cmd = { 0 };
+	struct fsl_mc_command cmd = { 0 };
 	int err;
 
 	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_GET_API_VERSION,

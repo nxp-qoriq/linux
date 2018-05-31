@@ -1021,7 +1021,6 @@ static ssize_t show_trans_timeout(struct netdev_queue *queue,
 	return sprintf(buf, "%lu", trans_timeout);
 }
 
-#ifdef CONFIG_XPS
 static unsigned int get_netdev_queue_index(struct netdev_queue *queue)
 {
 	struct net_device *dev = queue->dev;
@@ -1033,6 +1032,21 @@ static unsigned int get_netdev_queue_index(struct netdev_queue *queue)
 	return i;
 }
 
+static ssize_t show_traffic_class(struct netdev_queue *queue,
+				  struct netdev_queue_attribute *attribute,
+				  char *buf)
+{
+	struct net_device *dev = queue->dev;
+	int index = get_netdev_queue_index(queue);
+	int tc = netdev_txq_to_tc(dev, index);
+
+	if (tc < 0)
+		return -EINVAL;
+
+	return sprintf(buf, "%u\n", tc);
+}
+
+#ifdef CONFIG_XPS
 static ssize_t show_tx_maxrate(struct netdev_queue *queue,
 			       struct netdev_queue_attribute *attribute,
 			       char *buf)
@@ -1074,6 +1088,9 @@ static struct netdev_queue_attribute queue_tx_maxrate =
 
 static struct netdev_queue_attribute queue_trans_timeout =
 	__ATTR(tx_timeout, S_IRUGO, show_trans_timeout, NULL);
+
+static struct netdev_queue_attribute queue_traffic_class =
+	__ATTR(traffic_class, S_IRUGO, show_traffic_class, NULL);
 
 #ifdef CONFIG_BQL
 /*
@@ -1260,6 +1277,7 @@ static struct netdev_queue_attribute xps_cpus_attribute =
 
 static struct attribute *netdev_queue_default_attrs[] = {
 	&queue_trans_timeout.attr,
+	&queue_traffic_class.attr,
 #ifdef CONFIG_XPS
 	&xps_cpus_attribute.attr,
 	&queue_tx_maxrate.attr,

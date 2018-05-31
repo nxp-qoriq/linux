@@ -176,7 +176,7 @@ static struct its_itte *find_itte(struct vgic_its *its, u32 device_id,
 
 #define GIC_LPI_OFFSET 8192
 
-#define VITS_TYPER_DEVBITS 16
+#define VITS_TYPER_DEVBITS 17
 
 /*
  * Finds and returns a collection in the ITS collection table.

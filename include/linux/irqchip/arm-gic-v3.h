@@ -133,6 +133,9 @@
 #define GIC_BASER_SHAREABILITY(reg, type)				\
 	(GIC_BASER_##type << reg##_SHAREABILITY_SHIFT)
 
+/* encode a size field of width @w containing @n - 1 units */
+#define GIC_ENCODE_SZ(n, w) (((unsigned long)(n) - 1) & GENMASK_ULL(((w) - 1), 0))
+
 #define GICR_PROPBASER_SHAREABILITY_SHIFT		(10)
 #define GICR_PROPBASER_INNER_CACHEABILITY_SHIFT		(7)
 #define GICR_PROPBASER_OUTER_CACHEABILITY_SHIFT		(56)

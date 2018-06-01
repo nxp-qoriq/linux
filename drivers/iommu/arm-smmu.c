@@ -49,7 +49,7 @@
 #include <linux/spinlock.h>
 
 #include <linux/amba/bus.h>
-#include "../staging/fsl-mc/include/mc-bus.h"
+#include <linux/fsl/mc.h>
 
 #include "io-pgtable.h"
 

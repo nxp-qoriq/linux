@@ -304,7 +304,7 @@
 		ranges;
 
 		clockgen: clocking@1300000 {
-			compatible = "fsl,ls2080a-clockgen";
+			compatible = "fsl,lx2160a-clockgen";
 			reg = <0 0x1300000 0 0xa0000>;
 			#clock-cells = <2>;
 			clocks = <&sysclk>;

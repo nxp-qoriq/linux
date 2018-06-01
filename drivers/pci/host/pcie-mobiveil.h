@@ -36,6 +36,7 @@
 #define PAB_RST_CTRL				0x820
 #define PAB_BR_STAT				0x80c
 #define PAB_INTP_AXI_MISC_ENB			0xb0c
+#define PAB_INTP_AXI_MISC_STAT			0xb1c
 #define MSI					(0x1 << 3)
 #define INTA					(0x1 << 5)
 #define INTB					(0x1 << 6)

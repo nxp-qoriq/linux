@@ -45,6 +45,7 @@ struct lx_pcie {
 	struct mv_pcie *pci;
 	void __iomem *lut;
 	const struct lx_pcie_drvdata *drvdata;
+	int			irq;
 };
 
 #define to_lx_pcie(x)	dev_get_drvdata((x)->dev)
@@ -176,6 +177,20 @@ static int __init lx_add_root_port(struct lx_pcie *pcie)
 	return 0;
 }
 
+static irqreturn_t lx_pcie_handler(int irq, void *dev_id)
+{
+	struct lx_pcie *pcie = (struct lx_pcie *)dev_id;
+	struct mv_pcie *mv_pci = pcie->pci;
+	u32 val;
+
+	val = mv_pcie_readl_csr(mv_pci, PAB_INTP_AXI_MISC_STAT);
+	if (!val)
+		return IRQ_NONE;
+	mv_pcie_writel_csr(mv_pci, PAB_INTP_AXI_MISC_STAT, val);
+
+	return IRQ_HANDLED;
+}
+
 static int __init lx_pcie_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -216,6 +231,18 @@ static int __init lx_pcie_probe(struct platform_device *pdev)
 		return -ENODEV;
 
 	platform_set_drvdata(pdev, pcie);
+
+	pcie->irq = platform_get_irq_byname(pdev, "intr");
+	if (pcie->irq < 0) {
+		dev_err(&pdev->dev, "Can't get intr irq.\n");
+		return pcie->irq;
+	}
+	ret = devm_request_irq(&pdev->dev, pcie->irq,
+			lx_pcie_handler, IRQF_SHARED, pdev->name, pcie);
+	if (ret) {
+		dev_err(&pdev->dev, "Can't register LX PCIe IRQ.\n");
+		return  ret;
+	}
 
 	ret = lx_add_root_port(pcie);
 	if (ret < 0)

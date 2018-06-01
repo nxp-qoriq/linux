@@ -19,6 +19,8 @@
 #define GPEX_CLASSCODE				0x474
 #define GPEX_CLASSCODE_SHIFT			16
 #define GPEX_CLASSCODE_MASK			0xffff
+#define GPEX_PROGIF_SHIFT			8
+#define GPEX_PROGIF_MASK			0xff
 
 /* PAB CSR */
 #define PAB_CAP					0x804

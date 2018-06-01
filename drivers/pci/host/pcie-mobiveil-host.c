@@ -179,7 +179,8 @@ void mv_pcie_setup_rp_hw(struct root_port *rp)
 
 	/* program correct class for RC */
 	mv_pcie_read_own_conf(rp, GPEX_CLASSCODE, 4, &val);
-	val &= ~(GPEX_CLASSCODE_MASK << GPEX_CLASSCODE_SHIFT);
+	val &= ~(GPEX_CLASSCODE_MASK << GPEX_CLASSCODE_SHIFT |
+		 GPEX_PROGIF_MASK << GPEX_PROGIF_SHIFT);
 	val |= PCI_CLASS_BRIDGE_PCI << GPEX_CLASSCODE_SHIFT;
 	mv_pcie_write_own_conf(rp, GPEX_CLASSCODE, 4, val);
 

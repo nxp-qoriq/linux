@@ -165,8 +165,7 @@ void mv_pcie_setup_rp_hw(struct root_port *rp)
 	mv_pcie_writel_csr(pci, PCI_COMMAND, val);
 
 	/* enable INTx and MSI */
-	val = mv_pcie_readl_csr(pci, PAB_INTP_AXI_MISC_ENB);
-	val |= MSI | INTA | INTB | INTC | INTD;
+	val = IE_EC | IE_PMREDI | PCIE_UE | MSI | INTA | INTB | INTC | INTD;
 	mv_pcie_writel_csr(pci, PAB_INTP_AXI_MISC_ENB, val);
 
 	mv_pcie_outbound_win_setup(pci, 0, TYPE_MEM, rp->mem_base,

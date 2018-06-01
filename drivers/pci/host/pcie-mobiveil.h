@@ -44,6 +44,9 @@
 #define INTB					(0x1 << 6)
 #define INTC					(0x1 << 7)
 #define INTD					(0x1 << 8)
+#define PCIE_UE 				(0x1 << 9)
+#define IE_PMREDI				(0x1 << 29)
+#define IE_EC					(0x1 << 30)
 
 /* AXI PIO Engines */
 #define PAB_AXI_PIO_CTRL(idx)			(0x840 + 0x10 * idx)

@@ -1929,6 +1929,10 @@ static int lpuart_probe(struct platform_device *pdev)
 		}
 	}
 	set_bit(ret, linemap);
+	if (ret >= ARRAY_SIZE(lpuart_ports)) {
+		dev_err(&pdev->dev, "serial%d out of range\n", ret);
+		return -EINVAL;
+	}
 	sport->port.line = ret;
 	sport->lpuart32 = of_device_is_compatible(np, "fsl,ls1021a-lpuart");
 

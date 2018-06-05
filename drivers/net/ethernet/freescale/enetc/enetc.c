@@ -118,7 +118,7 @@ netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
 
 static bool enetc_tx_csum(struct sk_buff *skb, union enetc_tx_bd *txbd)
 {
-	int l3_start, l3_hsize, l4_hsize;
+	int l3_start, l3_hsize;
 	u16 l3_flags, l4_flags;
 
 	if (skb->ip_summed != CHECKSUM_PARTIAL)
@@ -126,11 +126,9 @@ static bool enetc_tx_csum(struct sk_buff *skb, union enetc_tx_bd *txbd)
 
 	switch (skb->csum_offset) {
 	case offsetof(struct tcphdr, check):
-		l4_hsize = sizeof(struct tcphdr);
 		l4_flags = ENETC_TXBD_L4_TCP;
 		break;
 	case offsetof(struct udphdr, check):
-		l4_hsize = sizeof(struct udphdr);
 		l4_flags = ENETC_TXBD_L4_UDP;
 		break;
 	default:
@@ -149,7 +147,7 @@ static bool enetc_tx_csum(struct sk_buff *skb, union enetc_tx_bd *txbd)
 
 	/* write BD fields */
 	txbd->l3_csoff = enetc_txbd_l3_csoff(l3_start, l3_hsize, l3_flags);
-	txbd->l4_csoff = enetc_txbd_l4_csoff(l4_hsize, l4_flags);
+	txbd->l4_csoff = l4_flags;
 
 	return true;
 }

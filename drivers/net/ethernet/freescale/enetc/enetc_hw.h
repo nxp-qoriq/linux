@@ -378,8 +378,7 @@ union enetc_tx_bd {
 #define ENETC_TXBD_L3_IPV6	BIT(15)
 
 #define ENETC_TXBD_L3_START_MASK	GENMASK(6, 0)
-#define ENETC_TXBD_L3_SET_HSIZE(val)	((((val) >> 2) & 0xef) << 8)
-#define ENETC_TXBD_L3_HSIZE_MASK	GENMASK(14, 8)
+#define ENETC_TXBD_L3_SET_HSIZE(val)	((((val) >> 2) & 0x7f) << 8)
 
 static inline __le16 enetc_txbd_l3_csoff(int start, int hdr_sz, u16 l3_flags)
 {
@@ -390,13 +389,6 @@ static inline __le16 enetc_txbd_l3_csoff(int start, int hdr_sz, u16 l3_flags)
 /* L4 csum flags */
 #define ENETC_TXBD_L4_UDP	BIT(5)
 #define ENETC_TXBD_L4_TCP	BIT(6)
-
-#define ENETC_TXBD_L4_SET_HSIZE(val)	(((val) >> 2) & 0x1f)
-
-static inline u8 enetc_txbd_l4_csoff(int hdr_sz, u8 l4_flags)
-{
-	return l4_flags | ENETC_TXBD_L4_SET_HSIZE(hdr_sz);
-}
 
 union enetc_rx_bd {
 	struct {

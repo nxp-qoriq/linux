@@ -194,8 +194,9 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb)
 	/* first BD needs frm_len set */
 	txbd->frm_len = cpu_to_le16(skb->len);
 	/* last BD needs 'F' bit set */
-	if (!nr_frags)
+	if (!nr_frags && !(flags & ENETC_TXBD_FLAGS_EX))
 		flags |= ENETC_TXBD_FLAGS_F;
+
 	txbd->flags = flags;
 
 	if (flags & ENETC_TXBD_FLAGS_EX) {
@@ -220,8 +221,9 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb)
 			skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
 		}
 
-		/* set 'F' if last */
-		txbd->ext.flags = flags & ENETC_TXBD_FLAGS_F;
+		if (!nr_frags)
+			txbd->ext.flags = ENETC_TXBD_FLAGS_F;
+
 		count++;
 	}
 

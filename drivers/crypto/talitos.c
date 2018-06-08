@@ -1245,7 +1245,8 @@ static int ipsec_esp(struct talitos_edesc *edesc, struct aead_request *areq,
 	 * In case of SEC 2.x+, cipher in len must include only the ciphertext,
 	 * while extent is used for ICV len.
 	 */
-	if (is_ipsec_esp && (desc->hdr & DESC_HDR_MODE1_MDEU_CICV))
+	if ((edesc->desc.hdr & DESC_HDR_TYPE_IPSEC_ESP) &&
+	    (desc->hdr & DESC_HDR_MODE1_MDEU_CICV))
 		desc->ptr[4].len = cpu_to_be16(cryptlen);
 
 	if (ret > 1) {

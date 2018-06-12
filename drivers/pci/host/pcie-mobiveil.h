@@ -21,6 +21,9 @@
 #define GPEX_CLASSCODE_MASK			0xffff
 #define GPEX_PROGIF_SHIFT			8
 #define GPEX_PROGIF_MASK			0xff
+#define GPEX_ACK_REPLAY_TO			0x438
+#define ACK_LAT_TO_VAL_MASK			0x1fff
+#define ACK_LAT_TO_VAL_SHIFT			0
 
 /* PAB CSR */
 #define PAB_CAP					0x804

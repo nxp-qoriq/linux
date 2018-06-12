@@ -105,6 +105,13 @@ static void lx_pcie_init(struct root_port *rp)
 {
 	struct mv_pcie *mv_pci = rp_to_mv_pcie(rp);
 	struct lx_pcie *pcie = to_lx_pcie(mv_pci);
+	u32 val;
+
+	/* Set ACK latency timeout */
+	val = mv_pcie_readl_csr(mv_pci, GPEX_ACK_REPLAY_TO);
+	val &= ~(ACK_LAT_TO_VAL_MASK << ACK_LAT_TO_VAL_SHIFT);
+	val |= (4 << ACK_LAT_TO_VAL_SHIFT);
+	mv_pcie_writel_csr(mv_pci, GPEX_ACK_REPLAY_TO, val);
 
 	/* Disable all outbound windows configured by bootloader */
 	lx_pcie_disable_outbound_wins(pcie);

@@ -501,6 +501,13 @@ static int enetc_get_rxfh(struct net_device *ndev, u32 *indir, u8 *key,
 			((u32 *)key)[i] = enetc_port_rd(hw, ENETC_PRSSK(i));
 
 	return 0;
+
+void enetc_set_rss_key(struct enetc_hw *hw, const u8 *bytes)
+{
+	int i;
+
+	for (i = 0; i < ENETC_RSSHASH_KEY_SIZE / 4; i++)
+		enetc_port_wr(hw, ENETC_PRSSK(i), ((u32 *)bytes)[i]);
 }
 
 static int enetc_set_rxfh(struct net_device *ndev, const u32 *indir,
@@ -513,8 +520,7 @@ static int enetc_set_rxfh(struct net_device *ndev, const u32 *indir,
 
 	/* set hash key, if PF */
 	if (key && hw->port)
-		for (i = 0; i < ENETC_RSSHASH_KEY_SIZE / 4; i++)
-			enetc_port_wr(hw, ENETC_PRSSK(i), ((u32 *)key)[i]);
+		enetc_set_rss_key(hw, key);
 
 	/* set RSS table */
 	if (indir) {

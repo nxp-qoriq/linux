@@ -244,6 +244,7 @@ void enetc_set_mac_flt_entry(struct enetc_si *si, int index,
 void enetc_clear_mac_flt_entry(struct enetc_si *si, int index);
 int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 		       int index);
+void enetc_set_rss_key(struct enetc_hw *hw, const u8 *bytes);
 int enetc_set_rss_table(struct enetc_si *si, u16 *table, int len);
 
 #ifdef CONFIG_ENETC_TSN

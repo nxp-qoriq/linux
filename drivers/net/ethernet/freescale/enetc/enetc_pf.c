@@ -532,11 +532,16 @@ static void enetc_configure_port_mac(struct enetc_hw *hw)
 
 static void enetc_configure_port(struct enetc_pf *pf)
 {
+	u8 hash_key[ENETC_RSSHASH_KEY_SIZE];
 	struct enetc_hw *hw = &pf->si->hw;
 
 	enetc_configure_port_mac(hw);
 
 	enetc_port_si_configure(pf->si);
+
+	/* set up hash key */
+	get_random_bytes(hash_key, ENETC_RSSHASH_KEY_SIZE);
+	enetc_set_rss_key(hw, hash_key);
 
 	/* split up RFS entries */
 	enetc_port_alloc_rfs(pf->si);

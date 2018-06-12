@@ -476,7 +476,8 @@ static u32 enetc_get_rxfh_indir_size(struct net_device *ndev)
 {
 	/* return the size of the RX flow hash indirection table */
 
-	return 64; /* TODO: use capabilities after moved to SI */
+	/* TODO: use capabilities after moved to SI */
+	return ENETC_RSS_TABLE_SIZE;
 }
 
 static int enetc_get_rxfh(struct net_device *ndev, u32 *indir, u8 *key,
@@ -484,23 +485,24 @@ static int enetc_get_rxfh(struct net_device *ndev, u32 *indir, u8 *key,
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	struct enetc_hw *hw = &priv->si->hw;
-	int i;
+	int err = 0, i;
 
 	/* return hash function */
 	if (hfunc)
 		*hfunc = ETH_RSS_HASH_TOP;
-
-	/* return RSS table */
-	if (indir)
-		for (i = 0; i < ARRAY_SIZE(priv->rss_table); i++)
-			indir[i] = priv->rss_table[i];
 
 	/* return hash key */
 	if (key && hw->port)
 		for (i = 0; i < ENETC_RSSHASH_KEY_SIZE / 4; i++)
 			((u32 *)key)[i] = enetc_port_rd(hw, ENETC_PRSSK(i));
 
-	return 0;
+	/* return RSS table */
+	if (indir)
+		err = enetc_get_rss_table(priv->si, indir,
+					  ENETC_RSS_TABLE_SIZE);
+
+	return err;
+}
 
 void enetc_set_rss_key(struct enetc_hw *hw, const u8 *bytes)
 {
@@ -516,7 +518,6 @@ static int enetc_set_rxfh(struct net_device *ndev, const u32 *indir,
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	struct enetc_hw *hw = &priv->si->hw;
 	int err = 0;
-	int i;
 
 	/* set hash key, if PF */
 	if (key && hw->port)
@@ -524,10 +525,8 @@ static int enetc_set_rxfh(struct net_device *ndev, const u32 *indir,
 
 	/* set RSS table */
 	if (indir) {
-		for (i = 0; i < 64; i++)
-			priv->rss_table[i] = (u16)indir[i];
-		err = enetc_set_rss_table(priv->si, priv->rss_table,
-					  sizeof(priv->rss_table));
+		err = enetc_set_rss_table(priv->si, indir,
+					  ENETC_RSS_TABLE_SIZE);
 	}
 
 	return err;

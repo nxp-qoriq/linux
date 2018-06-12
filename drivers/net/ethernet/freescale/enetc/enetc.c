@@ -920,9 +920,12 @@ static void enetc_setup_cbdr(struct enetc_hw *hw, struct enetc_cbdr *cbdr)
 	cbdr->cisr = hw->reg + ENETC_SICBDRCISR;
 }
 
-static void enetc_configure_si(struct enetc_si *si)
+static void enetc_configure_si(struct enetc_ndev_priv *priv)
 {
+	int rss_table[ENETC_RSS_TABLE_SIZE];
+	struct enetc_si *si = priv->si;
 	struct enetc_hw *hw = &si->hw;
+	int i;
 
 	enetc_setup_cbdr(hw, &si->cbd_ring);
 	/* set SI cache attributes */
@@ -931,6 +934,13 @@ static void enetc_configure_si(struct enetc_si *si)
 	enetc_wr(hw, ENETC_SICAR1, ENETC_SICAR_MSI);
 	/* enable SI, TODO: start RSS by default */
 	enetc_wr(hw, ENETC_SIMR, ENETC_SIMR_EN /*| ENETC_SIMR_RSSE*/);
+
+	/* Set up RSS table defaults */
+	for (i = 0; i < ENETC_RSS_TABLE_SIZE; i++)
+		rss_table[i] = i % priv->num_rx_rings;
+	/* TODO: fix the size, *2 is just to keep sim happy */
+	enetc_set_rss_table(si, rss_table, ENETC_RSS_TABLE_SIZE * 2);
+
 }
 
 int enetc_alloc_si_resources(struct enetc_ndev_priv *priv)
@@ -949,7 +959,7 @@ int enetc_alloc_si_resources(struct enetc_ndev_priv *priv)
 		goto err_alloc_cls;
 	}
 
-	enetc_configure_si(si);
+	enetc_configure_si(priv);
 
 	return 0;
 

@@ -198,35 +198,61 @@ int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 	return err;
 }
 
-/* Set RSS table */
-int enetc_set_rss_table(struct enetc_si *si, u16 *table, int len)
+static int enetc_cmd_rss_table(struct enetc_si *si, u32 *table, int count,
+			       int read)
 {
 	struct enetc_cbd cbd = {.cmd = 0};
-	dma_addr_t dma;
-	int err;
+	enum dma_data_direction dir = read ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
+	dma_addr_t dma, dma_align;
+	const size_t align = 64;
+	u8 *tmp, *tmp_align;
+	int err, i;
 
-	if (len < 0x80)
-		/* HW only takes in a full 64 entry/128B table */
+	if (count < 0x40)
+		/* HW only takes in a full 64 entry table */
 		return -EINVAL;
 
-	/* fill up the "set" descriptor */
-	cbd.cmd = 1;
-	cbd.cls = 3;
-	cbd.length = len;
-
-	dma = dma_map_single(&si->pdev->dev, table, len, DMA_TO_DEVICE);
-	if (dma_mapping_error(&si->pdev->dev, dma)) {
+	tmp = dma_alloc_coherent(&si->pdev->dev, count + align - 1, &dma, dir);
+	if (!tmp) {
 		netdev_err(si->ndev, "DMA mapping of RSS table failed!\n");
 		return -ENOMEM;
 	}
+	dma_align = ALIGN(dma, align);
+	tmp_align = PTR_ALIGN(tmp, align);
 
-	cbd.addr[0] = lower_32_bits(dma);
-	cbd.addr[1] = upper_32_bits(dma);
+	if (!read)
+		for (i = 0; i < count; i++)
+			tmp_align[i] = (u8)(table[i]);
+
+	/* fill up the descriptor */
+	cbd.cmd = read ? 2 : 1;
+	cbd.cls = 3;
+	cbd.length = count;
+
+	cbd.addr[0] = lower_32_bits(dma_align);
+	cbd.addr[1] = upper_32_bits(dma_align);
 
 	err = enetc_send_cmd(si, &cbd, false);
 	if (err)
-		netdev_err(si->ndev, "RSS table update failed (%d)!", err);
-	dma_unmap_single(&si->pdev->dev, dma, cbd.length, DMA_TO_DEVICE);
+		netdev_err(si->ndev, "RSS cmd failed (%d)!", err);
+
+	if (read)
+		for (i = 0; i < count; i++)
+			table[i] = tmp_align[i];
+
+	dma_free_coherent(&si->pdev->dev, count, tmp, dma);
 
 	return err;
+}
+
+/* Get RSS table */
+int enetc_get_rss_table(struct enetc_si *si, u32 *table, int count)
+{
+	return enetc_cmd_rss_table(si, table, count, true);
+}
+
+/* Set RSS table */
+int enetc_set_rss_table(struct enetc_si *si, const u32 *table, int count)
+{
+	return enetc_cmd_rss_table(si, (u32 *)table, count, false);
 }

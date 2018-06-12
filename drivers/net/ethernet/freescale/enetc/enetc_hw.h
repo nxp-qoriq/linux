@@ -205,6 +205,7 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PSICFGR0_ASE	BIT(15)
 #define ENETC_PSICFGR0_SIVC(bmp)	(((bmp) & 0xff) << 24) /* VLAN_TYPE */
 
+#define ENETC_RSS_TABLE_SIZE	64
 #define ENETC_RSSHASH_KEY_SIZE	40
 #define ENETC_PRSSK(n)		(0x01410 + (n) * 4) /* n = [0..9] */
 

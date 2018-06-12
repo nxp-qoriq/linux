@@ -194,7 +194,6 @@ struct enetc_ndev_priv {
 	struct enetc_bdr *rx_ring[16];
 
 	struct enetc_cls_rule *cls_rules;
-	u16 rss_table[64]; /* < TODO: remove and use HW results */
 };
 
 /* Messaging */
@@ -245,7 +244,8 @@ void enetc_clear_mac_flt_entry(struct enetc_si *si, int index);
 int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 		       int index);
 void enetc_set_rss_key(struct enetc_hw *hw, const u8 *bytes);
-int enetc_set_rss_table(struct enetc_si *si, u16 *table, int len);
+int enetc_get_rss_table(struct enetc_si *si, u32 *table, int count);
+int enetc_set_rss_table(struct enetc_si *si, const u32 *table, int count);
 
 #ifdef CONFIG_ENETC_TSN
 void enetc_tsn_init(struct enetc_si *si);

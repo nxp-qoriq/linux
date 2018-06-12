@@ -462,7 +462,7 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x0 0x2110000 0x0 0x10000>;
-			interrupts = <0 240 0x4>; /* Level high type */
+			interrupts = <0 26 0x4>; /* Level high type */
 			clocks = <&clockgen 4 7>;
 			clock-names = "dspi";
 			spi-num-chipselects = <5>;

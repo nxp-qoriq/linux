@@ -708,13 +708,13 @@ static int enetc_pf_probe(struct pci_dev *pdev,
 		goto err_map_pf_space;
 	}
 
-	enetc_get_si_caps(si);
-
 	pf = enetc_si_priv(si);
 	pf->si = si;
 	pf->total_vfs = pci_sriov_get_totalvfs(pdev);
 
 	enetc_configure_port(pf);
+
+	enetc_get_si_caps(si);
 
 	ndev = alloc_etherdev_mq(sizeof(*priv), ENETC_MAX_NUM_TXQS);
 	if (!ndev) {

@@ -3,6 +3,7 @@
  * Microsemi Ocelot Switch driver
  *
  * Copyright (c) 2017 Microsemi Corporation
+ * Copyright (c) 2018 NXP
  */
 #include <linux/phy.h>
 #include "ocelot.h"
@@ -10,7 +11,7 @@
 static const u32 felix_ana_regmap[] = {
 	REG(ANA_ADVLEARN,                  0x0089a0),
 	REG(ANA_VLANMASK,                  0x0089a4),
-	REG(ANA_PORT_B_DOMAIN,             0x0089a8),
+//	REG(ANA_PORT_B_DOMAIN,             0x0089a8),
 	REG(ANA_ANAGEFIL,                  0x0089ac),
 	REG(ANA_ANEVENTS,                  0x0089b0),
 	REG(ANA_STORMLIMIT_BURST,          0x0089b4),
@@ -80,22 +81,22 @@ static const u32 felix_ana_regmap[] = {
 	REG(ANA_PORT_PTP_DLY2_CFG,         0x007880),
 	REG(ANA_PORT_SFID_CFG,             0x007884),
 	REG(ANA_PFC_PFC_CFG,               0x008800),
-	REG(ANA_PFC_PFC_TIMER,             0x008804),
-	REG(ANA_IPT_OAM_MEP_CFG,           0x007000),
-	REG(ANA_IPT_IPT,                   0x007004),
-	REG(ANA_PPT_PPT,                   0x007fd0),
-	REG(ANA_FID_MAP_FID_MAP,           0x000000),
+//	REG(ANA_PFC_PFC_TIMER,             0x008804),
+//	REG(ANA_IPT_OAM_MEP_CFG,           0x007000),
+//	REG(ANA_IPT_IPT,                   0x007004),
+//	REG(ANA_PPT_PPT,                   0x007fd0),
+//	REG(ANA_FID_MAP_FID_MAP,           0x000000),
 	REG(ANA_AGGR_CFG,                  0x008a68),
 	REG(ANA_CPUQ_CFG,                  0x008a6c),
-	REG(ANA_CPUQ_CFG2,                 0x008a70),
+//	REG(ANA_CPUQ_CFG2,                 0x008a70),
 	REG(ANA_CPUQ_8021_CFG,             0x008a74),
 	REG(ANA_DSCP_CFG,                  0x008ab4),
 	REG(ANA_DSCP_REWR_CFG,             0x008bb4),
 	REG(ANA_VCAP_RNG_TYPE_CFG,         0x008bf4),
 	REG(ANA_VCAP_RNG_VAL_CFG,          0x008c14),
-	REG(ANA_VRAP_CFG,                  0x008c34),
-	REG(ANA_VRAP_HDR_DATA,             0x008c38),
-	REG(ANA_VRAP_HDR_MASK,             0x008c3c),
+//	REG(ANA_VRAP_CFG,                  0x008c34),
+//	REG(ANA_VRAP_HDR_DATA,             0x008c38),
+//	REG(ANA_VRAP_HDR_MASK,             0x008c3c),
 	REG(ANA_DISCARD_CFG,               0x008c40),
 	REG(ANA_FID_CFG,                   0x008c44),
 	REG(ANA_POL_PIR_CFG,               0x004000),
@@ -103,10 +104,10 @@ static const u32 felix_ana_regmap[] = {
 	REG(ANA_POL_MODE_CFG,              0x004008),
 	REG(ANA_POL_PIR_STATE,             0x00400c),
 	REG(ANA_POL_CIR_STATE,             0x004010),
-	REG(ANA_POL_STATE,                 0x004014),
+//	REG(ANA_POL_STATE,                 0x004014),
 	REG(ANA_POL_FLOWC,                 0x008c48),
 	REG(ANA_POL_HYST,                  0x008cb4),
-	REG(ANA_POL_MISC_CFG,              0x008c94),
+//	REG(ANA_POL_MISC_CFG,              0x008c94),
 };
 
 static const u32 felix_qs_regmap[] = {
@@ -121,7 +122,7 @@ static const u32 felix_qs_regmap[] = {
 	REG(QS_INJ_CTRL,                   0x000034),
 	REG(QS_INJ_STATUS,                 0x00003c),
 	REG(QS_INJ_ERR,                    0x000040),
-	REG(QS_INH_DBG,                    0x000048),
+//	REG(QS_INH_DBG,                    0x000048),
 };
 
 static const u32 felix_qsys_regmap[] = {
@@ -134,11 +135,11 @@ static const u32 felix_qsys_regmap[] = {
 	REG(QSYS_EGR_NO_SHARING,           0x00f4c0),
 	REG(QSYS_SW_STATUS,                0x00f4c4),
 	REG(QSYS_EXT_CPU_CFG,              0x00f4e0),
-	REG(QSYS_PAD_CFG,                  0x00f4e4),
+//	REG(QSYS_PAD_CFG,                  0x00f4e4),
 	REG(QSYS_CPU_GROUP_MAP,            0x00f4e8),
-	REG(QSYS_QMAP,                     0x00f4ec),
-	REG(QSYS_ISDX_SGRP,                0x00f000),
-	REG(QSYS_TIMED_FRAME_ENTRY,        0x00e000),
+//	REG(QSYS_QMAP,                     0x00f4ec),
+//	REG(QSYS_ISDX_SGRP,                0x00f000),
+//	REG(QSYS_TIMED_FRAME_ENTRY,        0x00e000),
 	REG(QSYS_TFRM_MISC,                0x00f50c),
 	REG(QSYS_TFRM_PORT_DLY,            0x00f510),
 	REG(QSYS_TFRM_TIMER_CFG_1,         0x00f514),
@@ -155,7 +156,7 @@ static const u32 felix_qsys_regmap[] = {
 	REG(QSYS_RES_STAT,                 0x00c004),
 	REG(QSYS_EGR_DROP_MODE,            0x00f578),
 	REG(QSYS_EQ_CTRL,                  0x00f57c),
-	REG(QSYS_EVENTS_CORE,              0x00f580),
+//	REG(QSYS_EVENTS_CORE,              0x00f580),
 	REG(QSYS_QMAXSDU_CFG_0,            0x00f584),
 	REG(QSYS_QMAXSDU_CFG_1,            0x00f5a0),
 	REG(QSYS_QMAXSDU_CFG_2,            0x00f5bc),
@@ -169,11 +170,11 @@ static const u32 felix_qsys_regmap[] = {
 	REG(QSYS_EIR_CFG,                  0x000004),
 	REG(QSYS_SE_CFG,                   0x000008),
 	REG(QSYS_SE_DWRR_CFG,              0x00000c),
-	REG(QSYS_SE_CONNECT,               0x00003c),
+//	REG(QSYS_SE_CONNECT,               0x00003c),
 	REG(QSYS_SE_DLB_SENSE,             0x000040),
 	REG(QSYS_CIR_STATE,                0x000044),
 	REG(QSYS_EIR_STATE,                0x000048),
-	REG(QSYS_SE_STATE,                 0x00004c),
+//	REG(QSYS_SE_STATE,                 0x00004c),
 	REG(QSYS_HSCH_MISC_CFG,            0x00f67c),
 	REG(QSYS_TAG_CONFIG,               0x00f680),
 	REG(QSYS_TAS_PARAM_CFG_CTRL,       0x00f698),
@@ -209,9 +210,9 @@ static const u32 felix_rew_regmap[] = {
 	REG(REW_RED_TAG_CFG,               0x000058),
 	REG(REW_DSCP_REMAP_DP1_CFG,        0x000410),
 	REG(REW_DSCP_REMAP_CFG,            0x000510),
-	REG(REW_STAT_CFG,                  0x000610),
-	REG(REW_REW_STICKY,                0x000614),
-	REG(REW_PPT,                       0x000400),
+//	REG(REW_STAT_CFG,                  0x000610),
+//	REG(REW_REW_STICKY,                0x000614),
+//	REG(REW_PPT,                       0x000400),
 };
 
 static const u32 felix_sys_regmap[] = {
@@ -223,7 +224,7 @@ static const u32 felix_sys_regmap[] = {
 	REG(SYS_FRM_AGING,                 0x000e44),
 	REG(SYS_STAT_CFG,                  0x000e48),
 	REG(SYS_SW_STATUS,                 0x000e4c),
-	REG(SYS_MISC_CFG,                  0x000e68),
+//	REG(SYS_MISC_CFG,                  0x000e68),
 	REG(SYS_REW_MAC_HIGH_CFG,          0x000e6c),
 	REG(SYS_REW_MAC_LOW_CFG,           0x000e84),
 	REG(SYS_TIMESTAMP_OFFSET,          0x000e9c),
@@ -233,19 +234,19 @@ static const u32 felix_sys_regmap[] = {
 	REG(SYS_ATOP_TOT_CFG,              0x000edc),
 	REG(SYS_MAC_FC_CFG,                0x000ee0),
 	REG(SYS_MMGT,                      0x000ef8),
-	REG(SYS_MMGT_FAST,                 0x000efc),
-	REG(SYS_EVENTS_DIF,                0x000f00),
-	REG(SYS_EVENTS_CORE,               0x000f10),
+//	REG(SYS_MMGT_FAST,                 0x000efc),
+//	REG(SYS_EVENTS_DIF,                0x000f00),
+//	REG(SYS_EVENTS_CORE,               0x000f10),
 	REG(SYS_CNT,                       0x000000),
 	REG(SYS_PTP_STATUS,                0x000f14),
 	REG(SYS_PTP_TXSTAMP,               0x000f18),
 	REG(SYS_PTP_NXT,                   0x000f1c),
 	REG(SYS_PTP_CFG,                   0x000f20),
 	REG(SYS_RAM_INIT,                  0x000f24),
-	REG(SYS_CM_ADDR,                   0x000f28),
-	REG(SYS_CM_DATA_WR,                0x000f2c),
-	REG(SYS_CM_DATA_RD,                0x000f30),
-	REG(SYS_CM_OP,                     0x000f34),
+//	REG(SYS_CM_ADDR,                   0x000f28),
+//	REG(SYS_CM_DATA_WR,                0x000f2c),
+//	REG(SYS_CM_DATA_RD,                0x000f30),
+//	REG(SYS_CM_OP,                     0x000f34),
 };
 
 static const u32 *felix_regmap[] = {

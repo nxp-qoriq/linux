@@ -452,7 +452,7 @@ static void enetc_port_alloc_rfs(struct enetc_si *si)
 
 	/* split RFS entries between functions */
 	num_entries = enetc_port_rd(hw, ENETC_PRFSCAPR) & 0xf;
-	num_entries = 32 * (1 << num_entries);
+	num_entries = 16 * (1 + num_entries);
 	vf_entries = num_entries / (pf->total_vfs + 1);
 
 	for (i = 0; i < pf->total_vfs; i++)

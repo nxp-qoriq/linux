@@ -577,6 +577,11 @@ const struct ethtool_ops enetc_vf_ethtool_ops = {
 	.get_sset_count = enetc_get_sset_count,
 	.get_strings = enetc_get_strings,
 	.get_ethtool_stats = enetc_get_ethtool_stats,
+	.get_rxnfc = enetc_get_rxnfc,
+	.set_rxnfc = enetc_set_rxnfc,
+	.get_rxfh_indir_size = enetc_get_rxfh_indir_size,
+	.get_rxfh = enetc_get_rxfh,
+	.set_rxfh = enetc_set_rxfh,
 	.get_ringparam = enetc_get_ringparam,
 };
 

@@ -167,7 +167,10 @@ int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 {
 	struct enetc_cbd cbd = {.cmd = 0};
 	bool async = false;
-	dma_addr_t dma;
+	dma_addr_t dma, dma_align;
+	const int align = 64;
+	void *tmp, *tmp_align;
+	int len = sizeof(*rfse) + align - 1;
 	int err;
 
 	/* fill up the "set" descriptor */
@@ -177,15 +180,18 @@ int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 	cbd.length = cpu_to_le16(sizeof(*rfse));
 	cbd.opt[3] = cpu_to_le32(0); /* SI */
 
-	dma = dma_map_single(&si->pdev->dev, rfse, cbd.length,
-			     DMA_TO_DEVICE);
-	if (dma_mapping_error(&si->pdev->dev, dma)) {
+	tmp = dma_alloc_coherent(&si->pdev->dev, len, &dma, DMA_TO_DEVICE);
+	if (!tmp) {
 		netdev_err(si->ndev, "DMA mapping of RFS entry failed!\n");
 		return -ENOMEM;
 	}
 
-	cbd.addr[0] = lower_32_bits(dma);
-	cbd.addr[1] = upper_32_bits(dma);
+	dma_align = ALIGN(dma, align);
+	tmp_align = PTR_ALIGN(tmp, align);
+	memcpy(tmp_align, rfse, sizeof(*rfse));
+
+	cbd.addr[0] = lower_32_bits(dma_align);
+	cbd.addr[1] = upper_32_bits(dma_align);
 
 	if (async)
 		cbd.status_flags |= ENETC_CBD_FLAGS_IE;
@@ -193,7 +199,7 @@ int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 	err = enetc_send_cmd(si, &cbd, async);
 	if (err)
 		netdev_err(si->ndev, "FS entry add failed (%d)!", err);
-	dma_unmap_single(&si->pdev->dev, dma, cbd.length, DMA_TO_DEVICE);
+	dma_free_coherent(&si->pdev->dev, len, tmp, dma);
 
 	return err;
 }

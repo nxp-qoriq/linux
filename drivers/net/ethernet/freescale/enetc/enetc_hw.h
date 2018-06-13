@@ -454,12 +454,17 @@ struct enetc_cmd_rfse {
 	u32 dip_m[4];
 	u16 ethtype_h;
 	u16 ethtype_m;
+	u16 ethtype4_h;
+	u16 ethtype4_m;
 	u16 sport_h;
 	u16 sport_m;
 	u16 dport_h;
 	u16 dport_m;
 	u16 vlan_h;
 	u16 vlan_m;
+	u8 proto_h;
+	u8 proto_m;
+	u16 flags;
 	u16 result;
 	u16 mode;
 };

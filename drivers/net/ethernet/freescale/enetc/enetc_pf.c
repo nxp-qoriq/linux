@@ -129,7 +129,7 @@ static void enetc_set_isol_vlan(struct enetc_hw *hw, int si, u16 vlan, u8 qos)
 
 static int enetc_mac_addr_hash_idx(const u8 *addr)
 {
-	u64 fold = ether_addr_to_u64(addr);
+	u64 fold = __swab64(ether_addr_to_u64(addr)) >> 16;
 	u64 mask = 0;
 	int res = 0;
 	int i;

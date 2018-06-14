@@ -18,6 +18,17 @@ config SIMU
         bool "SIMU"
         help
           Build Linux image for Simulator platform		  
+
+config QDS
+        bool "QDS"
+        help
+          Build Linux image for QDS platform
+
+config RDB
+        bool "RDB"
+        help
+          Build Linux image for RDB platform
+
 endchoice
 
 config ARCH_ACTIONS

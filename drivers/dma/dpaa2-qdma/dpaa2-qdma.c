@@ -98,10 +98,10 @@ dpaa2_qdma_request_desc(struct dpaa2_qdma_chan *dpaa2_chan)
 		comp_temp->fl_bus_addr = comp_temp->fd_bus_addr +
 					sizeof(struct dpaa2_fd);
 		comp_temp->desc_virt_addr =
-			(void *)((struct dpaa2_frame_list *)
+			(void *)((struct dpaa2_fl_entry *)
 				comp_temp->fl_virt_addr + 3);
 		comp_temp->desc_bus_addr = comp_temp->fl_bus_addr +
-				sizeof(struct dpaa2_frame_list) * 3;
+				sizeof(struct dpaa2_fl_entry) * 3;
 
 		comp_temp->qchan = dpaa2_chan;
 		comp_temp->sg_blk_num = 0;
@@ -128,19 +128,19 @@ static void dpaa2_qdma_populate_fd(uint32_t format,
 	memset(fd, 0, sizeof(struct dpaa2_fd));
 
 	/* fd populated */
-	fd->simple.addr = dpaa2_comp->fl_bus_addr;
+	dpaa2_fd_set_addr(fd, dpaa2_comp->fl_bus_addr);
 	/* Bypass memory translation, Frame list format, short length disable */
 	/* we need to disable BMT if fsl-mc use iova addr */
 	if (smmu_disable)
-		fd->simple.bpid = QMAN_FD_BMT_ENABLE;
-	fd->simple.format_offset = QMAN_FD_FMT_ENABLE | QMAN_FD_SL_DISABLE;
+		dpaa2_fd_set_bpid(fd, QMAN_FD_BMT_ENABLE);
+	dpaa2_fd_set_format(fd, QMAN_FD_FMT_ENABLE | QMAN_FD_SL_DISABLE);
 
-	fd->simple.frc = format | QDMA_SER_CTX;
+	dpaa2_fd_set_frc(fd, format | QDMA_SER_CTX);
 }
 
 /* first frame list for descriptor buffer */
 static void dpaa2_qdma_populate_first_framel(
-		struct dpaa2_frame_list *f_list,
+		struct dpaa2_fl_entry *f_list,
 		struct dpaa2_qdma_comp *dpaa2_comp)
 {
 	struct dpaa2_qdma_sd_d *sdd;
@@ -148,48 +148,45 @@ static void dpaa2_qdma_populate_first_framel(
 	sdd = (struct dpaa2_qdma_sd_d *)dpaa2_comp->desc_virt_addr;
 	memset(sdd, 0, 2 * (sizeof(*sdd)));
 	/* source and destination descriptor */
-	sdd->cmd = QDMA_SD_CMD_RDTTYPE_COHERENT; /* source descriptor CMD */
+	sdd->cmd = cpu_to_le32(QDMA_SD_CMD_RDTTYPE_COHERENT); /* source descriptor CMD */
 	sdd++;
-	sdd->cmd = QDMA_DD_CMD_WRTTYPE_COHERENT; /* dest descriptor CMD */
+	sdd->cmd = cpu_to_le32(QDMA_DD_CMD_WRTTYPE_COHERENT); /* dest descriptor CMD */
 
-	memset(f_list, 0, sizeof(struct dpaa2_frame_list));
+	memset(f_list, 0, sizeof(struct dpaa2_fl_entry));
 	/* first frame list to source descriptor */
-	f_list->addr_lo = dpaa2_comp->desc_bus_addr;
-	f_list->addr_hi = (dpaa2_comp->desc_bus_addr >> 32);
-	f_list->data_len.data_len_sl0 = 0x20; /* source/destination desc len */
-	f_list->fmt = QDMA_FL_FMT_SBF; /* single buffer frame */
+
+	dpaa2_fl_set_addr(f_list, dpaa2_comp->desc_bus_addr);
+	dpaa2_fl_set_len(f_list, 0x20);
+	dpaa2_fl_set_format(f_list, QDMA_FL_FMT_SBF | QDMA_FL_SL_LONG);
+
 	if (smmu_disable)
-		f_list->bmt = QDMA_FL_BMT_ENABLE; /* bypass memory translation */
-	f_list->sl = QDMA_FL_SL_LONG; /* long length */
-	f_list->f = 0; /* not the last frame list */
+		f_list->bpid = cpu_to_le16(QDMA_FL_BMT_ENABLE); /* bypass memory translation */
 }
 
 /* source and destination frame list */
-static void dpaa2_qdma_populate_frames(struct dpaa2_frame_list *f_list,
+static void dpaa2_qdma_populate_frames(struct dpaa2_fl_entry *f_list,
 		dma_addr_t dst, dma_addr_t src, size_t len, uint8_t fmt)
 {
 	/* source frame list to source buffer */
-	memset(f_list, 0, sizeof(struct dpaa2_frame_list));
-	f_list->addr_lo = src;
-	f_list->addr_hi = (src >> 32);
-	f_list->data_len.data_len_sl0 = len;
-	f_list->fmt = fmt; /* single buffer frame or scatter gather frame */
+	memset(f_list, 0, sizeof(struct dpaa2_fl_entry));
+
+
+	dpaa2_fl_set_addr(f_list, src);
+	dpaa2_fl_set_len(f_list, len);
+	dpaa2_fl_set_format(f_list, (fmt | QDMA_FL_SL_LONG)); /* single buffer frame or scatter gather frame */
 	if (smmu_disable)
-		f_list->bmt = QDMA_FL_BMT_ENABLE; /* bypass memory translation */
-	f_list->sl = QDMA_FL_SL_LONG; /* long length */
-	f_list->f = 0; /* not the last frame list */
+		f_list->bpid = cpu_to_le16(QDMA_FL_BMT_ENABLE); /* bypass memory translation */
 
 	f_list++;
 	/* destination frame list to destination buffer */
-	memset(f_list, 0, sizeof(struct dpaa2_frame_list));
-	f_list->addr_lo = dst;
-	f_list->addr_hi = (dst >> 32);
-	f_list->data_len.data_len_sl0 = len;
-	f_list->fmt = fmt; /* single buffer frame or scatter gather frame */
+	memset(f_list, 0, sizeof(struct dpaa2_fl_entry));
+
+	dpaa2_fl_set_addr(f_list, dst);
+	dpaa2_fl_set_len(f_list, len);
+	dpaa2_fl_set_format(f_list, (fmt | QDMA_FL_SL_LONG));
+	dpaa2_fl_set_final(f_list, QDMA_FL_F); /* single buffer frame or scatter gather frame */
 	if (smmu_disable)
-		f_list->bmt = QDMA_FL_BMT_ENABLE; /* bypass memory translation */
-	f_list->sl = QDMA_FL_SL_LONG; /* long length */
-	f_list->f = QDMA_FL_F; /* Final bit: 1, for last frame list */
+		f_list->bpid = cpu_to_le16(QDMA_FL_BMT_ENABLE); /* bypass memory translation */
 }
 
 static struct dma_async_tx_descriptor *dpaa2_qdma_prep_memcpy(
@@ -198,7 +195,7 @@ static struct dma_async_tx_descriptor *dpaa2_qdma_prep_memcpy(
 {
 	struct dpaa2_qdma_chan *dpaa2_chan = to_dpaa2_qdma_chan(chan);
 	struct dpaa2_qdma_comp *dpaa2_comp;
-	struct dpaa2_frame_list *f_list;
+	struct dpaa2_fl_entry *f_list;
 	uint32_t format;
 
 	dpaa2_comp = dpaa2_qdma_request_desc(dpaa2_chan);
@@ -211,7 +208,7 @@ static struct dma_async_tx_descriptor *dpaa2_qdma_prep_memcpy(
 	/* populate Frame descriptor */
 	dpaa2_qdma_populate_fd(format, dpaa2_comp);
 
-	f_list = (struct dpaa2_frame_list *)dpaa2_comp->fl_virt_addr;
+	f_list = (struct dpaa2_fl_entry *)dpaa2_comp->fl_virt_addr;
 
 #ifdef LONG_FORMAT
 	/* first frame list for descriptor buffer (logn format) */
@@ -533,7 +530,8 @@ static void dpaa2_qdma_fqdan_cb(struct dpaa2_io_notification_ctx *ctx)
 
 		/* obtain FD and process the error */
 		fd = dpaa2_dq_fd(dq);
-		status = fd->simple.ctrl & 0xff;
+
+		status = dpaa2_fd_get_ctrl(fd) & 0xff;
 		if (status)
 			dev_err(priv->dev, "FD error occurred\n");
 		found = 0;
@@ -549,8 +547,8 @@ static void dpaa2_qdma_fqdan_cb(struct dpaa2_io_notification_ctx *ctx)
 				fd_eq = (struct dpaa2_fd *)
 					dpaa2_comp->fd_virt_addr;
 
-				if (fd_eq->simple.addr ==
-					fd->simple.addr) {
+				if (le64_to_cpu(fd_eq->simple.addr) ==
+						le64_to_cpu(fd->simple.addr)) {
 
 					list_del(&dpaa2_comp->list);
 					list_add_tail(&dpaa2_comp->list,

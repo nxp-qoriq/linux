@@ -148,6 +148,8 @@ enum enetc_bdr_type {TX, RX};
 /*** TX BDR reg offsets */
 #define ENETC_TBMR	0
 #define ENETC_TBMR_VIH	BIT(9)
+#define ENETC_TBMR_PRIO_MASK		GENMASK(2, 0)
+#define ENETC_TBMR_PRIO_SET(val)	val
 
 #define ENETC_TBSR	0x4
 #define ENETC_TBBAR0	0x10

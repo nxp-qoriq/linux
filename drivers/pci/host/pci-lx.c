@@ -29,6 +29,10 @@
 #define PCIE_LUT_GCR			(0x28)
 #define PCIE_LUT_GCR_RRE		(0)
 
+#define PABRST				(31)
+#define WE				(31)
+#define PABR				(27)
+
 #define LX_PCIE_LTSSM_L0		0x2d /* L0 state */
 
 struct lx_pcie_drvdata {
@@ -36,6 +40,7 @@ struct lx_pcie_drvdata {
 	u32 ltssm_shift;
 	u32 ltssm_mask;
 	u32 lut_dbg;
+	u32 pf_int_stat;
 	bool lut_big_endian;
 	struct mv_pcie_rp_ops *rp_ops;
 	const struct mv_pcie_pab_ops *pab_ops;
@@ -116,7 +121,7 @@ static void lx_pcie_init(struct root_port *rp)
 	/* Disable all outbound windows configured by bootloader */
 	lx_pcie_disable_outbound_wins(pcie);
 
-	mv_pcie_setup_rp_hw(rp);
+	mv_pcie_setup_rp_hw(rp, false);
 	mv_pcie_wait_for_link(mv_pci);
 }
 
@@ -151,6 +156,7 @@ static struct lx_pcie_drvdata lx2160_drvdata = {
 	.lut_offset = 0x80000,
 	.lut_big_endian = false,
 	.lut_dbg = 0x407fc,
+	.pf_int_stat = 0x40018,
 	.ltssm_shift = 0,
 	.ltssm_mask = 0x3f,
 	.rp_ops = &lx_pcie_rp_ops,
@@ -180,15 +186,56 @@ static int __init lx_add_root_port(struct lx_pcie *pcie)
 	return 0;
 }
 
+static void lx_pcie_reinit_hw(struct lx_pcie *pcie)
+{
+	struct mv_pcie *mv_pci = pcie->pci;
+	struct root_port *rp = &mv_pci->rp;
+	const struct lx_pcie_drvdata *dd = pcie->drvdata;
+	u32 val, act_stat;
+
+	/* Poll for pab_csb_reset to clear , PAB activity to set */
+	do {
+		val = lx_pcie_lut_readl(pcie, dd->pf_int_stat);
+		act_stat = mv_pcie_readl_csr(mv_pci, PAB_ACTIVITY_STAT);
+
+	} while (((val & (1 << PABRST)) == 0) || act_stat);
+
+	while (!lx_pcie_link_up(mv_pci))
+		;
+
+	/* clear PEX_RESET bit in PEX_PF0_DBG register */
+	val = lx_pcie_lut_readl(pcie, dd->lut_dbg);
+	val |= 1 << WE;
+	lx_pcie_lut_writel(pcie, dd->lut_dbg, val);
+
+	val = lx_pcie_lut_readl(pcie, dd->lut_dbg);
+	val |= 1 << PABR;
+	lx_pcie_lut_writel(pcie, dd->lut_dbg, val);
+
+	val = lx_pcie_lut_readl(pcie, dd->lut_dbg);
+	val &= ~(1 << WE);
+	lx_pcie_lut_writel(pcie, dd->lut_dbg, val);
+
+	mv_pcie_setup_rp_hw(rp, true);
+}
 static irqreturn_t lx_pcie_handler(int irq, void *dev_id)
 {
 	struct lx_pcie *pcie = (struct lx_pcie *)dev_id;
 	struct mv_pcie *mv_pci = pcie->pci;
 	u32 val;
+	u16 ctrl;
 
 	val = mv_pcie_readl_csr(mv_pci, PAB_INTP_AXI_MISC_STAT);
 	if (!val)
 		return IRQ_NONE;
+
+	if (val & RESET) {
+		ctrl = mv_pcie_readw_csr(mv_pci, PCI_BRIDGE_CONTROL);
+		ctrl &= ~PCI_BRIDGE_CTL_BUS_RESET;
+		mv_pcie_writew_csr(mv_pci, PCI_BRIDGE_CONTROL, ctrl);
+		lx_pcie_reinit_hw(pcie);
+	}
+
 	mv_pcie_writel_csr(mv_pci, PAB_INTP_AXI_MISC_STAT, val);
 
 	return IRQ_HANDLED;

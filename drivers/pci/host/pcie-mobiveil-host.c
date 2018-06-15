@@ -141,21 +141,23 @@ static struct pci_ops mv_pcie_ops = {
 	.write = mv_pcie_write_conf,
 };
 
-void mv_pcie_setup_rp_hw(struct root_port *rp)
+void mv_pcie_setup_rp_hw(struct root_port *rp, bool reinit)
 {
 	u32 val;
 	struct mv_pcie *pci = rp_to_mv_pcie(rp);
 	int i;
 
-	/* setup RC BARs */
-	mv_pcie_writel_csr(pci, PCI_BASE_ADDRESS_0, 0x0);
-	mv_pcie_writel_csr(pci, PCI_BASE_ADDRESS_1, 0x0);
+	if (!reinit) {
+		/* setup RC BARs */
+		mv_pcie_writel_csr(pci, PCI_BASE_ADDRESS_0, 0x0);
+		mv_pcie_writel_csr(pci, PCI_BASE_ADDRESS_1, 0x0);
 
-	/* setup bus numbers */
-	val = mv_pcie_readl_csr(pci, PCI_PRIMARY_BUS);
-	val &= 0xff000000;
-	val |= 0x00010100;
-	mv_pcie_writel_csr(pci, PCI_PRIMARY_BUS, val);
+		/* setup bus numbers */
+		val = mv_pcie_readl_csr(pci, PCI_PRIMARY_BUS);
+		val &= 0xff000000;
+		val |= 0x00010100;
+		mv_pcie_writel_csr(pci, PCI_PRIMARY_BUS, val);
+	}
 
 	/* setup command register */
 	val = mv_pcie_readl_csr(pci, PCI_COMMAND);
@@ -165,7 +167,8 @@ void mv_pcie_setup_rp_hw(struct root_port *rp)
 	mv_pcie_writel_csr(pci, PCI_COMMAND, val);
 
 	/* enable INTx and MSI */
-	val = IE_EC | IE_PMREDI | PCIE_UE | MSI | INTA | INTB | INTC | INTD;
+	val = IE_EC | IE_PMREDI | PCIE_UE | MSI |
+		INTA | INTB | INTC | INTD | RESET;
 	mv_pcie_writel_csr(pci, PAB_INTP_AXI_MISC_ENB, val);
 
 	mv_pcie_outbound_win_setup(pci, 0, TYPE_MEM, rp->mem_base,

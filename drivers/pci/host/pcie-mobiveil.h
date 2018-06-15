@@ -38,10 +38,12 @@
 #define PAB_CTRL_FUNC_SEL_MASK			0x1ff
 #define PAB_CTRL_MSI_SW_CTRL_EN			(1 << 29)
 
+#define PAB_ACTIVITY_STAT			0x81c
 #define PAB_RST_CTRL				0x820
 #define PAB_BR_STAT				0x80c
 #define PAB_INTP_AXI_MISC_ENB			0xb0c
 #define PAB_INTP_AXI_MISC_STAT			0xb1c
+#define RESET					(0x1 << 1)
 #define MSI					(0x1 << 3)
 #define INTA					(0x1 << 5)
 #define INTB					(0x1 << 6)
@@ -254,7 +256,7 @@ static inline void mv_pcie_writeb_csr(struct mv_pcie *pci, u32 reg, u8 val)
 }
 
 #ifdef CONFIG_PCIE_MOBIVEIL_HOST
-void mv_pcie_setup_rp_hw(struct root_port *rp);
+void mv_pcie_setup_rp_hw(struct root_port *rp, bool reinit);
 int mv_pcie_init_rp(struct root_port *rp);
 #endif
 

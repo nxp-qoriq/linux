@@ -161,7 +161,9 @@ static inline bool enetc_si_is_pf(struct enetc_si *si)
 	return !!(si->hw.port);
 }
 
-#define ENETC_MAX_NUM_TXQS	8
+#define ENETC_MAX_TCS		8
+#define ENETC_TXQ_PER_TC	num_online_cpus()
+#define ENETC_MAX_NUM_TXQS	(ENETC_MAX_TCS * ENETC_TXQ_PER_TC)
 
 struct enetc_int_vector {
 	void __iomem *tbier;

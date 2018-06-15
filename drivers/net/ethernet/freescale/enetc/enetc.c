@@ -1154,8 +1154,7 @@ int enetc_open(struct net_device *ndev)
 
 	enetc_setup_bdrs(priv);
 
-
-	err = netif_set_real_num_tx_queues(ndev, priv->num_tx_rings);
+	err = netif_set_real_num_tx_queues(ndev, ENETC_TXQ_PER_TC);
 	if (err)
 		goto err_set_queues;
 

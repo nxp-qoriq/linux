@@ -179,11 +179,14 @@ static void enetc_vf_sw_init(struct enetc_ndev_priv *priv)
 	priv->tx_bd_count = 1024; //TODO: use defines for defaults
 	priv->rx_bd_count = 1024;
 
-	/* we only use one ring per CPU for now */
-	priv->num_rx_rings = min_t(u16, num_online_cpus(),
-				   priv->si->num_rx_rings);
-	priv->num_tx_rings = min_t(u16, num_online_cpus(),
-				   priv->si->num_tx_rings);
+	/* Enable all available TX rings in order to configure as many
+	 * priorities as possible, when needed.
+	 *
+	 * Enable all RX rings as well since the numbers of RX/TX rings are
+	 * assumed equal for now.
+	 */
+	priv->num_rx_rings = si->num_rx_rings;
+	priv->num_tx_rings = si->num_tx_rings;
 	priv->bdr_int_num = priv->num_rx_rings; /* int for each Tx/Rx pairs */
 
 	/* SI specific */

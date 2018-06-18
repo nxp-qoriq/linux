@@ -171,11 +171,11 @@ static void enetc_add_mac_addr_ht_filter(struct enetc_mac_filter *filter,
 
 static void enetc_clear_mac_ht_flt(struct enetc_hw *hw, int si_idx, int type)
 {
-	if (type == UC) {
-		enetc_port_wr(hw, ENETC_PSIUMHFR0(si_idx), 0);
+	if (type == UC) { // FIXME: Swap UC with MC low bits, TKT381557
+		enetc_port_wr(hw, ENETC_PSIMMHFR0(si_idx), 0);
 		enetc_port_wr(hw, ENETC_PSIUMHFR1(si_idx), 0);
 	} else { /* MC */
-		enetc_port_wr(hw, ENETC_PSIMMHFR0(si_idx), 0);
+		enetc_port_wr(hw, ENETC_PSIUMHFR0(si_idx), 0);
 		enetc_port_wr(hw, ENETC_PSIMMHFR1(si_idx), 0);
 	}
 }
@@ -183,11 +183,11 @@ static void enetc_clear_mac_ht_flt(struct enetc_hw *hw, int si_idx, int type)
 static void enetc_set_mac_ht_flt(struct enetc_hw *hw, int si_idx, int type,
 				 u32 *hash)
 {
-	if (type == UC) {
-		enetc_port_wr(hw, ENETC_PSIUMHFR0(si_idx), *hash);
+	if (type == UC) { // FIXME: Swap UC with MC low bits, TKT381557
+		enetc_port_wr(hw, ENETC_PSIMMHFR0(si_idx), *hash);
 		enetc_port_wr(hw, ENETC_PSIUMHFR1(si_idx), *(hash + 1));
 	} else { /* MC */
-		enetc_port_wr(hw, ENETC_PSIMMHFR0(si_idx), *hash);
+		enetc_port_wr(hw, ENETC_PSIUMHFR0(si_idx), *hash);
 		enetc_port_wr(hw, ENETC_PSIMMHFR1(si_idx), *(hash + 1));
 	}
 }

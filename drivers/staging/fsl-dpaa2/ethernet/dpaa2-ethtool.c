@@ -52,6 +52,11 @@ static char dpaa2_ethtool_stats[][ETH_GSTRING_LEN] = {
 	"rx nobuffer discards",
 	"tx discarded frames",
 	"tx confirmed frames",
+	/* page 3 */
+	"tx dequeue bytes",
+	"tx dequeue frames",
+	"tx reject bytes",
+	"tx reject frames",
 };
 
 #define DPAA2_ETH_NUM_STATS	ARRAY_SIZE(dpaa2_ethtool_stats)
@@ -298,7 +303,7 @@ static void dpaa2_eth_get_ethtool_stats(struct net_device *net_dev,
 	       sizeof(u64) * (DPAA2_ETH_NUM_STATS + DPAA2_ETH_NUM_EXTRA_STATS));
 
 	/* Print standard counters, from DPNI statistics */
-	for (j = 0; j <= 2; j++) {
+	for (j = 0; j <= 3; j++) {
 		err = dpni_get_statistics(priv->mc_io, 0, priv->mc_token,
 					  j, 0, &dpni_stats);
 		if (err != 0)
@@ -328,6 +333,12 @@ static void dpaa2_eth_get_ethtool_stats(struct net_device *net_dev,
 		*(data + i++) = dpni_stats.page_2.ingress_nobuffer_discards;
 		*(data + i++) = dpni_stats.page_2.egress_discarded_frames;
 		*(data + i++) = dpni_stats.page_2.egress_confirmed_frames;
+		break;
+		case 3:
+		*(data + i++) = dpni_stats.page_3.ceetm_dequeue_bytes;
+		*(data + i++) = dpni_stats.page_3.ceetm_dequeue_frames;
+		*(data + i++) = dpni_stats.page_3.ceetm_reject_bytes;
+		*(data + i++) = dpni_stats.page_3.ceetm_reject_frames;
 		break;
 		default:
 		break;

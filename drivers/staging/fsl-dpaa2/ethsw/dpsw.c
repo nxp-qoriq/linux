@@ -17,7 +17,7 @@ static void build_if_id_bitmap(__le64 *bmap,
 
 	for (i = 0; (i < num_ifs) && (i < DPSW_MAX_IF); i++) {
 		if (id[i] < DPSW_MAX_IF)
-			bmap[id[i] / 64] |= BIT_MASK(id[i] % 64);
+			bmap[id[i] / 64] |= cpu_to_le64(BIT_MASK(id[i] % 64));
 	}
 }
 
@@ -511,6 +511,7 @@ int dpsw_if_set_tci(struct fsl_mc_io *mc_io,
 {
 	struct fsl_mc_command cmd = { 0 };
 	struct dpsw_cmd_if_set_tci *cmd_params;
+	u16 tmp_conf = 0;
 
 	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPSW_CMDID_IF_SET_TCI,
@@ -518,10 +519,10 @@ int dpsw_if_set_tci(struct fsl_mc_io *mc_io,
 					  token);
 	cmd_params = (struct dpsw_cmd_if_set_tci *)cmd.params;
 	cmd_params->if_id = cpu_to_le16(if_id);
-	dpsw_set_field(cmd_params->conf, VLAN_ID, cfg->vlan_id);
-	dpsw_set_field(cmd_params->conf, DEI, cfg->dei);
-	dpsw_set_field(cmd_params->conf, PCP, cfg->pcp);
-	cmd_params->conf = cpu_to_le16(cmd_params->conf);
+	dpsw_set_field(tmp_conf, VLAN_ID, cfg->vlan_id);
+	dpsw_set_field(tmp_conf, DEI, cfg->dei);
+	dpsw_set_field(tmp_conf, PCP, cfg->pcp);
+	cmd_params->conf = cpu_to_le16(tmp_conf);
 
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);

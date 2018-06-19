@@ -4,7 +4,7 @@
 
 config FSL_DPAA2
 	bool "Freescale DPAA2 devices"
-	depends on FSL_MC_BUS && ARCH_LAYERSCAPE
+	depends on FSL_MC_BUS
 	---help---
 	  Build drivers for Freescale DataPath Acceleration
 	  Architecture (DPAA2) family of SoCs.
@@ -29,7 +29,7 @@ config FSL_DPAA2_ETH_USE_ERR_QUEUE
 
 # QBMAN_DEBUG requires some additional DPIO APIs
 config FSL_DPAA2_ETH_DEBUGFS
-	depends on DEBUG_FS && FSL_QBMAN_DEBUG
+	depends on DEBUG_FS
 	bool "Enable debugfs support"
 	default n
 	---help---

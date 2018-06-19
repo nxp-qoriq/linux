@@ -1,33 +1,8 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
 /*
  * Copyright 2014-2016 Freescale Semiconductor Inc.
  * Copyright 2016 NXP
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *     * Redistributions of source code must retain the above copyright
- *	 notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above copyright
- *	 notice, this list of conditions and the following disclaimer in the
- *	 documentation and/or other materials provided with the distribution.
- *     * Neither the name of Freescale Semiconductor nor the
- *	 names of its contributors may be used to endorse or promote products
- *	 derived from this software without specific prior written permission.
- *
- * ALTERNATIVELY, this software may be distributed under the terms of the
- * GNU General Public License ("GPL") as published by the Free Software
- * Foundation, either version 2 of that License or (at your option) any
- * later version.
- *
- * THIS SOFTWARE IS PROVIDED BY Freescale Semiconductor ``AS IS'' AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL Freescale Semiconductor BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include <linux/types.h>
 #include <linux/fsl/mc.h>
@@ -274,9 +249,9 @@ int dpaa2_io_service_register(struct dpaa2_io *d,
 
 	/* Enable the generation of CDAN notifications */
 	if (ctx->is_cdan)
-		qbman_swp_CDAN_set_context_enable(d->swp,
-						  (u16)ctx->id,
-						  ctx->qman64);
+		return qbman_swp_CDAN_set_context_enable(d->swp,
+							 (u16)ctx->id,
+							 ctx->qman64);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(dpaa2_io_service_register);
@@ -698,3 +673,108 @@ int dpaa2_io_query_bp_count(struct dpaa2_io *d, u32 bpid, u32 *num)
 	return 0;
 }
 EXPORT_SYMBOL(dpaa2_io_query_bp_count);
+
+/**
+ * dpaa2_io_service_enqueue_orp_fq() - Enqueue a frame to a frame queue with
+ * order restoration
+ * @d: the given DPIO service.
+ * @fqid: the given frame queue id.
+ * @fd: the frame descriptor which is enqueued.
+ * @orpid: the order restoration point ID
+ * @seqnum: the order sequence number
+ * @last: must be set for the final frame if seqnum is shared (spilt frame)
+ *
+ * Performs an enqueue to a frame queue using the specified order restoration
+ * point. The QMan device will ensure the order of frames placed on the
+ * queue will be ordered as per the sequence number.
+ *
+ * In the case a frame is split it is possible to enqueue using the same
+ * sequence number more than once. The final frame in a shared sequence number
+ * most be indicated by setting last = 1. For non shared sequence numbers
+ * last = 1 must always be set.
+ *
+ * Return 0 for successful enqueue, or -EBUSY if the enqueue ring is not ready,
+ * or -ENODEV if there is no dpio service.
+ */
+int dpaa2_io_service_enqueue_orp_fq(struct dpaa2_io *d, u32 fqid,
+				    const struct dpaa2_fd *fd, u16 orpid,
+				    u16 seqnum, int last)
+{
+	struct qbman_eq_desc ed;
+
+	d = service_select(d);
+	if (!d)
+		return -ENODEV;
+	qbman_eq_desc_clear(&ed);
+	qbman_eq_desc_set_orp(&ed, 0, orpid, seqnum, !last);
+	qbman_eq_desc_set_fq(&ed, fqid);
+	return qbman_swp_enqueue(d->swp, &ed, fd);
+}
+EXPORT_SYMBOL(dpaa2_io_service_enqueue_orp_fq);
+
+/**
+ * dpaa2_io_service_enqueue_orp_qd() - Enqueue a frame to a queueing destination
+ * with order restoration
+ * @d: the given DPIO service.
+ * @qdid: the given queuing destination id.
+ * @fd: the frame descriptor which is enqueued.
+ * @orpid: the order restoration point ID
+ * @seqnum: the order sequence number
+ * @last: must be set for the final frame if seqnum is shared (spilt frame)
+ *
+ * Performs an enqueue to a frame queue using the specified order restoration
+ * point. The QMan device will ensure the order of frames placed on the
+ * queue will be ordered as per the sequence number.
+ *
+ * In the case a frame is split it is possible to enqueue using the same
+ * sequence number more than once. The final frame in a shared sequence number
+ * most be indicated by setting last = 1. For non shared sequence numbers
+ * last = 1 must always be set.
+ *
+ * Return 0 for successful enqueue, or -EBUSY if the enqueue ring is not ready,
+ * or -ENODEV if there is no dpio service.
+ */
+int dpaa2_io_service_enqueue_orp_qd(struct dpaa2_io *d, u32 qdid, u8 prio,
+				    u16 qdbin, const struct dpaa2_fd *fd,
+				    u16 orpid, u16 seqnum, int last)
+{
+	struct qbman_eq_desc ed;
+
+	d = service_select(d);
+	if (!d)
+		return -ENODEV;
+	qbman_eq_desc_clear(&ed);
+	qbman_eq_desc_set_orp(&ed, 0, orpid, seqnum, !last);
+	qbman_eq_desc_set_qd(&ed, qdid, qdbin, prio);
+	return qbman_swp_enqueue(d->swp, &ed, fd);
+}
+EXPORT_SYMBOL_GPL(dpaa2_io_service_enqueue_orp_qd);
+
+/**
+ * dpaa2_io_service_orp_seqnum_drop() - Remove a sequence number from
+ * an order restoration list
+ * @d: the given DPIO service.
+ * @orpid: Order restoration point to remove a sequence number from
+ * @seqnum: Sequence number to remove
+ *
+ * Removes a frames sequence number from an order restoration point without
+ * enqueing the frame. Used to indicate that the order restoration hardware
+ * should not expect to see this sequence number. Typically used to indicate
+ * a frame was terminated or dropped from a flow.
+ *
+ * Return 0 for successful enqueue, or -EBUSY if the enqueue ring is not ready,
+ * or -ENODEV if there is no dpio service.
+ */
+int dpaa2_io_service_orp_seqnum_drop(struct dpaa2_io *d, u16 orpid, u16 seqnum)
+{
+	struct qbman_eq_desc ed;
+	struct dpaa2_fd fd;
+
+	d = service_select(d);
+	if (!d)
+		return -ENODEV;
+	qbman_eq_desc_clear(&ed);
+	qbman_eq_desc_set_orp_hole(&ed, orpid, seqnum);
+	return qbman_swp_enqueue(d->swp, &ed, &fd);
+}
+EXPORT_SYMBOL_GPL(dpaa2_io_service_orp_seqnum_drop);

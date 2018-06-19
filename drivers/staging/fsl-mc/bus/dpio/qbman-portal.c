@@ -1,33 +1,8 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
 /*
  * Copyright (C) 2014-2016 Freescale Semiconductor, Inc.
  * Copyright 2016 NXP
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
- *     * Neither the name of Freescale Semiconductor nor the
- *       names of its contributors may be used to endorse or promote products
- *       derived from this software without specific prior written permission.
- *
- * ALTERNATIVELY, this software may be distributed under the terms of the
- * GNU General Public License ("GPL") as published by the Free Software
- * Foundation, either version 2 of that License or (at your option) any
- * later version.
- *
- * THIS SOFTWARE IS PROVIDED BY Freescale Semiconductor ``AS IS'' AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL Freescale Semiconductor BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include <asm/cacheflush.h>
@@ -144,18 +119,18 @@ static inline u32 qbman_set_swp_cfg(u8 max_fill, u8 wn,	u8 est, u8 rpm, u8 dcm,
 				    u8 epm, int sd, int sp, int se,
 				    int dp, int de, int ep)
 {
-	return cpu_to_le32 (max_fill << SWP_CFG_DQRR_MF_SHIFT |
-			    est << SWP_CFG_EST_SHIFT |
-			    wn << SWP_CFG_WN_SHIFT |
-			    rpm << SWP_CFG_RPM_SHIFT |
-			    dcm << SWP_CFG_DCM_SHIFT |
-			    epm << SWP_CFG_EPM_SHIFT |
-			    sd << SWP_CFG_SD_SHIFT |
-			    sp << SWP_CFG_SP_SHIFT |
-			    se << SWP_CFG_SE_SHIFT |
-			    dp << SWP_CFG_DP_SHIFT |
-			    de << SWP_CFG_DE_SHIFT |
-			    ep << SWP_CFG_EP_SHIFT);
+	return (max_fill << SWP_CFG_DQRR_MF_SHIFT |
+		est << SWP_CFG_EST_SHIFT |
+		wn << SWP_CFG_WN_SHIFT |
+		rpm << SWP_CFG_RPM_SHIFT |
+		dcm << SWP_CFG_DCM_SHIFT |
+		epm << SWP_CFG_EPM_SHIFT |
+		sd << SWP_CFG_SD_SHIFT |
+		sp << SWP_CFG_SP_SHIFT |
+		se << SWP_CFG_SE_SHIFT |
+		dp << SWP_CFG_DP_SHIFT |
+		de << SWP_CFG_DE_SHIFT |
+		ep << SWP_CFG_EP_SHIFT);
 }
 
 /**
@@ -378,6 +353,43 @@ void qbman_eq_desc_set_no_orp(struct qbman_eq_desc *d, int respond_success)
 		d->verb |= enqueue_response_always;
 	else
 		d->verb |= enqueue_rejects_to_fq;
+}
+
+/**
+ * qbman_eq_desc_set_orp() - Set order-restoration in the enqueue descriptor
+ * @d: the enqueue descriptor.
+ * @response_success: 1 = enqueue with response always; 0 = enqueue with
+ * rejections returned on a FQ.
+ * @oprid: the order point record id.
+ * @seqnum: the order restoration sequence number.
+ * @incomplete: indicates whether this is the last fragments using the same
+ * sequence number.
+ */
+void qbman_eq_desc_set_orp(struct qbman_eq_desc *d, int respond_success,
+			   u16 oprid, u16 seqnum, int incomplete)
+{
+	d->verb |= (1 << QB_ENQUEUE_CMD_ORP_ENABLE_SHIFT);
+	if (respond_success)
+		d->verb |= enqueue_response_always;
+	else
+		d->verb |= enqueue_rejects_to_fq;
+	d->orpid = cpu_to_le16(oprid);
+	d->seqnum = cpu_to_le16((!!incomplete << 14) | seqnum);
+}
+
+/**
+ * qbman_eq_desc_set_orp_hole() - fill a hole in the order-restoration sequence
+ * without any enqueue
+ * @d: the enqueue descriptor.
+ * @oprid: the order point record id.
+ * @seqnum: the order restoration sequence number.
+ */
+void qbman_eq_desc_set_orp_hole(struct qbman_eq_desc *d, u16 oprid,
+				u16 seqnum)
+{
+	d->verb |= (1 << QB_ENQUEUE_CMD_ORP_ENABLE_SHIFT) | enqueue_empty;
+	d->orpid = cpu_to_le16(oprid);
+	d->seqnum = cpu_to_le16(seqnum);
 }
 
 /*

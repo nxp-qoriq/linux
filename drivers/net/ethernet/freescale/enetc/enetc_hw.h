@@ -66,18 +66,17 @@
 #define ENETC_SIPMAR1	0x84
 
 /* VF-PF Message passing */
-#define ENETC_VSI_START_IDX	1
 #define ENETC_DEFAULT_MSG_SIZE	1024
 static inline u32 enetc_vsi_set_msize(u32 size)
 {
 	return size < ENETC_DEFAULT_MSG_SIZE ? size >> 5 : 0;
 }
 
-#define ENETC_PSIMSGSR	0x204
-#define ENETC_PSIMSGSR_MR_MASK	GENMASK(2, 1)
-#define ENETC_PSIMSGSR_MS	BIT(0)
-#define ENETC_PSIVMSGRCVAR0(n)	(0x208 + (n) * 0x8) /* n = VSI index */
-#define ENETC_PSIVMSGRCVAR1(n)	(0x20C + (n) * 0x8)
+#define ENETC_PSIMSGRR	0x204
+#define ENETC_PSIMSGRR_MR_MASK	GENMASK(2, 1)
+#define ENETC_PSIMSGRR_MR(n) BIT((n) + 1) /* n = VSI index */
+#define ENETC_PSIVMSGRCVAR0(n)	(0x210 + (n) * 0x8) /* n = VSI index */
+#define ENETC_PSIVMSGRCVAR1(n)	(0x214 + (n) * 0x8)
 
 #define ENETC_VSIMSGSR	0x204
 #define ENETC_VSIMSGSR_MB	BIT(0)

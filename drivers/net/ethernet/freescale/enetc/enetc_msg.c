@@ -110,7 +110,7 @@ static void enetc_msg_task(struct work_struct *work)
 	int i;
 
 	for (;;) {
-		mr_mask = enetc_rd(hw, ENETC_PSIMSGSR) & ENETC_PSIMSGSR_MR_MASK;
+		mr_mask = enetc_rd(hw, ENETC_PSIMSGRR) & ENETC_PSIMSGRR_MR_MASK;
 		if (!mr_mask) {
 			/* re-arm MR interrupts, w1c the IDR reg */
 			enetc_wr(hw, ENETC_PSIIDR, ENETC_PSIIER_MR_MASK);
@@ -119,17 +119,17 @@ static void enetc_msg_task(struct work_struct *work)
 		}
 
 		for (i = 0; i < pf->num_vfs; i++) {
-			u32 psimsgsr;
+			u32 psimsgrr;
 			u16 msg_code;
 
-			if (!test_bit(i + ENETC_VSI_START_IDX, &mr_mask))
+			if (!(ENETC_PSIMSGRR_MR(i) & mr_mask))
 				continue;
 
 			enetc_msg_handle_rxmsg(pf, i, &msg_code);
 
-			psimsgsr = ENETC_SIMSGSR_SET_MC(msg_code);
-			psimsgsr |= BIT(i + ENETC_VSI_START_IDX);
-			enetc_wr(hw, ENETC_PSIMSGSR, psimsgsr); /* w1c */
+			psimsgrr = ENETC_SIMSGSR_SET_MC(msg_code);
+			psimsgrr |= ENETC_PSIMSGRR_MR(i); /* w1c */
+			enetc_wr(hw, ENETC_PSIMSGRR, psimsgrr);
 		}
 	}
 }
@@ -158,9 +158,9 @@ static int enetc_msg_alloc_mbx(struct enetc_si *si, int idx)
 
 	/* set multiple of 32 bytes */
 	val = lower_32_bits(msg->dma);
-	enetc_wr(hw, ENETC_PSIVMSGRCVAR0(idx + ENETC_VSI_START_IDX), val);
+	enetc_wr(hw, ENETC_PSIVMSGRCVAR0(idx), val);
 	val = upper_32_bits(msg->dma);
-	enetc_wr(hw, ENETC_PSIVMSGRCVAR1(idx + ENETC_VSI_START_IDX), val);
+	enetc_wr(hw, ENETC_PSIVMSGRCVAR1(idx), val);
 
 	return 0;
 }
@@ -175,8 +175,8 @@ static void enetc_msg_free_mbx(struct enetc_si *si, int idx)
 	dma_free_coherent(&si->pdev->dev, msg->size, msg->vaddr, msg->dma);
 	memset(msg, 0, sizeof(*msg));
 
-	enetc_wr(hw, ENETC_PSIVMSGRCVAR0(idx + ENETC_VSI_START_IDX), 0);
-	enetc_wr(hw, ENETC_PSIVMSGRCVAR1(idx + ENETC_VSI_START_IDX), 0);
+	enetc_wr(hw, ENETC_PSIVMSGRCVAR0(idx), 0);
+	enetc_wr(hw, ENETC_PSIVMSGRCVAR1(idx), 0);
 }
 
 int enetc_msg_psi_init(struct enetc_pf *pf)

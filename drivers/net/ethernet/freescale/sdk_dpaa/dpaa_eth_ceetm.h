@@ -121,12 +121,14 @@ struct root_q {
 struct prio_q {
 	__u16 qcount;
 	struct ceetm_class *parent;
+	struct qm_ceetm_channel *ch;
 };
 
 struct wbfs_q {
 	__u16 qcount;
 	int group_type;
 	struct ceetm_class *parent;
+	struct qm_ceetm_channel *ch;
 	__u16 cr;
 	__u16 er;
 };
@@ -164,7 +166,6 @@ struct root_c {
 	bool wbfs_grp_b;
 	bool wbfs_grp_large;
 	struct Qdisc *child;
-	struct qm_ceetm_channel *ch;
 };
 
 struct prio_c {
@@ -193,6 +194,7 @@ struct ceetm_class {
 	int refcnt; /* usage count of this class */
 	struct tcf_proto *filter_list; /* class attached filters */
 	struct Qdisc *parent;
+	struct qm_ceetm_channel *ch;
 	bool shaped;
 	int type; /* ROOT/PRIO/WBFS */
 	union {

@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
+/*
+ * Copyright 2017-2018 NXP
+ */
+
 #include "t1040d4rdb.dts"
 
 /include/ "qoriq-fman3-0-sdk.dtsi"

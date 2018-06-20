@@ -53,6 +53,7 @@
 	compatible = "fsl,ls1028a-simu", "fsl,ls1028a";
 
 	aliases {
+		crypto = &crypto;
 	};
 };
 

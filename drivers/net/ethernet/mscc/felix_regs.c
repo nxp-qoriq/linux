@@ -4,6 +4,7 @@
  *
  * Copyright (c) 2017 Microsemi Corporation
  */
+#include <linux/phy.h>
 #include "ocelot.h"
 
 static const u32 felix_ana_regmap[] = {
@@ -396,6 +397,125 @@ static const struct ocelot_stat_layout felix_stats_layout[] = {
 	{ .name = "drop_green_prio_7", .offset = 0x111, },
 };
 
+/* FIXME this is duplicated */
+/* Watermark encode
+ * Bit 8:   Unit; 0:1, 1:16
+ * Bit 7-0: Value to be multiplied with unit
+ */
+static u16 ocelot_wm_enc(u16 value)
+{
+	if (value >= BIT(8))
+		return BIT(8) | (value / 16);
+
+	return value;
+}
+
+void felix_port_adjust_link(struct net_device *dev)
+{
+	struct ocelot_port *port = netdev_priv(dev);
+	struct ocelot *ocelot = port->ocelot;
+	u8 p = port->chip_port;
+	int speed, atop_wm, mode = 0;
+
+	switch (dev->phydev->speed) {
+	case SPEED_10:
+		speed = OCELOT_SPEED_10;
+		break;
+	case SPEED_100:
+		speed = OCELOT_SPEED_100;
+		break;
+	case SPEED_1000:
+		speed = OCELOT_SPEED_1000;
+		mode = DEV_MAC_MODE_CFG_GIGA_MODE_ENA;
+		break;
+	case SPEED_2500:
+		speed = OCELOT_SPEED_2500;
+		mode = DEV_MAC_MODE_CFG_GIGA_MODE_ENA;
+		break;
+	default:
+		netdev_err(dev, "Unsupported PHY speed: %d\n",
+			   dev->phydev->speed);
+		return;
+	}
+
+	phy_print_status(dev->phydev);
+
+	if (!dev->phydev->link)
+		return;
+	netdev_err(dev, "DBG %s:%d\n", __func__, __LINE__);
+
+	/* Only full duplex supported for now */
+	ocelot_port_writel(port, DEV_MAC_MODE_CFG_FDX_ENA |
+			   mode, DEV_MAC_MODE_CFG);
+
+	/* Set MAC IFG Gaps
+	 * FDX: TX_IFG = 5, RX_IFG1 = RX_IFG2 = 0
+	 * !FDX: TX_IFG = 5, RX_IFG1 = RX_IFG2 = 5
+	 */
+	ocelot_port_writel(port, DEV_MAC_IFG_CFG_TX_IFG(5), DEV_MAC_IFG_CFG);
+
+	/* Load seed (0) and set MAC HDX late collision  */
+	ocelot_port_writel(port, DEV_MAC_HDX_CFG_LATE_COL_POS(67) |
+			   DEV_MAC_HDX_CFG_SEED_LOAD,
+			   DEV_MAC_HDX_CFG);
+	mdelay(1);
+	ocelot_port_writel(port, DEV_MAC_HDX_CFG_LATE_COL_POS(67),
+			   DEV_MAC_HDX_CFG);
+
+	/* Set Max Length and maximum tags allowed */
+	ocelot_port_writel(port, VLAN_ETH_FRAME_LEN, DEV_MAC_MAXLEN_CFG);
+	ocelot_port_writel(port, DEV_MAC_TAGS_CFG_TAG_ID(ETH_P_8021AD) |
+			   DEV_MAC_TAGS_CFG_VLAN_AWR_ENA |
+			   DEV_MAC_TAGS_CFG_VLAN_LEN_AWR_ENA,
+			   DEV_MAC_TAGS_CFG);
+
+	/* Enable MAC module */
+	ocelot_port_writel(port, DEV_MAC_ENA_CFG_RX_ENA |
+			   DEV_MAC_ENA_CFG_TX_ENA, DEV_MAC_ENA_CFG);
+
+	/* Take MAC, Port, Phy (intern) and PCS (SGMII/Serdes) clock out of
+	 * reset */
+	ocelot_port_writel(port, DEV_CLOCK_CFG_LINK_SPEED(speed),
+			   DEV_CLOCK_CFG);
+
+	/* Set SMAC of Pause frame (00:00:00:00:00:00) */
+	ocelot_port_writel(port, 0, DEV_MAC_FC_MAC_HIGH_CFG);
+	ocelot_port_writel(port, 0, DEV_MAC_FC_MAC_LOW_CFG);
+
+	/* No PFC */
+	ocelot_write_gix(ocelot, ANA_PFC_PFC_CFG_FC_LINK_SPEED(speed),
+			 ANA_PFC_PFC_CFG, p);
+
+	/* Set Pause WM hysteresis
+	 * 152 = 6 * VLAN_ETH_FRAME_LEN / OCELOT_BUFFER_CELL_SZ
+	 * 101 = 4 * VLAN_ETH_FRAME_LEN / OCELOT_BUFFER_CELL_SZ
+	 */
+	ocelot_write_rix(ocelot, SYS_PAUSE_CFG_PAUSE_ENA |
+			 SYS_PAUSE_CFG_PAUSE_STOP(101) |
+			 SYS_PAUSE_CFG_PAUSE_START(152), SYS_PAUSE_CFG, p);
+
+	/* Core: Enable port for frame transfer */
+	ocelot_write_rix(ocelot, QSYS_SWITCH_PORT_MODE_INGRESS_DROP_MODE |
+			 QSYS_SWITCH_PORT_MODE_SCH_NEXT_CFG(1) |
+			 QSYS_SWITCH_PORT_MODE_PORT_ENA,
+			 QSYS_SWITCH_PORT_MODE, p);
+
+	/* Flow control */
+	ocelot_write_rix(ocelot, SYS_MAC_FC_CFG_PAUSE_VAL_CFG(0xffff) |
+			 SYS_MAC_FC_CFG_RX_FC_ENA | SYS_MAC_FC_CFG_TX_FC_ENA |
+			 SYS_MAC_FC_CFG_ZERO_PAUSE_ENA |
+			 SYS_MAC_FC_CFG_FC_LATENCY_CFG(0x7) |
+			 SYS_MAC_FC_CFG_FC_LINK_SPEED(speed),
+			 SYS_MAC_FC_CFG, p);
+	ocelot_write_rix(ocelot, 0, ANA_POL_FLOWC, p);
+
+	/* Tail dropping watermark */
+	atop_wm = (ocelot->shared_queue_sz - 9 * VLAN_ETH_FRAME_LEN) / OCELOT_BUFFER_CELL_SZ;
+	ocelot_write_rix(ocelot, ocelot_wm_enc(9 * VLAN_ETH_FRAME_LEN),
+			 SYS_ATOP, p);
+	ocelot_write(ocelot, ocelot_wm_enc(atop_wm), SYS_ATOP_TOT_CFG);
+}
+
 int felix_chip_init(struct ocelot *ocelot)
 {
 	int ret;
@@ -404,6 +524,7 @@ int felix_chip_init(struct ocelot *ocelot)
 	ocelot->stats_layout = felix_stats_layout;
 	ocelot->num_stats = ARRAY_SIZE(felix_stats_layout);
 	ocelot->shared_queue_sz = 128 * 1024;
+	ocelot->port_adjust_link = &felix_port_adjust_link;
 
 	ret = ocelot_regfields_init(ocelot, felix_regfields);
 	if (ret)

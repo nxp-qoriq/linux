@@ -482,6 +482,7 @@ int ocelot_chip_init(struct ocelot *ocelot)
 	ocelot->stats_layout = ocelot_stats_layout;
 	ocelot->num_stats = ARRAY_SIZE(ocelot_stats_layout);
 	ocelot->shared_queue_sz = 224 * 1024;
+	ocelot->port_adjust_link = &ocelot_port_adjust_link;
 
 	ret = ocelot_regfields_init(ocelot, ocelot_regfields);
 	if (ret)

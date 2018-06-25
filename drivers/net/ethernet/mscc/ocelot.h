@@ -505,6 +505,8 @@ struct ocelot {
 	u64 *stats;
 	struct delayed_work stats_work;
 	struct workqueue_struct *stats_queue;
+
+	void (*port_adjust_link)(struct net_device *dev);
 };
 
 struct ocelot_port {
@@ -562,6 +564,7 @@ struct regmap *ocelot_io_platform_init(struct ocelot *ocelot,
 
 int ocelot_init(struct ocelot *ocelot);
 void ocelot_deinit(struct ocelot *ocelot);
+void ocelot_port_adjust_link(struct net_device *dev);
 int ocelot_chip_init(struct ocelot *ocelot);
 int ocelot_probe_port(struct ocelot *ocelot, u8 port,
 		      void __iomem *regs,

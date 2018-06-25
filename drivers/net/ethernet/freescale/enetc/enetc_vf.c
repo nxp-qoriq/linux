@@ -54,8 +54,8 @@ static void enetc_msg_vsi_write_msg(struct enetc_hw *hw,
 	u32 val;
 
 	val = enetc_vsi_set_msize(msg->size) | lower_32_bits(msg->dma);
-	enetc_wr(hw, ENETC_VSIMSGSNDAR0, val);
 	enetc_wr(hw, ENETC_VSIMSGSNDAR1, upper_32_bits(msg->dma));
+	enetc_wr(hw, ENETC_VSIMSGSNDAR0, val);
 }
 
 static int enetc_msg_vsi_send(struct enetc_si *si, struct enetc_msg_swbd *msg)

@@ -379,6 +379,7 @@ void ocelot_port_adjust_link(struct net_device *dev)
 
 	if (!dev->phydev->link)
 		return;
+	netdev_err(dev, "DBG %s:%d\n", __func__, __LINE__);
 
 	/* Only full duplex supported for now */
 	ocelot_port_writel(port, DEV_MAC_MODE_CFG_FDX_ENA |
@@ -488,6 +489,8 @@ static int ocelot_port_open(struct net_device *dev)
 		netdev_err(dev, "Could not attach to PHY\n");
 		return err;
 	}
+	netif_carrier_on(dev);
+	ocelot->port_adjust_link(dev);
 
 	dev->phydev = port->phy;
 
@@ -500,6 +503,7 @@ static int ocelot_port_stop(struct net_device *dev)
 {
 	struct ocelot_port *port = netdev_priv(dev);
 
+	netif_carrier_off(dev);
 	phy_disconnect(port->phy);
 
 	dev->phydev = NULL;

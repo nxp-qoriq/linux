@@ -177,6 +177,11 @@ void dpaa2_io_down(struct dpaa2_io *d)
 {
 	if (!atomic_dec_and_test(&d->refs))
 		return;
+
+	spin_lock(&dpio_list_lock);
+	dpio_by_cpu[d->dpio_desc.cpu] = NULL;
+	spin_unlock(&dpio_list_lock);
+
 	kfree(d);
 }
 EXPORT_SYMBOL(dpaa2_io_down);

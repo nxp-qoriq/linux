@@ -19,6 +19,7 @@
 #include <linux/acpi_iort.h>
 #include <linux/bitmap.h>
 #include <linux/cpu.h>
+#include <linux/crash_dump.h>
 #include <linux/delay.h>
 #include <linux/dma-iommu.h>
 #include <linux/interrupt.h>
@@ -2010,8 +2011,15 @@ static u64 its_clear_vpend_valid(void __iomem *vlpi_base)
 	return val;
 }
 
+/*
+ * Booting with kdump and LPIs enabled is generally fine.
+ */
 static bool enabled_lpis_allowed(void)
 {
+	/* Allow a kdump kernel */
+	if (is_kdump_kernel())
+		return true;
+
 	return false;
 }
 

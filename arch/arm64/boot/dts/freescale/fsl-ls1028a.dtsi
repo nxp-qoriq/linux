@@ -472,15 +472,18 @@
 			status = "disabled";
 		};
 
-		pcie@1F0000000 { /* rcie_enetc */
+		pcie@1f0000000 { /* rcie_enetc */
 			compatible = "pci-host-ecam-generic";
-			reg = <0x01 0xF0000000 0x0 0x100000>;
+			reg = <0x01 0xf0000000 0x0 0x100000>;
 			#address-cells = <3>;
 			#size-cells = <2>;
 			#interrupt-cells = <1>;
 			msi-parent = <&its>;
 			device_type = "pci";
 			bus-range = <0x0 0x0>;
+			dma-coherent;
+			msi-map = <0 &its 0 0xe>;
+			iommu-map = <0 &smmu 0x4000 0xe>;
 			ranges = <0x82000000 0x0 0x00000000  0x1 0xf8000000  0x0 0x160000     /* PF0-6 BAR0 - non-prefetchable memory */
 				  0xc2000000 0x0 0x00000000  0x1 0xf8160000  0x0 0x070000     /* PF0-6, BAR2 - prefetchable memory */
 				  0x82000000 0x0 0x00000000  0x1 0xf81d0000  0x0 0x020000     /* PF0, VF-BAR0 - non-prefetchable memory */

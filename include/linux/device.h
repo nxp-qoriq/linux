@@ -753,10 +753,12 @@ enum device_link_state {
  * Device link flags.
  *
  * STATELESS: The core won't track the presence of supplier/consumer drivers.
- * AUTOREMOVE: Remove this link automatically on consumer driver unbind.
+ * AUTOREMOVE_CONSUMER: Remove this link automatically on consumer driver unbind.
+ * AUTOREMOVE_SUPPLIER: Remove the link automatically on supplier driver unbind.
  */
 #define DL_FLAG_STATELESS		BIT(0)
 #define DL_FLAG_AUTOREMOVE_CONSUMER	BIT(1)
+#define DL_FLAG_AUTOREMOVE_SUPPLIER	BIT(4)
 
 /**
  * struct device_link - Device link representation.

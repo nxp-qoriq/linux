@@ -38,7 +38,7 @@
 #include <uapi/linux/tsn.h>
 
 struct tsn_ops {
-	int (*get_capability)(struct net_device *, struct port_status *);
+	u32 (*get_capability)(struct net_device *ndev);
 	/* Qbv standard */
 	int (*qbv_set)(struct net_device *ndev, struct tsn_qbv_conf *qbvconf);
 	int (*qbv_get)(struct net_device *ndev, struct tsn_qbv_conf *qbvconf);

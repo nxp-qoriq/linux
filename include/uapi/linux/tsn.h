@@ -45,7 +45,7 @@
 #define MAX_ENTRY_NUMBER 128
 #define MAX_IFNAME_COUNT 64
 
-enum {
+enum tsn_capability {
 	TSN_CAP_QBV = 0x1,
 	TSN_CAP_QCI = 0x2,
 	TSN_CAP_QBU = 0x4,

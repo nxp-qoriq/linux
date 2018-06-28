@@ -378,19 +378,12 @@ static int tsn_simple_reply(struct genl_info *info, u32 cmd, char *portname, s32
 	return tsn_send_reply(rep_skb, info);
 }
 
-static int cmd_cb_streamid_set(struct genl_info *info)
+int tsn_init_check(struct genl_info *info, struct net_device **ndev)
 {
-	struct nlattr *na, *sid[TSN_STREAMID_ATTR_MAX + 1];
+	struct nlattr *na;
 	char *portname;
-	u32 sid_index;
-	u8 iden_type = 1;
-	bool enable;
-	int ret;
 	struct net_device *netdev;
-	struct tsn_cb_streamid sidconf;
-	const struct tsn_ops *tsnops;
 
-	/*read data */
 	na = info->attrs[TSN_ATTR_IFNAME];
 	if (!na) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, "no portname", -TSN_ATTRERR);
@@ -399,14 +392,51 @@ static int cmd_cb_streamid_set(struct genl_info *info)
 
 	portname = (char *)nla_data(na);
 	netdev = __dev_get_by_name(genl_info_net(info), portname);
+	if (!netdev) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
+		return -EOPNOTSUPP;
+	}
 
 	pr_info("tsn: cmd_cb_streamid_set : netdev index is %d name is %s\n",
 			netdev->ifindex, netdev->name);
 
-	if (netdev->tsn_ops == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+	if (!netdev->tsn_ops) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -EOPNOTSUPP;
 	}
+
+	*ndev = netdev;
+#if 0
+	tsnops = netdev->tsn_ops;
+
+	if (!netdev->tsn_ops->get_capability) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
+		pr_info("Need to implement the capability function first!\n");
+		return -EOPNOTSUPP;
+	}
+
+	if (!(netdev->tsn_ops->get_capability(netdev) & capability)) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
+		return -EOPNOTSUPP;
+	}
+#endif
+	return 0;
+}
+
+static int cmd_cb_streamid_set(struct genl_info *info)
+{
+	struct nlattr *na, *sid[TSN_STREAMID_ATTR_MAX + 1];
+	u32 sid_index;
+	u8 iden_type = 1;
+	bool enable;
+	int ret;
+	struct net_device *netdev;
+	struct tsn_cb_streamid sidconf;
+	const struct tsn_ops *tsnops;
+
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
 
 	tsnops = netdev->tsn_ops;
 
@@ -472,7 +502,7 @@ static int cmd_cb_streamid_set(struct genl_info *info)
 		case STREAMID_IP:
 
 		default:
-			tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+			tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 			return -EINVAL;
 	}
 
@@ -490,14 +520,14 @@ static int cmd_cb_streamid_set(struct genl_info *info)
 
 loaddev:
 	if (tsnops->cb_streamid_set == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -EOPNOTSUPP;
 	}
 
 	tsnops->cb_streamid_set(netdev, sid_index, enable, &sidconf);
 
 	/* simple reply here. To be continue */
-	if (tsn_simple_reply(info, TSN_CMD_REPLY, portname, 0))
+	if (tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, 0))
 		return -1;
 
 	return 0;
@@ -516,7 +546,6 @@ static int tsn_cb_streamid_set(struct sk_buff *skb, struct genl_info *info)
 static int cmd_cb_streamid_get(struct genl_info *info)
 {
 	struct nlattr *na, *sidattr, *sid[TSN_STREAMID_ATTR_MAX + 1];
-	char *portname;
 	u32 sid_index;
 	struct genlmsghdr *genlhdr;
 	struct sk_buff *rep_skb;
@@ -527,21 +556,9 @@ static int cmd_cb_streamid_get(struct genl_info *info)
 	struct tsn_cb_streamid_counters sidcounts;
 	const struct tsn_ops *tsnops;
 
-	/*read data */
-	na = info->attrs[TSN_ATTR_IFNAME];
-	if (!na)
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
 		return -EINVAL;
-
-	portname = (char *)nla_data(na);
-	netdev = __dev_get_by_name(genl_info_net(info), portname);
-
-	pr_info("tsn: cmd_cb_streamid_get : netdev index is %d name is %s\n",
-			netdev->ifindex, netdev->name);
-
-	if (netdev->tsn_ops == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
-		return -EOPNOTSUPP;
-	}
 
 	tsnops = netdev->tsn_ops;
 
@@ -563,12 +580,12 @@ static int cmd_cb_streamid_get(struct genl_info *info)
 	sid_index = nla_get_u32(sid[TSN_STREAMID_ATTR_INDEX]);
 
 	if (tsnops->cb_streamid_get == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -EINVAL;
 	} else {
 		valid = tsnops->cb_streamid_get(netdev, sid_index, &sidconf);
 		if (valid < 0) {
-			tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_DEVRETERR);
+			tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_DEVRETERR);
 			return -1;
 		}
 	}
@@ -580,7 +597,7 @@ static int cmd_cb_streamid_get(struct genl_info *info)
 		return ret;
 
 	/* input netlink the parameters */
-	sidattr = nla_nest_start(rep_skb, TSN_ATTR_QCI_SFI);
+	sidattr = nla_nest_start(rep_skb, TSN_ATTR_STREAM_IDENTIFY);
 	if (!sidattr) {
 		ret = -EINVAL;
 		goto err;
@@ -593,7 +610,7 @@ static int cmd_cb_streamid_get(struct genl_info *info)
 	else if (valid == 0)
 		nla_put_flag(rep_skb, TSN_STREAMID_ATTR_DISABLE);
 	else {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		goto err;
 	}
 
@@ -620,17 +637,17 @@ static int cmd_cb_streamid_get(struct genl_info *info)
 		case STREAMID_DMAC_VLAN:
 		case STREAMID_IP:
 		default:
-			tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+			tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 			goto err;
 	}
 
 	if (tsnops->cb_streamid_counters_get == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		goto err;
 	} else {
 		ret = tsnops->cb_streamid_counters_get(netdev, sid_index, &sidcounts);
 		if (ret < 0) {
-			tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_DEVRETERR);
+			tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_DEVRETERR);
 			goto err;
 		}
 	}
@@ -646,7 +663,7 @@ static int cmd_cb_streamid_get(struct genl_info *info)
 	/* end netlink input the parameters */
 
 	/* netlink lib func */
-	ret = nla_put_string(rep_skb, TSN_ATTR_IFNAME, portname);
+	ret = nla_put_string(rep_skb, TSN_ATTR_IFNAME, netdev->name);
 	if (ret < 0)
 		goto err;
 
@@ -690,7 +707,6 @@ static int tsn_cb_streamid_counters_get(struct sk_buff *skb, struct genl_info *i
 static int cmd_qci_sfi_set(struct genl_info *info)
 {
 	struct nlattr *na, *sfi[TSN_QCI_SFI_ATTR_MAX + 1];
-	char *portname;
 	u32 sfi_handle;
 	bool enable;
 	int ret;
@@ -698,21 +714,9 @@ static int cmd_qci_sfi_set(struct genl_info *info)
 	struct tsn_qci_psfp_sfi_conf sficonf;
 	const struct tsn_ops *tsnops;
 
-	/*read data */
-	na = info->attrs[TSN_ATTR_IFNAME];
-	if (!na)
-		return -EINVAL;
-
-
-	portname = (char *)nla_data(na);
-	netdev = __dev_get_by_name(genl_info_net(info), portname);
-
-	pr_info("tsn: cmd_qci_sfi_set : netdev index is %d name is %s\n", netdev->ifindex, netdev->name);
-	if (netdev->tsn_ops == NULL) {
-		pr_info("no tsn_ops at device %s\n", portname);
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
-		return -ENODEV;
-	}
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
 
 	tsnops = netdev->tsn_ops;
 
@@ -741,13 +745,13 @@ static int cmd_qci_sfi_set(struct genl_info *info)
 		goto loaddrive;
 	} else {
 		pr_err("tsn: must provde ENABLE or DISABLE attribute.\n");
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
 
 	if (!sfi[TSN_QCI_SFI_ATTR_GATE_ID]) {
 		pr_err("tsn: must provide stream gate index\n");
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
 
@@ -781,13 +785,13 @@ static int cmd_qci_sfi_set(struct genl_info *info)
 
 loaddrive:
 	if (tsnops->qci_sfi_set == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -EINVAL;
 	}
 
 	tsnops->qci_sfi_set(netdev, sfi_handle, enable, &sficonf);
 
-	if (tsn_simple_reply(info, TSN_CMD_REPLY, portname, TSN_SUCCESS))
+	if (tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, TSN_SUCCESS))
 		return -1;
 
 	return 0;
@@ -807,7 +811,6 @@ static int cmd_qci_sfi_get(struct genl_info *info)
 {
 	struct nlattr *na, *sfiattr;
 	struct nlattr *sfi[TSN_QCI_SFI_ATTR_MAX + 1];
-	char *portname;
 	u32 sfi_handle;
 	struct sk_buff *rep_skb;
 	int ret, valid = 0;
@@ -817,13 +820,9 @@ static int cmd_qci_sfi_get(struct genl_info *info)
 	struct tsn_qci_psfp_sfi_counters sficount;
 	const struct tsn_ops *tsnops;
 
-	/*read data */
-	na = info->attrs[TSN_ATTR_IFNAME];
-	if (!na)
-		return -EINVAL;
-
-	portname = (char *)nla_data(na);
-	netdev = __dev_get_by_name(genl_info_net(info), portname);
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
 
 	genlhdr = info->genlhdr;
 
@@ -842,24 +841,19 @@ static int cmd_qci_sfi_get(struct genl_info *info)
 
 	sfi_handle = nla_get_u32(sfi[TSN_QCI_SFI_ATTR_INDEX]);
 
-	if (netdev->tsn_ops == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
-		return -1;
-	}
-
 	tsnops = netdev->tsn_ops;
 
 	memset(&sficonf, 0, sizeof(struct tsn_qci_psfp_sfi_conf));
 	memset(&sficount, 0, sizeof(struct tsn_qci_psfp_sfi_counters));
 
 	if ((tsnops->qci_sfi_get == NULL) || (tsnops->qci_sfi_counters_get == NULL)) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -EINVAL;
 	} else {
 		valid = tsnops->qci_sfi_get(netdev, sfi_handle, &sficonf);
 
 		if (valid < 0) {
-			tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_DEVRETERR);
+			tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_DEVRETERR);
 			return -1;
 		}
 
@@ -875,7 +869,7 @@ static int cmd_qci_sfi_get(struct genl_info *info)
 
 	sfiattr = nla_nest_start(rep_skb, TSN_ATTR_QCI_SFI);
 	if (!sfiattr) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		ret = -EINVAL;
 		goto err;
 	}
@@ -908,7 +902,7 @@ static int cmd_qci_sfi_get(struct genl_info *info)
 	return tsn_send_reply(rep_skb, info);
 err:
 	nlmsg_free(rep_skb);
-	tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+	tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 	return ret;
 }
 
@@ -926,7 +920,6 @@ static int cmd_qci_sfi_counters_get(struct genl_info *info)
 {
 	struct nlattr *na, *sfiattr;
 	struct nlattr *sfi[TSN_QCI_SFI_ATTR_MAX + 1];
-	char *portname;
 	u32 sfi_handle;
 	struct sk_buff *rep_skb;
 	int ret;
@@ -935,15 +928,9 @@ static int cmd_qci_sfi_counters_get(struct genl_info *info)
 	struct tsn_qci_psfp_sfi_counters sficount;
 	const struct tsn_ops *tsnops;
 
-	/*read data */
-	na = info->attrs[TSN_ATTR_IFNAME];
-	if (!na)
-		return -EINVAL;
-
-	portname = (char *)nla_data(na);
-	netdev = __dev_get_by_name(genl_info_net(info), portname);
-
-	pr_info("tsn: cmd_qci_sfi_counters_get : netdev index is %d net name is %s\n", netdev->ifindex, netdev->name);
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
 
 	genlhdr = info->genlhdr;
 
@@ -962,22 +949,17 @@ static int cmd_qci_sfi_counters_get(struct genl_info *info)
 
 	sfi_handle = nla_get_u32(sfi[TSN_QCI_SFI_ATTR_INDEX]);
 
-	if (netdev->tsn_ops == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
-		return -1;
-	}
-
 	tsnops = netdev->tsn_ops;
 
 	memset(&sficount, 0, sizeof(struct tsn_qci_psfp_sfi_counters));
 	if (tsnops->qci_sfi_counters_get == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -1;
 	}
 
 	ret = tsnops->qci_sfi_counters_get(netdev, sfi_handle, &sficount);
 	if (ret < 0) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_DEVRETERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_DEVRETERR);
 		return -EINVAL;
 	}
 
@@ -1005,7 +987,7 @@ static int cmd_qci_sfi_counters_get(struct genl_info *info)
 	return tsn_send_reply(rep_skb, info);
 err:
 	nlmsg_free(rep_skb);
-	tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+	tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 	return ret;
 }
 
@@ -1024,7 +1006,6 @@ static int cmd_qci_sgi_set(struct genl_info *info)
 	struct nlattr *na;
 	struct nlattr *sgia[TSN_QCI_SGI_ATTR_MAX + 1];
 	struct nlattr *admin[TSN_SGI_ATTR_CTRL_MAX + 1];
-	char *portname;
 	int ret = 0;
 	struct net_device *netdev;
 	const struct tsn_ops *tsnops;
@@ -1033,31 +1014,16 @@ static int cmd_qci_sgi_set(struct genl_info *info)
 	u16 sgi_handle = 0;
 	u16 listcount = 0;
 
-	na = info->attrs[TSN_ATTR_IFNAME];
-	if (!na)
-		return -EINVAL;
-
-	portname = (char *)nla_data(na);
-	netdev = __dev_get_by_name(genl_info_net(info), portname);
-	if (netdev == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
-		pr_err("tsn: error portname, not found netdev\n");
-		return -1;
-	}
-
-	pr_info("tsn: cmd_qci_sgi_set : netdev index is %d name is %s\n", netdev->ifindex, netdev->name);
-
-	if (netdev->tsn_ops == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
-		return -EOPNOTSUPP;
-	}
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
 
 	tsnops = netdev->tsn_ops;
 
 	memset(&sgi, 0, sizeof(struct tsn_qci_psfp_sgi_conf));
 
 	if (!info->attrs[TSN_ATTR_QCI_SGI]) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
 
@@ -1065,13 +1031,13 @@ static int cmd_qci_sgi_set(struct genl_info *info)
 
 	ret = NLA_PARSE_NESTED(sgia, TSN_QCI_SGI_ATTR_MAX, na, qci_sgi_policy);
 	if (ret) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
 
 	if (sgia[TSN_QCI_SGI_ATTR_ENABLE] && sgia[TSN_QCI_SGI_ATTR_DISABLE]) {
 		pr_err("tsn: enable or disable?\n");
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -1;
 	}
 
@@ -1171,7 +1137,7 @@ static int cmd_qci_sgi_set(struct genl_info *info)
 		}
 
 		if (count < listcount) {
-			tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+			tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 			pr_err("tsn: gate list count less than TSN_SGI_ATTR_CTRL_LEN\n");
 			if (gcl != NULL)
 				kfree(gcl);
@@ -1183,7 +1149,7 @@ static int cmd_qci_sgi_set(struct genl_info *info)
 
 loaddev:
 	if (tsnops->qci_sgi_set == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		if (gcl != NULL)
 			kfree(gcl);
 		return -EINVAL;
@@ -1195,9 +1161,9 @@ loaddev:
 	if (gcl != NULL)
 		kfree(gcl);
 	if (!ret)
-		return tsn_simple_reply(info, TSN_CMD_REPLY, portname, TSN_SUCCESS);
+		return tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, TSN_SUCCESS);
 
-	tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_DEVRETERR);
+	tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_DEVRETERR);
 	return -1;
 }
 
@@ -1215,7 +1181,6 @@ static int cmd_qci_sgi_get(struct genl_info *info)
 {
 	struct nlattr *na, *sgiattr, *adminattr, *sglattr;
 	struct nlattr *sgi[TSN_QCI_SGI_ATTR_MAX + 1];
-	char *portname;
 	struct sk_buff *rep_skb;
 	int ret;
 	struct net_device *netdev;
@@ -1226,24 +1191,12 @@ static int cmd_qci_sgi_get(struct genl_info *info)
 	u16 sgi_handle;
 	u8 listcount, i;
 
-	/*read port */
-	na = info->attrs[TSN_ATTR_IFNAME];
-	if (!na) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, "no portname", -TSN_ATTRERR);
-		return -EINVAL;
-	}
-
-	portname = (char *)nla_data(na);
-	netdev = __dev_get_by_name(genl_info_net(info), portname);
-	if (netdev == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
-		return -EINVAL;
-	}
-
-	pr_info("tsn: cmd_qci_sgi_get : netdev index is %d net name is %s\n", netdev->ifindex, netdev->name);
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
 
 	if (!info->attrs[TSN_ATTR_QCI_SGI]) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		pr_err("tsn: no sgi handle input \n");
 		return -EINVAL;
 	}
@@ -1256,7 +1209,7 @@ static int cmd_qci_sgi_get(struct genl_info *info)
 	}
 
 	if (!sgi[TSN_QCI_SGI_ATTR_INDEX]) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		pr_err("tsn: no sgi handle input \n");
 		return -EINVAL;
 	}
@@ -1266,23 +1219,18 @@ static int cmd_qci_sgi_get(struct genl_info *info)
 	/* Get config data from device */
 	genlhdr = info->genlhdr;
 
-	if (netdev->tsn_ops == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
-		return -1;
-	}
-
 	tsnops = netdev->tsn_ops;
 
 	memset(&sgiadmin, 0, sizeof(struct tsn_qci_psfp_sgi_conf));
 
 	if (tsnops->qci_sgi_get == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -1;
 	}
 
 	ret = tsnops->qci_sgi_get(netdev, sgi_handle, &sgiadmin);
 	if (ret < 0) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_DEVRETERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_DEVRETERR);
 		return -1;
 	}
 
@@ -1392,7 +1340,7 @@ out1:
 	return tsn_send_reply(rep_skb, info);
 err:
 	nlmsg_free(rep_skb);
-	tsn_simple_reply(info, TSN_CMD_REPLY, portname, ret);
+	tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, ret);
 	return -1;
 }
 
@@ -1410,7 +1358,6 @@ static int cmd_qci_sgi_status_get(struct genl_info *info)
 {
 	struct nlattr *na, *sgiattr, *operattr, *sglattr;
 	struct nlattr *sgi[TSN_QCI_SGI_ATTR_MAX + 1];
-	char *portname;
 	struct sk_buff *rep_skb;
 	int ret;
 	struct net_device *netdev;
@@ -1422,22 +1369,12 @@ static int cmd_qci_sgi_status_get(struct genl_info *info)
 	u8 listcount;
 	int valid, i;
 
-	/*read port */
-	na = info->attrs[TSN_ATTR_IFNAME];
-	if (!na)
-		return -EINVAL;
-
-	portname = (char *)nla_data(na);
-	netdev = __dev_get_by_name(genl_info_net(info), portname);
-	if (netdev == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
-		return -EINVAL;
-	}
-
-	pr_info("tsn: cmd_qci_sgi_status_get : netdev index is %d net name is %s\n", netdev->ifindex, netdev->name);
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
 
 	if (!info->attrs[TSN_ATTR_QCI_SGI]) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		pr_err("tsn: no sgi handle input \n");
 		return -EINVAL;
 	}
@@ -1450,7 +1387,7 @@ static int cmd_qci_sgi_status_get(struct genl_info *info)
 	}
 
 	if (!sgi[TSN_QCI_SGI_ATTR_INDEX]) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		pr_err("tsn: no sgi handle input \n");
 		return -EINVAL;
 	}
@@ -1460,23 +1397,18 @@ static int cmd_qci_sgi_status_get(struct genl_info *info)
 	/* Get status data from device */
 	genlhdr = info->genlhdr;
 
-	if (netdev->tsn_ops == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
-		return -1;
-	}
-
 	tsnops = netdev->tsn_ops;
 
 	memset(&sgistat, 0, sizeof(struct tsn_psfp_sgi_status));
 
 	if (tsnops->qci_sgi_status_get == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -1;
 	}
 
 	valid = tsnops->qci_sgi_status_get(netdev, sgi_handle, &sgistat);
 	if (valid < 0) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_DEVRETERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_DEVRETERR);
 		return -1;
 	}
 
@@ -1581,7 +1513,7 @@ out1:
 	return tsn_send_reply(rep_skb, info);
 err:
 	nlmsg_free(rep_skb);
-	tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+	tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 	return -1;
 }
 
@@ -1598,7 +1530,6 @@ static int tsn_qci_sgi_status_get(struct sk_buff *skb, struct genl_info *info)
 static int cmd_qci_fmi_set(struct genl_info *info)
 {
 	struct nlattr *na, *fmi[TSN_QCI_FMI_ATTR_MAX + 1];
-	char *portname;
 	u32 index;
 	int ret;
 	struct net_device *netdev;
@@ -1606,21 +1537,9 @@ static int cmd_qci_fmi_set(struct genl_info *info)
 	const struct tsn_ops *tsnops;
 	bool enable = 0;
 
-	/*read data */
-	na = info->attrs[TSN_ATTR_IFNAME];
-	if (!na)
-		return -EINVAL;
-
-	portname = (char *)nla_data(na);
-	netdev = __dev_get_by_name(genl_info_net(info), portname);
-
-	pr_info("tsn: cmd_qci_fmi_set : netdev index is %d name is %s\n", netdev->ifindex, netdev->name);
-
-	if (netdev->tsn_ops == NULL) {
-		pr_info("no tsn_ops at device %s\n", portname);
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
-		return -ENODEV;
-	}
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
 
 	tsnops = netdev->tsn_ops;
 
@@ -1677,13 +1596,13 @@ static int cmd_qci_fmi_set(struct genl_info *info)
 loaddev:
 
 	if (tsnops->qci_fmi_set == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -EINVAL;
 	}
 
 	tsnops->qci_fmi_set(netdev, index, enable, &fmiconf);
 
-	if (tsn_simple_reply(info, TSN_CMD_REPLY, portname, TSN_SUCCESS))
+	if (tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, TSN_SUCCESS))
 		return -1;
 
 	return 0;
@@ -1702,7 +1621,6 @@ static int tsn_qci_fmi_set(struct sk_buff *skb, struct genl_info *info)
 static int cmd_qci_fmi_get(struct genl_info *info)
 {
 	struct nlattr *na, *fmi[TSN_QCI_FMI_ATTR_MAX + 1], *fmiattr;
-	char *portname;
 	u32 index;
 	struct sk_buff *rep_skb;
 	int ret;
@@ -1711,15 +1629,9 @@ static int cmd_qci_fmi_get(struct genl_info *info)
 	const struct tsn_ops *tsnops;
 	struct genlmsghdr *genlhdr;
 
-	/*read data */
-	na = info->attrs[TSN_ATTR_IFNAME];
-	if (!na)
-		return -EINVAL;
-
-	portname = (char *)nla_data(na);
-	netdev = __dev_get_by_name(genl_info_net(info), portname);
-
-	pr_info("tsn: cmd_qci_fmi_get : netdev index is %d name is %s\n", netdev->ifindex, netdev->name);
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
 
 	if (!info->attrs[TSN_ATTR_QCI_FMI])
 		return -EINVAL;
@@ -1738,18 +1650,12 @@ static int cmd_qci_fmi_get(struct genl_info *info)
 	index = nla_get_u32(fmi[TSN_QCI_FMI_ATTR_INDEX]);
 
 	/* Get data from device */
-	if (netdev->tsn_ops == NULL) {
-		pr_info("no tsn_ops at device %s\n", portname);
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
-		return -ENODEV;
-	}
-
 	tsnops = netdev->tsn_ops;
 
 	memset(&fmiconf, 0, sizeof(struct tsn_qci_psfp_fmi));
 
 	if (tsnops->qci_fmi_get == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -EINVAL;
 	}
 
@@ -1796,7 +1702,7 @@ static int cmd_qci_fmi_get(struct genl_info *info)
 	return tsn_send_reply(rep_skb, info);
 
 	nlmsg_free(rep_skb);
-	tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+	tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 	return -1;
 }
 
@@ -1815,7 +1721,6 @@ static int cmd_qbv_set(struct genl_info *info)
 	struct nlattr *na, *na1;
 	struct nlattr *qbv_table, *qbv[TSN_QBV_ATTR_MAX + 1], *qbvctrl[TSN_QBV_ATTR_CTRL_MAX + 1];
 	int rem;
-	char *portname;
 	int ret = 0;
 	struct net_device *netdev;
 	struct tsn_qbv_conf qbvconfig;
@@ -1824,20 +1729,9 @@ static int cmd_qbv_set(struct genl_info *info)
 	struct tsn_qbv_entry *gatelist = NULL;
 	int count = 0;
 
-	/*read data */
-	na = info->attrs[TSN_ATTR_IFNAME];
-	if (!na)
-		return -EINVAL;
-
-	portname = (char *)nla_data(na);
-	netdev = __dev_get_by_name(genl_info_net(info), portname);
-
-	pr_info("tsn: cmd_qbv_set : netdev index is %d name is %s\n", netdev->ifindex, netdev->name);
-
-	if (netdev->tsn_ops == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
-		return -EOPNOTSUPP;
-	}
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
 
 	tsnops = netdev->tsn_ops;
 
@@ -1864,7 +1758,7 @@ static int cmd_qbv_set(struct genl_info *info)
 	}
 
 	if (!qbv[TSN_QBV_ATTR_ADMINENTRY]) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -1;
 	}
 
@@ -1920,14 +1814,14 @@ static int cmd_qbv_set(struct genl_info *info)
 
 setdrive:
 	if (tsnops->qbv_set == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		goto err;
 	}
 
 	ret = tsnops->qbv_set(netdev, &qbvconfig);
 
 	/* send back */
-	tsn_simple_reply(info, TSN_CMD_REPLY, portname, TSN_SUCCESS);
+	tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, TSN_SUCCESS);
 
 err:
 	if (gatelist != NULL)
@@ -1948,9 +1842,7 @@ static int tsn_qbv_set(struct sk_buff *skb, struct genl_info *info)
 
 static int cmd_qbv_get(struct genl_info *info)
 {
-	struct nlattr *na;
 	struct nlattr *qbv, *qbvadminattr;
-	char *portname;
 	struct sk_buff *rep_skb;
 	int ret;
 	int len = 0, i = 0;
@@ -1959,35 +1851,24 @@ static int cmd_qbv_get(struct genl_info *info)
 	struct tsn_qbv_conf qbvconf;
 	const struct tsn_ops *tsnops;
 
-	/*read data */
-	na = info->attrs[TSN_ATTR_IFNAME];
-	if (!na)
-		return -EINVAL;
-
-	portname = (char *)nla_data(na);
-	netdev = __dev_get_by_name(genl_info_net(info), portname);
-
-	pr_info("tsn: cmd_qbv_get : netdev index is %d net name is %s\n", netdev->ifindex, netdev->name);
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
 
 	genlhdr = info->genlhdr;
-
-	if (netdev->tsn_ops == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
-		return -1;
-	}
 
 	tsnops = netdev->tsn_ops;
 
 	memset(&qbvconf, 0, sizeof(struct tsn_qbv_conf));
 
 	if (tsnops->qbv_get == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -1;
 	}
 
 	ret = tsnops->qbv_get(netdev, &qbvconf);
 	if (ret < 0) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_DEVRETERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_DEVRETERR);
 		return ret;
 	}
 
@@ -2061,9 +1942,7 @@ static int cmd_qbv_get(struct genl_info *info)
 
 static int cmd_qbv_status_get(struct genl_info *info)
 {
-	struct nlattr *na;
 	struct nlattr *qbv, *qbvoperattr;
-	char *portname;
 	struct sk_buff *rep_skb;
 	int ret;
 	int len = 0, i = 0;
@@ -2072,35 +1951,24 @@ static int cmd_qbv_status_get(struct genl_info *info)
 	struct tsn_qbv_status qbvstatus;
 	const struct tsn_ops *tsnops;
 
-	/*read data */
-	na = info->attrs[TSN_ATTR_IFNAME];
-	if (!na)
-		return -EINVAL;
-
-	portname = (char *)nla_data(na);
-	netdev = __dev_get_by_name(genl_info_net(info), portname);
-
-	pr_info("tsn: cmd_qbv_get : netdev index is %d net name is %s\n", netdev->ifindex, netdev->name);
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
 
 	genlhdr = info->genlhdr;
-
-	if (netdev->tsn_ops == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
-		return -1;
-	}
 
 	tsnops = netdev->tsn_ops;
 
 	memset(&qbvstatus, 0, sizeof(struct tsn_qbv_status));
 
 	if (tsnops->qbv_get_status == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -1;
 	}
 
 	ret = tsnops->qbv_get_status(netdev, &qbvstatus);
 	if (ret < 0) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_DEVRETERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_DEVRETERR);
 		return ret;
 	}
 
@@ -2198,49 +2066,39 @@ static int tsn_cbs_set(struct sk_buff *skb, struct genl_info *info)
 {
 	struct nlattr *na;
 	struct nlattr *cbsa[TSN_CBS_ATTR_MAX + 1];
-	char *portname;
 	struct net_device *netdev;
 	const struct tsn_ops *tsnops;
 	int ret;
 	u8 tc, bw;
 
-	/*read data */
-	na = info->attrs[TSN_ATTR_IFNAME];
-	if (!na)
-		return -EINVAL;
-
-	portname = (char *)nla_data(na);
-	netdev = __dev_get_by_name(genl_info_net(info), portname);
-
-	pr_info("tsn: cmd_cbs_set : netdev index is %d net name is %s\n", netdev->ifindex, netdev->name);
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
 
 	if (!info->attrs[TSN_ATTR_CBS]) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
 
 	na = info->attrs[TSN_ATTR_CBS];
 
-	if (netdev->tsn_ops == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
-		return -EINVAL;
-	}
 
 	tsnops = netdev->tsn_ops;
+
 	if (tsnops->cbs_set == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -1;
 	}
 
 	ret = NLA_PARSE_NESTED(cbsa, TSN_CBS_ATTR_MAX, na, cbs_policy);
 	if (ret) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
 
 	if (!cbsa[TSN_CBS_ATTR_TC_INDEX]) {
 		pr_err("tsn: no TSN_CBS_ATTR_TC_INDEX input \n");
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
 	tc = nla_get_u8(cbsa[TSN_CBS_ATTR_TC_INDEX]);
@@ -2248,23 +2106,23 @@ static int tsn_cbs_set(struct sk_buff *skb, struct genl_info *info)
 
 	if (!cbsa[TSN_CBS_ATTR_BW]) {
 		pr_err("tsn: no TSN_CBS_ATTR_BW input \n");
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
 
 	bw = nla_get_u8(cbsa[TSN_CBS_ATTR_BW]);
 	if (bw < 0 || bw > 100) {
 		pr_err("tsn: TSN_CBS_ATTR_BW isn't in the range of 0~100 \n");
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
 
 	ret = tsnops->cbs_set(netdev, tc, bw);
 	if (ret < 0) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_DEVRETERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_DEVRETERR);
 		return -EINVAL;
 	}
-	tsn_simple_reply(info, TSN_CMD_REPLY, portname, TSN_SUCCESS);
+	tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, TSN_SUCCESS);
 	return 0;
 }
 
@@ -2272,7 +2130,6 @@ static int tsn_cbs_get(struct sk_buff *skb, struct genl_info *info)
 {
 	struct nlattr *na, *cbsattr;
 	struct nlattr *cbsa[TSN_CBS_ATTR_MAX + 1];
-	char *portname;
 	struct net_device *netdev;
 	const struct tsn_ops *tsnops;
 	struct sk_buff *rep_skb;
@@ -2280,29 +2137,19 @@ static int tsn_cbs_get(struct sk_buff *skb, struct genl_info *info)
 	struct genlmsghdr *genlhdr;
 	u8 tc;
 
-	na = info->attrs[TSN_ATTR_IFNAME];
-	if (!na)
-		return -EINVAL;
-
-	portname = (char *)nla_data(na);
-	netdev = __dev_get_by_name(genl_info_net(info), portname);
-
-	pr_info("tsn: cmd_cbs_get : netdev index is %d net name is %s\n", netdev->ifindex, netdev->name);
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
 
 	if (!info->attrs[TSN_ATTR_CBS]) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
-		return -EINVAL;
-	}
-
-	if (netdev->tsn_ops == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
 
 	tsnops = netdev->tsn_ops;
 
 	if (tsnops->cbs_get == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -1;
 	}
 
@@ -2310,7 +2157,7 @@ static int tsn_cbs_get(struct sk_buff *skb, struct genl_info *info)
 	ret = NLA_PARSE_NESTED(cbsa, TSN_CBS_ATTR_MAX, na, cbs_policy);
 	if (ret) {
 		printk("tsn: parse value TSN_CBS_ATTR_MAX error.");
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
 
@@ -2332,7 +2179,7 @@ static int tsn_cbs_get(struct sk_buff *skb, struct genl_info *info)
 
 	if (!cbsa[TSN_CBS_ATTR_TC_INDEX]) {
 		printk("tsn: must to specify the TSN_CBS_ATTR_TC_INDEX attribute\n");
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
 	tc = nla_get_u8(cbsa[TSN_CBS_ATTR_TC_INDEX]);
@@ -2340,7 +2187,7 @@ static int tsn_cbs_get(struct sk_buff *skb, struct genl_info *info)
 	ret = tsnops->cbs_get(netdev, tc);
 	if (ret < 0) {
 		printk("tsn: cbs_get return error\n");
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
 
@@ -2354,24 +2201,17 @@ static int cmd_qbu_set(struct genl_info *info)
 {
 	struct nlattr *na;
 	struct nlattr *qbua[TSN_QBU_ATTR_MAX + 1];
-	char *portname;
 	struct net_device *netdev;
 	const struct tsn_ops *tsnops;
 	int ret;
 	u8 preemptable = 0;
 
-	/*read data */
-	na = info->attrs[TSN_ATTR_IFNAME];
-	if (!na)
-		return -EINVAL;
-
-	portname = (char *)nla_data(na);
-	netdev = __dev_get_by_name(genl_info_net(info), portname);
-
-	pr_info("tsn: cmd_qbu_set : netdev index is %d net name is %s\n", netdev->ifindex, netdev->name);
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
 
 	if (!info->attrs[TSN_ATTR_QBU]) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
 
@@ -2379,7 +2219,7 @@ static int cmd_qbu_set(struct genl_info *info)
 
 	ret = NLA_PARSE_NESTED(qbua, TSN_QBU_ATTR_MAX, na, qbu_policy);
 	if (ret) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
 
@@ -2388,25 +2228,20 @@ static int cmd_qbu_set(struct genl_info *info)
 	else
 		pr_info("Disable Qbu since no preemptable TSN_QBU_ATTR_ADMIN_STATE config!\n");
 
-	if (netdev->tsn_ops == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
-		return -EINVAL;
-	}
-
 	tsnops = netdev->tsn_ops;
 
 	if (tsnops->qbu_set == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -EINVAL;
 	}
 
 	ret = tsnops->qbu_set(netdev, preemptable);
 	if (ret < 0) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_DEVRETERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_DEVRETERR);
 		return -EINVAL;
 	}
 
-	tsn_simple_reply(info, TSN_CMD_REPLY, portname, TSN_SUCCESS);
+	tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, TSN_SUCCESS);
 	return 0;
 }
 
@@ -2422,8 +2257,7 @@ static int tsn_qbu_set(struct sk_buff *skb, struct genl_info *info)
 
 static int cmd_qbu_get_status(struct genl_info *info)
 {
-	struct nlattr *na, *qbuattr;
-	char *portname;
+	struct nlattr *qbuattr;
 	struct net_device *netdev;
 	const struct tsn_ops *tsnops;
 	struct sk_buff *rep_skb;
@@ -2431,35 +2265,25 @@ static int cmd_qbu_get_status(struct genl_info *info)
 	struct genlmsghdr *genlhdr;
 	struct tsn_preempt_status pps;
 
-	na = info->attrs[TSN_ATTR_IFNAME];
-	if (!na)
-		return -EINVAL;
-
-	portname = (char *)nla_data(na);
-	netdev = __dev_get_by_name(genl_info_net(info), portname);
-
-	pr_info("tsn: cmd_qbu_get : netdev index is %d net name is %s\n", netdev->ifindex, netdev->name);
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
 
 	/* Get status data from device */
 	genlhdr = info->genlhdr;
-
-	if (netdev->tsn_ops == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
-		return -EINVAL;
-	}
 
 	tsnops = netdev->tsn_ops;
 
 	memset(&pps, 0, sizeof(struct tsn_preempt_status));
 
 	if (tsnops->qbu_get == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -1;
 	}
 
 	ret = tsnops->qbu_get(netdev, &pps);
 	if (ret < 0) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_DEVRETERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_DEVRETERR);
 		return -1;
 	}
 
@@ -2501,24 +2325,17 @@ static int tsn_tsd_set(struct sk_buff *skb, struct genl_info *info)
 {
 	struct nlattr *na;
 	struct nlattr *ntsd[TSN_TSD_ATTR_MAX + 1];
-	char *portname;
 	struct net_device *netdev;
 	const struct tsn_ops *tsnops;
 	struct tsn_tsd tsd;
 	int ret;
 
-	/*read data */
-	na = info->attrs[TSN_ATTR_IFNAME];
-	if (!na)
-		return -EINVAL;
-
-	portname = (char *)nla_data(na);
-	netdev = __dev_get_by_name(genl_info_net(info), portname);
-
-	pr_info("tsn: cmd_qbu_set : netdev index is %d net name is %s\n", netdev->ifindex, netdev->name);
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
 
 	if (!info->attrs[TSN_ATTR_TSD]) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
 
@@ -2527,19 +2344,14 @@ static int tsn_tsd_set(struct sk_buff *skb, struct genl_info *info)
 	ret = NLA_PARSE_NESTED(ntsd, TSN_TSD_ATTR_MAX, na, tsd_policy);
 	if (ret) {
 		printk("tsn: parse value TSN_TSD_ATTR_MAX error.");
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
-		return -EINVAL;
-	}
-
-	if (netdev->tsn_ops == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
 
 	tsnops = netdev->tsn_ops;
 
 	if (tsnops->tsd_set == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -EINVAL;
 	}
 
@@ -2553,7 +2365,7 @@ static int tsn_tsd_set(struct sk_buff *skb, struct genl_info *info)
 
 		if (!tsd.period) {
 			printk("tsn: parse value TSN_TSD_ATTR_PERIOD error.");
-				tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+				tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 				return -EINVAL;
 		}
 
@@ -2570,11 +2382,11 @@ static int tsn_tsd_set(struct sk_buff *skb, struct genl_info *info)
 
 	ret = tsnops->tsd_set(netdev, &tsd);
 	if (ret < 0) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_DEVRETERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_DEVRETERR);
 		return -EINVAL;
 	}
 
-	tsn_simple_reply(info, TSN_CMD_REPLY, portname, TSN_SUCCESS);
+	tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, TSN_SUCCESS);
 	return 0;
 }
 
@@ -2582,7 +2394,6 @@ static int tsn_tsd_get(struct sk_buff *skb, struct genl_info *info)
 {
 	struct nlattr *na, *tsdattr;
 	struct nlattr *tsda[TSN_TSD_ATTR_MAX + 1];
-	char *portname;
 	struct net_device *netdev;
 	const struct tsn_ops *tsnops;
 	struct sk_buff *rep_skb;
@@ -2590,35 +2401,25 @@ static int tsn_tsd_get(struct sk_buff *skb, struct genl_info *info)
 	struct genlmsghdr *genlhdr;
 	struct tsn_tsd_status tts;
 
-	na = info->attrs[TSN_ATTR_IFNAME];
-	if (!na)
-		return -EINVAL;
-
-	portname = (char *)nla_data(na);
-	netdev = __dev_get_by_name(genl_info_net(info), portname);
-
-	pr_info("tsn: cmd_cbs_get : netdev index is %d net name is %s\n", netdev->ifindex, netdev->name);
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
 
 	if (!info->attrs[TSN_ATTR_TSD]) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
-		return -EINVAL;
-	}
-
-	if (netdev->tsn_ops == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
 
 	tsnops = netdev->tsn_ops;
 
 	if (tsnops->tsd_get == NULL) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_NODEVOPS);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -1;
 	}
 
 	ret = tsnops->tsd_get(netdev, &tts);
 	if (ret < 0) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_DEVRETERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_DEVRETERR);
 		return -1;
 	}
 
@@ -2627,7 +2428,7 @@ static int tsn_tsd_get(struct sk_buff *skb, struct genl_info *info)
 	ret = NLA_PARSE_NESTED(tsda, TSN_TSD_ATTR_MAX, na, tsd_policy);
 	if (ret) {
 		printk("tsn: parse value TSN_TSD_ATTR_MAX error.");
-		tsn_simple_reply(info, TSN_CMD_REPLY, portname, -TSN_ATTRERR);
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
 

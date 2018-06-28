@@ -78,6 +78,23 @@
 
 #include "libata.h"
 #include "libata-transport.h"
+#include "ahci.h"
+
+#define SERDES2_LNAGCR0 0x1EB0E00
+#define LN_RX_RST 		0x80000010
+#define LN_RX_RST_DONE 	0x3
+#define LN_RX_MASK 		0xf
+
+enum ahci_qoriq_type {
+	AHCI_LX2160 = 2
+};
+
+struct ahci_qoriq_priv {
+	struct ccsr_ahci *reg_base;
+	enum ahci_qoriq_type type;
+	void __iomem *ecc_addr;
+	bool is_dmacoherent;
+};
 
 /* debounce timing parameters in msecs { interval, duration, timeout } */
 const unsigned long sata_deb_timing_normal[]		= {   5,  100, 2000 };
@@ -3947,6 +3964,12 @@ int sata_link_hardreset(struct ata_link *link, const unsigned long *timing,
 			unsigned long deadline,
 			bool *online, int (*check_ready)(struct ata_link *))
 {
+	struct ata_port *ap = link->ap;
+	struct ahci_host_priv *hpriv = ap->host->private_data;
+	struct ahci_qoriq_priv *qoriq_priv = hpriv->plat_data;
+	bool lx2160a_workaround = (qoriq_priv->type == AHCI_LX2160);
+
+	u32 __iomem *base;
 	u32 scontrol;
 	int rc;
 
@@ -3986,13 +4009,32 @@ int sata_link_hardreset(struct ata_link *link, const unsigned long *timing,
 	 */
 	ata_msleep(link->ap, 1);
 
+	if (lx2160a_workaround) {
+		/*
+		 * Add few msec delay.
+		 * Check for corresponding serdes lane RST_DONE .
+		 * apply lane reset.
+		 */
+
+		base = ioremap(SERDES2_LNAGCR0, PAGE_SIZE);
+		if (!base) {
+			ata_link_err(link, "ioremap failed\n");
+			goto out;
+		}
+
+		ata_msleep(link->ap, 1);
+
+		if ((readl(base + 0xC0) & LN_RX_MASK) != LN_RX_RST_DONE)
+			writel(LN_RX_RST, base + 0x40);
+	}
+
 	/* bring link back */
 	rc = sata_link_resume(link, timing, deadline);
 	if (rc)
-		goto out;
+		goto unmap;
 	/* if link is offline nothing more to do */
 	if (ata_phys_link_offline(link))
-		goto out;
+		goto unmap;
 
 	/* Link is online.  From this point, -ENODEV too is an error. */
 	if (online)
@@ -4014,12 +4056,14 @@ int sata_link_hardreset(struct ata_link *link, const unsigned long *timing,
 			ata_wait_ready(link, pmp_deadline, check_ready);
 		}
 		rc = -EAGAIN;
-		goto out;
+		goto unmap;
 	}
 
 	rc = 0;
 	if (check_ready)
 		rc = ata_wait_ready(link, deadline, check_ready);
+ unmap:
+	iounmap(base);
  out:
 	if (rc && rc != -EAGAIN) {
 		/* online is set iff link is online && reset succeeded */

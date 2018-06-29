@@ -543,11 +543,11 @@ static int dpaa2_mac_probe(struct fsl_mc_device *mc_dev)
 	}
 #endif /* CONFIG_FSL_DPAA2_MAC_NETDEVS */
 
-	/* probe the PHY as a fixed-link if there's a phy-handle defined
-	 * in the device tree
+	/* probe the PHY as a fixed-link if there isn't a phy-handle defined
+	 * in the device tree or if dpmac attributes indicates so
 	 */
 	phy_node = of_parse_phandle(dpmac_node, "phy-handle", 0);
-	if (!phy_node) {
+	if (!phy_node || (priv->attr.link_type == DPMAC_LINK_TYPE_FIXED)) {
 		goto probe_fixed_link;
 	}
 

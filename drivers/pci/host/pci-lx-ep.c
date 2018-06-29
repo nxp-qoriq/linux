@@ -184,13 +184,6 @@ static int lx_pcie_ep_dev_init(struct lx_pcie *pcie, int pf_idx, int vf_idx)
 	return 0;
 }
 
-static void lx_pcie_set_sriov(struct lx_pcie *pcie, int func)
-{
-	unsigned int val;
-
-	val = ioread32(pcie->lut + PEX_PF_VF(func));
-}
-
 static int lx_pcie_ep_init(struct lx_pcie *pcie)
 {
 	u32 sriov_header;
@@ -209,7 +202,6 @@ static int lx_pcie_ep_init(struct lx_pcie *pcie)
 	}
 
 	for (i = 0; i < pf; i++) {
-		lx_pcie_set_sriov(pcie, pf);
 		for (j = 0; j <= vf; j++)
 			lx_pcie_ep_dev_init(pcie, i, j);
 	}

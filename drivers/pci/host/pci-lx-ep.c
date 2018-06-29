@@ -128,7 +128,7 @@ static void lx_pcie_ep_setup_wins(struct lx_pcie *pcie, int bar_num, int pf)
 	}
 }
 
-static void lx_pcie_setup_ep(struct lx_pcie *pcie)
+static int lx_pcie_setup_ep(struct lx_pcie *pcie)
 {
 	u32 pf;
 
@@ -137,11 +137,26 @@ static void lx_pcie_setup_ep(struct lx_pcie *pcie)
 				PCIE_BAR_SIZE * PCIE_PF_NUM * PCIE_BAR_NUM,
 				&pcie->buf_addr_pf,
 				GFP_KERNEL);
+
+		if (pcie->buf_pf == NULL) {
+			dev_err(pcie->dev, "PF buff alloc failed !\n");
+			return -ENOMEM;
+		}
+
 		pcie->buf_vf = dma_alloc_coherent(pcie->dev,
 				PCIE_BAR_SIZE * PCIE_VF_NUM * PCIE_PF_NUM *
 				PCIE_BAR_NUM,
 				&pcie->buf_addr_vf,
 				GFP_KERNEL);
+
+		if (pcie->buf_vf == NULL) {
+			dev_err(pcie->dev, "VF buff alloc failed !\n");
+			if (pcie->buf_pf)
+				free_pages((unsigned long)pcie->buf_pf,
+					PCIE_BAR_SIZE * PCIE_PF_NUM *
+					PCIE_BAR_NUM);
+			return -ENOMEM;
+		}
 
 		for (pf = 0; pf < PCIE_PF_NUM; pf++)
 			lx_pcie_ep_setup_wins(pcie, PCIE_BAR_NUM_SRIOV, pf);
@@ -150,9 +165,16 @@ static void lx_pcie_setup_ep(struct lx_pcie *pcie)
 					PCIE_BAR_SIZE * PCIE_BAR_NUM,
 					&pcie->buf_addr_pf,
 					GFP_KERNEL);
+
+		if (pcie->buf_pf == NULL) {
+			dev_err(pcie->dev, "PF buff alloc failed !\n");
+			return -ENOMEM;
+		}
+
 		lx_pcie_ep_setup_wins(pcie, PCIE_BAR_NUM, 0);
 	}
 
+	return 0;
 }
 
 static int lx_pcie_ep_dev_init(struct lx_pcie *pcie, int pf_idx, int vf_idx)
@@ -191,6 +213,7 @@ static int lx_pcie_ep_init(struct lx_pcie *pcie)
 	u32 sriov_header;
 	int pf, vf, i, j;
 	struct mv_pcie *mv_pci = pcie->pci;
+	int ret;
 
 	sriov_header = mv_pcie_readl_csr(mv_pci, PCIE_SRIOV_CAPABILITY);
 	if (PCI_EXT_CAP_ID(sriov_header) == PCI_EXT_CAP_ID_SRIOV) {
@@ -208,7 +231,11 @@ static int lx_pcie_ep_init(struct lx_pcie *pcie)
 			lx_pcie_ep_dev_init(pcie, i, j);
 	}
 
-	lx_pcie_setup_ep(pcie);
+	ret = lx_pcie_setup_ep(pcie);
+	if (ret) {
+		dev_err(pcie->dev, "EP device setup failed !\n");
+		return -1;
+	}
 
 	return 0;
 }
@@ -317,11 +344,12 @@ static int lx_pcie_ep_remove(struct platform_device *pdev)
 
 	if (pcie->buf_pf)
 		free_pages((unsigned long)pcie->buf_pf,
-			PCIE_BAR_SIZE * PCIE_PF_NUM * 4);
+			PCIE_BAR_SIZE * PCIE_PF_NUM * PCIE_BAR_NUM);
 
 	if (pcie->buf_vf)
 		free_pages((unsigned long)pcie->buf_vf,
-				PCIE_BAR_SIZE * PCIE_VF_NUM * PCIE_PF_NUM * 4);
+				PCIE_BAR_SIZE * PCIE_VF_NUM * PCIE_PF_NUM *
+				PCIE_BAR_NUM);
 
 	list_for_each_entry_safe(ep, tmp, &pcie->ep_list, node)
 		lx_pcie_ep_dev_remove(ep);

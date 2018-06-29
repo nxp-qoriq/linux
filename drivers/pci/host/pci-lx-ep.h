@@ -23,8 +23,6 @@
 #define PCIE_VF_NUM		4
 
 #define PCIE_SRIOV_CAPABILITY	0x2a0
-#define PCIE_CFG_READY		0x4b0
-#define PCIE_CONFIG_READY	(1 << 0)
 
 #define PCIE_BAR_NUM		4
 #define PCIE_BAR_NUM_SRIOV	8
@@ -80,8 +78,6 @@ void lx_pcie_ep_inbound_win_set(struct lx_pcie *pcie, int func, int bar,
 				     u64 phys);
 
 void lx_pcie_ep_dev_setup_bar(struct lx_ep_dev *ep, int bar, u32 size);
-
-void lx_pcie_ep_dev_cfg_enable(struct lx_ep_dev *ep);
 
 int lx_pcie_ep_dbgfs_init(struct lx_pcie *pcie);
 int lx_pcie_ep_dbgfs_remove(struct lx_pcie *pcie);

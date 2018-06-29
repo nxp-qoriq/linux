@@ -45,12 +45,6 @@ lx_pci_ep_find(struct lx_pcie *pcie, int dev_id)
 	return NULL;
 }
 
-static void lx_pcie_try_cfg2(struct lx_pcie *pcie, int pf, int vf)
-{
-	struct mv_pcie *mv_pci = pcie->pci;
-
-	mv_pcie_writel_csr(mv_pci, PCIE_CFG_READY, PCIE_CONFIG_READY);
-}
 
 static bool lx_pcie_is_bridge(struct lx_pcie *pcie)
 {
@@ -106,11 +100,6 @@ void lx_pcie_ep_inbound_win_set(struct lx_pcie *pcie, int func,
 			upper_32_bits(phys));
 	mv_pcie_writel_csr(mv_pci, PAB_PEX_BAR_AMAP(func, bar),
 			lower_32_bits(phys) | 1);
-}
-
-void lx_pcie_ep_dev_cfg_enable(struct lx_ep_dev *ep)
-{
-	lx_pcie_try_cfg2(ep->pcie, ep->pf_idx, ep->vf_idx);
 }
 
 static void lx_pcie_ep_setup_wins(struct lx_pcie *pcie, int bar_num, int pf)

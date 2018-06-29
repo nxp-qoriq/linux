@@ -54,6 +54,8 @@ struct dpio_priv {
 	struct dpaa2_io *io;
 };
 
+static cpumask_var_t cpus_unused_mask;
+
 static irqreturn_t dpio_irq_handler(int irq_num, void *arg)
 {
 	struct device *dev = (struct device *)arg;
@@ -113,7 +115,7 @@ static int dpaa2_dpio_probe(struct fsl_mc_device *dpio_dev)
 	struct dpio_priv *priv;
 	int err = -ENOMEM;
 	struct device *dev = &dpio_dev->dev;
-	static int next_cpu = -1;
+	int next_cpu;
 
 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
@@ -155,10 +157,7 @@ static int dpaa2_dpio_probe(struct fsl_mc_device *dpio_dev)
 	desc.dpio_id = dpio_dev->obj_desc.id;
 
 	/* get the cpu to use for the affinity hint */
-	if (next_cpu == -1)
-		next_cpu = cpumask_first(cpu_online_mask);
-	else
-		next_cpu = cpumask_next(next_cpu, cpu_online_mask);
+	next_cpu = cpumask_first(cpus_unused_mask);
 
 	if (!cpu_possible(next_cpu)) {
 		dev_err(dev, "probe failed. Number of DPIOs exceeds NR_CPUS.\n");
@@ -166,6 +165,7 @@ static int dpaa2_dpio_probe(struct fsl_mc_device *dpio_dev)
 		goto err_allocate_irqs;
 	}
 	desc.cpu = next_cpu;
+	cpumask_clear_cpu(next_cpu, cpus_unused_mask);
 
 	if (dpio_dev->obj_desc.region_count < 3 
 	    || IS_ENABLED(CONFIG_FSL_MC_QMAN_NOT_SHARABLE_MEMORY_CACHE)) {
@@ -233,7 +233,7 @@ static int dpaa2_dpio_remove(struct fsl_mc_device *dpio_dev)
 {
 	struct device *dev;
 	struct dpio_priv *priv;
-	int err;
+	int err, cpu;
 
 	dev = &dpio_dev->dev;
 	priv = dev_get_drvdata(dev);
@@ -260,6 +260,9 @@ static int dpaa2_dpio_remove(struct fsl_mc_device *dpio_dev)
 	dpio_close(dpio_dev->mc_io, 0, dpio_dev->mc_handle);
 
 	fsl_mc_portal_free(dpio_dev->mc_io);
+
+	cpu = dpaa2_io_get_cpu(priv->io);
+	cpumask_set_cpu(cpu, cpus_unused_mask);
 
 	dev_set_drvdata(dev, NULL);
 
@@ -291,11 +294,17 @@ static struct fsl_mc_driver dpaa2_dpio_driver = {
 
 static int dpio_driver_init(void)
 {
+	if (!zalloc_cpumask_var(&cpus_unused_mask, GFP_KERNEL))
+		return -ENOMEM;
+	cpumask_setall(cpus_unused_mask);
+	cpumask_and(cpus_unused_mask, cpus_unused_mask, cpu_online_mask);
+
 	return fsl_mc_driver_register(&dpaa2_dpio_driver);
 }
 
 static void dpio_driver_exit(void)
 {
+	free_cpumask_var(cpus_unused_mask);
 	fsl_mc_driver_unregister(&dpaa2_dpio_driver);
 }
 module_init(dpio_driver_init);

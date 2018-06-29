@@ -123,7 +123,8 @@ static void lx_pcie_ep_setup_wins(struct lx_pcie *pcie, int bar_num, int pf)
 			buf_addr = pcie->buf_addr_pf + bar * PCIE_BAR_SIZE +
 				pf * PCIE_BAR_NUM * PCIE_BAR_SIZE;
 
-		lx_pcie_ep_inbound_win_set(pcie, pf, bar, buf_addr);
+		if ((bar != 1) && (bar != 5))
+			lx_pcie_ep_inbound_win_set(pcie, pf, bar, buf_addr);
 	}
 }
 

@@ -40,6 +40,7 @@
 #include <linux/delay.h>
 
 #include "../../include/mc.h"
+#include "../../include/mc-sys.h"
 #include "../../include/dpaa2-io.h"
 
 #include "qbman-portal.h"
@@ -117,7 +118,13 @@ static int dpaa2_dpio_probe(struct fsl_mc_device *dpio_dev)
 	struct dpio_priv *priv;
 	int err = -ENOMEM;
 	struct device *dev = &dpio_dev->dev;
+	struct device *root_dprc_dev;
 	int next_cpu;
+
+	fsl_mc_get_root_dprc(dev, &root_dprc_dev);
+	if (root_dprc_dev->links.status != DL_DEV_DRIVER_BOUND)
+		return -EPROBE_DEFER;
+	device_link_add(dev, root_dprc_dev, DL_FLAG_AUTOREMOVE);
 
 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
@@ -134,6 +141,7 @@ static int dpaa2_dpio_probe(struct fsl_mc_device *dpio_dev)
 		}
 	}
 	dpio_dev->mc_io = dpio_mc_io;
+	device_link_add(dev, &dpio_mc_io->dpmcp_dev->dev, DL_FLAG_AUTOREMOVE);
 
 	err = dpio_open(dpio_dev->mc_io, 0, dpio_dev->obj_desc.id,
 			&dpio_dev->mc_handle);

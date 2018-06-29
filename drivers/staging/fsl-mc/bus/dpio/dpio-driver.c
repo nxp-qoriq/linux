@@ -55,6 +55,8 @@ struct dpio_priv {
 };
 
 static cpumask_var_t cpus_unused_mask;
+static struct fsl_mc_io *dpio_mc_io = NULL;
+static int dpio_num_probed = 0;
 
 static irqreturn_t dpio_irq_handler(int irq_num, void *arg)
 {
@@ -123,12 +125,15 @@ static int dpaa2_dpio_probe(struct fsl_mc_device *dpio_dev)
 
 	dev_set_drvdata(dev, priv);
 
-	err = fsl_mc_portal_allocate(dpio_dev, 0, &dpio_dev->mc_io);
-	if (err) {
-		dev_dbg(dev, "MC portal allocation failed\n");
-		err = -EPROBE_DEFER;
-		goto err_mcportal;
+	if (dpio_mc_io == NULL) {
+		err = fsl_mc_portal_allocate(dpio_dev, 0, &dpio_mc_io);
+		if (err) {
+			dev_dbg(dev, "MC portal allocation failed\n");
+			err = -EPROBE_DEFER;
+			goto err_mcportal;
+		}
 	}
+	dpio_dev->mc_io = dpio_mc_io;
 
 	err = dpio_open(dpio_dev->mc_io, 0, dpio_dev->obj_desc.id,
 			&dpio_dev->mc_handle);
@@ -198,11 +203,12 @@ static int dpaa2_dpio_probe(struct fsl_mc_device *dpio_dev)
 		goto err_dpaa2_io_create;
 	}
 
+	dpio_num_probed++;
+
 	dev_info(dev, "probed\n");
 	dev_dbg(dev, "   receives_notifications = %d\n",
 		desc.receives_notifications);
 	dpio_close(dpio_dev->mc_io, 0, dpio_dev->mc_handle);
-	fsl_mc_portal_free(dpio_dev->mc_io);
 
 	return 0;
 
@@ -211,11 +217,15 @@ err_dpaa2_io_create:
 err_register_dpio_irq:
 	fsl_mc_free_irqs(dpio_dev);
 err_allocate_irqs:
+	cpumask_set_cpu(next_cpu, cpus_unused_mask);
 	dpio_disable(dpio_dev->mc_io, 0, dpio_dev->mc_handle);
 err_get_attr:
 	dpio_close(dpio_dev->mc_io, 0, dpio_dev->mc_handle);
 err_open:
-	fsl_mc_portal_free(dpio_dev->mc_io);
+	if (cpumask_full(cpus_unused_mask)) {
+		fsl_mc_portal_free(dpio_dev->mc_io);
+		dpio_mc_io = NULL;
+	}
 err_mcportal:
 	dev_set_drvdata(dev, NULL);
 err_priv_alloc:
@@ -242,12 +252,6 @@ static int dpaa2_dpio_remove(struct fsl_mc_device *dpio_dev)
 
 	dpio_teardown_irqs(dpio_dev);
 
-	err = fsl_mc_portal_allocate(dpio_dev, 0, &dpio_dev->mc_io);
-	if (err) {
-		dev_err(dev, "MC portal allocation failed\n");
-		goto err_mcportal;
-	}
-
 	err = dpio_open(dpio_dev->mc_io, 0, dpio_dev->obj_desc.id,
 			&dpio_dev->mc_handle);
 	if (err) {
@@ -259,18 +263,19 @@ static int dpaa2_dpio_remove(struct fsl_mc_device *dpio_dev)
 
 	dpio_close(dpio_dev->mc_io, 0, dpio_dev->mc_handle);
 
-	fsl_mc_portal_free(dpio_dev->mc_io);
+err_open:
 
 	cpu = dpaa2_io_get_cpu(priv->io);
 	cpumask_set_cpu(cpu, cpus_unused_mask);
 
+	if (dpio_num_probed == 1) {
+		fsl_mc_portal_free(dpio_dev->mc_io);
+		dpio_mc_io = NULL;
+	}
+	dpio_num_probed--;
+
 	dev_set_drvdata(dev, NULL);
 
-	return 0;
-
-err_open:
-	fsl_mc_portal_free(dpio_dev->mc_io);
-err_mcportal:
 	return err;
 }
 

@@ -21,6 +21,7 @@
 #define PCIE_SRIOV_POS		0x178
 #define PCIE_PF_NUM		2
 #define PCIE_VF_NUM		4
+#define PCIE_VF_NUM_TOTAL	32
 
 #define PCIE_SRIOV_CAPABILITY	0x2a0
 

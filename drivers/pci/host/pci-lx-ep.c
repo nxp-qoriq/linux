@@ -168,7 +168,8 @@ static int lx_pcie_ep_dev_init(struct lx_pcie *pcie, int pf_idx, int vf_idx)
 	ep->vf_idx = vf_idx;
 
 	if (vf_idx)
-		ep->dev_id = 2 + pf_idx * PCIE_VF_NUM  + (vf_idx - 1);
+		ep->dev_id = PCIE_PF_NUM + pf_idx * PCIE_VF_NUM_TOTAL +
+				(vf_idx - 1);
 	else
 		ep->dev_id = pf_idx;
 

@@ -466,6 +466,7 @@ static int dpaa2_mac_probe(struct fsl_mc_device *mc_dev)
 	struct dpaa2_mac_priv	*priv = NULL;
 	struct device_node	*phy_node, *dpmac_node;
 	struct net_device	*netdev;
+	struct fsl_mc_device    *dpmcp_dev;
 	phy_interface_t		if_mode;
 	int			err = 0;
 
@@ -498,6 +499,9 @@ static int dpaa2_mac_probe(struct fsl_mc_device *mc_dev)
 		err = -EPROBE_DEFER;
 		goto err_free_netdev;
 	}
+
+	dpmcp_dev = mc_dev->mc_io->dpmcp_dev;
+	device_link_add(&mc_dev->dev, &dpmcp_dev->dev, DL_FLAG_AUTOREMOVE);
 
 	err = dpmac_open(mc_dev->mc_io, 0, mc_dev->obj_desc.id,
 			 &mc_dev->mc_handle);

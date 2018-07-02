@@ -383,6 +383,15 @@ void fsl_mc_get_root_dprc(struct device *dev,
 }
 EXPORT_SYMBOL_GPL(fsl_mc_get_root_dprc);
 
+/**
+ * fsl_mc_find_device_by_name - find a specific device on the fsl_mc bus
+ */
+struct device *fsl_mc_find_device_by_name(const char *name)
+{
+       return bus_find_device_by_name(&fsl_mc_bus_type, NULL, name);
+}
+EXPORT_SYMBOL_GPL(fsl_mc_find_device_by_name);
+
 static int get_dprc_attr(struct fsl_mc_io *mc_io,
 			 int container_id, struct dprc_attributes *attr)
 {

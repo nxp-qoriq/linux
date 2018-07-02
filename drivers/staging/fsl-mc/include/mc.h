@@ -205,6 +205,8 @@ void fsl_mc_free_irqs(struct fsl_mc_device *mc_dev);
 void fsl_mc_dma_configure(struct fsl_mc_device *mc_dev,
 	struct device_node *fsl_mc_platform_node, int coherent);
 
+struct device *fsl_mc_find_device_by_name(const char *name);
+
 #ifdef CONFIG_FSL_MC_BUS
 struct iommu_group *fsl_mc_device_group(struct device *dev);
 #else

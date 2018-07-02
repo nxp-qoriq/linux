@@ -85,6 +85,8 @@ void dpaa2_io_down(struct dpaa2_io *d);
 
 irqreturn_t dpaa2_io_irq(struct dpaa2_io *obj);
 
+int dpaa2_io_get_cpu(struct dpaa2_io *d);
+
 /**
  * struct dpaa2_io_notification_ctx - The DPIO notification context structure
  * @cb:           The callback to be invoked when the notification arrives

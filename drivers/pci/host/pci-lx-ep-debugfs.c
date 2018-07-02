@@ -366,9 +366,11 @@ static int lx_pcie_ep_init_test(struct lx_ep_dev *ep, u64 bus_addr)
 
 	if (ep->vf_idx)
 		test->buf = pcie->buf_vf + (ep->vf_idx - 1) * PCIE_BAR_SIZE +
-				ep->pf_idx * PCIE_VF_NUM * PCIE_BAR_SIZE * 4;
+				ep->pf_idx * PCIE_VF_NUM * PCIE_BAR_SIZE * 4
+				+ 2 * PCIE_BAR_SIZE * PCIE_VF_NUM;
 	else
-		test->buf = pcie->buf_pf + ep->pf_idx * PCIE_BAR_SIZE * 4;
+		test->buf = pcie->buf_pf + ep->pf_idx * PCIE_BAR_SIZE * 4 +
+				2 * PCIE_BAR_SIZE;
 
 	if (!test->buf) {
 		dev_info(&ep->dev, "failed to get mem for bar0\n");

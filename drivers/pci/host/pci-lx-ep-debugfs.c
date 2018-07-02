@@ -27,6 +27,8 @@
 
 #define PCIE_MSI_MSG_ADDR_OFF	0x8c
 #define PCIE_MSI_MSG_DATA_OFF	0x94
+#define PCIE_MSI_MSG_ADDR_OFF_VF	0x84
+#define PCIE_MSI_MSG_DATA_OFF_VF	0x8c
 #define MSIX_TEST		1
 
 enum test_type {
@@ -55,17 +57,11 @@ struct lx_ep_test {
 	dma_addr_t		out_addr;
 	dma_addr_t		bus_addr;
 	dma_addr_t		msi_addr;
-	dma_addr_t		msi_addr1;
-	dma_addr_t		msi_addr2;
-#ifdef MSIX_TEST
-	u64			msix_msg_addr1;
-	u16			msix_msg_data1;
-	u64			msix_msg_addr2;
-	u16			msix_msg_data2;
-	u64			msix_msg_addr3;
-	u16			msix_msg_data3;
-#else
 	u64			msi_msg_addr;
+#ifdef MSIX_TEST
+	u64			msix_msg_addr[3];
+	u16			msix_msg_data[3];
+#else
 	u16			msi_msg_data;
 #endif
 	struct task_struct	*thread;
@@ -82,32 +78,18 @@ struct lx_ep_test {
 };
 
 #ifdef MSIX_TEST
-static int lx_pcie_ep_trigger_msix(struct lx_ep_test *test)
+static int lx_pcie_ep_trigger_msix(struct lx_ep_test *test, int entry)
 {
+	int offset;
+
 	if (!test->msi)
 		return -EINVAL;
 
-	iowrite32(test->msix_msg_data1, test->msi);
-
-	return 0;
-}
-
-static int lx_pcie_ep_trigger_msix1(struct lx_ep_test *test)
-{
-	if (!test->msi)
+	offset = test->msix_msg_addr[entry] - test->msi_msg_addr;
+	if (offset > PCIE_BAR_SIZE)
 		return -EINVAL;
 
-	iowrite32(test->msix_msg_data2, test->msi + PCIE_BAR_SIZE);
-
-	return 0;
-}
-
-static int lx_pcie_ep_trigger_msix2(struct lx_ep_test *test)
-{
-	if (!test->msi)
-		return -EINVAL;
-
-	iowrite32(test->msix_msg_data3, test->msi + 2 * PCIE_BAR_SIZE);
+	iowrite32(test->msix_msg_data[entry], test->msi + offset);
 
 	return 0;
 }
@@ -308,9 +290,9 @@ int lx_pcie_ep_test_thread(void *arg)
 	lx_pcie_ep_test_done(test);
 
 #ifdef MSIX_TEST
-	lx_pcie_ep_trigger_msix(test);
-	lx_pcie_ep_trigger_msix1(test);
-	lx_pcie_ep_trigger_msix2(test);
+	lx_pcie_ep_trigger_msix(test, 0);
+	lx_pcie_ep_trigger_msix(test, 1);
+	lx_pcie_ep_trigger_msix(test, 2);
 #else
 	lx_pcie_ep_trigger_msi(test);
 #endif
@@ -347,6 +329,8 @@ static int lx_pcie_ep_init_test(struct lx_ep_dev *ep, u64 bus_addr)
 	struct mv_pcie *mv_pci = pcie->pci;
 	struct lx_ep_test *test = ep->driver_data;
 	int err;
+	int val;
+	int i;
 	u32 msix_addr_high;
 
 	if (test) {
@@ -378,7 +362,7 @@ static int lx_pcie_ep_init_test(struct lx_ep_dev *ep, u64 bus_addr)
 		goto _err;
 	}
 
-	test->out_addr = pcie->out_base + ep->dev_id * PCIE_BAR_SIZE * 4;
+	test->out_addr = pcie->out_base + ep->dev_id * PCIE_BAR_SIZE * 2;
 	test->out = ioremap(test->out_addr, PCIE_BAR_SIZE);
 	if (!test->out) {
 		dev_info(&ep->dev, "failed to map out\n");
@@ -388,76 +372,63 @@ static int lx_pcie_ep_init_test(struct lx_ep_dev *ep, u64 bus_addr)
 
 	test->bus_addr = ALIGN(bus_addr, PCIE_BAR_SIZE);
 	test->msi_addr = test->out_addr + PCIE_BAR_SIZE;
-	test->msi_addr1 = test->out_addr + 2 * PCIE_BAR_SIZE;
-	test->msi_addr2 = test->out_addr + 3 * PCIE_BAR_SIZE;
 
-	test->msi = ioremap(test->msi_addr, 3 * PCIE_BAR_SIZE);
+	test->msi = ioremap(test->msi_addr, PCIE_BAR_SIZE);
 	if (!test->msi)
 		dev_info(&ep->dev, "failed to map MSI outbound region\n");
 
-#ifdef MSIX_TEST
-	msix_addr_high = mv_pcie_readl_csr(mv_pci,
-			PAB_MSIX_TABLE_PBA_ACCESS + 0x4);
-	test->msix_msg_addr1 =
-		mv_pcie_readl_csr(mv_pci,  PAB_MSIX_TABLE_PBA_ACCESS) |
-		(((u64)msix_addr_high) << 32);
-	test->msix_msg_data1 =
-		mv_pcie_readl_csr(mv_pci, PAB_MSIX_TABLE_PBA_ACCESS + 8);
-
-	msix_addr_high = mv_pcie_readl_csr(mv_pci,
-			PAB_MSIX_TABLE_PBA_ACCESS + 0x14);
-	test->msix_msg_addr2 =
-		mv_pcie_readl_csr(mv_pci,  PAB_MSIX_TABLE_PBA_ACCESS + 0x10) |
-		(((u64)msix_addr_high) << 32);
-	test->msix_msg_data2 =
-		mv_pcie_readl_csr(mv_pci, PAB_MSIX_TABLE_PBA_ACCESS + 0x18);
-
-	msix_addr_high = mv_pcie_readl_csr(mv_pci,
-			PAB_MSIX_TABLE_PBA_ACCESS + 0x24);
-	test->msix_msg_addr3 =
-		mv_pcie_readl_csr(mv_pci,  PAB_MSIX_TABLE_PBA_ACCESS + 0x20) |
-		(((u64)msix_addr_high) << 32);
-	test->msix_msg_data3 =
-		mv_pcie_readl_csr(mv_pci, PAB_MSIX_TABLE_PBA_ACCESS + 0x28);
-#else
 	val =  mv_pcie_readl_csr(mv_pci, PAB_CTRL);
 	val &= ~(PAB_CTRL_FUNC_SEL_MASK << PAB_CTRL_FUNC_SEL_SHIFT);
 	val |= (ep->dev_id & PAB_CTRL_FUNC_SEL_MASK) << PAB_CTRL_FUNC_SEL_SHIFT;
 	mv_pcie_writel_csr(mv_pci, PAB_CTRL, val);
 
-	msix_addr_high = mv_pcie_readl_csr(mv_pci, PCIE_MSI_MSG_ADDR_OFF + 0x4);
-	test->msi_msg_addr = mv_pcie_readl_csr(mv_pci,  PCIE_MSI_MSG_ADDR_OFF) |
-		(((u64)msix_addr_high) << 32);
-	test->msi_msg_data = mv_pcie_readl_csr(mv_pci, PCIE_MSI_MSG_DATA_OFF);
+#ifdef MSIX_TEST
+	for (i = 0; i < 3; i++) {
+		msix_addr_high = mv_pcie_readl_csr(mv_pci,
+			PAB_MSIX_TABLE_PBA_ACCESS + 0x4 + 0x10 * i);
+
+		test->msix_msg_addr[i] = mv_pcie_readl_csr(mv_pci,
+			 PAB_MSIX_TABLE_PBA_ACCESS + 0x10 * i) |
+			(((u64)msix_addr_high) << 32);
+
+		test->msix_msg_data[i] = mv_pcie_readl_csr(mv_pci,
+			 PAB_MSIX_TABLE_PBA_ACCESS + 8 + 0x10 * i);
+	}
+	test->msi_msg_addr = test->msix_msg_addr[0] & (~(PCIE_BAR_SIZE - 1));
+#else
+	if (ep->dev_id < PCIE_PF_NUM) {
+		msix_addr_high =
+			mv_pcie_readl_csr(mv_pci, PCIE_MSI_MSG_ADDR_OFF + 0x4);
+		test->msi_msg_addr =
+			mv_pcie_readl_csr(mv_pci,  PCIE_MSI_MSG_ADDR_OFF) |
+			(((u64)msix_addr_high) << 32);
+		test->msi_msg_data =
+			mv_pcie_readl_csr(mv_pci, PCIE_MSI_MSG_DATA_OFF);
+	} else {
+		msix_addr_high =
+			mv_pcie_readl_csr(mv_pci,
+					PCIE_MSI_MSG_ADDR_OFF_VF + 0x4);
+		test->msi_msg_addr =
+			mv_pcie_readl_csr(mv_pci,  PCIE_MSI_MSG_ADDR_OFF_VF) |
+			(((u64)msix_addr_high) << 32);
+		test->msi_msg_data =
+			mv_pcie_readl_csr(mv_pci, PCIE_MSI_MSG_DATA_OFF_VF);
+	}
+#endif
 
 	val =  mv_pcie_readl_csr(mv_pci, PAB_CTRL);
 	val &= ~(PAB_CTRL_FUNC_SEL_MASK << PAB_CTRL_FUNC_SEL_SHIFT);
 	mv_pcie_writel_csr(mv_pci, PAB_CTRL, val);
-#endif
 
 	/* outbound window set for memory */
-	lx_pcie_ep_outbound_win_set(pcie, ep->dev_id * 4, TYPE_MEM,
+	lx_pcie_ep_outbound_win_set(pcie, ep->dev_id * 2, TYPE_MEM,
 				  test->out_addr, bus_addr,
 				  ep->dev_id, PCIE_BAR_SIZE);
 
-#ifdef MSIX_TEST
-	/* outbound window set for MSI-X */
-	lx_pcie_ep_outbound_win_set(pcie, ep->dev_id * 4 + 1, TYPE_MEM,
-				  test->msi_addr, test->msix_msg_addr1,
-				  ep->dev_id, PCIE_BAR_SIZE);
-	lx_pcie_ep_outbound_win_set(pcie, ep->dev_id * 4 + 2, TYPE_MEM,
-				  test->msi_addr1, test->msix_msg_addr2,
-				  ep->dev_id, PCIE_BAR_SIZE);
-
-	lx_pcie_ep_outbound_win_set(pcie, ep->dev_id * 4 + 3, TYPE_MEM,
-				  test->msi_addr2, test->msix_msg_addr3,
-				  ep->dev_id, PCIE_BAR_SIZE);
-#else
-	/* outbound window set for MSI */
-	lx_pcie_ep_outbound_win_set(pcie, ep->dev_id * 4 + 1, TYPE_MEM,
+	/* outbound window set for MSI-X and MSI*/
+	lx_pcie_ep_outbound_win_set(pcie, ep->dev_id * 2 + 1, TYPE_MEM,
 				  test->msi_addr, test->msi_msg_addr,
 				  ep->dev_id, PCIE_BAR_SIZE);
-#endif
 
 	return 0;
 
@@ -546,7 +517,7 @@ static ssize_t lx_pcie_ep_dbg_test_read(struct file *filp,
 
 #ifdef MSIX_TEST
 	desc = sprintf(buf, "MSI ADDR:0x%llx MSI DATA:0x%x\n",
-		test->msix_msg_addr1, test->msix_msg_data1);
+		test->msi_msg_addr, test->msix_msg_data[0]);
 #else
 	desc = sprintf(buf, "MSI ADDR:0x%llx MSI DATA:0x%x\n",
 		test->msi_msg_addr, test->msi_msg_data);

@@ -102,9 +102,6 @@ void fsl_mc_cleanup_all_resource_pools(struct fsl_mc_device *mc_bus_dev);
 
 bool fsl_mc_bus_exists(void);
 
-void fsl_mc_get_root_dprc(struct device *dev,
-			  struct device **root_dprc_dev);
-
 bool fsl_mc_is_root_dprc(struct device *dev);
 
 extern struct bus_type fsl_mc_bus_type;

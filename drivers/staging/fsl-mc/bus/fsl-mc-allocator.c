@@ -583,6 +583,7 @@ static int fsl_mc_allocator_probe(struct fsl_mc_device *mc_dev)
 {
 	enum fsl_mc_pool_type pool_type;
 	struct fsl_mc_device *mc_bus_dev;
+	struct device *root_dprc_dev;
 	struct fsl_mc_bus *mc_bus;
 	int error;
 
@@ -593,6 +594,10 @@ static int fsl_mc_allocator_probe(struct fsl_mc_device *mc_dev)
 	if (WARN_ON(!dev_is_fsl_mc(&mc_bus_dev->dev)))
 		return -EINVAL;
 
+	fsl_mc_get_root_dprc(&mc_dev->dev, &root_dprc_dev);
+	if (root_dprc_dev->links.status != DL_DEV_DRIVER_BOUND)
+		return -EPROBE_DEFER;
+
 	mc_bus = to_fsl_mc_bus(mc_bus_dev);
 	error = object_type_to_pool_type(mc_dev->obj_desc.type, &pool_type);
 	if (error < 0)
@@ -601,6 +606,8 @@ static int fsl_mc_allocator_probe(struct fsl_mc_device *mc_dev)
 	error = fsl_mc_resource_pool_add_device(mc_bus, pool_type, mc_dev);
 	if (error < 0)
 		return error;
+
+	device_link_add(&mc_dev->dev, root_dprc_dev, DL_FLAG_AUTOREMOVE);
 
 	dev_dbg(&mc_dev->dev,
 		"Allocatable fsl-mc device bound to fsl_mc_allocator driver");

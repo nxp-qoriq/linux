@@ -622,6 +622,110 @@ static const struct file_operations lx_pcie_ep_dbg_dump_fops = {
 	.read = lx_pcie_ep_dbg_dump_read,
 };
 
+static ssize_t ls_pcie_ep_dbg_regs_read(struct file *filp, char __user *buffer,
+				    size_t count, loff_t *ppos)
+{
+	struct lx_ep_dev *ep = filp->private_data;
+	struct lx_pcie *pcie = ep->pcie;
+	struct mv_pcie *mv_pci = pcie->pci;
+	char *buf;
+	int desc = 0, i, len;
+	int func, bar;
+
+	buf = kmalloc(1024 * 1024, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	desc += sprintf(buf + desc, "\n%s", "outbound info:\n");
+	for (i = 0; i < 256; i++) {
+		desc += sprintf(buf + desc, "OUB_WIN%d\n", i);
+		desc += sprintf(buf + desc, "\tLOWER PHYS	0x%08x\n",
+			mv_pcie_readl_csr(mv_pci, PAB_AXI_AMAP_AXI_WIN(i)));
+		desc += sprintf(buf + desc, "\tUPPER PHYS	0x%08x\n",
+			mv_pcie_readl_csr(mv_pci, PAB_EXT_AXI_AMAP_AXI_WIN(i)));
+		desc += sprintf(buf + desc, "\tLOWER BUS	0x%08x\n",
+			mv_pcie_readl_csr(mv_pci, PAB_AXI_AMAP_PEX_WIN_L(i)));
+		desc += sprintf(buf + desc, "\tUPPER BUS	0x%08x\n",
+			mv_pcie_readl_csr(mv_pci, PAB_AXI_AMAP_PEX_WIN_H(i)));
+		desc += sprintf(buf + desc, "\tSIZE		0x%08x\n",
+			mv_pcie_readl_csr(mv_pci, PAB_AXI_AMAP_CTRL(i)) &
+			(AXI_AMAP_CTRL_SIZE_MASK << AXI_AMAP_CTRL_SIZE_SHIFT));
+		desc += sprintf(buf + desc, "\tEXT_SIZ		0x%08x\n",
+			mv_pcie_readl_csr(mv_pci, PAB_EXT_AXI_AMAP_SIZE(i)));
+		desc += sprintf(buf + desc, "\tPARAM		0x%08x\n",
+			mv_pcie_readl_csr(mv_pci,
+				PAB_AXI_AMAP_PCI_HDR_PARAM(i)));
+		desc += sprintf(buf + desc, "\tCTRL		0x%08x\n",
+			mv_pcie_readl_csr(mv_pci, PAB_AXI_AMAP_CTRL(i)));
+	}
+
+	desc += sprintf(buf + desc, "\n%s", "inbound info:\n");
+	for (func = 0; func < 2; func++) {
+		for (bar = 0; bar < 8; bar++) {
+			desc += sprintf(buf + desc, "INB_WIN%d\n",
+					func * 8 + bar);
+			desc += sprintf(buf + desc, "\tBAR_AMAP	0x%08x\n",
+				mv_pcie_readl_csr(mv_pci,
+					PAB_PEX_BAR_AMAP(func, bar)));
+			desc += sprintf(buf + desc, "\tEXT_BAR_AMAP	\
+				0x%08x\n", mv_pcie_readl_csr(mv_pci,
+					PAB_EXT_PEX_BAR_AMAP(func, bar)));
+		}
+	}
+
+	len = simple_read_from_buffer(buffer, count, ppos, buf, desc);
+	kfree(buf);
+
+	return len;
+}
+
+static ssize_t ls_pcie_ep_dbg_regs_write(struct file *filp,
+					 const char __user *buffer,
+					 size_t count, loff_t *ppos)
+{
+	struct lx_ep_dev *ep = filp->private_data;
+	struct lx_pcie *pcie = ep->pcie;
+	struct mv_pcie *mv_pci = pcie->pci;
+	char buf[256];
+
+	if (count >= sizeof(buf))
+		return -ENOSPC;
+
+	memset(buf, 0, sizeof(buf));
+
+	if (copy_from_user(buf, buffer, count))
+		return -EFAULT;
+
+	if (strncmp(buf, "reg", 3) == 0) {
+		u32 reg, value;
+		int cnt;
+
+		cnt = sscanf(&buf[3], "%x %x", &reg, &value);
+		if (cnt == 2) {
+			mv_pcie_writel_csr(mv_pci, reg, value);
+			value = mv_pcie_readl_csr(mv_pci, reg);
+			dev_info(&ep->dev, "reg 0x%08x: 0x%08x\n",
+				 reg, value);
+		} else {
+			dev_info(&ep->dev, "reg <reg> <value>\n");
+		}
+	} else if (strncmp(buf, "lut", 3) == 0) {
+		/* to do */
+		dev_info(&ep->dev, " Not support lut command\n");
+	} else {
+		dev_info(&ep->dev, "Unknown command %s\n", buf);
+		dev_info(&ep->dev, "Available commands:\n");
+		dev_info(&ep->dev, "   reg <reg> <value>\n");
+	}
+
+	return count;
+}
+static const struct file_operations ls_pcie_ep_dbg_regs_fops = {
+	.owner = THIS_MODULE,
+	.open = simple_open,
+	.read =  ls_pcie_ep_dbg_regs_read,
+	.write = ls_pcie_ep_dbg_regs_write,
+};
 static int lx_pcie_ep_dev_dbgfs_init(struct lx_ep_dev *ep)
 {
 	struct lx_pcie *pcie = ep->pcie;
@@ -631,6 +735,11 @@ static int lx_pcie_ep_dev_dbgfs_init(struct lx_ep_dev *ep)
 	ep->dir = debugfs_create_dir(dev_name(&ep->dev), pcie->dir);
 	if (!ep->dir)
 		return -ENOMEM;
+
+	pfile = debugfs_create_file("regs", 0600, ep->dir, ep,
+				    &ls_pcie_ep_dbg_regs_fops);
+	if (!pfile)
+		dev_info(&ep->dev, "debugfs regs for failed\n");
 
 	pfile = debugfs_create_file("test", 0600, ep->dir, ep,
 				    &lx_pcie_ep_dbg_test_fops);

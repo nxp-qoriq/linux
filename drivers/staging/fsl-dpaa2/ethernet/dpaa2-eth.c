@@ -1570,6 +1570,8 @@ static struct fsl_mc_device *setup_dpcon(struct dpaa2_eth_priv *priv)
 		return NULL;
 	}
 
+	device_link_add(dev, &dpcon->dev, DL_FLAG_AUTOREMOVE);
+
 	err = dpcon_open(priv->mc_io, 0, dpcon->obj_desc.id, &dpcon->mc_handle);
 	if (err) {
 		dev_err(dev, "dpcon_open() failed\n");
@@ -1666,6 +1668,8 @@ static int setup_dpio(struct dpaa2_eth_priv *priv)
 	struct dpaa2_eth_channel *channel;
 	struct dpcon_notification_cfg dpcon_notif_cfg;
 	struct device *dev = priv->net_dev->dev.parent;
+	struct device *dpio_dev;
+	char dpio_name[20];
 	int i, err;
 
 	/* We want the ability to spread ingress traffic (RX, TX conf) to as
@@ -1716,6 +1720,11 @@ static int setup_dpio(struct dpaa2_eth_priv *priv)
 			dev_err(dev, "dpcon_set_notification failed()\n");
 			goto err_set_cdan;
 		}
+
+		/* Setup a device link to the DPIO device */
+		sprintf(dpio_name, "dpio.%d", nctx->dpio_id);
+		dpio_dev = fsl_mc_find_device_by_name(dpio_name);
+		device_link_add(dev, dpio_dev, DL_FLAG_AUTOREMOVE);
 
 		/* If we managed to allocate a channel and also found an affine
 		 * DPIO for this core, add it to the final mask
@@ -1880,6 +1889,8 @@ static int setup_dpbp(struct dpaa2_eth_priv *priv)
 		dev_err(dev, "DPBP device allocation failed\n");
 		return err;
 	}
+
+	device_link_add(dev, &dpbp_dev->dev, DL_FLAG_AUTOREMOVE);
 
 	priv->dpbp_dev = dpbp_dev;
 
@@ -3331,6 +3342,8 @@ static int dpaa2_eth_probe(struct fsl_mc_device *dpni_dev)
 		err = -EPROBE_DEFER;
 		goto err_portal_alloc;
 	}
+
+	device_link_add(dev, &priv->mc_io->dpmcp_dev->dev, DL_FLAG_AUTOREMOVE);
 
 	/* MC objects initialization and configuration */
 	err = setup_dpni(dpni_dev);

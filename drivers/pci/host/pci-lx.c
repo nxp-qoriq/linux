@@ -228,7 +228,7 @@ static int __init lx_pcie_probe(struct platform_device *pdev)
 	pcie->pci = mv_pci;
 
 	csr_base = platform_get_resource_byname(pdev, IORESOURCE_MEM, "regs");
-	mv_pci->csr_base = devm_ioremap_resource(dev, csr_base);
+	mv_pci->csr_base = devm_pci_remap_cfg_resource(dev, csr_base);
 	if (IS_ERR(mv_pci->csr_base))
 		return PTR_ERR(mv_pci->csr_base);
 

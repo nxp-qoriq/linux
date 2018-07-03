@@ -218,7 +218,7 @@ int mv_pcie_init_rp(struct root_port *rp)
 		rp->cfg_size = resource_size(cfg_res);
 		rp->cfg_base = cfg_res->start;
 
-		rp->va_cfg_base = devm_ioremap(dev, rp->cfg_base, rp->cfg_size);
+		rp->va_cfg_base = devm_pci_remap_cfg_resource(dev, cfg_res);
 		if (!rp->va_cfg_base) {
 			dev_err(dev, "error with ioremap\n");
 			return -ENOMEM;

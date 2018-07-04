@@ -32,13 +32,6 @@ config FSL_QBMAN_DEBUG
 	help
 	  QBMan debug assistant APIs.
 
-config FSL_MC_RESTOOL
-        tristate "Freescale Management Complex (MC) restool driver"
-        depends on FSL_MC_BUS
-        help
-          Driver that provides kernel support for the Freescale Management
-          Complex resource manager user-space tool.
-
 config FSL_MC_QMAN_NOT_SHARABLE_MEMORY_CACHE
         tristate "Force using the interface before qman 5.0"
         depends on FSL_MC_BUS

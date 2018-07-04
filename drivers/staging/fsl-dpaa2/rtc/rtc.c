@@ -163,12 +163,13 @@ static int rtc_probe(struct fsl_mc_device *mc_dev)
 	err = fsl_mc_portal_allocate(mc_dev, 0, &mc_dev->mc_io);
 	if (unlikely(err)) {
 		dev_err(dev, "fsl_mc_portal_allocate err %d\n", err);
+		err = -EPROBE_DEFER;
 		goto err_exit;
 	}
 	if (!mc_dev->mc_io) {
 		dev_err(dev,
 			"fsl_mc_portal_allocate returned null handle but no error\n");
-		err = -EFAULT;
+		err = -EPROBE_DEFER;
 		goto err_exit;
 	}
 	device_link_add(dev, &mc_dev->mc_io->dpmcp_dev->dev, DL_FLAG_AUTOREMOVE);

@@ -189,11 +189,15 @@ static int lx_pcie_ep_dev_init(struct lx_pcie *pcie, int pf_idx, int vf_idx)
 	ep->pf_idx = pf_idx;
 	ep->vf_idx = vf_idx;
 
-	if (vf_idx)
+	if (vf_idx) {
 		ep->dev_id = PCIE_PF_NUM + pf_idx * PCIE_VF_NUM_TOTAL +
 				(vf_idx - 1);
-	else
+		ep->win_idx = PCIE_PF_NUM + pf_idx * PCIE_VF_NUM_ENABLED +
+				(vf_idx - 1);
+	} else {
 		ep->dev_id = pf_idx;
+		ep->win_idx = pf_idx;
+	}
 
 	if (vf_idx)
 		dev_set_name(&ep->dev, "pf%d-vf%d",

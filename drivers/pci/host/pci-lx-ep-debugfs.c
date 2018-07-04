@@ -362,7 +362,7 @@ static int lx_pcie_ep_init_test(struct lx_ep_dev *ep, u64 bus_addr)
 		goto _err;
 	}
 
-	test->out_addr = pcie->out_base + ep->dev_id * PCIE_BAR_SIZE * 2;
+	test->out_addr = pcie->out_base + ep->win_idx * PCIE_BAR_SIZE * 2;
 	test->out = ioremap(test->out_addr, PCIE_BAR_SIZE);
 	if (!test->out) {
 		dev_info(&ep->dev, "failed to map out\n");
@@ -421,14 +421,14 @@ static int lx_pcie_ep_init_test(struct lx_ep_dev *ep, u64 bus_addr)
 	mv_pcie_writel_csr(mv_pci, PAB_CTRL, val);
 
 	/* outbound window set for memory */
-	lx_pcie_ep_outbound_win_set(pcie, ep->dev_id * 2, TYPE_MEM,
+	lx_pcie_ep_outbound_win_set(pcie, ep->win_idx * 2, TYPE_MEM,
 				  test->out_addr, bus_addr,
-				  ep->dev_id, PCIE_BAR_SIZE);
+				  ep->win_idx, PCIE_BAR_SIZE);
 
 	/* outbound window set for MSI-X and MSI*/
-	lx_pcie_ep_outbound_win_set(pcie, ep->dev_id * 2 + 1, TYPE_MEM,
+	lx_pcie_ep_outbound_win_set(pcie, ep->win_idx * 2 + 1, TYPE_MEM,
 				  test->msi_addr, test->msi_msg_addr,
-				  ep->dev_id, PCIE_BAR_SIZE);
+				  ep->win_idx, PCIE_BAR_SIZE);
 
 	return 0;
 

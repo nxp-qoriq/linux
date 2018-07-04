@@ -21,7 +21,8 @@
 #define PCIE_SRIOV_POS		0x178
 #define PCIE_PF_NUM		2
 #define PCIE_VF_NUM		4
-#define PCIE_VF_NUM_TOTAL	32
+#define PCIE_VF_NUM_TOTAL	128
+#define PCIE_VF_NUM_ENABLED	32
 
 #define PCIE_SRIOV_CAPABILITY	0x2a0
 
@@ -66,6 +67,7 @@ struct lx_ep_dev {
 	int			pf_idx;
 	int			vf_idx;
 	int			dev_id;
+	int			win_idx;
 	void			*driver_data;
 };
 

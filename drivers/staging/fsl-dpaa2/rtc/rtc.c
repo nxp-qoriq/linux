@@ -171,6 +171,7 @@ static int rtc_probe(struct fsl_mc_device *mc_dev)
 		err = -EFAULT;
 		goto err_exit;
 	}
+	device_link_add(dev, &mc_dev->mc_io->dpmcp_dev->dev, DL_FLAG_AUTOREMOVE);
 
 	err = dprtc_open(mc_dev->mc_io, 0, mc_dev->obj_desc.id,
 			 &mc_dev->mc_handle);

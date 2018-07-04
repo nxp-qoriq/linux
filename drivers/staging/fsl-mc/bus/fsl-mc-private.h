@@ -12,6 +12,7 @@
 
 #include "../include/mc.h"
 #include "../include/mc-bus.h"
+#include <linux/miscdevice.h>
 
 int __must_check fsl_mc_device_add(struct dprc_obj_desc *obj_desc,
 				   struct fsl_mc_io *mc_io,
@@ -50,5 +51,24 @@ int __must_check fsl_create_mc_io(struct device *dev,
 				  u32 flags, struct fsl_mc_io **new_mc_io);
 
 void fsl_destroy_mc_io(struct fsl_mc_io *mc_io);
+
+#ifdef CONFIG_FSL_MC_UAPI_SUPPORT
+
+int fsl_mc_uapi_create_device_file(struct fsl_mc_device *root_dprc);
+
+void fsl_mc_uapi_remove_device_file(struct fsl_mc_device *root_dprc);
+
+#else
+
+static inline int fsl_mc_uapi_create_device_file(struct fsl_mc_device *root_dprc)
+{
+	        return 0;
+}
+
+static inline void fsl_mc_uapi_remove_device_file(struct fsl_mc_device *root_dprc)
+{
+}
+
+#endif
 
 #endif /* _FSL_MC_PRIVATE_H_ */

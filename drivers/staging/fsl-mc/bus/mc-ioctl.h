@@ -15,8 +15,9 @@
 #include "../include/mc-sys.h"
 
 #define RESTOOL_IOCTL_TYPE   'R'
+#define RESTOOL_IOCTL_SEQ    0xE0
 
 #define RESTOOL_SEND_MC_COMMAND \
-	_IOWR(RESTOOL_IOCTL_TYPE, 0xE0, struct mc_command)
+	_IOWR(RESTOOL_IOCTL_TYPE, RESTOOL_IOCTL_SEQ, struct mc_command)
 
 #endif /* _FSL_MC_IOCTL_H_ */

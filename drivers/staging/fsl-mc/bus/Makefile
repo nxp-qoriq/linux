@@ -23,3 +23,6 @@ mc-bus-driver-objs := fsl-mc-bus.o \
 
 # MC DPIO driver
 obj-$(CONFIG_FSL_MC_DPIO) += dpio/
+
+# MC userspace support
+obj-$(CONFIG_FSL_MC_UAPI_SUPPORT) += fsl-mc-uapi.o

@@ -14,6 +14,7 @@
 #include <linux/device.h>
 #include <linux/mod_devicetable.h>
 #include <linux/interrupt.h>
+#include <linux/miscdevice.h>
 #include "../include/dprc.h"
 
 #define FSL_MC_VENDOR_FREESCALE	0x1957
@@ -110,6 +111,24 @@ struct fsl_mc_device_irq {
 #define FSL_MC_IS_DPRC	0x0001
 
 /**
+ * struct fsl_mc_uapi - information associated with a device file
+ * @misc: struct miscdevice linked to the root dprc
+ * @device: newly created device in /dev
+ * @mutex: mutex lock to serialize the open/release operations
+ * @root_mc_io_in_use: local MC I/O instance in use or not
+ * @dynamic_instance_count: number of dynamically created MC I/O instances
+ * @static_mc_io: pointer to the static MC I/O object
+ */
+struct fsl_mc_uapi {
+	struct miscdevice misc;
+	struct device *device;
+	struct mutex mutex; /* serialize open/release operations */
+	bool root_mc_io_in_use;
+	u32 dynamic_instance_count;
+	struct fsl_mc_io *root_mc_io;
+};
+
+/**
  * struct fsl_mc_device - MC object device object
  * @dev: Linux driver model device object
  * @dma_mask: Default DMA mask
@@ -123,6 +142,7 @@ struct fsl_mc_device_irq {
  * @irqs: pointer to array of pointers to interrupts allocated to this device
  * @resource: generic resource associated with this MC object device, if any.
  * @driver_override: Driver name to force a match
+ * @uapi_misc: struct that abstracts the interaction with userspace
  *
  * Generic device object for MC object devices that are "attached" to a
  * MC bus.
@@ -156,6 +176,7 @@ struct fsl_mc_device {
 	struct fsl_mc_device_irq **irqs;
 	struct fsl_mc_resource *resource;
 	const char *driver_override;
+	struct fsl_mc_uapi uapi_misc;
 };
 
 #define to_fsl_mc_device(_dev) \

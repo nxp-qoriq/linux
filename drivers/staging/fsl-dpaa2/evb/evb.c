@@ -39,6 +39,7 @@
 #include <net/netlink.h>
 
 #include "../../fsl-mc/include/mc.h"
+#include "../../fsl-mc/include/mc-sys.h"
 
 #include "dpdmux.h"
 #include "dpdmux-cmd.h"
@@ -1223,6 +1224,7 @@ static int evb_probe(struct fsl_mc_device *evb_dev)
 		err = -EFAULT;
 		goto err_free_netdev;
 	}
+	device_link_add(dev, &priv->mc_io->dpmcp_dev->dev, DL_FLAG_AUTOREMOVE);
 
 	err = evb_init(evb_dev);
 	if (unlikely(err)) {

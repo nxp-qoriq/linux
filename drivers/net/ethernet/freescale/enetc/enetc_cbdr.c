@@ -161,16 +161,15 @@ void enetc_set_mac_flt_entry(struct enetc_si *si, int index,
 	}
 }
 
+#define RFSE_ALIGN	64
 /* Set entry in RFS table */
 int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 		       int index)
 {
 	struct enetc_cbd cbd = {.cmd = 0};
-	bool async = false;
 	dma_addr_t dma, dma_align;
-	const int align = 64;
 	void *tmp, *tmp_align;
-	int len = sizeof(*rfse) + align - 1;
+	bool async = false;
 	int err;
 
 	/* fill up the "set" descriptor */
@@ -180,14 +179,15 @@ int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 	cbd.length = cpu_to_le16(sizeof(*rfse));
 	cbd.opt[3] = cpu_to_le32(0); /* SI */
 
-	tmp = dma_alloc_coherent(&si->pdev->dev, len, &dma, DMA_TO_DEVICE);
+	tmp = dma_alloc_coherent(&si->pdev->dev, sizeof(*rfse) + RFSE_ALIGN,
+				 &dma, DMA_TO_DEVICE);
 	if (!tmp) {
 		netdev_err(si->ndev, "DMA mapping of RFS entry failed!\n");
 		return -ENOMEM;
 	}
 
-	dma_align = ALIGN(dma, align);
-	tmp_align = PTR_ALIGN(tmp, align);
+	dma_align = ALIGN(dma, RFSE_ALIGN);
+	tmp_align = PTR_ALIGN(tmp, RFSE_ALIGN);
 	memcpy(tmp_align, rfse, sizeof(*rfse));
 
 	cbd.addr[0] = lower_32_bits(dma_align);
@@ -199,18 +199,19 @@ int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 	err = enetc_send_cmd(si, &cbd, async);
 	if (err)
 		netdev_err(si->ndev, "FS entry add failed (%d)!", err);
-	dma_free_coherent(&si->pdev->dev, len, tmp, dma);
+
+	dma_free_coherent(&si->pdev->dev, sizeof(*rfse) + RFSE_ALIGN,
+			  tmp, dma);
 
 	return err;
 }
 
+#define RSSE_ALIGN	64
 static int enetc_cmd_rss_table(struct enetc_si *si, u32 *table, int count,
 			       int read)
 {
 	struct enetc_cbd cbd = {.cmd = 0};
-	enum dma_data_direction dir = read ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
 	dma_addr_t dma, dma_align;
-	const size_t align = 64;
 	u8 *tmp, *tmp_align;
 	int err, i;
 
@@ -218,13 +219,14 @@ static int enetc_cmd_rss_table(struct enetc_si *si, u32 *table, int count,
 		/* HW only takes in a full 64 entry table */
 		return -EINVAL;
 
-	tmp = dma_alloc_coherent(&si->pdev->dev, count + align - 1, &dma, dir);
+	tmp = dma_alloc_coherent(&si->pdev->dev, count + RSSE_ALIGN,
+				 &dma, read ? DMA_FROM_DEVICE : DMA_TO_DEVICE);
 	if (!tmp) {
 		netdev_err(si->ndev, "DMA mapping of RSS table failed!\n");
 		return -ENOMEM;
 	}
-	dma_align = ALIGN(dma, align);
-	tmp_align = PTR_ALIGN(tmp, align);
+	dma_align = ALIGN(dma, RSSE_ALIGN);
+	tmp_align = PTR_ALIGN(tmp, RSSE_ALIGN);
 
 	if (!read)
 		for (i = 0; i < count; i++)
@@ -246,7 +248,7 @@ static int enetc_cmd_rss_table(struct enetc_si *si, u32 *table, int count,
 		for (i = 0; i < count; i++)
 			table[i] = tmp_align[i];
 
-	dma_free_coherent(&si->pdev->dev, count, tmp, dma);
+	dma_free_coherent(&si->pdev->dev, count + RSSE_ALIGN, tmp, dma);
 
 	return err;
 }

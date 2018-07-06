@@ -2647,7 +2647,7 @@ mqprio:
 	return mlx5e_setup_tc(dev, tc->tc);
 }
 
-static void
+void
 mlx5e_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats)
 {
 	struct mlx5e_priv *priv = netdev_priv(dev);

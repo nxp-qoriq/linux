@@ -623,7 +623,6 @@
 			compatible = "arm,mmu-500";
 			reg = <0 0x5000000 0 0x800000>;
 			#iommu-cells = <1>;
-			stream-match-mask = <0x7C00>;
 			#global-interrupts = <14>;
 			interrupts = <0 13 4>, /* global secure fault */
 				     <0 14 4>, /* combined secure interrupt */

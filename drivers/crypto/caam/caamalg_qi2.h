@@ -156,7 +156,7 @@ struct dpaa2_caam_priv_per_cpu {
  * @qm_sg_dma: bus physical mapped address of h/w link table
  * @assoclen: associated data length, in CAAM endianness
  * @assoclen_dma: bus physical mapped address of req->assoclen
- * @sgt: the h/w link table
+ * @sgt: the h/w link table, followed by IV
  */
 struct aead_edesc {
 	int src_nents;
@@ -166,9 +166,6 @@ struct aead_edesc {
 	dma_addr_t qm_sg_dma;
 	unsigned int assoclen;
 	dma_addr_t assoclen_dma;
-#define CAAM_QI_MAX_AEAD_SG						\
-	((CAAM_QI_MEMCACHE_SIZE - offsetof(struct aead_edesc, sgt)) /	\
-	 sizeof(struct dpaa2_sg_entry))
 	struct dpaa2_sg_entry sgt[0];
 };
 
@@ -181,7 +178,7 @@ struct aead_edesc {
  * @qm_sg_dma: bus physical mapped address of h/w link table
  * @tmp: array of scatterlists used by 'scatterwalk_ffwd'
  * @dst: pointer to output scatterlist, usefull for unmapping
- * @sgt: the h/w link table
+ * @sgt: the h/w link table, followed by IV
  */
 struct tls_edesc {
 	int src_nents;
@@ -201,7 +198,7 @@ struct tls_edesc {
  * @iv_dma: dma address of iv for checking continuity and link table
  * @qm_sg_bytes: length of dma mapped qm_sg space
  * @qm_sg_dma: I/O virtual address of h/w link table
- * @sgt: the h/w link table
+ * @sgt: the h/w link table, followed by IV
  */
 struct ablkcipher_edesc {
 	int src_nents;
@@ -209,9 +206,6 @@ struct ablkcipher_edesc {
 	dma_addr_t iv_dma;
 	int qm_sg_bytes;
 	dma_addr_t qm_sg_dma;
-#define CAAM_QI_MAX_ABLKCIPHER_SG					    \
-	((CAAM_QI_MEMCACHE_SIZE - offsetof(struct ablkcipher_edesc, sgt)) / \
-	 sizeof(struct dpaa2_sg_entry))
 	struct dpaa2_sg_entry sgt[0];
 };
 

@@ -60,6 +60,8 @@
 #define AT803X_DEBUG_REG_5			0x05
 #define AT803X_DEBUG_TX_CLK_DLY_EN		BIT(8)
 
+#define AT803X_LPI_EN				BIT(8)
+
 #define ATH8030_PHY_ID 0x004dd076
 #define ATH8031_PHY_ID 0x004dd074
 #define ATH8035_PHY_ID 0x004dd072
@@ -67,6 +69,8 @@
 MODULE_DESCRIPTION("Atheros 803x PHY driver");
 MODULE_AUTHOR("Matus Ujhelyi");
 MODULE_LICENSE("GPL");
+
+#define LX2160ARDB_PACKET_LOSS_WORKAROUND
 
 struct at803x_priv {
 	bool phy_reset:1;
@@ -274,6 +278,21 @@ does_not_require_reset_workaround:
 	return 0;
 }
 
+#ifdef LX2160ARDB_PACKET_LOSS_WORKAROUND
+static void at803x_enable_smart_eee(struct phy_device *phydev, int on)
+{
+	int value;
+
+	/* 5.1.11 Smart_eee control3 */
+	value = phy_read_mmd_indirect(phydev, 0x805D, MDIO_MMD_PCS);
+	if (on)
+		value |= AT803X_LPI_EN;
+	else
+		value &= ~AT803X_LPI_EN;
+	phy_write_mmd_indirect(phydev, 0x805D, MDIO_MMD_PCS, value);
+}
+#endif
+
 static int at803x_config_init(struct phy_device *phydev)
 {
 	int ret;
@@ -281,6 +300,12 @@ static int at803x_config_init(struct phy_device *phydev)
 	ret = genphy_config_init(phydev);
 	if (ret < 0)
 		return ret;
+
+#ifdef LX2160ARDB_PACKET_LOSS_WORKAROUND
+	dev_info(&phydev->mdio.dev, "%s: LX2160ARDB packet loss workaround: "
+	         "disabling Smart EEE\n", __func__);
+	at803x_enable_smart_eee(phydev, 0);
+#endif
 
 	if (phydev->interface == PHY_INTERFACE_MODE_RGMII_RXID ||
 			phydev->interface == PHY_INTERFACE_MODE_RGMII_ID) {

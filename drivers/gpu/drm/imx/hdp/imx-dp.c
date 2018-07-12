@@ -44,10 +44,6 @@ void dp_fw_init(state_struct *state, u32 core_rate)
 
 	ret = CDN_API_General_Test_Echo_Ext_blocking(state, echo_msg, echo_resp,
 		sizeof(echo_msg), CDN_BUS_TYPE_APB);
-
-	/* Line swapping */
-	CDN_API_General_Write_Register_blocking(state,
-		ADDR_SOURCD_PHY + (LANES_CONFIG << 2), 0x0040001b);
 }
 
 static const struct of_device_id scfg_device_ids[] = {

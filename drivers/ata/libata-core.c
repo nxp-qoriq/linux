@@ -80,10 +80,22 @@
 #include "libata-transport.h"
 #include "ahci.h"
 
-#define SERDES2_LNAGCR0 0x1EB0E00
-#define LN_RX_RST 		0x80000010
-#define LN_RX_RST_DONE 	0x3
-#define LN_RX_MASK 		0xf
+#define RCWSR29_BASE			0x1E00170
+#define SERDES2_BASE			0x1EB0000
+#define SERDES2_LNAX_RX_CR(x)	(0x840 + (0x100 * (x)))
+#define SERDES2_LNAX_RX_CBR(x)	(0x8C0 + (0x100 * (x)))
+#define LN_RX_RST				0x80000010
+#define LN_RX_RST_DONE			0x3
+#define LN_RX_MASK				0xf
+
+#define SERDES2_LNAA 0
+#define SERDES2_LNAB 1
+#define SERDES2_LNAC 2
+#define SERDES2_LNAD 3
+#define SERDES2_LNAE 4
+#define SERDES2_LNAF 5
+#define SERDES2_LNAG 6
+#define SERDES2_LNAH 7
 
 enum ahci_qoriq_type {
 	AHCI_LX2160 = 2
@@ -3969,9 +3981,11 @@ int sata_link_hardreset(struct ata_link *link, const unsigned long *timing,
 	struct ahci_qoriq_priv *qoriq_priv = hpriv->plat_data;
 	bool lx2160a_workaround = (qoriq_priv->type == AHCI_LX2160);
 
-	u32 __iomem *base;
+	void __iomem *serdes_base;
+	void __iomem *rcw_base;
 	u32 scontrol;
 	int rc;
+	int val;
 
 	DPRINTK("ENTER\n");
 
@@ -4016,16 +4030,97 @@ int sata_link_hardreset(struct ata_link *link, const unsigned long *timing,
 		 * apply lane reset.
 		 */
 
-		base = ioremap(SERDES2_LNAGCR0, PAGE_SIZE);
-		if (!base) {
-			ata_link_err(link, "ioremap failed\n");
+		serdes_base = ioremap(SERDES2_BASE, PAGE_SIZE);
+		if (!serdes_base) {
+			ata_link_err(link, "serdes ioremap failed\n");
 			goto out;
+		}
+
+		rcw_base = ioremap(RCWSR29_BASE, PAGE_SIZE);
+		if (!rcw_base) {
+			ata_link_err(link, "rcw ioremap failed\n");
+			goto out1;
 		}
 
 		ata_msleep(link->ap, 1);
 
-		if ((readl(base + 0xC0) & LN_RX_MASK) != LN_RX_RST_DONE)
-			writel(LN_RX_RST, base + 0x40);
+		val = (readl(rcw_base) & GENMASK(25, 21)) >> 21;
+
+		switch (val) {
+		case 1:
+			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAC)) &
+				LN_RX_MASK) != LN_RX_RST_DONE)
+				writel(LN_RX_RST, serdes_base +
+					SERDES2_LNAX_RX_CR(SERDES2_LNAC));
+			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAD)) &
+				LN_RX_MASK) != LN_RX_RST_DONE)
+				writel(LN_RX_RST, serdes_base +
+					SERDES2_LNAX_RX_CR(SERDES2_LNAD));
+			break;
+
+		case 4:
+			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAG)) &
+				LN_RX_MASK) != LN_RX_RST_DONE)
+				writel(LN_RX_RST, serdes_base +
+					SERDES2_LNAX_RX_CR(SERDES2_LNAG));
+			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAH)) &
+				LN_RX_MASK) != LN_RX_RST_DONE)
+				writel(LN_RX_RST, serdes_base +
+					SERDES2_LNAX_RX_CR(SERDES2_LNAH));
+			break;
+
+		case 5:
+			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAE)) &
+				LN_RX_MASK) != LN_RX_RST_DONE)
+				writel(LN_RX_RST, serdes_base +
+					SERDES2_LNAX_RX_CR(SERDES2_LNAE));
+			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAF)) &
+				LN_RX_MASK) != LN_RX_RST_DONE)
+				writel(LN_RX_RST, serdes_base +
+					SERDES2_LNAX_RX_CR(SERDES2_LNAF));
+			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAG)) &
+				LN_RX_MASK) != LN_RX_RST_DONE)
+				writel(LN_RX_RST, serdes_base +
+					SERDES2_LNAX_RX_CR(SERDES2_LNAG));
+			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAH)) &
+				LN_RX_MASK) != LN_RX_RST_DONE)
+				writel(LN_RX_RST, serdes_base +
+					SERDES2_LNAX_RX_CR(SERDES2_LNAH));
+			break;
+
+		case 8:
+			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAC)) &
+				LN_RX_MASK) != LN_RX_RST_DONE)
+				writel(LN_RX_RST, serdes_base +
+					SERDES2_LNAX_RX_CR(SERDES2_LNAC));
+			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAD)) &
+				LN_RX_MASK) != LN_RX_RST_DONE)
+				writel(LN_RX_RST, serdes_base +
+					SERDES2_LNAX_RX_CR(SERDES2_LNAD));
+			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAE)) &
+				LN_RX_MASK) != LN_RX_RST_DONE)
+				writel(LN_RX_RST, serdes_base +
+					SERDES2_LNAX_RX_CR(SERDES2_LNAE));
+			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAF)) &
+				LN_RX_MASK) != LN_RX_RST_DONE)
+				writel(LN_RX_RST, serdes_base +
+					SERDES2_LNAX_RX_CR(SERDES2_LNAF));
+			break;
+
+		case 12:
+			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAG)) &
+				LN_RX_MASK) != LN_RX_RST_DONE)
+				writel(LN_RX_RST, serdes_base +
+					SERDES2_LNAX_RX_CR(SERDES2_LNAG));
+			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAH)) &
+				LN_RX_MASK) != LN_RX_RST_DONE)
+				writel(LN_RX_RST, serdes_base +
+					SERDES2_LNAX_RX_CR(SERDES2_LNAH));
+			break;
+
+		default:
+			ata_link_warn(link, "rcw %d SRDS_PRTCL_S2 not support sata\n", val);
+		}
 	}
 
 	/* bring link back */
@@ -4063,7 +4158,9 @@ int sata_link_hardreset(struct ata_link *link, const unsigned long *timing,
 	if (check_ready)
 		rc = ata_wait_ready(link, deadline, check_ready);
  unmap:
-	iounmap(base);
+	iounmap(rcw_base);
+ out1:
+	iounmap(serdes_base);
  out:
 	if (rc && rc != -EAGAIN) {
 		/* online is set iff link is online && reset succeeded */

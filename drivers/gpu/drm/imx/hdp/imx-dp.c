@@ -90,7 +90,7 @@ void dp_mode_set(state_struct *state, int vic, int format, int color_depth, int 
 	/* Number of lanes and SSC */
 	u8 num_lanes = 4;
 	u8 ssc = 0;
-	u8 scrambler = 0;
+	u8 scrambler = 1;
 	/* Max voltage swing */
 	u8 max_vswing = 3;
 	u8 force_max_vswing = 0;

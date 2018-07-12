@@ -976,7 +976,7 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 	}
 #endif
 
-	hdp->link_rate = AFE_LINK_RATE_1_6;
+	hdp->link_rate = AFE_LINK_RATE_2_7;
 
 	hdp->dual_mode = false;
 

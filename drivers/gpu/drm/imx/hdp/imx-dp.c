@@ -118,6 +118,10 @@ void dp_mode_set(state_struct *state, int vic, int format, int color_depth, int 
 	/* Transfer Unit */
 	u8 transfer_unit = 64;
 	VIC_SYMBOL_RATE sym_rate;
+	S_LINK_STAT rls;
+	u32 evt;
+	u8 eventId;
+	u8 HPDevents;
 
 	ret = CDN_API_DPTX_SetHostCap_blocking(state,
 		max_link_rate,
@@ -129,6 +133,54 @@ void dp_mode_set(state_struct *state, int vic, int format, int color_depth, int 
 		lane_mapping,
 		ext_host_cap
 		);
+
+	ret = CDN_API_DPTX_TrainingControl_blocking(state, 1);
+
+	do {
+		do {
+			CDN_API_Get_Event(state, &evt);
+		} while ((evt & 2) == 0);
+
+		CDN_API_DPTX_ReadEvent_blocking(state, &eventId, &HPDevents);
+		switch (eventId) {
+		case 0x01:
+			printk("INFO: Full link training started\n");
+			break;
+		case 0x02:
+			printk("INFO: Fast link training started\n");
+			break;
+		case 0x04:
+			printk("INFO: Clock recovery phase finished\n");
+			break;
+		case 0x08:
+			printk("INFO: Channel equalization phase finished (this is last part meaning training finished)\n");
+			break;
+		case 0x10:
+			printk("INFO: Fast link training finished\n");
+			break;
+		case 0x20:
+			printk("ERROR: Clock recovery phase failed\n");
+			break;;
+		case 0x40:
+			printk("ERROR: Channel equalization phase failed\n");
+			break;
+		case 0x80:
+			printk("ERROR: Fast link training failed\n");
+			break;
+		default:
+			printk("ERROR: Invalid ID:0x%.4X\n", eventId);
+			break;
+		}
+	}while (eventId != 0x08 && eventId != 0x10);
+
+	ret = CDN_API_DPTX_ReadLinkStat_blocking(state, &rls);
+	printk("INFO: Get Read Link Status (ret = %d resp:\n"
+	       "rate: %d, lanes: %d\n"
+	       "vswing 0..3: %d %d %d\n"
+	       "preemp 0..3: %d %d %d\n",
+	       ret, rls.rate, rls.lanes,
+	       rls.swing[0], rls.swing[1], rls.swing[2],
+	       rls.preemphasis[0], rls.preemphasis[1], rls.preemphasis[2]);
 
 	switch (max_link_rate) {
 	case 0x0a:
@@ -151,8 +203,6 @@ void dp_mode_set(state_struct *state, int vic, int format, int color_depth, int 
 		bt_type,
 		transfer_unit
 		);
-
-	ret = CDN_API_DPTX_TrainingControl_blocking(state, 1);
 
 	/* Set video on */
 	ret = CDN_API_DPTX_SetVideo_blocking(state, 1);

@@ -377,6 +377,7 @@ static void enetc_set_loopback(struct net_device *ndev, bool en)
 		reg = enetc_port_rd(hw, ENETC_PM0_CMD_CFG);
 		reg = en ? reg | ENETC_PM0_CMD_XGLP : reg & ~ENETC_PM0_CMD_XGLP;
 		enetc_port_wr(hw, ENETC_PM0_CMD_CFG, reg);
+		enetc_port_wr(hw, ENETC_PM1_CMD_CFG, reg);
 	}
 }
 
@@ -530,12 +531,31 @@ static void enetc_configure_port_mac(struct enetc_hw *hw)
 	enetc_port_wr(hw, ENETC_PM0_CMD_CFG, ENETC_PM0_CMD_PHY_TX_EN |
 		      ENETC_PM0_CMD_TXP	| ENETC_PM0_PROMISC |
 		      ENETC_PM0_TX_EN | ENETC_PM0_RX_EN);
+
+	enetc_port_wr(hw, ENETC_PM1_CMD_CFG, ENETC_PM0_CMD_PHY_TX_EN |
+		      ENETC_PM0_CMD_TXP	| ENETC_PM0_PROMISC |
+		      ENETC_PM0_TX_EN | ENETC_PM0_RX_EN);
+}
+
+static void enetc_configure_port_pmac(struct enetc_hw *hw)
+{
+	u32 temp;
+
+	/* Set pMAC step lock */
+	temp = enetc_port_rd(hw, ENETC_PFPMR);
+	enetc_port_wr(hw, ENETC_PFPMR,
+			temp|ENETC_PFPMR_PMACE|ENETC_PFPMR_MWLM);
+
+	temp = enetc_port_rd(hw, ENETC_MMCSR);
+	enetc_port_wr(hw, ENETC_MMCSR, temp|ENETC_MMCSR_ME);
 }
 
 static void enetc_configure_port(struct enetc_pf *pf)
 {
 	u8 hash_key[ENETC_RSSHASH_KEY_SIZE];
 	struct enetc_hw *hw = &pf->si->hw;
+
+	enetc_configure_port_pmac(hw);
 
 	enetc_configure_port_mac(hw);
 

@@ -1591,23 +1591,19 @@ int enetc_qbu_set(struct net_device *ndev, u8 ptvector)
 	int i;
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 
-	temp = enetc_port_rd(&priv->si->hw, ENETC_PFPMR);
-	enetc_port_wr(&priv->si->hw, ENETC_PFPMR,
-			temp|ENETC_PFPMR_PMACE|ENETC_PFPMR_MWLM);
-
-	temp = enetc_port_rd(&priv->si->hw, ENETC_MMCSR);
-	enetc_port_wr(&priv->si->hw, ENETC_MMCSR, temp|ENETC_MMCSR_ME);
-
 	temp = enetc_rd(&priv->si->hw, QBV_PTGCR_OFFSET);
 	if (temp & QBV_TGE)
 		enetc_wr(&priv->si->hw, QBV_PTGCR_OFFSET, temp & (~QBV_TGPE));
 
-	for (i = 0;i < 8;i++)
+	for (i = 0;i < 8;i++) {
 		/* 1 Enabled. Traffic is transmitted on the preemptive MAC. */
-		if ((ptvector >> i) & 0x1) {
-			temp = enetc_port_rd(&priv->si->hw, ENETC_PTCFPR(i));
+		temp = enetc_port_rd(&priv->si->hw, ENETC_PTCFPR(i));
+
+		if ((ptvector >> i) & 0x1)
 			enetc_port_wr(&priv->si->hw, ENETC_PTCFPR(i), temp | ENETC_FPE);
-		}
+		else
+			enetc_port_wr(&priv->si->hw, ENETC_PTCFPR(i), temp & ~ENETC_FPE);
+	}
 
 	return 0;
 }

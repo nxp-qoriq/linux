@@ -213,6 +213,12 @@ enum enetc_bdr_type {TX, RX};
 
 #define ENETC_PRFSMR		0x01800
 #define ENETC_PRFSMR_RFSE	BIT(31)
+#define ENETC_PFPMR			0x01900
+#define ENETC_PFPMR_PMACE	BIT(1)
+#define ENETC_PFPMR_MWLM	BIT(0)
+#define ENETC_MMCSR		0x1F00
+#define ENETC_MMCSR_ME		BIT(16)
+
 #define ENETC_PRFSCAPR		0x01804
 #define ENETC_PSIRFSCFGR(n)	(0x01814 + (n) * 4) /* n = SI index */
 
@@ -225,6 +231,8 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PM0_CMD_XGLP	BIT(10)
 #define ENETC_PM0_CMD_TXP	BIT(11)
 #define ENETC_PM0_CMD_PHY_TX_EN	BIT(15)
+#define ENETC_PM0_CMD_SFD   BIT(21)
+#define ENETC_PM1_CMD_CFG	0x09008
 
 #define ENETC_PM0_MAXFRM	0x08014
 #define ENETC_SET_TX_MTU(val)	((val) << 16)
@@ -950,12 +958,6 @@ struct enetc_cbd {
 #define ENETC_SIPCAPR1	0x24
 #define ENETC_SITGTGR	0x30
 
-#define ENETC_MMCSR		0x1F00
-#define ENETC_MMCSR_ME		BIT(16)
-
-#define ENETC_PFPMR		0x1900
-#define ENETC_PFPMR_PMACE	BIT(1)
-#define ENETC_PFPMR_MWLM	BIT(0)
 #define ENETC_PTCFPR(n)		(0x1910 + (n) * 4) /* n = [0 ..7] */
 #define ENETC_FPE		BIT(31)
 

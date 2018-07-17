@@ -1996,22 +1996,17 @@ struct caam_crypto_alg {
 	struct caam_alg_entry caam;
 };
 
-static int caam_cra_init(struct crypto_tfm *tfm, bool uses_dkp)
+static int caam_cra_init(struct caam_ctx *ctx, struct caam_alg_entry *caam,
+			 bool uses_dkp)
 {
-	struct crypto_alg *alg = tfm->__crt_alg;
-	struct caam_crypto_alg *caam_alg = container_of(alg, typeof(*caam_alg),
-							crypto_alg);
-	struct caam_ctx *ctx = crypto_tfm_ctx(tfm);
 	dma_addr_t dma_addr;
 	int i;
 
 	/* copy descriptor header template value */
-	ctx->cdata.algtype = OP_TYPE_CLASS1_ALG |
-			     caam_alg->caam.class1_alg_type;
-	ctx->adata.algtype = OP_TYPE_CLASS2_ALG |
-			     caam_alg->caam.class2_alg_type;
+	ctx->cdata.algtype = OP_TYPE_CLASS1_ALG | caam->class1_alg_type;
+	ctx->adata.algtype = OP_TYPE_CLASS2_ALG | caam->class2_alg_type;
 
-	ctx->dev = caam_alg->caam.dev;
+	ctx->dev = caam->dev;
 	ctx->dir = uses_dkp ? DMA_BIDIRECTIONAL : DMA_TO_DEVICE;
 
 	dma_addr = dma_map_single_attrs(ctx->dev, ctx->flc,
@@ -2031,19 +2026,24 @@ static int caam_cra_init(struct crypto_tfm *tfm, bool uses_dkp)
 
 static int caam_cra_init_ablkcipher(struct crypto_tfm *tfm)
 {
+	struct crypto_alg *alg = tfm->__crt_alg;
+	struct caam_crypto_alg *caam_alg = container_of(alg, typeof(*caam_alg),
+							crypto_alg);
 	struct ablkcipher_tfm *ablkcipher_tfm =
 		crypto_ablkcipher_crt(__crypto_ablkcipher_cast(tfm));
 
 	ablkcipher_tfm->reqsize = sizeof(struct caam_request);
-	return caam_cra_init(tfm, false);
+	return caam_cra_init(crypto_tfm_ctx(tfm), &caam_alg->caam, false);
 }
 
 static int caam_cra_init_aead(struct crypto_aead *tfm)
 {
 	struct aead_alg *alg = crypto_aead_alg(tfm);
+	struct caam_aead_alg *caam_alg = container_of(alg, typeof(*caam_alg),
+						      aead);
 
 	crypto_aead_set_reqsize(tfm, sizeof(struct caam_request));
-	return caam_cra_init(crypto_aead_tfm(tfm),
+	return caam_cra_init(crypto_aead_ctx(tfm), &caam_alg->caam,
 			     (alg->setkey == aead_setkey) ||
 			     (alg->setkey == tls_setkey));
 }

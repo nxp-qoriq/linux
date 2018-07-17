@@ -238,7 +238,6 @@ struct caam_flc {
 enum optype {
 	ENCRYPT = 0,
 	DECRYPT,
-	GIVENCRYPT,
 	NUM_OP
 };
 

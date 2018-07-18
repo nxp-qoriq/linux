@@ -1074,7 +1074,7 @@ int qbman_swp_CDAN_set(struct qbman_swp *s, u16 channelid,
 struct qbman_fq_query_desc {
 	u8 verb;
 	u8 reserved[3];
-	u32 fqid;
+	__le32 fqid;
 	u8 reserved2[56];
 };
 
@@ -1123,7 +1123,7 @@ u32 qbman_fq_state_byte_count(const struct qbman_fq_query_np_rslt *r)
 struct qbman_bp_query_desc {
 	u8 verb;
 	u8 reserved;
-	u16 bpid;
+	__le16 bpid;
 	u8 reserved2[60];
 };
 

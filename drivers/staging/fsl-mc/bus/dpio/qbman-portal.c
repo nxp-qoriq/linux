@@ -1089,7 +1089,7 @@ int qbman_fq_query_state(struct qbman_swp *s, u32 fqid,
 		return -EBUSY;
 
 	/* FQID is a 24 bit value */
-	p->fqid = cpu_to_le32(fqid) & 0x00FFFFFF;
+	p->fqid = cpu_to_le32(fqid & 0x00FFFFFF);
 	resp = qbman_swp_mc_complete(s, p, QBMAN_FQ_QUERY_NP);
 	if (!resp) {
 		pr_err("qbman: Query FQID %d NP fields failed, no response\n",
@@ -1112,12 +1112,12 @@ int qbman_fq_query_state(struct qbman_swp *s, u32 fqid,
 
 u32 qbman_fq_state_frame_count(const struct qbman_fq_query_np_rslt *r)
 {
-	return (r->frm_cnt & 0x00FFFFFF);
+	return (le32_to_cpu(r->frm_cnt) & 0x00FFFFFF);
 }
 
 u32 qbman_fq_state_byte_count(const struct qbman_fq_query_np_rslt *r)
 {
-	return r->byte_cnt;
+	return le32_to_cpu(r->byte_cnt);
 }
 
 struct qbman_bp_query_desc {
@@ -1137,7 +1137,7 @@ int qbman_bp_query(struct qbman_swp *s, u32 bpid,
 	if (!p)
 		return -EBUSY;
 
-	p->bpid = bpid;
+	p->bpid = cpu_to_le16(bpid);
 	resp = qbman_swp_mc_complete(s, p, QBMAN_BP_QUERY);
 	if (!resp) {
 		pr_err("qbman: Query BPID %d fields failed, no response\n",
@@ -1160,5 +1160,5 @@ int qbman_bp_query(struct qbman_swp *s, u32 bpid,
 
 u32 qbman_bp_info_num_free_bufs(struct qbman_bp_query_rslt *a)
 {
-	return a->fill;
+	return le32_to_cpu(a->fill);
 }

@@ -1127,7 +1127,7 @@ struct qbman_bp_query_desc {
 	u8 reserved2[60];
 };
 
-int qbman_bp_query(struct qbman_swp *s, u32 bpid,
+int qbman_bp_query(struct qbman_swp *s, u16 bpid,
 		   struct qbman_bp_query_rslt *r)
 {
 	struct qbman_bp_query_desc *p;

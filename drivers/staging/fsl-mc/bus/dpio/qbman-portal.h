@@ -497,7 +497,7 @@ struct qbman_bp_query_rslt {
 	u8 reserved3[9];
 };
 
-int qbman_bp_query(struct qbman_swp *s, u32 bpid,
+int qbman_bp_query(struct qbman_swp *s, u16 bpid,
 		   struct qbman_bp_query_rslt *r);
 
 u32 qbman_bp_info_num_free_bufs(struct qbman_bp_query_rslt *a);

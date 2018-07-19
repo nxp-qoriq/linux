@@ -180,7 +180,7 @@ void dp_mode_set(state_struct *state, int vic, int format, int color_depth, int 
 	       rls.swing[0], rls.swing[1], rls.swing[2],
 	       rls.preemphasis[0], rls.preemphasis[1], rls.preemphasis[2]);
 
-	switch (max_link_rate) {
+	switch (rls.rate) {
 	case 0x0a:
 		sym_rate = RATE_2_7;
 		break;

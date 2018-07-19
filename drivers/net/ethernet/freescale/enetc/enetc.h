@@ -166,13 +166,15 @@ static inline bool enetc_si_is_pf(struct enetc_si *si)
 #define ENETC_MAX_NUM_TXQS	(ENETC_MAX_TCS * ENETC_TXQ_PER_TC)
 
 struct enetc_int_vector {
-	void __iomem *tbier;
 	void __iomem *rbier;
+	void __iomem *tbier_base;
+	unsigned long tx_rings_map;
+	int count_tx_rings;
 	struct napi_struct napi;
 	char name[IFNAMSIZ + 8];
 
-	struct enetc_bdr tx_ring ____cacheline_aligned_in_smp;
-	struct enetc_bdr rx_ring;
+	struct enetc_bdr rx_ring ____cacheline_aligned_in_smp;
+	struct enetc_bdr tx_ring[0];
 };
 
 struct enetc_cls_rule {
@@ -180,13 +182,15 @@ struct enetc_cls_rule {
 	bool used;
 };
 
+#define ENETC_MAX_BDR_INT	2 /* fixed to max # of available cpus */
+
 struct enetc_ndev_priv {
 	struct net_device *ndev;
 	struct device *dev; /* dma-mapping device */
 	struct enetc_si *si;
 
 	int bdr_int_num; /* number of Rx/Tx ring interrupts */
-	struct enetc_int_vector *int_vector;
+	struct enetc_int_vector *int_vector[ENETC_MAX_BDR_INT];
 	u16 num_rx_rings, num_tx_rings;
 	u16 rx_bd_count, tx_bd_count;
 
@@ -227,6 +231,7 @@ void enetc_free_msix(struct enetc_ndev_priv *priv);
 int enetc_setup_irqs(struct enetc_ndev_priv *priv);
 void enetc_free_irqs(struct enetc_ndev_priv *priv);
 void enetc_get_si_caps(struct enetc_si *si);
+void enetc_init_si_rings_params(struct enetc_ndev_priv *priv);
 int enetc_alloc_si_resources(struct enetc_ndev_priv *priv);
 void enetc_free_si_resources(struct enetc_ndev_priv *priv);
 

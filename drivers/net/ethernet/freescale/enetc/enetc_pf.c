@@ -690,28 +690,6 @@ static void enetc_pf_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 	enetc_get_primary_mac_addr(&si->hw, ndev->dev_addr);
 }
 
-static void enetc_pf_sw_init(struct enetc_ndev_priv *priv)
-{
-	struct enetc_si *si = priv->si;
-
-	priv->tx_bd_count = 1024; //TODO: use defines for defaults
-	priv->rx_bd_count = 1024;
-
-	/* Enable all available TX rings in order to configure as many
-	 * priorities as possible, when needed.
-	 *
-	 * Enable all RX rings as well since the numbers of RX/TX rings are
-	 * assumed equal for now.
-	 */
-	priv->num_rx_rings = si->num_rx_rings;
-	priv->num_tx_rings = si->num_tx_rings;
-	 // TODO: fixed to Rx/TX pair, make configurable
-	priv->bdr_int_num = priv->num_rx_rings;
-
-	/* SI specific */
-	si->cbd_ring.bd_count = 64; //TODO: use defines for defaults
-}
-
 static int enetc_pf_probe(struct pci_dev *pdev,
 			  const struct pci_device_id *ent)
 {
@@ -753,7 +731,7 @@ static int enetc_pf_probe(struct pci_dev *pdev,
 
 	priv = netdev_priv(ndev);
 
-	enetc_pf_sw_init(priv);
+	enetc_init_si_rings_params(priv);
 
 	err = enetc_alloc_si_resources(priv);
 	if (err) {

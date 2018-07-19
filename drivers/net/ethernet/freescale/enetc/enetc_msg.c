@@ -194,8 +194,8 @@ int enetc_msg_psi_init(struct enetc_pf *pf)
 		return err;
 	}
 
-	/* set a single IRQ entry for PSI message receive notification */
-	enetc_configure_hw_vector(&si->hw, ENETC_SI_INT_IDX);
+	/* set one IRQ entry for PSI message receive notification (SI int) */
+	enetc_wr(&si->hw, ENETC_SIMSIVR, ENETC_SI_INT_IDX);
 
 	/* initialize PSI mailbox */
 	INIT_WORK(&pf->msg_task, enetc_msg_task);

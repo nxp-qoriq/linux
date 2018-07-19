@@ -865,7 +865,6 @@ static int hpd_det_worker(void *_dp)
 				imx_hdp_cable_plugin(hdp);
 				hdp->cable_state = true;
 				drm_kms_helper_hotplug_event(hdp->connector.dev);
-				imx_hdp_mode_setup(hdp, &hdp->video.cur_mode);
 			} else if (HPDevents & 0x2) {
 				hdp->cable_state = false;
 				imx_hdp_cable_plugout(hdp);
@@ -877,7 +876,7 @@ static int hpd_det_worker(void *_dp)
 		} else if (evt & 0xf)
 			printk(KERN_DEBUG "evt=0x%x\n", evt);
 
-		schedule_timeout_idle(1);
+		schedule_timeout_idle(100000);
 	}
 
 	return 0;

@@ -566,7 +566,7 @@ imx_hdp_connector_mode_valid(struct drm_connector *connector,
 {
 	enum drm_mode_status mode_status = MODE_OK;
 
-	if (mode->clock > 150000)
+	if (mode->clock > 594000)
 		return MODE_CLOCK_HIGH;
 
 	return mode_status;

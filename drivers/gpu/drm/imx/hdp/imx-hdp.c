@@ -20,12 +20,34 @@
 
 struct drm_display_mode *g_mode;
 
-static const struct drm_display_mode edid_cea_modes = {
+static const struct drm_display_mode edid_cea_modes[] = {
+	/* 3 - 720x480@60Hz */
+	{ DRM_MODE("720x480", DRM_MODE_TYPE_DRIVER, 27000, 720, 736,
+		   798, 858, 0, 480, 489, 495, 525, 0,
+		   DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC),
+	  .vrefresh = 60, .picture_aspect_ratio = HDMI_PICTURE_ASPECT_16_9, },
+	/* 4 - 1280x720@60Hz */
+	{ DRM_MODE("1280x720", DRM_MODE_TYPE_DRIVER, 74250, 1280, 1390,
+		   1430, 1650, 0, 720, 725, 730, 750, 0,
+		   DRM_MODE_FLAG_PHSYNC | DRM_MODE_FLAG_PVSYNC),
+	  .vrefresh = 60, .picture_aspect_ratio = HDMI_PICTURE_ASPECT_16_9, },
 	/* 16 - 1920x1080@60Hz */
-	DRM_MODE("1920x1080", DRM_MODE_TYPE_DRIVER, 148500, 1920, 2008,
+	{ DRM_MODE("1920x1080", DRM_MODE_TYPE_DRIVER, 148500, 1920, 2008,
 		   2052, 2200, 0, 1080, 1084, 1089, 1125, 0,
 		   DRM_MODE_FLAG_PHSYNC | DRM_MODE_FLAG_PVSYNC),
-	  .vrefresh = 60, .picture_aspect_ratio = HDMI_PICTURE_ASPECT_16_9,
+	  .vrefresh = 60, .picture_aspect_ratio = HDMI_PICTURE_ASPECT_16_9, },
+	/* 97 - 3840x2160@60Hz */
+	{ DRM_MODE("3840x2160", DRM_MODE_TYPE_DRIVER, 594000,
+		   3840, 4016, 4104, 4400, 0,
+		   2160, 2168, 2178, 2250, 0,
+		   DRM_MODE_FLAG_PHSYNC | DRM_MODE_FLAG_PVSYNC),
+	  .vrefresh = 60, .picture_aspect_ratio = HDMI_PICTURE_ASPECT_16_9, },
+	/* 96 - 3840x2160@30Hz */
+	{ DRM_MODE("3840x2160", DRM_MODE_TYPE_DRIVER, 297000,
+		   3840, 4016, 4104, 4400, 0,
+		   2160, 2168, 2178, 2250, 0,
+		   DRM_MODE_FLAG_PHSYNC | DRM_MODE_FLAG_PVSYNC),
+	  .vrefresh = 30, .picture_aspect_ratio = HDMI_PICTURE_ASPECT_16_9, },
 };
 
 static inline struct imx_hdp *enc_to_imx_hdp(struct drm_encoder *e)
@@ -499,6 +521,8 @@ static int imx_hdp_connector_get_modes(struct drm_connector *connector)
 {
 	struct drm_display_mode *mode;
 	int num_modes = 0;
+	int i;
+
 #ifdef edid_enable
 	struct imx_hdp *hdp = container_of(connector, struct imx_hdp,
 					     connector);
@@ -520,13 +544,15 @@ static int imx_hdp_connector_get_modes(struct drm_connector *connector)
 	} else {
 		dev_dbg(hdp->dev, "failed to get edid\n");
 #endif
-		mode = drm_mode_create(connector->dev);
-		if (!mode)
-			return -EINVAL;
-		drm_mode_copy(mode, &edid_cea_modes);
-		mode->type |= DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
-		drm_mode_probed_add(connector, mode);
-		num_modes = 1;
+		for (i = 0; i < ARRAY_SIZE(edid_cea_modes); i++) {
+			mode = drm_mode_create(connector->dev);
+			if (!mode)
+				return -EINVAL;
+			drm_mode_copy(mode, &edid_cea_modes[i]);
+			mode->type |= DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
+			drm_mode_probed_add(connector, mode);
+		}
+		num_modes = i;
 #ifdef edid_enable
 	}
 #endif

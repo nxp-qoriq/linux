@@ -79,7 +79,7 @@ static irqreturn_t enetc_msix(int irq, void *data)
 	enetc_wr_reg(v->tbier, 0);
 	enetc_wr_reg(v->rbier, 0);
 
-	napi_schedule(&v->napi);
+	napi_schedule_irqoff(&v->napi);
 
 	return IRQ_HANDLED;
 }

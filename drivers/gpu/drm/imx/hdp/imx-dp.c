@@ -119,6 +119,8 @@ void dp_mode_set(state_struct *state, int vic, int format, int color_depth, int 
 	u8 eventId;
 	u8 HPDevents;
 
+	CDN_API_DPTX_SetDbg_blocking(state, DPTX_DBG_SET_PWR_SKIP_SLEEP);
+
 	ret = CDN_API_DPTX_SetHostCap_blocking(state,
 		max_link_rate,
 		(num_lanes & 0x7) | ((ssc & 1) << 3) | ((scrambler & 1) << 4),

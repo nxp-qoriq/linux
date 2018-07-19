@@ -479,9 +479,7 @@ CDN_API_STATUS CDN_API_DPTX_Set_VIC(state_struct *state, VIC_MODES vicMode,
 		bitsPerPixelCalc = bitsPerPixel * 3;
 
 	/* KHz */
-	pixelClockFreq =
-	    CDN_API_Get_PIXEL_FREQ_KHZ_ClosetVal(vic_table[vicMode]
-						 [PIXEL_FREQ_KHZ], CDN_DPTX);
+	pixelClockFreq = vic_table[vicMode][PIXEL_FREQ_KHZ];
 
 	/* KHz */
 	min_link_rate = rate * 995;

@@ -155,7 +155,7 @@ void mv_pcie_setup_rp_hw(struct root_port *rp, bool reinit)
 		/* setup bus numbers */
 		val = mv_pcie_readl_csr(pci, PCI_PRIMARY_BUS);
 		val &= 0xff000000;
-		val |= 0x00010100;
+		val |= 0x00ff0100;
 		mv_pcie_writel_csr(pci, PCI_PRIMARY_BUS, val);
 	}
 

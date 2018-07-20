@@ -1017,11 +1017,11 @@ int enetc_qci_sgi_set(struct net_device *ndev, u32 index,
 
 	sgi_config = &cbdr->sgi_table;
 
-	sgi_config->ocgtst = tsn_qci_sgi->admin.control_list_length?
-			0x80 : (tsn_qci_sgi->admin.gate_states? 0x80 : 0x0);
+	sgi_config->ocgtst = tsn_qci_sgi->admin.control_list_length ?
+			0x80 : (tsn_qci_sgi->admin.gate_states ? 0x80 : 0x0);
 
-	sgi_config->oipv = tsn_qci_sgi->admin.control_list_length?
-			0x0 : ((tsn_qci_sgi->admin.init_ipv < 0)?
+	sgi_config->oipv = tsn_qci_sgi->admin.control_list_length ?
+			0x0 : ((tsn_qci_sgi->admin.init_ipv < 0) ?
 					0x0 : ((tsn_qci_sgi->admin.init_ipv & 0x7) | 0x8));
 
 	sgi_config->en = 0x80;
@@ -1161,7 +1161,7 @@ int enetc_qci_sgi_get(struct net_device *ndev, u32 index,
 
 	sgi_config = &cbdr->sgi_table;
 
-	tsn_qci_sgi->admin.gate_states = ((sgi_config->ocgtst & 0x80)? true : false);
+	tsn_qci_sgi->admin.gate_states = ((sgi_config->ocgtst & 0x80) ? true : false);
 	if (sgi_config->oipv & 0x08)
 		tsn_qci_sgi->admin.init_ipv = sgi_config->oipv & 0x7;
 	else
@@ -1306,7 +1306,7 @@ int enetc_qci_sgi_status_get(struct net_device *ndev, u16 index,
 	if (sgi_config->gset & 0x4)
 		status->config_pending = true;
 
-	status->oper.gate_states = ((sgi_config->ocgtst & 0x80)? true : false);
+	status->oper.gate_states = ((sgi_config->ocgtst & 0x80) ? true : false);
 
 	/* Check gate list length is zero? */
 	if (!(sgi_config->oacl_len & 0x30)) {
@@ -1461,14 +1461,14 @@ int enetc_qci_fmi_set(struct net_device *ndev, u32 index, bool enable,
 	fmi_config->en = 0x80;
 	if (tsn_qci_fmi->cir) {
 		temp = (u64)1000 * tsn_qci_fmi->cir;
-		temp = temp/3725;
+		temp = temp / 3725;
 	}
 	fmi_config->cir = cpu_to_le32((u32)temp);
 	fmi_config->cbs = cpu_to_le32(tsn_qci_fmi->cbs);
 	temp = 0;
 	if (tsn_qci_fmi->eir) {
 		temp = (u64)1000 * tsn_qci_fmi->eir;
-		temp = temp/3725;
+		temp = temp / 3725;
 	}
 	fmi_config->eir = cpu_to_le32((u32)temp);
 	fmi_config->ebs = cpu_to_le32(tsn_qci_fmi->ebs);
@@ -1523,14 +1523,14 @@ int enetc_qci_fmi_get(struct net_device *ndev, u32 index,
 	fmi_config = &cbdr->fmi_conf;
 	if (fmi_config->cir) {
 		temp = (u64)3725 * fmi_config->cir;
-		temp = temp/1000;
+		temp = temp / 1000;
 	}
 	tsn_qci_fmi->cir = le32_to_cpu((u32)temp);
 	tsn_qci_fmi->cbs = le32_to_cpu(fmi_config->cbs);
 	temp = 0;
 	if (fmi_config->eir) {
 		temp = (u64)3725 * fmi_config->eir;
-		temp = temp/1000;
+		temp = temp / 1000;
 	}
 	tsn_qci_fmi->eir = le32_to_cpu((u32)temp);
 	tsn_qci_fmi->ebs = le32_to_cpu(fmi_config->ebs);
@@ -1595,7 +1595,7 @@ int enetc_qbu_set(struct net_device *ndev, u8 ptvector)
 	if (temp & QBV_TGE)
 		enetc_wr(&priv->si->hw, QBV_PTGCR_OFFSET, temp & (~QBV_TGPE));
 
-	for (i = 0;i < 8;i++) {
+	for (i = 0; i < 8; i++) {
 		/* 1 Enabled. Traffic is transmitted on the preemptive MAC. */
 		temp = enetc_port_rd(&priv->si->hw, ENETC_PTCFPR(i));
 
@@ -1614,8 +1614,7 @@ int enetc_qbu_get(struct net_device *ndev,
 	int i;
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 
-	if (enetc_port_rd(&priv->si->hw, ENETC_PFPMR) & ENETC_PFPMR_PMACE)
-	{
+	if (enetc_port_rd(&priv->si->hw, ENETC_PFPMR) & ENETC_PFPMR_PMACE) {
 		preemptstat->preemption_active = true;
 		if (enetc_rd(&priv->si->hw, QBV_PTGCR_OFFSET) & QBV_TGE)
 			preemptstat->hold_request = 1;
@@ -1626,8 +1625,8 @@ int enetc_qbu_get(struct net_device *ndev,
 		return 0;
 	}
 
-	for (i = 0;i < 8;i++)
-		if(enetc_port_rd(&priv->si->hw, ENETC_PTCFPR(i)) & 0x80000000)
+	for (i = 0; i < 8; i++)
+		if (enetc_port_rd(&priv->si->hw, ENETC_PTCFPR(i)) & 0x80000000)
 			preemptstat->admin_state |= 1 << i;
 
 	preemptstat->hold_advance =

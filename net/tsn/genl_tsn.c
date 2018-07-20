@@ -86,12 +86,10 @@ static const struct nla_policy qbu_policy[TSN_QBU_ATTR_MAX + 1] = {
 	[TSN_QBU_ATTR_HOLD_REQUEST] 	= { .type = NLA_U8},
 };
 
-
 static const struct nla_policy cbs_policy[TSN_CBS_ATTR_MAX + 1] = {
 	[TSN_CBS_ATTR_TC_INDEX]		= { .type = NLA_U8},
 	[TSN_CBS_ATTR_BW]			= { .type = NLA_U8},
 };
-
 
 static const struct nla_policy tsd_policy[TSN_TSD_ATTR_MAX + 1] = {
 	[TSN_TSD_ATTR_ENABLE]			= { .type = NLA_FLAG},
@@ -519,7 +517,7 @@ static int cmd_cb_streamid_set(struct genl_info *info)
 		sidconf.ofac_iport = nla_get_u32(sid[TSN_STREAMID_ATTR_OFIP]);
 
 loaddev:
-	if (tsnops->cb_streamid_set == NULL) {
+	if (!tsnops->cb_streamid_set) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -EOPNOTSUPP;
 	}
@@ -579,7 +577,7 @@ static int cmd_cb_streamid_get(struct genl_info *info)
 
 	sid_index = nla_get_u32(sid[TSN_STREAMID_ATTR_INDEX]);
 
-	if (tsnops->cb_streamid_get == NULL) {
+	if (!tsnops->cb_streamid_get) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -EINVAL;
 	} else {
@@ -784,7 +782,7 @@ static int cmd_qci_sfi_set(struct genl_info *info)
 		sficonf.block_oversize = true;
 
 loaddrive:
-	if (tsnops->qci_sfi_set == NULL) {
+	if (!tsnops->qci_sfi_set) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -EINVAL;
 	}
@@ -846,7 +844,7 @@ static int cmd_qci_sfi_get(struct genl_info *info)
 	memset(&sficonf, 0, sizeof(struct tsn_qci_psfp_sfi_conf));
 	memset(&sficount, 0, sizeof(struct tsn_qci_psfp_sfi_counters));
 
-	if ((tsnops->qci_sfi_get == NULL) || (tsnops->qci_sfi_counters_get == NULL)) {
+	if (!tsnops->qci_sfi_get || !tsnops->qci_sfi_counters_get) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -EINVAL;
 	} else {
@@ -952,7 +950,7 @@ static int cmd_qci_sfi_counters_get(struct genl_info *info)
 	tsnops = netdev->tsn_ops;
 
 	memset(&sficount, 0, sizeof(struct tsn_qci_psfp_sfi_counters));
-	if (tsnops->qci_sfi_counters_get == NULL) {
+	if (!tsnops->qci_sfi_counters_get) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -1;
 	}
@@ -1148,7 +1146,7 @@ static int cmd_qci_sgi_set(struct genl_info *info)
 		pr_info("tsn: no admin list parameters setting\n");
 
 loaddev:
-	if (tsnops->qci_sgi_set == NULL) {
+	if (!tsnops->qci_sgi_set) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		if (gcl != NULL)
 			kfree(gcl);
@@ -1223,7 +1221,7 @@ static int cmd_qci_sgi_get(struct genl_info *info)
 
 	memset(&sgiadmin, 0, sizeof(struct tsn_qci_psfp_sgi_conf));
 
-	if (tsnops->qci_sgi_get == NULL) {
+	if (!tsnops->qci_sgi_get) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -1;
 	}
@@ -1288,7 +1286,7 @@ static int cmd_qci_sgi_get(struct genl_info *info)
 	if (!listcount)
 		goto out1;
 
-	if (sgiadmin.admin.gcl == NULL) {
+	if (!sgiadmin.admin.gcl) {
 		pr_err("error: list lenghth is not zero, but no gate control list\n");
 		ret = -TSN_DEVRETERR;
 		goto err;
@@ -1401,7 +1399,7 @@ static int cmd_qci_sgi_status_get(struct genl_info *info)
 
 	memset(&sgistat, 0, sizeof(struct tsn_psfp_sgi_status));
 
-	if (tsnops->qci_sgi_status_get == NULL) {
+	if (!tsnops->qci_sgi_status_get) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -1;
 	}
@@ -1595,7 +1593,7 @@ static int cmd_qci_fmi_set(struct genl_info *info)
 
 loaddev:
 
-	if (tsnops->qci_fmi_set == NULL) {
+	if (!tsnops->qci_fmi_set) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -EINVAL;
 	}
@@ -1654,7 +1652,7 @@ static int cmd_qci_fmi_get(struct genl_info *info)
 
 	memset(&fmiconf, 0, sizeof(struct tsn_qci_psfp_fmi));
 
-	if (tsnops->qci_fmi_get == NULL) {
+	if (!tsnops->qci_fmi_get) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -EINVAL;
 	}
@@ -1813,7 +1811,7 @@ static int cmd_qbv_set(struct genl_info *info)
 		qbvconfig.admin.control_list = gatelist;
 
 setdrive:
-	if (tsnops->qbv_set == NULL) {
+	if (!tsnops->qbv_set) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		goto err;
 	}
@@ -1861,7 +1859,7 @@ static int cmd_qbv_get(struct genl_info *info)
 
 	memset(&qbvconf, 0, sizeof(struct tsn_qbv_conf));
 
-	if (tsnops->qbv_get == NULL) {
+	if (!tsnops->qbv_get) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -1;
 	}
@@ -1961,7 +1959,7 @@ static int cmd_qbv_status_get(struct genl_info *info)
 
 	memset(&qbvstatus, 0, sizeof(struct tsn_qbv_status));
 
-	if (tsnops->qbv_get_status == NULL) {
+	if (!tsnops->qbv_get_status) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -1;
 	}
@@ -2085,7 +2083,7 @@ static int tsn_cbs_set(struct sk_buff *skb, struct genl_info *info)
 
 	tsnops = netdev->tsn_ops;
 
-	if (tsnops->cbs_set == NULL) {
+	if (!tsnops->cbs_set) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -1;
 	}
@@ -2148,7 +2146,7 @@ static int tsn_cbs_get(struct sk_buff *skb, struct genl_info *info)
 
 	tsnops = netdev->tsn_ops;
 
-	if (tsnops->cbs_get == NULL) {
+	if (!tsnops->cbs_get) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -1;
 	}
@@ -2156,7 +2154,7 @@ static int tsn_cbs_get(struct sk_buff *skb, struct genl_info *info)
 	na = info->attrs[TSN_ATTR_CBS];
 	ret = NLA_PARSE_NESTED(cbsa, TSN_CBS_ATTR_MAX, na, cbs_policy);
 	if (ret) {
-		printk("tsn: parse value TSN_CBS_ATTR_MAX error.");
+		pr_err("tsn: parse value TSN_CBS_ATTR_MAX error.");
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
@@ -2178,7 +2176,7 @@ static int tsn_cbs_get(struct sk_buff *skb, struct genl_info *info)
 		return -EMSGSIZE;
 
 	if (!cbsa[TSN_CBS_ATTR_TC_INDEX]) {
-		printk("tsn: must to specify the TSN_CBS_ATTR_TC_INDEX attribute\n");
+		pr_err("tsn: must to specify the TSN_CBS_ATTR_TC_INDEX attribute\n");
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
@@ -2186,7 +2184,7 @@ static int tsn_cbs_get(struct sk_buff *skb, struct genl_info *info)
 
 	ret = tsnops->cbs_get(netdev, tc);
 	if (ret < 0) {
-		printk("tsn: cbs_get return error\n");
+		pr_err("tsn: cbs_get return error\n");
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
@@ -2230,7 +2228,7 @@ static int cmd_qbu_set(struct genl_info *info)
 
 	tsnops = netdev->tsn_ops;
 
-	if (tsnops->qbu_set == NULL) {
+	if (!tsnops->qbu_set) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -EINVAL;
 	}
@@ -2276,7 +2274,7 @@ static int cmd_qbu_get_status(struct genl_info *info)
 
 	memset(&pps, 0, sizeof(struct tsn_preempt_status));
 
-	if (tsnops->qbu_get == NULL) {
+	if (!tsnops->qbu_get) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -1;
 	}
@@ -2350,15 +2348,14 @@ static int tsn_tsd_set(struct sk_buff *skb, struct genl_info *info)
 
 	tsnops = netdev->tsn_ops;
 
-	if (tsnops->tsd_set == NULL) {
+	if (!tsnops->tsd_set) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -EINVAL;
 	}
 
 	if (nla_get_flag(ntsd[TSN_TSD_ATTR_DISABLE])) {
 		tsd.enable = false;
-	}
-	else {
+	} else {
 		if (ntsd[TSN_TSD_ATTR_PERIOD]) {
 			tsd.period = nla_get_u32(ntsd[TSN_TSD_ATTR_PERIOD]);
 		}
@@ -2412,7 +2409,7 @@ static int tsn_tsd_get(struct sk_buff *skb, struct genl_info *info)
 
 	tsnops = netdev->tsn_ops;
 
-	if (tsnops->tsd_get == NULL) {
+	if (!tsnops->tsd_get) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -1;
 	}
@@ -2427,7 +2424,7 @@ static int tsn_tsd_get(struct sk_buff *skb, struct genl_info *info)
 
 	ret = NLA_PARSE_NESTED(tsda, TSN_TSD_ATTR_MAX, na, tsd_policy);
 	if (ret) {
-		printk("tsn: parse value TSN_TSD_ATTR_MAX error.");
+		pr_err("tsn: parse value TSN_TSD_ATTR_MAX error.");
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}

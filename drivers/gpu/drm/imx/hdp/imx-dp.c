@@ -18,6 +18,7 @@
 
 void dp_fw_load(state_struct *state)
 {
+	printk("Loading DP Firmware\n");
 	CDN_API_LoadFirmware(state,
 		(u8 *)mhdp_iram0_get_ptr(),
 		mhdp_iram0_get_size(),
@@ -31,6 +32,7 @@ void dp_fw_init(state_struct *state, u32 core_rate)
 	u8 echo_resp[sizeof(echo_msg) + 1];
 	int ret;
 	u8 resp;
+	u16 ver, verlib;
 
 	/* configure the clock */
 	CDN_API_SetClock(state, core_rate/1000000);
@@ -38,6 +40,9 @@ void dp_fw_init(state_struct *state, u32 core_rate)
 	cdn_apb_write(state, APB_CTRL << 2, 0);
 
 	ret = CDN_API_CheckAlive_blocking(state);
+
+	CDN_API_General_getCurVersion(state, &ver, &verlib);
+	printk("FIRMWARE VERSION: %d, LIB VERSION: %d\n", ver, verlib);
 
 	/* turn on IP activity */
 	ret = CDN_API_MainControl_blocking(state, 1, &resp);

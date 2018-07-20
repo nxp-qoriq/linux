@@ -519,8 +519,10 @@ CDN_API_STATUS CDN_API_DPTX_Set_VIC(state_struct *state, VIC_MODES vicMode,
 	val = TU_SIZE_reg * pixelClockFreq * bitsPerPixelCalc;
 	val /= NumOfLanes * rate * 8;
 
-	if (val > 64)
+	if (val > 64) {
+		printk("CDN_ERROR_NOT_SUPPORTED val: %d\n", val);
 		return CDN_ERROR_NOT_SUPPORTED;
+	}
 
 	DP_FRAMER_TU_Param = (TU_SIZE_reg << 8) + val + (1 << 15);
 

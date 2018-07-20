@@ -451,8 +451,11 @@ static int imx_get_vic_index(struct drm_display_mode *mode)
 	for (i = 0; i < VIC_MODE_COUNT; i++) {
 		if (mode->hdisplay == vic_table[i][H_ACTIVE] &&
 			mode->vdisplay == vic_table[i][V_ACTIVE] &&
-			mode->clock == vic_table[i][PIXEL_FREQ_KHZ])
-			return i;
+			mode->clock == vic_table[i][PIXEL_FREQ_KHZ]) {
+				printk("VIC_MODE %d: hdisplay: %d, vdisplay: %d, clock: %d\n",
+					i, mode->hdisplay, mode->vdisplay, mode->clock);
+				return i;
+		}
 	}
 	/* Default 1080p60 */
 	printk(KERN_INFO "default vic 2\n");
@@ -858,14 +861,17 @@ static int hpd_det_worker(void *_dp)
 	for (;;) {
 		CDN_API_Get_Event(&hdp->state, &evt);
 		if (evt & 0x1) {
+			printk("Got HPD event\n");
 			/* HPD event */
 			CDN_API_DPTX_ReadEvent_blocking(&hdp->state, &eventId, &HPDevents);
 			CDN_API_DPTX_GetHpdStatus_blocking(&hdp->state, &aux_hpd);
 			if (HPDevents & 0x1) {
+				printk("HPD event: plugin\n");
 				imx_hdp_cable_plugin(hdp);
 				hdp->cable_state = true;
 				drm_kms_helper_hotplug_event(hdp->connector.dev);
 			} else if (HPDevents & 0x2) {
+				printk("HPD event: plugout\n");
 				hdp->cable_state = false;
 				imx_hdp_cable_plugout(hdp);
 				drm_kms_helper_hotplug_event(hdp->connector.dev);

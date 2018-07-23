@@ -250,7 +250,6 @@ enum optype {
  * @fd_flt_dma: DMA address for the frame list table
  * @flc: Flow Context
  * @flc_dma: I/O virtual address of Flow Context
- * @op_type: operation type
  * @cbk: Callback function to invoke when job is completed
  * @ctx: arbit context attached with request by the application
  * @edesc: extended descriptor; points to one of {skcipher,aead}_edesc
@@ -260,7 +259,6 @@ struct caam_request {
 	dma_addr_t fd_flt_dma;
 	struct caam_flc *flc;
 	dma_addr_t flc_dma;
-	enum optype op_type;
 	void (*cbk)(void *ctx, u32 err);
 	void *ctx;
 	void *edesc;

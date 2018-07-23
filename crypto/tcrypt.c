@@ -355,11 +355,13 @@ static void test_aead_speed(const char *algo, int enc, unsigned int secs,
 			aead_request_set_crypt(req, sg, sgout, *b_size, iv);
 			aead_request_set_ad(req, aad_size);
 
-			if (secs)
+			if (secs) {
 				ret = test_aead_jiffies(req, enc, *b_size,
 							secs);
-			else
+				cond_resched();
+			} else {
 				ret = test_aead_cycles(req, enc, *b_size);
+			}
 
 			if (ret) {
 				pr_err("%s() failed return code=%d\n", e, ret);
@@ -733,12 +735,14 @@ static void test_ahash_speed_common(const char *algo, unsigned int secs,
 
 		ahash_request_set_crypt(req, sg, output, speed[i].plen);
 
-		if (secs)
+		if (secs) {
 			ret = test_ahash_jiffies(req, speed[i].blen,
 						 speed[i].plen, output, secs);
-		else
+			cond_resched();
+		} else {
 			ret = test_ahash_cycles(req, speed[i].blen,
 						speed[i].plen, output);
+		}
 
 		if (ret) {
 			pr_err("hashing failed ret=%d\n", ret);
@@ -956,12 +960,14 @@ static void test_skcipher_speed(const char *algo, int enc, unsigned int secs,
 
 			skcipher_request_set_crypt(req, sg, sg, *b_size, iv);
 
-			if (secs)
+			if (secs) {
 				ret = test_acipher_jiffies(req, enc,
 							   *b_size, secs);
-			else
+				cond_resched();
+			} else {
 				ret = test_acipher_cycles(req, enc,
 							  *b_size);
+			}
 
 			if (ret) {
 				pr_err("%s() failed flags=%x\n", e,

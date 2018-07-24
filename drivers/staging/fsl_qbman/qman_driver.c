@@ -645,14 +645,14 @@ static struct qman_portal *init_pcfg(struct qm_portal_config *pcfg)
 static void init_slave(int cpu)
 {
 	struct qman_portal *p;
-	struct cpumask oldmask = current->cpus_allowed;
+	const cpumask_t *oldmask = current->cpus_ptr;
 	set_cpus_allowed_ptr(current, get_cpu_mask(cpu));
 	p = qman_create_affine_slave(shared_portals[shared_portals_idx++], cpu);
 	if (!p)
 		pr_err("Qman slave portal failure on cpu %d\n", cpu);
 	else
 		pr_info("Qman portal %sinitialised, cpu %d\n", "(slave) ", cpu);
-	set_cpus_allowed_ptr(current, &oldmask);
+	set_cpus_allowed_ptr(current, oldmask);
 	if (shared_portals_idx >= num_shared_portals)
 		shared_portals_idx = 0;
 }

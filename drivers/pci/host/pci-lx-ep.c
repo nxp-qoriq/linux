@@ -27,8 +27,16 @@
 
 #include "pci-lx-ep.h"
 
-static int lx_pcie_link_up(struct mv_pcie *pci)
+static int lx_pcie_ep_link_up(struct mv_pcie *pci)
 {
+	u32 state;
+
+	state = mv_pcie_readl_csr(pci, GPEX_LTSSM_STATE_STATUS);
+	state =	(state >> LTSSM_STAT_CODE_SHIFT) & LTSSM_STAT_CODE_MASK;
+
+	if (state == LX_PCIE_LTSSM_L0)
+		return 1;
+
 	return 0;
 }
 
@@ -44,7 +52,6 @@ lx_pci_ep_find(struct lx_pcie *pcie, int dev_id)
 
 	return NULL;
 }
-
 
 static bool lx_pcie_is_bridge(struct lx_pcie *pcie)
 {
@@ -89,6 +96,24 @@ int lx_pcie_ep_outbound_win_set(struct lx_pcie *pcie, int idx, int type,
 	mv_pcie_writel_csr(mv_pci, PAB_EXT_AXI_AMAP_SIZE(idx), size_h);
 
 	return 0;
+}
+
+void lx_pcie_ep_enable_inbound_win(struct lx_pcie *pcie)
+{
+	struct mv_pcie *mv_pci = pcie->pci;
+	int bar, pf;
+
+	if (pcie->sriov) {
+		for (pf = 0; pf < PCIE_PF_NUM; pf++) {
+			for (bar = 0; bar < PCIE_BAR_NUM_SRIOV; bar++)
+				mv_pcie_writel_csr(mv_pci,
+						PAB_PEX_BAR_AMAP(pf, bar), 1);
+		}
+	} else {
+		for (bar = 0; bar < PCIE_BAR_NUM; bar++)
+			mv_pcie_writel_csr(mv_pci,
+					PAB_PEX_BAR_AMAP(0, bar), 1);
+	}
 }
 
 void lx_pcie_ep_inbound_win_set(struct lx_pcie *pcie, int func,
@@ -244,14 +269,96 @@ static int lx_pcie_ep_init(struct lx_pcie *pcie)
 	return 0;
 }
 
+static void lx_pcie_ep_enable_ppio_apio_msi(struct mv_pcie *mv_pci)
+{
+	u32 val;
+
+	val = mv_pcie_readl_csr(mv_pci, PAB_CTRL);
+	val |= PAB_CTRL_APIO_EN | PAB_CTRL_PPIO_EN |
+		PAB_CTRL_MSI_SW_CTRL_EN;
+	mv_pcie_writel_csr(mv_pci, PAB_CTRL, val);
+
+	val = mv_pcie_readl_csr(mv_pci, PAB_AXI_PIO_CTRL(0));
+	val |= APIO_EN | MEM_WIN_EN;
+	mv_pcie_writel_csr(mv_pci, PAB_AXI_PIO_CTRL(0), val);
+
+	val = mv_pcie_readl_csr(mv_pci, PAB_PEX_PIO_CTRL(0));
+	val |= PPIO_EN;
+	mv_pcie_writel_csr(mv_pci, PAB_PEX_PIO_CTRL(0), val);
+
+	val =  mv_pcie_readl_csr(mv_pci, PAB_INTP_AXI_MISC_ENB);
+	val |= 1 << 0;
+	mv_pcie_writel_csr(mv_pci, PAB_INTP_AXI_MISC_ENB, val);
+}
+
+static void lx_pcie_ep_reinit_hw(struct lx_pcie *pcie)
+{
+	struct mv_pcie *mv_pci = pcie->pci;
+	const struct lx_pcie_ep_drvdata *dd = pcie->drvdata;
+	u32 val;
+	int pf;
+
+	/* Poll for pab_csb_reset to clear */
+	do
+		val = ioread32(pcie->lut + dd->pf_int_stat);
+	while ((val & (1 << PABRST)) == 0);
+
+	while (!lx_pcie_ep_link_up(mv_pci))
+		;
+
+	/* clear PEX_RESET bit in PEX_PF0_DBG register */
+	val = ioread32(pcie->lut + dd->lut_dbg);
+	val |= 1 << WE;
+	iowrite32(val, pcie->lut + dd->lut_dbg);
+
+	val = ioread32(pcie->lut + dd->lut_dbg);
+	val |= 1 << PABR;
+	iowrite32(val, pcie->lut + dd->lut_dbg);
+
+	val = ioread32(pcie->lut + dd->lut_dbg);
+	val &= ~(1 << WE);
+	iowrite32(val, pcie->lut + dd->lut_dbg);
+
+	lx_pcie_ep_enable_ppio_apio_msi(mv_pci);
+
+	lx_pcie_ep_enable_inbound_win(pcie);
+
+	if (pcie->sriov) {
+		for (pf = 0; pf < PCIE_PF_NUM; pf++)
+			lx_pcie_ep_setup_wins(pcie, PCIE_BAR_NUM_SRIOV, pf);
+	} else {
+		lx_pcie_ep_setup_wins(pcie, PCIE_BAR_NUM, 0);
+	}
+
+}
+
+static irqreturn_t lx_pcie_ep_handler(int irq, void *dev_id)
+{
+	struct lx_pcie *pcie = (struct lx_pcie *)dev_id;
+	struct mv_pcie *mv_pci = pcie->pci;
+	u32 val;
+
+	val = mv_pcie_readl_csr(mv_pci, PAB_INTP_AXI_MISC_STAT);
+	if (!val)
+		return IRQ_NONE;
+
+	if (val & RESET)
+		lx_pcie_ep_reinit_hw(pcie);
+
+	mv_pcie_writel_csr(mv_pci, PAB_INTP_AXI_MISC_STAT, val);
+
+	return IRQ_HANDLED;
+}
+
 static const struct mv_pcie_pab_ops lx_pcie_pab_ops = {
-	.link_up = lx_pcie_link_up,
+	.link_up = lx_pcie_ep_link_up,
 };
 
 static struct lx_pcie_ep_drvdata lx2160_drvdata = {
 	.lut_offset = 0x80000,
 	.lut_big_endian = false,
 	.lut_dbg = 0x407fc,
+	.pf_int_stat = 0x40018,
 	.ltssm_shift = 0,
 	.ltssm_mask = 0x3f,
 	.pab_ops = &lx_pcie_pab_ops,
@@ -296,6 +403,17 @@ static int lx_pcie_ep_probe(struct platform_device *pdev)
 	mv_pci->ops = pcie->drvdata->pab_ops;
 	pcie->lut = mv_pci->csr_base + pcie->drvdata->lut_offset;
 
+	pcie->irq = platform_get_irq_byname(pdev, "intr");
+	if (pcie->irq < 0) {
+		dev_err(&pdev->dev, "Can't get intr irq.\n");
+		return pcie->irq;
+	}
+	ret = devm_request_irq(&pdev->dev, pcie->irq,
+			lx_pcie_ep_handler, IRQF_SHARED, pdev->name, pcie);
+	if (ret) {
+		dev_err(&pdev->dev, "Can't register LX PCIe IRQ.\n");
+		return  ret;
+	}
 
 	cfg_res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "config");
 	if (cfg_res)

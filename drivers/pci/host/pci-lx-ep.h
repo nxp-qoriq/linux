@@ -33,11 +33,17 @@
 #define SIZE_1G            (1024 * 1024 * 1024)
 #define SIZE_1M            (1024 * 1024)
 
+#define PABRST				(31)
+#define WE				(31)
+#define PABR				(27)
+
+#define LX_PCIE_LTSSM_L0		0x2d /* L0 state */
 struct lx_pcie_ep_drvdata {
 	u32 lut_offset;
 	u32 ltssm_shift;
 	u32 ltssm_mask;
 	u32 lut_dbg;
+	u32 pf_int_stat;
 	bool lut_big_endian;
 	struct mv_pcie_rp_ops *rp_ops;
 	const struct mv_pcie_pab_ops *pab_ops;
@@ -57,6 +63,7 @@ struct lx_pcie {
 	phys_addr_t             out_base;
 	int                     sriov;
 	int                     index;
+	int			irq;
 };
 
 struct lx_ep_dev {

@@ -549,7 +549,6 @@ int enetc_cb_streamid_set(struct net_device *ndev, u32 index,
 	dma_addr_t dma;
 	u16 data_size, dma_size;
 	int curr_cbd;
-	u64 zero;
 
 	if (!ndev)
 		return -EINVAL;
@@ -563,35 +562,52 @@ int enetc_cb_streamid_set(struct net_device *ndev, u32 index,
 	cbdr->cls = BDCR_CMD_STREAM_IDENTIFY;
 	cbdr->status_flags = 0;
 
-	if (!en) {
-		cbdr->length = cpu_to_le16(8);
+	data_size = sizeof(struct null_streamid_data);
+	si_data = (struct null_streamid_data *)kzalloc(data_size, __GFP_DMA | GFP_KERNEL);
+	cbdr->length = cpu_to_le16(data_size);
 
-		zero = 0x8000000000000000;
-
-		dma = dma_map_single(&priv->si->pdev->dev, &zero, 8, DMA_FROM_DEVICE);
-		if (dma_mapping_error(&priv->si->pdev->dev, dma)) {
-			netdev_err(priv->si->ndev, "DMA mapping failed!\n");
-			kfree(si_data);
-			return -ENOMEM;
-		}
-
-		cbdr->addr[0] = lower_32_bits(dma);
-		cbdr->addr[1] = upper_32_bits(dma);
-
-		si_conf = &cbdr->sid_set;
-		/* Only one port supported for one entry, set itself */
-		si_conf->iports = 1 << (priv->si->pdev->devfn & 0x7);
-		si_conf->id_type = 1;
-		si_conf->oui[2] = 0x0;
-		si_conf->oui[1] = 0x80;
-		si_conf->oui[0] = 0xC2;
-
-		xmit_cbdr(priv->si, curr_cbd);
-		DUMP_CBDR(cbdr);
-		DUMP_DATA((char *)(&zero), 8);
-		memset(cbdr, 0, sizeof(*cbdr));
-		return 0;
+	dma = dma_map_single(&priv->si->pdev->dev, si_data, data_size, DMA_FROM_DEVICE);
+	if (dma_mapping_error(&priv->si->pdev->dev, dma)) {
+		netdev_err(priv->si->ndev, "DMA mapping failed!\n");
+		kfree(si_data);
+		return -ENOMEM;
 	}
+
+	cbdr->addr[0] = lower_32_bits(dma);
+	cbdr->addr[1] = upper_32_bits(dma);
+	si_data1 = (struct null_streamid_data *)si_data;
+	si_data1->dmac[0] = 0xFF;
+	si_data1->dmac[1] = 0xFF;
+	si_data1->dmac[2] = 0xFF;
+	si_data1->dmac[3] = 0xFF;
+	si_data1->dmac[4] = 0xFF;
+	si_data1->dmac[5] = 0xFF;
+	si_data1->vid_vidm_tg =	cpu_to_le16(ENETC_CBDR_SID_VID_MASK +
+								((0x3 << 14) | ENETC_CBDR_SID_VIDM));
+
+	si_conf = &cbdr->sid_set;
+	/* Only one port supported for one entry, set itself */
+	si_conf->iports = 1 << (priv->si->pdev->devfn & 0x7);
+	si_conf->id_type = 1;
+	si_conf->oui[2] = 0x0;
+	si_conf->oui[1] = 0x80;
+	si_conf->oui[0] = 0xC2;
+
+	xmit_cbdr(priv->si, curr_cbd);
+	DUMP_CBDR(cbdr);
+	DUMP_DATA((char *)si_data, data_size);
+	memset(cbdr, 0, sizeof(*cbdr));
+	kfree(si_data);
+
+	if (!en)
+		return 0;
+
+	curr_cbd = alloc_cbdr(priv->si, &cbdr);
+
+	cbdr->index = cpu_to_le16((u16)index);
+	cbdr->cmd = 0;
+	cbdr->cls = BDCR_CMD_STREAM_IDENTIFY;
+	cbdr->status_flags = 0;
 
 	si_conf = &cbdr->sid_set;
 	si_conf->en = 0x80;
@@ -677,6 +693,7 @@ int enetc_cb_streamid_get(struct net_device *ndev, u32 index,
 	dma_addr_t dma;
 	u16 data_size, dma_size;
 	int curr_cbd;
+	int valid;
 
 	if (!ndev)
 		return -EINVAL;
@@ -743,11 +760,12 @@ int enetc_cb_streamid_get(struct net_device *ndev, u32 index,
 
 	streamid->handle = le32_to_cpu(si_data->stream_handle);
 	streamid->ifac_iport = le32_to_cpu(si_data->input_ports);
+	valid = si_data->en;
 
 	memset(cbdr, 0, sizeof(*cbdr));
 	kfree(si_data);
 
-	return 0;
+	return valid;
 }
 
 /*  CBD Class 7: Stream Identity Statistics Query Descriptor - Long Format */

@@ -1409,7 +1409,7 @@ static int flexcan_probe(struct platform_device *pdev)
 
 	devm_can_led_init(dev);
 
-	dev_info(&pdev->dev, "device registered (reg_base=%p, irq=%d)\n",
+	dev_info(&pdev->dev, "device registered (reg_base=%px, irq=%d)\n",
 		 priv->regs, dev->irq);
 
 	return 0;

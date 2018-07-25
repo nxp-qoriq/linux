@@ -728,9 +728,15 @@
 			      <0x0 0x8390000 0x0 0x10000>, /* Status regs */
 			      <0x0 0x83a0000 0x0 0x40000>; /* Block regs */
 			interrupts = <0 152 0x4>,
-				     <0 39 0x4>;
-			interrupt-names = "qdma-error", "qdma-queue";
+				     <0 39 0x4>,
+				     <0 40 0x4>,
+				     <0 41 0x4>,
+				     <0 42 0x4>;
+			interrupt-names = "qdma-error", "qdma-queue0",
+				"qdma-queue1", "qdma-queue2", "qdma-queue3";
 			channels = <8>;
+			block-number = <1>;
+			block-offset = <0x10000>;
 			queues = <2>;
 			status-sizes = <64>;
 			queue-sizes = <64 64>;

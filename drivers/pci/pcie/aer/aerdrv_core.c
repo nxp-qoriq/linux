@@ -551,6 +551,7 @@ static void handle_error_source(struct pcie_device *aerdev,
 	struct aer_err_info *info)
 {
 	int pos;
+	int status, id, ret;
 
 	if (info->severity == AER_CORRECTABLE) {
 		/*
@@ -561,8 +562,34 @@ static void handle_error_source(struct pcie_device *aerdev,
 		if (pos)
 			pci_write_config_dword(dev, pos + PCI_ERR_COR_STATUS,
 					info->status);
-	} else
+	} else {
+		/* LX2 PCIe false DL protocol error WA */
+		ret = pci_read_config_dword(dev, PCI_VENDOR_ID, &id);
+		pos = dev->aer_cap;
+		status = (info->status & ~info->mask);
+		if (!ret && (id == 0x8d801957) && pos && (status & (1 << 4))) {
+			/* wait 1ms */
+			msleep(1);
+
+			ret = pci_read_config_dword(dev,
+					pos + PCI_ERR_COR_STATUS, &status);
+			/*
+			 * if CFG read does not failed and REPLAY_NUM_ROLLOVER
+			 * not set, then it is a false DLP error.
+			 */
+			if(!ret && !(status & (1 << 8))) {
+				dev_printk(KERN_DEBUG, &dev->dev, "false DLP error\n");
+				/* clear DLP error status */
+				pci_write_config_dword(dev,
+						pos + PCI_ERR_UNCOR_STATUS,
+						info->status);
+
+				return;
+			}
+		}
+
 		do_recovery(dev, info->severity);
+	}
 }
 
 #ifdef CONFIG_ACPI_APEI_PCIEAER

@@ -33,6 +33,7 @@ struct sdhci_esdhc {
 	u8 vendor_ver;
 	u8 spec_ver;
 	bool quirk_incorrect_hostver;
+	bool quirk_limited_clk_division;
 	unsigned int peripheral_clock;
 };
 
@@ -466,6 +467,7 @@ static void esdhc_of_set_clock(struct sdhci_host *host, unsigned int clock)
 	struct sdhci_esdhc *esdhc = sdhci_pltfm_priv(pltfm_host);
 	int pre_div = 1;
 	int div = 1;
+	int division;
 	ktime_t timeout;
 	u32 temp;
 
@@ -518,6 +520,24 @@ static void esdhc_of_set_clock(struct sdhci_host *host, unsigned int clock)
 
 	while (host->max_clk / pre_div / div > clock && div < 16)
 		div++;
+
+	if (esdhc->quirk_limited_clk_division &&
+		host->mmc->ios.timing == MMC_TIMING_MMC_HS400) {
+		division = pre_div * div;
+		if (division <= 4) {
+			pre_div = 4;
+			div = 1;
+		} else if (division <= 8) {
+			pre_div = 4;
+			div = 2;
+		} else if (division <= 12) {
+			pre_div = 4;
+			div = 3;
+		} else {
+			pr_warn("%s: using upsupported clock division.\n",
+				mmc_hostname(host->mmc));
+		}
+	}
 
 	dev_dbg(mmc_dev(host->mmc), "desired SD clock: %d, actual: %d\n",
 		clock, host->max_clk / pre_div / div);
@@ -858,6 +878,11 @@ static struct soc_device_attribute soc_incorrect_hostver[] = {
 	{ },
 };
 
+static struct soc_device_attribute soc_fixup_sdhc_clkdivs[] = {
+	{ .family = "QorIQ LX2160A", .revision = "1.0", },
+	{ },
+};
+
 static void esdhc_init(struct platform_device *pdev, struct sdhci_host *host)
 {
 	struct sdhci_pltfm_host *pltfm_host;
@@ -878,6 +903,11 @@ static void esdhc_init(struct platform_device *pdev, struct sdhci_host *host)
 		esdhc->quirk_incorrect_hostver = true;
 	else
 		esdhc->quirk_incorrect_hostver = false;
+
+	if (soc_device_match(soc_fixup_sdhc_clkdivs))
+		esdhc->quirk_limited_clk_division = true;
+	else
+		esdhc->quirk_limited_clk_division = false;
 
 	np = pdev->dev.of_node;
 	clk = of_clk_get(np, 0);
@@ -937,6 +967,7 @@ static int sdhci_esdhc_probe(struct platform_device *pdev)
 
 	pltfm_host = sdhci_priv(host);
 	esdhc = sdhci_pltfm_priv(pltfm_host);
+
 	if (esdhc->vendor_ver == VENDOR_V_22)
 		host->quirks2 |= SDHCI_QUIRK2_HOST_NO_CMD23;
 

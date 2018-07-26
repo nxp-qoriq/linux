@@ -586,7 +586,7 @@ static enum qman_cb_dqrr_result caam_rsp_fq_dqrr_cb(struct qman_portal *p,
 				fd->status);
 	}
 
-	if (unlikely(fd->format != fd->format)) {
+	if (unlikely(fd->format != qm_fd_compound)) {
 		dev_err(qidev, "Non-compound FD from CAAM\n");
 		return qman_cb_dqrr_consume;
 	}

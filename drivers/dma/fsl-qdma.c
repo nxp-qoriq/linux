@@ -91,7 +91,6 @@
 #define FSL_QDMA_DSR_DB			0x80000000
 
 #define FSL_QDMA_BASE_BUFFER_SIZE	96
-#define FSL_QDMA_EXPECT_SG_ENTRY_NUM	16
 #define FSL_QDMA_CIRCULAR_DESC_SIZE_MIN	64
 #define FSL_QDMA_CIRCULAR_DESC_SIZE_MAX	16384
 #define FSL_QDMA_QUEUE_NUM_MAX		8
@@ -241,7 +240,6 @@ struct fsl_qdma_queue {
 	struct list_head	comp_used;
 	struct list_head	comp_free;
 	struct dma_pool		*comp_pool;
-	struct dma_pool		*sg_pool;
 	spinlock_t		queue_lock;
 	dma_addr_t		bus_addr;
 	u32                     n_cq;
@@ -250,20 +248,12 @@ struct fsl_qdma_queue {
 	void __iomem		*block_base;
 };
 
-struct fsl_qdma_sg {
-	dma_addr_t		bus_addr;
-	void			*virt_addr;
-};
-
 struct fsl_qdma_comp {
 	dma_addr_t              bus_addr;
 	void			*virt_addr;
 	struct fsl_qdma_chan	*qchan;
-	struct fsl_qdma_sg	*sg_block;
 	struct virt_dma_desc    vdesc;
 	struct list_head	list;
-	u32			sg_block_src;
-	u32			sg_block_dst;
 };
 
 struct fsl_qdma_engine {
@@ -387,15 +377,11 @@ static int fsl_qdma_pre_request_enqueue_desc(struct fsl_qdma_queue *queue)
  * Request a command descriptor for enqueue.
  */
 static struct fsl_qdma_comp *fsl_qdma_request_enqueue_desc(
-					struct fsl_qdma_chan *fsl_chan,
-					unsigned int dst_nents,
-					unsigned int src_nents)
+					struct fsl_qdma_chan *fsl_chan)
 {
 	struct fsl_qdma_comp *comp_temp;
-	struct fsl_qdma_sg *sg_block;
 	struct fsl_qdma_queue *queue = fsl_chan->queue;
 	unsigned long flags;
-	unsigned int dst_sg_entry_block, src_sg_entry_block, sg_entry_total, i;
 
 	spin_lock_irqsave(&queue->queue_lock, flags);
 	if (list_empty(&queue->comp_free)) {
@@ -418,43 +404,6 @@ static struct fsl_qdma_comp *fsl_qdma_request_enqueue_desc(
 		list_del(&comp_temp->list);
 		spin_unlock_irqrestore(&queue->queue_lock, flags);
 	}
-
-	if (dst_nents != 0)
-		dst_sg_entry_block = dst_nents /
-					(FSL_QDMA_EXPECT_SG_ENTRY_NUM - 1) + 1;
-	else
-		dst_sg_entry_block = 0;
-
-	if (src_nents != 0)
-		src_sg_entry_block = src_nents /
-					(FSL_QDMA_EXPECT_SG_ENTRY_NUM - 1) + 1;
-	else
-		src_sg_entry_block = 0;
-
-	sg_entry_total = dst_sg_entry_block + src_sg_entry_block;
-	if (sg_entry_total) {
-		sg_block = kzalloc(sizeof(*sg_block) *
-					      sg_entry_total,
-					      GFP_KERNEL);
-		if (!sg_block) {
-			dma_pool_free(queue->comp_pool,
-					comp_temp->virt_addr,
-					comp_temp->bus_addr);
-			return NULL;
-		}
-		comp_temp->sg_block = sg_block;
-		for (i = 0; i < sg_entry_total; i++) {
-			sg_block->virt_addr = dma_pool_alloc(queue->sg_pool,
-							GFP_NOWAIT,
-							&sg_block->bus_addr);
-			memset(sg_block->virt_addr, 0,
-					FSL_QDMA_EXPECT_SG_ENTRY_NUM * 16);
-			sg_block++;
-		}
-	}
-
-	comp_temp->sg_block_src = src_sg_entry_block;
-	comp_temp->sg_block_dst = dst_sg_entry_block;
 	comp_temp->qchan = fsl_chan;
 
 	return comp_temp;
@@ -526,23 +475,7 @@ static struct fsl_qdma_queue *fsl_qdma_alloc_queue_resources(
 					 queue_temp->bus_addr);
 				return NULL;
 			}
-			/*
-			 * The dma pool for queue command buffer
-			 */
-			queue_temp->sg_pool =
-			dma_pool_create("sg_pool",
-				       &pdev->dev,
-				       FSL_QDMA_EXPECT_SG_ENTRY_NUM * 16,
-				       64, 0);
-			if (!queue_temp->sg_pool) {
-				dma_free_coherent(&pdev->dev,
-					 sizeof(struct fsl_qdma_format) *
-					 queue_size[i],
-					 queue_temp->cq,
-					 queue_temp->bus_addr);
-				dma_pool_destroy(queue_temp->comp_pool);
-				return NULL;
-			}
+
 			/*
 			 * List for queue command buffer
 			 */
@@ -963,7 +896,7 @@ fsl_qdma_prep_memcpy(struct dma_chan *chan, dma_addr_t dst,
 	struct fsl_qdma_chan *fsl_chan = to_fsl_qdma_chan(chan);
 	struct fsl_qdma_comp *fsl_comp;
 
-	fsl_comp = fsl_qdma_request_enqueue_desc(fsl_chan, 0, 0);
+	fsl_comp = fsl_qdma_request_enqueue_desc(fsl_chan);
 	fsl_qdma_comp_fill_memcpy(fsl_comp, dst, src, len);
 
 	return vchan_tx_prep(&fsl_chan->vchan, &fsl_comp->vdesc, flags);
@@ -1008,23 +941,11 @@ static void fsl_qdma_free_desc(struct virt_dma_desc *vdesc)
 {
 	struct fsl_qdma_comp *fsl_comp;
 	struct fsl_qdma_queue *fsl_queue;
-	struct fsl_qdma_sg *sg_block;
 	unsigned long flags;
 	unsigned int i;
 
 	fsl_comp = to_fsl_qdma_comp(vdesc);
 	fsl_queue = fsl_comp->qchan->queue;
-
-	if (fsl_comp->sg_block) {
-		for (i = 0; i < fsl_comp->sg_block_src +
-				fsl_comp->sg_block_dst; i++) {
-			sg_block = fsl_comp->sg_block + i;
-			dma_pool_free(fsl_queue->sg_pool,
-				      sg_block->virt_addr,
-				      sg_block->bus_addr);
-		}
-		kfree(fsl_comp->sg_block);
-	}
 
 	spin_lock_irqsave(&fsl_queue->queue_lock, flags);
 	list_add_tail(&fsl_comp->list, &fsl_queue->comp_free);

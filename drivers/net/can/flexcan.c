@@ -235,7 +235,7 @@ struct flexcan_regs {
 	u32 rxfgmask;		/* 0x48 */
 	u32 rxfir;		/* 0x4c */
 	u32 _reserved3[12];	/* 0x50 */
-	u8  mb[1024];		/* 0x80 */
+	u8 mb[2][512];		/* 0x80 */
 	/* FIFO-mode:
 	 *			MB
 	 * 0x080...0x08f	0	RX message buffer
@@ -362,11 +362,20 @@ static inline void flexcan_write_le(u32 val, void __iomem *addr)
 static struct flexcan_mb *flexcan_get_mb(const struct flexcan_priv *priv,
 					 u8 mb_index)
 {
+	u8 mb_count_bank;
+	bool bank;
+
 	if (WARN_ON(mb_index >= priv->mb_count))
 		return NULL;
 
+	mb_count_bank = sizeof(priv->regs->mb[0]) / priv->mb_size;
+
+	bank = mb_index >= mb_count_bank;
+	if (bank)
+		mb_index -= mb_count_bank;
+
 	return (struct flexcan_mb __iomem *)
-		(&priv->regs->mb[priv->mb_size * mb_index]);
+		(&priv->regs->mb[bank][priv->mb_size * mb_index]);
 }
 
 static inline void flexcan_error_irq_enable(const struct flexcan_priv *priv)
@@ -1150,7 +1159,8 @@ static int flexcan_open(struct net_device *dev)
 		priv->mb_size = sizeof(struct flexcan_mb) + CANFD_MAX_DLEN;
 	else
 		priv->mb_size = sizeof(struct flexcan_mb) + CAN_MAX_DLEN;
-	priv->mb_count = sizeof(priv->regs->mb) / priv->mb_size;
+	priv->mb_count = (sizeof(priv->regs->mb[0]) / priv->mb_size) +
+			 (sizeof(priv->regs->mb[1]) / priv->mb_size);
 
 	if (priv->devtype_data->quirks & FLEXCAN_QUIRK_USE_OFF_TIMESTAMP) {
 		priv->tx_mb_idx = FLEXCAN_TX_MB_OFF_TIMESTAMP;

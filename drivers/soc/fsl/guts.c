@@ -100,6 +100,11 @@ static const struct fsl_soc_die_attr fsl_soc_die[] = {
 	  .svr		= 0x87000000,
 	  .mask		= 0xfff70000,
 	},
+	/* Die: LX2160A, SoC: LX2160A/LX2120A/LX2080A */
+	{ .die		= "LX2160A",
+	  .svr		= 0x87360000,
+	  .mask		= 0xff3f0000,
+	},
 	{ },
 };
 

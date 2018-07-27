@@ -537,6 +537,8 @@ static const struct net_device_ops ethsw_port_ops = {
 	.ndo_change_mtu		= port_change_mtu,
 	.ndo_has_offload_stats	= port_has_offload_stats,
 	.ndo_get_offload_stats	= port_get_offload_stats,
+	.ndo_bridge_setlink     = switchdev_port_bridge_setlink,
+	.ndo_bridge_getlink     = switchdev_port_bridge_getlink,
 
 	.ndo_start_xmit		= port_dropframe,
 };

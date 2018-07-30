@@ -10,6 +10,19 @@ config FSL_ENETC_VF
 	---help---
 	  TBD
 
+config FSL_ENETC_PTP_CLOCK
+	tristate "ENETC PTP clock driver"
+	depends on FSL_ENETC || FSL_ENETC_VF
+	select PTP_1588_CLOCK
+	---help---
+	  This driver adds support for using the ENETC 1588 timer
+	  as a PTP clock. This clock is only useful if your PTP
+	  programs are getting hardware time stamps on the PTP Ethernet
+	  packets using the SO_TIMESTAMPING API.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called fsl-enetc-ptp.
+
 if FSL_ENETC
 
 config ENETC_TSN

@@ -17,8 +17,6 @@
 
 #include <linux/platform_device.h>
 
-#include <linux/of_device.h>
-
 #include "core.h"
 
 int dwc3_host_init(struct dwc3 *dwc)
@@ -75,14 +73,8 @@ int dwc3_host_init(struct dwc3 *dwc)
 		return -ENOMEM;
 	}
 
-	if (IS_ENABLED(CONFIG_OF) && dwc->dev->of_node)
-		of_dma_configure(&xhci->dev, dwc->dev->of_node);
-	else
-		dma_set_coherent_mask(&xhci->dev, dwc->dev->coherent_dma_mask);
 
-	xhci->dev.parent        = dwc->dev;
-	xhci->dev.dma_mask	= dwc->dev->dma_mask;
-	xhci->dev.dma_parms	= dwc->dev->dma_parms;
+	xhci->dev.parent	= dwc->dev;
 
 	/* set DMA operations */
 	if (dwc->dev->of_node && of_dma_is_coherent(dwc->dev->of_node)) {
@@ -100,6 +92,15 @@ int dwc3_host_init(struct dwc3 *dwc)
 	}
 
 	memset(props, 0, sizeof(struct property_entry) * ARRAY_SIZE(props));
+
+	if (dwc->quirk_reverse_in_out)
+		props[prop_idx++].name = "quirk-reverse-in-out";
+
+	if (dwc->quirk_stop_transfer_in_block)
+		props[prop_idx++].name = "quirk-stop-transfer-in-block";
+
+	if (dwc->quirk_stop_ep_in_u1)
+		props[prop_idx++].name = "quirk-stop-ep-in-u1";
 
 	if (dwc->usb3_lpm_capable)
 		props[prop_idx++].name = "usb3-lpm-capable";
@@ -125,9 +126,9 @@ int dwc3_host_init(struct dwc3 *dwc)
 	}
 
 	phy_create_lookup(dwc->usb2_generic_phy, "usb2-phy",
-			  dev_name(&xhci->dev));
+			  dev_name(dwc->dev));
 	phy_create_lookup(dwc->usb3_generic_phy, "usb3-phy",
-			  dev_name(&xhci->dev));
+			  dev_name(dwc->dev));
 
 	ret = platform_device_add(xhci);
 	if (ret) {
@@ -138,9 +139,9 @@ int dwc3_host_init(struct dwc3 *dwc)
 	return 0;
 err2:
 	phy_remove_lookup(dwc->usb2_generic_phy, "usb2-phy",
-			  dev_name(&xhci->dev));
+			  dev_name(dwc->dev));
 	phy_remove_lookup(dwc->usb3_generic_phy, "usb3-phy",
-			  dev_name(&xhci->dev));
+			  dev_name(dwc->dev));
 err1:
 	platform_device_put(xhci);
 	return ret;
@@ -149,8 +150,8 @@ err1:
 void dwc3_host_exit(struct dwc3 *dwc)
 {
 	phy_remove_lookup(dwc->usb2_generic_phy, "usb2-phy",
-			  dev_name(&dwc->xhci->dev));
+			  dev_name(dwc->dev));
 	phy_remove_lookup(dwc->usb3_generic_phy, "usb3-phy",
-			  dev_name(&dwc->xhci->dev));
+			  dev_name(dwc->dev));
 	platform_device_unregister(dwc->xhci);
 }

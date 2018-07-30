@@ -72,6 +72,7 @@ static int dwc3_pci_quirks(struct pci_dev *pdev, struct platform_device *dwc3)
 			PROPERTY_ENTRY_BOOL("snps,disable_scramble_quirk"),
 			PROPERTY_ENTRY_BOOL("snps,dis_u3_susphy_quirk"),
 			PROPERTY_ENTRY_BOOL("snps,dis_u2_susphy_quirk"),
+			PROPERTY_ENTRY_BOOL("linux,sysdev_is_parent"),
 			{ },
 		};
 
@@ -83,6 +84,7 @@ static int dwc3_pci_quirks(struct pci_dev *pdev, struct platform_device *dwc3)
 
 		struct property_entry properties[] = {
 			PROPERTY_ENTRY_STRING("dr_mode", "peripheral"),
+			PROPERTY_ENTRY_BOOL("linux,sysdev_is_parent"),
 			{ }
 		};
 
@@ -128,6 +130,7 @@ static int dwc3_pci_quirks(struct pci_dev *pdev, struct platform_device *dwc3)
 			PROPERTY_ENTRY_BOOL("snps,usb3_lpm_capable"),
 			PROPERTY_ENTRY_BOOL("snps,has-lpm-erratum"),
 			PROPERTY_ENTRY_BOOL("snps,dis_enblslpm_quirk"),
+			PROPERTY_ENTRY_BOOL("linux,sysdev_is_parent"),
 			{ },
 		};
 

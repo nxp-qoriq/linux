@@ -776,9 +776,8 @@ static int dpa_private_netdev_init(struct net_device *net_dev)
 	net_dev->features |= NETIF_F_HW_ACCEL_MQ;
 
 #ifndef CONFIG_PPC
-	/* Due to the A010022 FMan errata, we can not use contig frames larger
-	 * than 4K, nor S/G frames. We need to stop advertising S/G and GSO
-	 * support.
+	/* Due to the A010022 FMan errata, we can not use S/G frames. We need
+	 * to stop advertising S/G and GSO support.
 	 */
 	if (unlikely(dpaa_errata_a010022)) {
 		net_dev->hw_features &= ~NETIF_F_SG;
@@ -981,9 +980,6 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 	/* We only want to use jumbo frame optimization if we actually have
 	 * L2 MAX FRM set for jumbo frames as well.
 	 */
-#ifndef CONFIG_PPC
-	if (likely(!dpaa_errata_a010022))
-#endif
 	if(fm_get_max_frm() < 9600)
 		dev_warn(dev,
 			"Invalid configuration: if jumbo frames support is on, FSL_FM_MAX_FRAME_SIZE should be set to 9600\n");

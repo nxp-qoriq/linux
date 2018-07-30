@@ -234,6 +234,9 @@ static int xhci_free_msi(struct xhci_hcd *xhci)
 static int xhci_setup_msi(struct xhci_hcd *xhci)
 {
 	int ret;
+	/*
+	 * TODO:Check with MSI Soc for sysdev
+	 */
 	struct pci_dev  *pdev = to_pci_dev(xhci_to_hcd(xhci)->self.controller);
 
 	ret = pci_enable_msi(pdev);
@@ -260,7 +263,7 @@ static int xhci_setup_msi(struct xhci_hcd *xhci)
  */
 static void xhci_free_irq(struct xhci_hcd *xhci)
 {
-	struct pci_dev *pdev = to_pci_dev(xhci_to_hcd(xhci)->self.controller);
+	struct pci_dev *pdev = to_pci_dev(xhci_to_hcd(xhci)->self.sysdev);
 	int ret;
 
 	/* return if using legacy interrupt */
@@ -746,7 +749,7 @@ void xhci_shutdown(struct usb_hcd *hcd)
 	struct xhci_hcd *xhci = hcd_to_xhci(hcd);
 
 	if (xhci->quirks & XHCI_SPURIOUS_REBOOT)
-		usb_disable_xhci_ports(to_pci_dev(hcd->self.controller));
+		usb_disable_xhci_ports(to_pci_dev(hcd->self.sysdev));
 
 	spin_lock_irq(&xhci->lock);
 	xhci_halt(xhci);
@@ -763,7 +766,7 @@ void xhci_shutdown(struct usb_hcd *hcd)
 
 	/* Yet another workaround for spurious wakeups at shutdown with HSW */
 	if (xhci->quirks & XHCI_SPURIOUS_WAKEUP)
-		pci_set_power_state(to_pci_dev(hcd->self.controller), PCI_D3hot);
+		pci_set_power_state(to_pci_dev(hcd->self.sysdev), PCI_D3hot);
 }
 
 #ifdef CONFIG_PM
@@ -1604,14 +1607,38 @@ int xhci_urb_dequeue(struct usb_hcd *hcd, struct urb *urb, int status)
 			ret = -ENOMEM;
 			goto done;
 		}
-		ep->ep_state |= EP_HALT_PENDING;
-		ep->stop_cmds_pending++;
-		ep->stop_cmd_timer.expires = jiffies +
+		/*
+		 *A-009611: Issuing an End Transfer command on an IN endpoint.
+		 *when a transfer is in progress on USB blocks the transmission
+		 *Workaround: Software must wait for all existing TRBs to
+		 *complete before issuing End transfer command.
+		 */
+		if ((ep_ring->enqueue == ep_ring->dequeue &&
+				(xhci->quirks & XHCI_STOP_TRANSFER_IN_BLOCK)) ||
+				!(xhci->quirks & XHCI_STOP_TRANSFER_IN_BLOCK)) {
+			ep->ep_state |= EP_HALT_PENDING;
+			ep->stop_cmds_pending++;
+			ep->stop_cmd_timer.expires = jiffies +
 			XHCI_STOP_EP_CMD_TIMEOUT * HZ;
-		add_timer(&ep->stop_cmd_timer);
-		xhci_queue_stop_endpoint(xhci, command, urb->dev->slot_id,
-					 ep_index, 0);
-		xhci_ring_cmd_db(xhci);
+			add_timer(&ep->stop_cmd_timer);
+			xhci_queue_stop_endpoint(xhci, command,
+					urb->dev->slot_id,
+					ep_index, 0);
+			xhci_ring_cmd_db(xhci);
+		}
+
+		/*
+		 *A-009668: Stop Endpoint Command does not complete.
+		 *Workaround: Instead of issuing a Stop Endpoint Command,
+		 *issue a Disable Slot Command with the corresponding slot ID.
+		 *Alternately, you can issue an Address Device Command with
+		 *BSR=1
+		 */
+		if ((urb->dev->speed <= USB_SPEED_HIGH) &&
+					(xhci->quirks & XHCI_STOP_EP_IN_U1)) {
+			xhci_queue_slot_control(xhci, command, TRB_DISABLE_SLOT,
+					urb->dev->slot_id);
+		}
 	}
 done:
 	spin_unlock_irqrestore(&xhci->lock, flags);
@@ -4861,7 +4888,11 @@ int xhci_get_frame(struct usb_hcd *hcd)
 int xhci_gen_setup(struct usb_hcd *hcd, xhci_get_quirks_t get_quirks)
 {
 	struct xhci_hcd		*xhci;
-	struct device		*dev = hcd->self.controller;
+	/*
+	 * TODO: Check with DWC3 clients for sysdev according to
+	 * quirks
+	 */
+	struct device		*dev = hcd->self.sysdev;
 	int			retval;
 
 	/* Accept arbitrarily long scatter-gather lists */

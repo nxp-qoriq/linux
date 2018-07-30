@@ -62,6 +62,9 @@
 #define ENETC_SICAR_WR_COHERENT	0x00006727
 #define ENETC_SICAR_MSI	0x00300030 /* rd/wr device, no snoop, no alloc */
 
+#define ENETC_SICTR0	0x18
+#define ENETC_SICTR1	0x1c
+
 #define ENETC_SIPMAR0	0x80
 #define ENETC_SIPMAR1	0x84
 
@@ -130,6 +133,7 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_BDR(t, i, r)	(0x8000 + (t) * 0x100 + ENETC_BDR_OFF(i) + (r))
 /*** RX BDR reg offsets */
 #define ENETC_RBMR	0
+#define ENETC_RBMR_BDS	BIT(2)
 #define ENETC_RBMR_VTE	BIT(5)
 #define ENETC_RBMR_EN	BIT(31)
 
@@ -391,6 +395,9 @@ union enetc_tx_bd {
 #define ENETC_TXBD_L3_START_MASK	GENMASK(6, 0)
 #define ENETC_TXBD_L3_SET_HSIZE(val)	((((val) >> 2) & 0x7f) << 8)
 
+/* Extension flags */
+#define ENETC_TXBD_E_FLAGS_TWO_STEP_PTP	BIT(2)
+
 static inline __le16 enetc_txbd_l3_csoff(int start, int hdr_sz, u16 l3_flags)
 {
 	return cpu_to_le16(l3_flags | ENETC_TXBD_L3_SET_HSIZE(hdr_sz) |
@@ -401,10 +408,16 @@ static inline __le16 enetc_txbd_l3_csoff(int start, int hdr_sz, u16 l3_flags)
 #define ENETC_TXBD_L4_UDP	BIT(5)
 #define ENETC_TXBD_L4_TCP	BIT(6)
 
+// TODO: Add support for dynamic allocation of BD rings to replace #ifdefs
+#define enetc_has_extended_rxbds() IS_ENABLED(CONFIG_FSL_ENETC_HW_TIMESTAMPING)
+
 union enetc_rx_bd {
 	struct {
 		__le64 addr;
 		u8 reserved[8];
+#ifdef CONFIG_FSL_ENETC_HW_TIMESTAMPING
+		u8 reserved1[16];
+#endif
 	} w;
 	struct {
 		__le16 inet_csum;
@@ -419,6 +432,10 @@ union enetc_rx_bd {
 			};
 			__le32 lstatus;
 		};
+#ifdef CONFIG_FSL_ENETC_HW_TIMESTAMPING
+		__le32 ts;
+		u8 reserved[12];
+#endif
 	} r;
 };
 
@@ -427,6 +444,7 @@ union enetc_rx_bd {
 #define ENETC_RXBD_ERR_MASK	0xff
 #define ENETC_RXBD_LSTATUS(flags)	((flags) << 16)
 #define ENETC_RXBD_FLAG_VLAN	BIT(9)
+#define ENETC_RXBD_FLAG_TSTMP	BIT(10)
 
 #define ENETC_MAC_ADDR_FILT_CNT	8 /* # of supported entries per port */
 #define EMETC_MAC_ADDR_FILT_RES	3 /* # of reserved entries at the beginning */

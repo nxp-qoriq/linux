@@ -195,6 +195,8 @@ struct enetc_ndev_priv {
 	u16 rx_bd_count, tx_bd_count;
 
 	u16 msg_enable;
+	/* HW timestamping en flags */
+	bool tx_tstamp, rx_tstamp;
 
 	struct enetc_bdr *tx_ring[16];
 	struct enetc_bdr *rx_ring[16];
@@ -239,6 +241,7 @@ int enetc_open(struct net_device *ndev);
 int enetc_close(struct net_device *ndev);
 netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev);
 struct net_device_stats *enetc_get_stats(struct net_device *ndev);
+int enetc_ioctl(struct net_device *dev, struct ifreq *rq, int cmd);
 int enetc_set_features(struct net_device *ndev,
 		       netdev_features_t features);
 int enetc_setup_tc(struct net_device *ndev, enum tc_setup_type type,

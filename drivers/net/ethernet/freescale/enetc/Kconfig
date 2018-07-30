@@ -23,6 +23,18 @@ config FSL_ENETC_PTP_CLOCK
 	  To compile this driver as a module, choose M here: the module
 	  will be called fsl-enetc-ptp.
 
+config FSL_ENETC_HW_TIMESTAMPING
+	bool "ENETC hardware timestamping support"
+	depends on FSL_ENETC || FSL_ENETC_VF
+	select FSL_ENETC_PTP_CLOCK
+	---help---
+	  Enable hardware timestamping support on the Ethernet packets
+	  using the SO_TIMESTAMPING API. Because the RX BD ring dynamic
+	  allocation hasn't been supported and it's too expensive to use
+	  extended RX BDs if timestamping isn't used, the option was used
+	  to control hardware timestamping/extended RX BDs to be enabled
+	  or not.
+
 if FSL_ENETC
 
 config ENETC_TSN

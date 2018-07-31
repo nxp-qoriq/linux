@@ -363,6 +363,8 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 			percpu_stats->rx_packets++;
 			percpu_stats->rx_bytes += dpaa2_fd_get_len(fd);
 
+			rcu_read_lock();
+
 			xdp_act = bpf_prog_run_xdp(xdp_prog, &xdp);
 			switch (xdp_act) {
 			case XDP_PASS:
@@ -372,6 +374,7 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 			case XDP_ABORTED:
 			case XDP_DROP:
 				release_fd_buf(priv, ch, addr);
+				rcu_read_unlock();
 				goto drop_cnt;
 			case XDP_TX:
 				if (dpaa2_eth_xdp_tx(priv, (struct dpaa2_fd *)fd, vaddr,
@@ -382,8 +385,11 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 					free_rx_fd(priv, fd, vaddr);
 					ch->buf_count--;
 				}
+				rcu_read_unlock();
 				return;
 			}
+
+			rcu_read_unlock();
 		}
 		dma_unmap_single(dev, addr, DPAA2_ETH_RX_BUF_SIZE,
 				 DMA_BIDIRECTIONAL);

@@ -6,6 +6,9 @@
 
 #include "enetc_ptp.h"
 
+int enetc_phc_index = ENETC_PHC_INDEX_DEFAULT;
+EXPORT_SYMBOL(enetc_phc_index);
+
 struct enetc_ptp_config {
 	u32	ck_sel;
 	u32	tclk_period;
@@ -23,8 +26,6 @@ struct enetc_ptp {
 	struct enetc_ptp_config *config;
 	spinlock_t lock; /* protects regs */
 };
-
-int enetc_phc_index;
 
 static u64 tmr_cnt_read(struct enetc_ptp *ptp)
 {
@@ -340,7 +341,7 @@ static void enetc_ptp_remove(struct pci_dev *pdev)
 	enetc_wr_reg(ptp->regs + TMR_TEVENT, 0);
 	enetc_wr_reg(ptp->regs + TMR_CTRL, 0);
 
-	enetc_phc_index = -1;
+	enetc_phc_index = ENETC_PHC_INDEX_DEFAULT;
 	ptp_clock_unregister(ptp->clock);
 
 	iounmap(ptp->regs);

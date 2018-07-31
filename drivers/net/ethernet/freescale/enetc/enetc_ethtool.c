@@ -32,6 +32,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <linux/net_tstamp.h>
+#include <linux/module.h>
 #include "enetc.h"
 
 static const u32 enetc_si_regs[] = {
@@ -572,6 +574,35 @@ static void enetc_get_ringparam(struct net_device *ndev,
 	}
 }
 
+static int enetc_get_ts_info(struct net_device *ndev,
+			     struct ethtool_ts_info *info)
+{
+	int *phc_idx;
+
+	phc_idx = symbol_get(enetc_phc_index);
+	if (phc_idx) {
+		info->phc_index = *phc_idx;
+		symbol_put(enetc_phc_index);
+	} else {
+		info->phc_index = ENETC_PHC_INDEX_DEFAULT;
+	}
+
+#ifdef CONFIG_ENETC_HW_TIMESTAMPING
+	info->so_timestamping = SOF_TIMESTAMPING_TX_HARDWARE |
+				SOF_TIMESTAMPING_RX_HARDWARE |
+				SOF_TIMESTAMPING_RAW_HARDWARE;
+
+	info->tx_types = (1 << HWTSTAMP_TX_OFF) |
+			 (1 << HWTSTAMP_TX_ON);
+	info->rx_filters = (1 << HWTSTAMP_FILTER_NONE) |
+			   (1 << HWTSTAMP_FILTER_ALL);
+#else
+	info->so_timestamping = SOF_TIMESTAMPING_RX_SOFTWARE |
+				SOF_TIMESTAMPING_SOFTWARE;
+#endif
+	return 0;
+}
+
 const struct ethtool_ops enetc_pf_ethtool_ops = {
 	.get_regs_len = enetc_get_reglen,
 	.get_regs = enetc_get_regs,
@@ -585,6 +616,7 @@ const struct ethtool_ops enetc_pf_ethtool_ops = {
 	.get_rxfh = enetc_get_rxfh,
 	.set_rxfh = enetc_set_rxfh,
 	.get_ringparam = enetc_get_ringparam,
+	.get_ts_info = enetc_get_ts_info,
 };
 
 const struct ethtool_ops enetc_vf_ethtool_ops = {
@@ -599,6 +631,7 @@ const struct ethtool_ops enetc_vf_ethtool_ops = {
 	.get_rxfh = enetc_get_rxfh,
 	.set_rxfh = enetc_set_rxfh,
 	.get_ringparam = enetc_get_ringparam,
+	.get_ts_info = enetc_get_ts_info,
 };
 
 void enetc_set_ethtool_ops(struct net_device *ndev)

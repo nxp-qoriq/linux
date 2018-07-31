@@ -376,3 +376,33 @@
 &can1 {
 	status = "okay";
 };
+
+&pcs_mdio3 {
+	pcs_phy3: ethernet-phy@0 {
+		backplane-mode = "10gbase-kr";
+		compatible = "ethernet-phy-ieee802.3-c45";
+		reg = <0x0>;
+		fsl,lane-handle = <&serdes1>;
+		fsl,lane-reg = <0xF00 0x100>;/* lane H */
+	};
+};
+
+&pcs_mdio4 {
+	pcs_phy4: ethernet-phy@0 {
+		backplane-mode = "10gbase-kr";
+		compatible = "ethernet-phy-ieee802.3-c45";
+		reg = <0x0>;
+		fsl,lane-handle = <&serdes1>;
+		fsl,lane-reg = <0xE00 0x100>;/* lane G */
+	};
+};
+
+/* Update DPMAC connections to backplane PHYs
+ * &dpmac3 {
+ * 	phy-handle = <&pcs_phy3>;
+ * };
+ *
+ * &dpmac4 {
+ * 	phy-handle = <&pcs_phy4>;
+ * };
+ */

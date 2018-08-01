@@ -498,6 +498,8 @@ static int lx_pcie_ep_start_test(struct lx_ep_dev *ep, char *cmd)
 	char dirt_str[2];
 	int ret;
 
+	memset(dirt_str, 0, sizeof(dirt_str));
+
 	if (strncmp(cmd, "dma", 3) == 0)
 		type = TEST_TYPE_DMA;
 	else

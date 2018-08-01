@@ -148,6 +148,7 @@ static int lx_pcie_ep_test_dma(struct lx_ep_test *test)
 	enum dma_ctrl_flags dma_flags = DMA_CTRL_ACK | DMA_PREP_INTERRUPT;
 	struct timespec start, end, period;
 	int i = 0;
+	struct dma_async_tx_descriptor *dma_desc;
 
 	dma_cap_zero(mask);
 	dma_cap_set(DMA_MEMCPY, mask);
@@ -180,7 +181,6 @@ static int lx_pcie_ep_test_dma(struct lx_ep_test *test)
 
 	getrawmonotonic(&start);
 	while (!kthread_should_stop() && (i < test->loop)) {
-		struct dma_async_tx_descriptor *dma_desc;
 		dma_cookie_t	dma_cookie = {0};
 		unsigned long tmo;
 		int status;
@@ -193,7 +193,7 @@ static int lx_pcie_ep_test_dma(struct lx_ep_test *test)
 							   dma_flags);
 		if (!dma_desc) {
 			pr_err("DMA desc constr failed...\n");
-			goto _err;
+			goto _err_desc;
 		}
 
 		dma_desc->callback = lx_pcie_ep_test_dma_cb;
@@ -202,7 +202,7 @@ static int lx_pcie_ep_test_dma(struct lx_ep_test *test)
 
 		if (dma_submit_error(dma_cookie)) {
 			pr_err("DMA submit error....\n");
-			goto _err;
+			goto _err_desc;
 		}
 
 		/* Trigger the transaction */
@@ -212,7 +212,7 @@ static int lx_pcie_ep_test_dma(struct lx_ep_test *test)
 					  msecs_to_jiffies(5 * test->len));
 		if (tmo == 0) {
 			pr_err("Self-test copy timed out, disabling\n");
-			goto _err;
+			goto _err_desc;
 		}
 
 		status = dma_async_is_tx_complete(chan, dma_cookie,
@@ -234,6 +234,11 @@ static int lx_pcie_ep_test_dma(struct lx_ep_test *test)
 	dma_release_channel(chan);
 
 	return 0;
+
+_err_desc:
+	dma_desc->callback = NULL;
+	dma_desc->callback_param = NULL;
+	dma_desc = NULL;
 
 _err:
 	dma_release_channel(chan);

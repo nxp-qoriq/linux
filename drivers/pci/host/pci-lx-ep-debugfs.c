@@ -605,6 +605,11 @@ static ssize_t lx_pcie_ep_dbg_test_write(struct file *filp,
 		while (buf[i] == ' ')
 			i++;
 
+		if (i > 248) {
+			dev_err(&ep->dev, "the white space is too much\n");
+			return -ENOSPC;
+		}
+
 		if (kstrtou64(&buf[i], 0, &bus_addr))
 			dev_info(&ep->dev, "command: init <bus_addr>\n");
 		else {

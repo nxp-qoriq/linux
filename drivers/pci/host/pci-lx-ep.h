@@ -23,6 +23,7 @@
 #define PCIE_VF_NUM		4
 #define PCIE_VF_NUM_TOTAL	128
 #define PCIE_VF_NUM_ENABLED	32
+#define OB_WIN_NUMBER		256
 
 #define PCIE_SRIOV_CAPABILITY	0x2a0
 

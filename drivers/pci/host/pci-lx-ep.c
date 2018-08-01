@@ -64,6 +64,16 @@ static bool lx_pcie_is_bridge(struct lx_pcie *pcie)
 	return header_type == PCI_HEADER_TYPE_BRIDGE;
 }
 
+static void lx_pcie_ep_outbound_disable(struct lx_pcie *pcie, int idx)
+{
+	u32 val;
+	struct mv_pcie *mv_pci = pcie->pci;
+
+	val = mv_pcie_readl_csr(mv_pci, PAB_AXI_AMAP_CTRL(idx));
+	val &= ~AXI_AMAP_CTRL_EN;
+	mv_pcie_writel_csr(mv_pci, PAB_AXI_AMAP_CTRL(idx), val);
+}
+
 int lx_pcie_ep_outbound_win_set(struct lx_pcie *pcie, int idx, int type,
 				u64 phys, u64 bus_addr, u32 func, u64 size)
 {
@@ -259,6 +269,9 @@ static int lx_pcie_ep_init(struct lx_pcie *pcie)
 		for (j = 0; j <= vf; j++)
 			lx_pcie_ep_dev_init(pcie, i, j);
 	}
+
+	for (i = 0; i < OB_WIN_NUMBER; i++)
+		lx_pcie_ep_outbound_disable(pcie, i);
 
 	ret = lx_pcie_setup_ep(pcie);
 	if (ret) {

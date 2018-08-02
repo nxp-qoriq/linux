@@ -1,7 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0+
 /* Freescale backplane driver.
  *   Author: Shaohui Xie <Shaohui.Xie@freescale.com>
+ *           Florinel Iordache <florinel.iordache@nxp.com>
  *
  * Copyright 2015 Freescale Semiconductor, Inc.
+ * Copyright 2018 NXP
  *
  * Licensed under the GPL-2 or later.
  */
@@ -21,16 +24,26 @@
 #include <linux/delay.h>
 #include <linux/workqueue.h>
 
-/* XFI PCS Device Identifier */
-#define FSL_PCS_PHY_ID				0x0083e400
+#include "fsl_backplane.h"
 
-/* Freescale KR PMD registers */
-#define FSL_KR_PMD_CTRL				0x96
-#define FSL_KR_PMD_STATUS			0x97
-#define FSL_KR_LP_CU				0x98
-#define FSL_KR_LP_STATUS			0x99
-#define FSL_KR_LD_CU				0x9a
-#define FSL_KR_LD_STATUS			0x9b
+
+/* XFI PCS Device Identifier */
+#define FSL_PCS_PHY_ID_LS				0x0083e400
+#define FSL_PCS_PHY_ID_LX				0x00000000
+
+
+/* Link_Training_Registers */
+static int lt_MDIO_MMD = 0;
+static u32 lt_KR_PMD_CTRL = 0;
+static u32 lt_KR_PMD_STATUS = 0;
+static u32 lt_KR_LP_CU = 0;
+static u32 lt_KR_LP_STATUS = 0;
+static u32 lt_KR_LD_CU = 0;
+static u32 lt_KR_LD_STATUS = 0;
+
+/* Freescale KX/KR AN registers */
+static u32 fsl_AN_AD1 = 0;
+static u32 fsl_AN_BP_STAT = 0;
 
 /* Freescale KR PMD defines */
 #define PMD_RESET				0x1
@@ -49,32 +62,15 @@
 /* Freescale KX PCS mode register init value */
 #define IF_MODE_INIT				0x8
 
-/* Freescale KX/KR AN registers */
-#define FSL_AN_AD1				0x11
-#define FSL_AN_BP_STAT				0x30
 
 /* Freescale KX/KR AN registers defines */
 #define AN_CTRL_INIT				0x1200
 #define KX_AN_AD1_INIT				0x25
 #define KR_AN_AD1_INIT				0x85
 #define AN_LNK_UP_MASK				0x4
-#define KR_AN_MASK				0x8
-#define TRAIN_FAIL				0x8
+#define KR_AN_MASK					0x8
+#define TRAIN_FAIL					0x8
 
-/* C(-1) */
-#define BIN_M1					0
-/* C(1) */
-#define BIN_LONG				1
-#define BIN_M1_SEL				6
-#define BIN_Long_SEL				7
-#define CDR_SEL_MASK				0x00070000
-#define BIN_SNAPSHOT_NUM			5
-#define BIN_M1_THRESHOLD			3
-#define BIN_LONG_THRESHOLD			2
-
-#define PRE_COE_SHIFT				22
-#define POST_COE_SHIFT				16
-#define ZERO_COE_SHIFT				8
 
 #define PRE_COE_MAX				0x0
 #define PRE_COE_MIN				0x8
@@ -83,35 +79,10 @@
 #define ZERO_COE_MAX				0x30
 #define ZERO_COE_MIN				0x0
 
-#define TECR0_INIT				0x24200000
 #define RATIO_PREQ				0x3
 #define RATIO_PST1Q				0xd
 #define RATIO_EQ				0x20
 
-#define GCR0_RESET_MASK				0x600000
-#define GCR1_SNP_START_MASK			0x00000040
-#define GCR1_CTL_SNP_START_MASK			0x00002000
-#define GCR1_REIDL_TH_MASK			0x00700000
-#define GCR1_REIDL_EX_SEL_MASK			0x000c0000
-#define GCR1_REIDL_ET_MAS_MASK			0x00004000
-#define TECR0_AMP_RED_MASK			0x0000003f
-
-#define RECR1_CTL_SNP_DONE_MASK			0x00000002
-#define RECR1_SNP_DONE_MASK			0x00000004
-#define TCSR1_SNP_DATA_MASK			0x0000ffc0
-#define TCSR1_SNP_DATA_SHIFT			6
-#define TCSR1_EQ_SNPBIN_SIGN_MASK		0x100
-
-#define RECR1_GAINK2_MASK			0x0f000000
-#define RECR1_GAINK2_SHIFT			24
-#define RECR1_GAINK3_MASK			0x000f0000
-#define RECR1_GAINK3_SHIFT			16
-#define RECR1_OFFSET_MASK			0x00003f80
-#define RECR1_OFFSET_SHIFT			7
-#define RECR1_BLW_MASK				0x00000f80
-#define RECR1_BLW_SHIFT				7
-#define EYE_CTRL_SHIFT				12
-#define BASE_WAND_SHIFT				10
 
 #define XGKR_TIMEOUT				1050
 
@@ -134,6 +105,7 @@
 					COP1_MASK | COZ_MASK | COM1_MASK)
 
 #define NEW_ALGORITHM_TRAIN_TX
+
 #ifdef	NEW_ALGORITHM_TRAIN_TX
 #define	FORCE_INC_COP1_NUMBER			0
 #define	FORCE_INC_COM1_NUMBER			1
@@ -150,6 +122,12 @@ enum backplane_mode {
 	PHY_BACKPLANE_1000BASE_KX,
 	PHY_BACKPLANE_10GBASE_KR,
 	PHY_BACKPLANE_INVAL
+};
+
+enum serdes_type {
+	SERDES_10G,
+	SERDES_28G,
+	SERDES_INVAL
 };
 
 enum coe_filed {
@@ -171,25 +149,6 @@ enum train_state {
 	TRAINED,
 };
 
-struct per_lane_ctrl_status {
-	__be32 gcr0;	/* 0x.000 - General Control Register 0 */
-	__be32 gcr1;	/* 0x.004 - General Control Register 1 */
-	__be32 gcr2;	/* 0x.008 - General Control Register 2 */
-	__be32 resv1;	/* 0x.00C - Reserved */
-	__be32 recr0;	/* 0x.010 - Receive Equalization Control Register 0 */
-	__be32 recr1;	/* 0x.014 - Receive Equalization Control Register 1 */
-	__be32 tecr0;	/* 0x.018 - Transmit Equalization Control Register 0 */
-	__be32 resv2;	/* 0x.01C - Reserved */
-	__be32 tlcr0;	/* 0x.020 - TTL Control Register 0 */
-	__be32 tlcr1;	/* 0x.024 - TTL Control Register 1 */
-	__be32 tlcr2;	/* 0x.028 - TTL Control Register 2 */
-	__be32 tlcr3;	/* 0x.02C - TTL Control Register 3 */
-	__be32 tcsr0;	/* 0x.030 - Test Control/Status Register 0 */
-	__be32 tcsr1;	/* 0x.034 - Test Control/Status Register 1 */
-	__be32 tcsr2;	/* 0x.038 - Test Control/Status Register 2 */
-	__be32 tcsr3;	/* 0x.03C - Test Control/Status Register 3 */
-};
-
 struct tx_condition {
 	bool bin_m1_late_early;
 	bool bin_long_late_early;
@@ -208,6 +167,7 @@ struct tx_condition {
 struct fsl_xgkr_inst {
 	void *reg_base;
 	struct phy_device *phydev;
+	struct backplane_serdes bckpl_sd;
 	struct tx_condition tx_c;
 	struct delayed_work xgkr_wk;
 	enum train_state state;
@@ -217,6 +177,38 @@ struct fsl_xgkr_inst {
 	u32 ratio_pst1q;
 	u32 adpt_eq;
 };
+
+static void setup_an_lt_ls(void)
+{
+	/* Freescale KR PMD registers */
+	lt_MDIO_MMD = MDIO_MMD_PMAPMD;
+	lt_KR_PMD_CTRL = 0x96;
+	lt_KR_PMD_STATUS = 0x97;
+	lt_KR_LP_CU = 0x98;
+	lt_KR_LP_STATUS = 0x99;
+	lt_KR_LD_CU = 0x9a;
+	lt_KR_LD_STATUS = 0x9b;
+
+	/* Freescale KX/KR AN registers */
+	fsl_AN_AD1 = 0x11;
+	fsl_AN_BP_STAT = 0x30;
+}
+
+static void setup_an_lt_lx(void)
+{
+	/* Auto-Negotiation and Link Training Core Registers page 1: 256 = 0x100 */
+	lt_MDIO_MMD = MDIO_MMD_AN;
+	lt_KR_PMD_CTRL = 0x100;
+	lt_KR_PMD_STATUS = 0x101;
+	lt_KR_LP_CU = 0x102;
+	lt_KR_LP_STATUS = 0x103;
+	lt_KR_LD_CU = 0x104;
+	lt_KR_LD_STATUS = 0x105;
+
+	/* Freescale KX/KR AN registers */
+	fsl_AN_AD1 = 0x03;
+	fsl_AN_BP_STAT = 0x0F;
+}
 
 static void tx_condition_init(struct tx_condition *tx_c)
 {
@@ -236,86 +228,28 @@ static void tx_condition_init(struct tx_condition *tx_c)
 
 void tune_tecr0(struct fsl_xgkr_inst *inst)
 {
-	struct per_lane_ctrl_status *reg_base = inst->reg_base;
-	u32 val;
-
-	val = TECR0_INIT |
-		inst->adpt_eq << ZERO_COE_SHIFT |
-		inst->ratio_preq << PRE_COE_SHIFT |
-		inst->ratio_pst1q << POST_COE_SHIFT;
-
-	/* reset the lane */
-	iowrite32(ioread32(&reg_base->gcr0) & ~GCR0_RESET_MASK,
-		    &reg_base->gcr0);
-	udelay(1);
-	iowrite32(val, &reg_base->tecr0);
-	udelay(1);
-	/* unreset the lane */
-	iowrite32(ioread32(&reg_base->gcr0) | GCR0_RESET_MASK,
-		    &reg_base->gcr0);
-	udelay(1);
+	inst->bckpl_sd.tune_tecr0(inst->reg_base, inst->ratio_preq, inst->ratio_pst1q, inst->adpt_eq);
 }
 
 static void start_lt(struct phy_device *phydev)
 {
-	phy_write_mmd(phydev, MDIO_MMD_PMAPMD, FSL_KR_PMD_CTRL, TRAIN_EN);
+	phy_write_mmd(phydev, lt_MDIO_MMD, lt_KR_PMD_CTRL, TRAIN_EN);
 }
 
 static void stop_lt(struct phy_device *phydev)
 {
-	phy_write_mmd(phydev, MDIO_MMD_PMAPMD, FSL_KR_PMD_CTRL, TRAIN_DISABLE);
-}
-
-static void reset_gcr0(struct fsl_xgkr_inst *inst)
-{
-	struct per_lane_ctrl_status *reg_base = inst->reg_base;
-
-	iowrite32(ioread32(&reg_base->gcr0) & ~GCR0_RESET_MASK,
-		    &reg_base->gcr0);
-	udelay(1);
-	iowrite32(ioread32(&reg_base->gcr0) | GCR0_RESET_MASK,
-		    &reg_base->gcr0);
-	udelay(1);
-}
-
-void lane_set_1gkx(void *reg)
-{
-	struct per_lane_ctrl_status *reg_base = reg;
-	u32 val;
-
-	/* reset the lane */
-	iowrite32(ioread32(&reg_base->gcr0) & ~GCR0_RESET_MASK,
-		    &reg_base->gcr0);
-	udelay(1);
-
-	/* set gcr1 for 1GKX */
-	val = ioread32(&reg_base->gcr1);
-	val &= ~(GCR1_REIDL_TH_MASK | GCR1_REIDL_EX_SEL_MASK |
-		 GCR1_REIDL_ET_MAS_MASK);
-	iowrite32(val, &reg_base->gcr1);
-	udelay(1);
-
-	/* set tecr0 for 1GKX */
-	val = ioread32(&reg_base->tecr0);
-	val &= ~TECR0_AMP_RED_MASK;
-	iowrite32(val, &reg_base->tecr0);
-	udelay(1);
-
-	/* unreset the lane */
-	iowrite32(ioread32(&reg_base->gcr0) | GCR0_RESET_MASK,
-		    &reg_base->gcr0);
-	udelay(1);
+	phy_write_mmd(phydev, lt_MDIO_MMD, lt_KR_PMD_CTRL, TRAIN_DISABLE);
 }
 
 static void reset_lt(struct phy_device *phydev)
 {
-	phy_write_mmd(phydev, MDIO_MMD_PMAPMD, MDIO_CTRL1, PMD_RESET);
-	phy_write_mmd(phydev, MDIO_MMD_PMAPMD, FSL_KR_PMD_CTRL, TRAIN_DISABLE);
-	phy_write_mmd(phydev, MDIO_MMD_PMAPMD, FSL_KR_LD_CU, 0);
-	phy_write_mmd(phydev, MDIO_MMD_PMAPMD, FSL_KR_LD_STATUS, 0);
-	phy_write_mmd(phydev, MDIO_MMD_PMAPMD, FSL_KR_PMD_STATUS, 0);
-	phy_write_mmd(phydev, MDIO_MMD_PMAPMD, FSL_KR_LP_CU, 0);
-	phy_write_mmd(phydev, MDIO_MMD_PMAPMD, FSL_KR_LP_STATUS, 0);
+	phy_write_mmd(phydev, lt_MDIO_MMD, MDIO_CTRL1, PMD_RESET);
+	phy_write_mmd(phydev, lt_MDIO_MMD, lt_KR_PMD_CTRL, TRAIN_DISABLE);
+	phy_write_mmd(phydev, lt_MDIO_MMD, lt_KR_LD_CU, 0);
+	phy_write_mmd(phydev, lt_MDIO_MMD, lt_KR_LD_STATUS, 0);
+	phy_write_mmd(phydev, lt_MDIO_MMD, lt_KR_PMD_STATUS, 0);
+	phy_write_mmd(phydev, lt_MDIO_MMD, lt_KR_LP_CU, 0);
+	phy_write_mmd(phydev, lt_MDIO_MMD, lt_KR_LP_STATUS, 0);
 }
 
 static void start_xgkr_state_machine(struct delayed_work *work)
@@ -329,7 +263,7 @@ static void start_xgkr_an(struct phy_device *phydev)
 	struct fsl_xgkr_inst *inst;
 
 	reset_lt(phydev);
-	phy_write_mmd(phydev, MDIO_MMD_AN, FSL_AN_AD1, KR_AN_AD1_INIT);
+	phy_write_mmd(phydev, MDIO_MMD_AN, fsl_AN_AD1, KR_AN_AD1_INIT);
 	phy_write_mmd(phydev, MDIO_MMD_AN, MDIO_CTRL1, AN_CTRL_INIT);
 
 	inst = phydev->priv;
@@ -341,22 +275,22 @@ static void start_xgkr_an(struct phy_device *phydev)
 static void start_1gkx_an(struct phy_device *phydev)
 {
 	phy_write_mmd(phydev, MDIO_MMD_PCS, FSL_PCS_IF_MODE, IF_MODE_INIT);
-	phy_write_mmd(phydev, MDIO_MMD_AN, FSL_AN_AD1, KX_AN_AD1_INIT);
+	phy_write_mmd(phydev, MDIO_MMD_AN, fsl_AN_AD1, KX_AN_AD1_INIT);
 	phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_STAT1);
 	phy_write_mmd(phydev, MDIO_MMD_AN, MDIO_CTRL1, AN_CTRL_INIT);
 }
 
 static void ld_coe_status(struct fsl_xgkr_inst *inst)
 {
-	phy_write_mmd(inst->phydev, MDIO_MMD_PMAPMD,
-		      FSL_KR_LD_STATUS, inst->ld_status);
+	phy_write_mmd(inst->phydev, lt_MDIO_MMD,
+		      lt_KR_LD_STATUS, inst->ld_status);
 }
 
 static void ld_coe_update(struct fsl_xgkr_inst *inst)
 {
 	dev_dbg(&inst->phydev->mdio.dev, "sending request: %x\n", inst->ld_update);
-	phy_write_mmd(inst->phydev, MDIO_MMD_PMAPMD,
-		      FSL_KR_LD_CU, inst->ld_update);
+	phy_write_mmd(inst->phydev, lt_MDIO_MMD,
+		      lt_KR_LD_CU, inst->ld_update);
 }
 
 static void init_inst(struct fsl_xgkr_inst *inst, int reset)
@@ -375,134 +309,6 @@ static void init_inst(struct fsl_xgkr_inst *inst, int reset)
 	inst->ld_update = 0;
 	inst->ld_status &= ~RX_READY_MASK;
 	ld_coe_status(inst);
-}
-
-#ifdef	NEW_ALGORITHM_TRAIN_TX
-static int get_median_gaink2(u32 *reg)
-{
-	int gaink2_snap_shot[BIN_SNAPSHOT_NUM];
-	u32 rx_eq_snp;
-	struct per_lane_ctrl_status *reg_base;
-	int timeout;
-	int i, j, tmp, pos;
-
-	reg_base = (struct per_lane_ctrl_status *)reg;
-
-	for (i = 0; i < BIN_SNAPSHOT_NUM; i++) {
-		/* wait RECR1_CTL_SNP_DONE_MASK has cleared */
-		timeout = 100;
-		while (ioread32(&reg_base->recr1) &
-		       RECR1_CTL_SNP_DONE_MASK) {
-			udelay(1);
-			timeout--;
-			if (timeout == 0)
-				break;
-		}
-
-		/* start snap shot */
-		iowrite32((ioread32(&reg_base->gcr1) |
-			    GCR1_CTL_SNP_START_MASK),
-			    &reg_base->gcr1);
-
-		/* wait for SNP done */
-		timeout = 100;
-		while (!(ioread32(&reg_base->recr1) &
-		       RECR1_CTL_SNP_DONE_MASK)) {
-			udelay(1);
-			timeout--;
-			if (timeout == 0)
-				break;
-		}
-
-		/* read and save the snap shot */
-		rx_eq_snp = ioread32(&reg_base->recr1);
-		gaink2_snap_shot[i] = (rx_eq_snp & RECR1_GAINK2_MASK) >>
-					RECR1_GAINK2_SHIFT;
-
-		/* terminate the snap shot by setting GCR1[REQ_CTL_SNP] */
-		iowrite32((ioread32(&reg_base->gcr1) &
-			    ~GCR1_CTL_SNP_START_MASK),
-			    &reg_base->gcr1);
-	}
-
-	/* get median of the 5 snap shot */
-	for (i = 0; i < BIN_SNAPSHOT_NUM - 1; i++) {
-		tmp = gaink2_snap_shot[i];
-		pos = i;
-		for (j = i + 1; j < BIN_SNAPSHOT_NUM; j++) {
-			if (gaink2_snap_shot[j] < tmp) {
-				tmp = gaink2_snap_shot[j];
-				pos = j;
-			}
-		}
-
-		gaink2_snap_shot[pos] = gaink2_snap_shot[i];
-		gaink2_snap_shot[i] = tmp;
-	}
-
-	return gaink2_snap_shot[2];
-}
-#endif
-
-static bool is_bin_early(int bin_sel, void *reg)
-{
-	bool early = false;
-	int bin_snap_shot[BIN_SNAPSHOT_NUM];
-	int i, negative_count = 0;
-	struct per_lane_ctrl_status *reg_base = reg;
-	int timeout;
-
-	for (i = 0; i < BIN_SNAPSHOT_NUM; i++) {
-		/* wait RECR1_SNP_DONE_MASK has cleared */
-		timeout = 100;
-		while ((ioread32(&reg_base->recr1) & RECR1_SNP_DONE_MASK)) {
-			udelay(1);
-			timeout--;
-			if (timeout == 0)
-				break;
-		}
-
-		/* set TCSR1[CDR_SEL] to BinM1/BinLong */
-		if (bin_sel == BIN_M1) {
-			iowrite32((ioread32(&reg_base->tcsr1) &
-				    ~CDR_SEL_MASK) | BIN_M1_SEL,
-				    &reg_base->tcsr1);
-		} else {
-			iowrite32((ioread32(&reg_base->tcsr1) &
-				    ~CDR_SEL_MASK) | BIN_Long_SEL,
-				    &reg_base->tcsr1);
-		}
-
-		/* start snap shot */
-		iowrite32(ioread32(&reg_base->gcr1) | GCR1_SNP_START_MASK,
-			    &reg_base->gcr1);
-
-		/* wait for SNP done */
-		timeout = 100;
-		while (!(ioread32(&reg_base->recr1) & RECR1_SNP_DONE_MASK)) {
-			udelay(1);
-			timeout--;
-			if (timeout == 0)
-				break;
-		}
-
-		/* read and save the snap shot */
-		bin_snap_shot[i] = (ioread32(&reg_base->tcsr1) &
-				TCSR1_SNP_DATA_MASK) >> TCSR1_SNP_DATA_SHIFT;
-		if (bin_snap_shot[i] & TCSR1_EQ_SNPBIN_SIGN_MASK)
-			negative_count++;
-
-		/* terminate the snap shot by setting GCR1[REQ_CTL_SNP] */
-		iowrite32(ioread32(&reg_base->gcr1) & ~GCR1_SNP_START_MASK,
-			    &reg_base->gcr1);
-	}
-
-	if (((bin_sel == BIN_M1) && (negative_count > BIN_M1_THRESHOLD)) ||
-	    ((bin_sel == BIN_LONG && (negative_count > BIN_LONG_THRESHOLD)))) {
-		early = true;
-	}
-
-	return early;
 }
 
 static void train_tx(struct fsl_xgkr_inst *inst)
@@ -524,8 +330,8 @@ recheck:
 		inst->ld_status |= RX_READY_MASK;
 		ld_coe_status(inst);
 		/* tell LP we are ready */
-		phy_write_mmd(phydev, MDIO_MMD_PMAPMD,
-			      FSL_KR_PMD_STATUS, RX_STAT);
+		phy_write_mmd(phydev, lt_MDIO_MMD,
+			      lt_KR_PMD_STATUS, RX_STAT);
 		return;
 	}
 
@@ -533,7 +339,7 @@ recheck:
 	 * we can clear up the appropriate update request so that the
 	 * subsequent code may easily issue new update requests if needed.
 	 */
-	lp_status = phy_read_mmd(phydev, MDIO_MMD_PMAPMD, FSL_KR_LP_STATUS) &
+	lp_status = phy_read_mmd(phydev, lt_MDIO_MMD, lt_KR_LP_STATUS) &
 				 REQUEST_MASK;
 	status_cop1 = (lp_status & COP1_MASK) >> COP1_SHIFT;
 	status_coz = (lp_status & COZ_MASK) >> COZ_SHIFT;
@@ -679,7 +485,7 @@ recheck:
 		}
 
 		if (status_cop1 != COE_MAX) {
-			median_gaink2 = get_median_gaink2(inst->reg_base);
+			median_gaink2 = inst->bckpl_sd.get_median_gaink2(inst->reg_base);
 			if (median_gaink2 == 0xf) {
 				tx_c->post_inc = 1;
 			} else {
@@ -704,8 +510,8 @@ recheck:
 #endif
 
 	/* snapshot and select bin */
-	bin_m1_early = is_bin_early(BIN_M1, inst->reg_base);
-	bin_long_early = is_bin_early(BIN_LONG, inst->reg_base);
+	bin_m1_early = inst->bckpl_sd.is_bin_early(BIN_M1, inst->reg_base);
+	bin_long_early = inst->bckpl_sd.is_bin_early(BIN_LONG, inst->reg_base);
 
 	if (!tx_c->bin_m1_stop && !tx_c->bin_m1_late_early && bin_m1_early) {
 		tx_c->bin_m1_stop = true;
@@ -798,7 +604,7 @@ static int is_link_training_fail(struct phy_device *phydev)
 	int val;
 	int timeout = 100;
 
-	val = phy_read_mmd(phydev, MDIO_MMD_PMAPMD, FSL_KR_PMD_STATUS);
+	val = phy_read_mmd(phydev, lt_MDIO_MMD, lt_KR_PMD_STATUS);
 	if (!(val & TRAIN_FAIL) && (val & RX_STAT)) {
 		/* check LNK_STAT for sure */
 		while (timeout--) {
@@ -814,7 +620,7 @@ static int is_link_training_fail(struct phy_device *phydev)
 
 static int check_rx(struct phy_device *phydev)
 {
-	return phy_read_mmd(phydev, MDIO_MMD_PMAPMD, FSL_KR_LP_STATUS) &
+	return phy_read_mmd(phydev, lt_MDIO_MMD, lt_KR_LP_STATUS) &
 			    RX_READY_MASK;
 }
 
@@ -1029,7 +835,7 @@ static void train_rx(struct fsl_xgkr_inst *inst)
 	int request, old_ld_status;
 
 	/* get request from LP */
-	request = phy_read_mmd(phydev, MDIO_MMD_PMAPMD, FSL_KR_LP_CU) &
+	request = phy_read_mmd(phydev, lt_MDIO_MMD, lt_KR_LP_CU) &
 			      (LD_ALL_MASK);
 	old_ld_status = inst->ld_status;
 
@@ -1097,13 +903,13 @@ static void xgkr_start_train(struct phy_device *phydev)
 	for (i = 0; i < 2;) {
 		dead_line = jiffies + msecs_to_jiffies(500);
 		while (time_before(jiffies, dead_line)) {
-			val = phy_read_mmd(phydev, MDIO_MMD_PMAPMD,
-					   FSL_KR_PMD_STATUS);
+			val = phy_read_mmd(phydev, lt_MDIO_MMD,
+					   lt_KR_PMD_STATUS);
 			if (val & TRAIN_FAIL) {
 				/* LT failed already, reset lane to avoid
 				 * it run into hanging, then start LT again.
 				 */
-				reset_gcr0(inst);
+				inst->bckpl_sd.reset_gcr0(inst->reg_base);
 				start_lt(phydev);
 			} else if ((val & PMD_STATUS_SUP_STAT) &&
 				   (val & PMD_STATUS_FRAME_LOCK))
@@ -1125,10 +931,10 @@ static void xgkr_start_train(struct phy_device *phydev)
 
 		while (time_before(jiffies, dead_line)) {
 			/* check if the LT is already failed */
-			lt_state = phy_read_mmd(phydev, MDIO_MMD_PMAPMD,
-						FSL_KR_PMD_STATUS);
+			lt_state = phy_read_mmd(phydev, lt_MDIO_MMD,
+						lt_KR_PMD_STATUS);
 			if (lt_state & TRAIN_FAIL) {
-				reset_gcr0(inst);
+				inst->bckpl_sd.reset_gcr0(inst->reg_base);
 				break;
 			}
 
@@ -1174,8 +980,8 @@ static void xgkr_state_machine(struct work_struct *work)
 
 	switch (inst->state) {
 	case DETECTING_LP:
-		phy_read_mmd(phydev, MDIO_MMD_AN, FSL_AN_BP_STAT);
-		an_state = phy_read_mmd(phydev, MDIO_MMD_AN, FSL_AN_BP_STAT);
+		phy_read_mmd(phydev, MDIO_MMD_AN, fsl_AN_BP_STAT);
+		an_state = phy_read_mmd(phydev, MDIO_MMD_AN, fsl_AN_BP_STAT);
 		if ((an_state & KR_AN_MASK))
 			needs_train = true;
 		break;
@@ -1203,15 +1009,23 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 	struct fsl_xgkr_inst *xgkr_inst;
 	struct device_node *phy_node, *lane_node;
 	struct resource res_lane;
+	struct backplane_serdes bckpl_sd;
+	const char *st;
 	const char *bm;
 	int ret;
 	int bp_mode;
+	int serdes_type;
 	u32 lane[2];
 
 	phy_node = phydev->mdio.dev.of_node;
+	if (!phy_node) {
+		dev_err(&phydev->mdio.dev, "No associated device tree node\n");
+		return -EINVAL;
+	}
+
 	bp_mode = of_property_read_string(phy_node, "backplane-mode", &bm);
 	if (bp_mode < 0)
-		return 0;
+		return -EINVAL;
 
 	if (!strcasecmp(bm, "1000base-kx")) {
 		bp_mode = PHY_BACKPLANE_1000BASE_KX;
@@ -1225,6 +1039,20 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 	lane_node = of_parse_phandle(phy_node, "fsl,lane-handle", 0);
 	if (!lane_node) {
 		dev_err(&phydev->mdio.dev, "parse fsl,lane-handle failed\n");
+		return -EINVAL;
+	}
+
+	ret = of_property_read_string(lane_node, "compatible", &st);
+	if (ret < 0) {
+		//assume SERDES-10G if compatible property is not specified
+		serdes_type = SERDES_10G;
+	}
+	else if (!strcasecmp(st, "fsl,serdes-10g")) {
+		serdes_type = SERDES_10G;
+	} else if (!strcasecmp(st, "fsl,serdes-28g")) {
+		serdes_type = SERDES_28G;
+	} else {
+		dev_err(&phydev->mdio.dev, "Unknown serdes-type\n");
 		return -EINVAL;
 	}
 
@@ -1250,10 +1078,27 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 		return -ENOMEM;
 	}
 
+	switch (serdes_type)
+	{
+	case SERDES_10G:
+		setup_an_lt_ls();
+		setup_backplane_serdes_10g(&bckpl_sd);
+		break;
+
+	case SERDES_28G:
+		setup_an_lt_lx();
+		setup_backplane_serdes_28g(&bckpl_sd);
+		break;
+
+	default:
+		dev_err(&phydev->mdio.dev, "Unsupported serdes-type\n");
+		return -EINVAL;
+	}
+
 	if (bp_mode == PHY_BACKPLANE_1000BASE_KX) {
 		phydev->speed = SPEED_1000;
 		/* configure the lane for 1000BASE-KX */
-		lane_set_1gkx(phydev->priv);
+		bckpl_sd.lane_set_1gkx(phydev->priv);
 		return 0;
 	}
 
@@ -1264,6 +1109,8 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 
 	xgkr_inst->reg_base = phydev->priv;
 	xgkr_inst->phydev = phydev;
+	xgkr_inst->bckpl_sd = bckpl_sd;
+
 	phydev->priv = xgkr_inst;
 
 	if (bp_mode == PHY_BACKPLANE_10GBASE_KR) {
@@ -1276,11 +1123,21 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 
 static int fsl_backplane_aneg_done(struct phy_device *phydev)
 {
+	if (!phydev->mdio.dev.of_node) {
+		dev_err(&phydev->mdio.dev, "No associated device tree node\n");
+		return -EINVAL;
+	}
+
 	return 1;
 }
 
 static int fsl_backplane_config_aneg(struct phy_device *phydev)
 {
+	if (!phydev->mdio.dev.of_node) {
+		dev_err(&phydev->mdio.dev, "No associated device tree node\n");
+		return -EINVAL;
+	}
+
 	if (phydev->speed == SPEED_10000) {
 		phydev->supported |= SUPPORTED_10000baseKR_Full;
 		start_xgkr_an(phydev);
@@ -1297,6 +1154,11 @@ static int fsl_backplane_config_aneg(struct phy_device *phydev)
 
 static int fsl_backplane_suspend(struct phy_device *phydev)
 {
+	if (!phydev->mdio.dev.of_node) {
+		dev_err(&phydev->mdio.dev, "No associated device tree node\n");
+		return -EINVAL;
+	}
+
 	if (phydev->speed == SPEED_10000) {
 		struct fsl_xgkr_inst *xgkr_inst = phydev->priv;
 
@@ -1307,6 +1169,11 @@ static int fsl_backplane_suspend(struct phy_device *phydev)
 
 static int fsl_backplane_resume(struct phy_device *phydev)
 {
+	if (!phydev->mdio.dev.of_node) {
+		dev_err(&phydev->mdio.dev, "No associated device tree node\n");
+		return -EINVAL;
+	}
+
 	if (phydev->speed == SPEED_10000) {
 		struct fsl_xgkr_inst *xgkr_inst = phydev->priv;
 
@@ -1320,6 +1187,11 @@ static int fsl_backplane_resume(struct phy_device *phydev)
 
 static int fsl_backplane_read_status(struct phy_device *phydev)
 {
+	if (!phydev->mdio.dev.of_node) {
+		dev_err(&phydev->mdio.dev, "No associated device tree node\n");
+		return -EINVAL;
+	}
+
 	if (is_link_up(phydev))
 		phydev->link = 1;
 	else
@@ -1328,10 +1200,20 @@ static int fsl_backplane_read_status(struct phy_device *phydev)
 	return 0;
 }
 
+static int fsl_backplane_match_phy_device(struct phy_device *phydev)
+{
+	if (!phydev->mdio.dev.of_node) {
+		dev_err(&phydev->mdio.dev, "No associated device tree node\n");
+		return 0;
+	}
+
+	return 1;
+}
+
 static struct phy_driver fsl_backplane_driver[] = {
 	{
-	.phy_id		= FSL_PCS_PHY_ID,
-	.name		= "Freescale Backplane",
+	.phy_id		= FSL_PCS_PHY_ID_LS,
+	.name		= "Freescale Backplane LS",
 	.phy_id_mask	= 0xffffffff,
 	.features	= SUPPORTED_Backplane | SUPPORTED_Autoneg |
 			  SUPPORTED_MII,
@@ -1341,13 +1223,29 @@ static struct phy_driver fsl_backplane_driver[] = {
 	.read_status	= fsl_backplane_read_status,
 	.suspend	= fsl_backplane_suspend,
 	.resume		= fsl_backplane_resume,
+	.match_phy_device = fsl_backplane_match_phy_device,
+	},
+	{
+	.phy_id		= FSL_PCS_PHY_ID_LX,
+	.name		= "Freescale Backplane LX",
+	.phy_id_mask	= 0xffffffff,
+	.features	= SUPPORTED_Backplane | SUPPORTED_Autoneg |
+			  SUPPORTED_MII,
+	.probe          = fsl_backplane_probe,
+	.aneg_done      = fsl_backplane_aneg_done,
+	.config_aneg	= fsl_backplane_config_aneg,
+	.read_status	= fsl_backplane_read_status,
+	.suspend	= fsl_backplane_suspend,
+	.resume		= fsl_backplane_resume,
+	.match_phy_device = fsl_backplane_match_phy_device,
 	},
 };
 
 module_phy_driver(fsl_backplane_driver);
 
 static struct mdio_device_id __maybe_unused freescale_tbl[] = {
-	{ FSL_PCS_PHY_ID, 0xffffffff },
+	{ FSL_PCS_PHY_ID_LS, 0xffffffff },
+	{ FSL_PCS_PHY_ID_LX, 0xffffffff },
 	{ }
 };
 

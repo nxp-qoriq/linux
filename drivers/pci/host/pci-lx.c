@@ -299,13 +299,6 @@ static int __init lx_pcie_probe(struct platform_device *pdev)
 	if (ret < 0)
 		return ret;
 
-	if ((csr_base->start != 0x3600000) && (csr_base->start != 0x3800000)) {
-		/* disable the uncorrectable DLP error report */
-		val = mv_pcie_readl_csr(mv_pci, CFG_UNCORRECTABLE_ERROR_MASK);
-		val |= (1 << DATA_LINK_PROTOCOL_ERR_SHIFT);
-		mv_pcie_writel_csr(mv_pci, CFG_UNCORRECTABLE_ERROR_MASK, val);
-	}
-
 	/* disable the correctable RTT error report */
 	val = mv_pcie_readl_csr(mv_pci, CFG_CORRECTABLE_ERROR_MASK);
 	val |= (1 << REPLAY_TIMER_TIMEOUT_SHIFT);

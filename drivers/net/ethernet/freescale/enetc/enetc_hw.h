@@ -373,7 +373,7 @@ union enetc_tx_bd {
 		};
 	};
 	struct {
-		__le32 ts;
+		__le32 tstamp;
 		__le16 tpid;
 		__le16 vid;
 		u8 reserved[6];
@@ -433,7 +433,7 @@ union enetc_rx_bd {
 			__le32 lstatus;
 		};
 #ifdef CONFIG_FSL_ENETC_HW_TIMESTAMPING
-		__le32 ts;
+		__le32 tstamp;
 		u8 reserved[12];
 #endif
 	} r;

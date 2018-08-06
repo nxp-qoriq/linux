@@ -38,7 +38,7 @@
 #include <linux/udp.h>
 
 static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
-			      bool ts);
+			      bool tstamp);
 static void enetc_unmap_tx_buff(struct enetc_bdr *tx_ring,
 				struct enetc_tx_swbd *tx_swbd);
 static int enetc_clean_tx_ring(struct enetc_bdr *tx_ring);
@@ -163,7 +163,7 @@ static bool enetc_tx_csum(struct sk_buff *skb, union enetc_tx_bd *txbd)
 }
 
 static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
-			      bool ts)
+			      bool tstamp)
 {
 	unsigned int nr_frags = skb_shinfo(skb)->nr_frags;
 	struct enetc_tx_swbd *tx_swbd;
@@ -171,7 +171,7 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 	int len = skb_headlen(skb);
 	union enetc_tx_bd *txbd;
 	int i, start, count = 0;
-	bool do_vlan, do_ts;
+	bool do_vlan, do_tstamp;
 	unsigned int f;
 	dma_addr_t dma;
 	u8 flags = 0;
@@ -194,9 +194,9 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 	count++;
 
 	do_vlan = skb_vlan_tag_present(skb);
-	do_ts = ts && (skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP);
+	do_tstamp = tstamp && (skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP);
 
-	if (do_vlan || do_ts)
+	if (do_vlan || do_tstamp)
 		flags |= ENETC_TXBD_FLAGS_EX;
 
 	if (enetc_tx_csum(skb, txbd))
@@ -227,7 +227,7 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 			txbd->ext.e_flags |= 1; /* < do VLAN */
 		}
 
-		if (do_ts) {
+		if (do_tstamp) {
 			skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
 			txbd->ext.e_flags |= ENETC_TXBD_E_FLAGS_TWO_STEP_PTP;
 		}
@@ -359,9 +359,9 @@ static void enetc_get_tx_tstamp(struct enetc_hw *hw, union enetc_tx_bd *txbd,
 	if (txbd->flags & ENETC_TXBD_FLAGS_TSTMP) {
 		lo = enetc_rd(hw, ENETC_SICTR0);
 		hi = enetc_rd(hw, ENETC_SICTR1);
-		if (lo <= txbd->ext.ts)
+		if (lo <= txbd->ext.tstamp)
 			hi -= 1;
-		*tstamp = (u64)hi << 32 | txbd->ext.ts;
+		*tstamp = (u64)hi << 32 | txbd->ext.tstamp;
 	}
 }
 
@@ -383,11 +383,11 @@ static int enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
 	struct enetc_tx_swbd *tx_swbd;
 	struct enetc_ndev_priv *priv;
 	int i, bds_to_clean;
-	bool do_ts, first;
+	bool do_tstamp, first;
 	u64 tstamp = 0;
 
 	priv = netdev_priv(ndev);
-	do_ts = priv->tx_tstamp;
+	do_tstamp = priv->tx_tstamp;
 
 	i = tx_ring->next_to_clean;
 	tx_swbd = &tx_ring->tx_swbd[i];
@@ -397,7 +397,7 @@ static int enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
 	while (bds_to_clean) {
 		bool is_eof = !!tx_swbd->skb;
 
-		if (unlikely(do_ts)) {
+		if (unlikely(do_tstamp)) {
 			if (unlikely(first)) {
 				union enetc_tx_bd *txbd;
 
@@ -532,10 +532,10 @@ static void enetc_get_rx_tstamp(struct net_device *ndev,
 	if (rxbd->r.flags & ENETC_RXBD_FLAG_TSTMP) {
 		lo = enetc_rd(hw, ENETC_SICTR0);
 		hi = enetc_rd(hw, ENETC_SICTR1);
-		if (lo <= rxbd->r.ts)
+		if (lo <= rxbd->r.tstamp)
 			hi -= 1;
 
-		tstamp = (u64)hi << 32 | rxbd->r.ts;
+		tstamp = (u64)hi << 32 | rxbd->r.tstamp;
 		memset(shhwtstamps, 0, sizeof(*shhwtstamps));
 		shhwtstamps->hwtstamp = ns_to_ktime(tstamp);
 	}

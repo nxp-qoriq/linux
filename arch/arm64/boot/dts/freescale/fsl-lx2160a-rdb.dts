@@ -230,6 +230,28 @@
 		reg = <0x2>;
 		/* Poll mode - no "interrupts" property defined */
 	};
+	aquantia_phy3: ethernet-phy@3 {
+		/* AQR107 PHY - "compatible" property not strictly needed */
+		compatible = "ethernet-phy-ieee802.3-c45";
+		reg = <0x4>;
+		/* Poll mode - no "interrupts" property defined */
+	};
+	aquantia_phy4: ethernet-phy@4 {
+		/* AQR107 PHY - "compatible" property not strictly needed */
+		compatible = "ethernet-phy-ieee802.3-c45";
+		reg = <0x5>;
+		/* Poll mode - no "interrupts" property defined */
+	};
+};
+
+&dpmac3 {
+        phy-handle = <&aquantia_phy3>;
+        phy-connection-type = "xgmii";
+};
+
+&dpmac4 {
+        phy-handle = <&aquantia_phy4>;
+        phy-connection-type = "xgmii";
 };
 
 &dpmac17 {

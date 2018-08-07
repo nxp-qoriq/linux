@@ -1120,6 +1120,11 @@ static void enetc_setup_txbdr(struct enetc_hw *hw, struct enetc_bdr *tx_ring)
 	if (tx_ring->ndev->features & NETIF_F_HW_VLAN_CTAG_TX)
 		tbmr |= ENETC_TBMR_VIH;
 
+	if (enetc_tsn_is_enabled()) {
+		tbmr &= ~ENETC_TBMR_PRIO_MASK;
+		tbmr |= ENETC_TBMR_PRIO_SET(idx % 8);
+	}
+
 	/* enable ring */
 	enetc_txbdr_wr(hw, idx, ENETC_TBMR, tbmr);
 
@@ -1281,7 +1286,7 @@ int enetc_open(struct net_device *ndev)
 
 	enetc_setup_bdrs(priv);
 
-	err = netif_set_real_num_tx_queues(ndev, ENETC_TXQ_PER_TC);
+	err = netif_set_real_num_tx_queues(ndev, ENETC_DEFAULT_NUM_TXQS);
 	if (err)
 		goto err_set_queues;
 

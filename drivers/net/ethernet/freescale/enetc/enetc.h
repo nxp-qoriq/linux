@@ -165,6 +165,12 @@ static inline bool enetc_si_is_pf(struct enetc_si *si)
 #define ENETC_TXQ_PER_TC	num_online_cpus()
 #define ENETC_MAX_NUM_TXQS	(ENETC_MAX_TCS * ENETC_TXQ_PER_TC)
 
+#ifdef CONFIG_ENETC_TSN
+#define ENETC_DEFAULT_NUM_TXQS 8
+#else
+#define ENETC_DEFAULT_NUM_TXQS ENETC_TXQ_PER_TC
+#endif
+
 struct enetc_int_vector {
 	void __iomem *rbier;
 	void __iomem *tbier_base;

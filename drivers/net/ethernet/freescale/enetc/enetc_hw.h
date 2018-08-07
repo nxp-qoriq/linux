@@ -410,6 +410,7 @@ static inline __le16 enetc_txbd_l3_csoff(int start, int hdr_sz, u16 l3_flags)
 
 // TODO: Add support for dynamic allocation of BD rings to replace #ifdefs
 #define enetc_has_extended_rxbds() IS_ENABLED(CONFIG_FSL_ENETC_HW_TIMESTAMPING)
+#define enetc_tsn_is_enabled() IS_ENABLED(CONFIG_ENETC_TSN)
 
 union enetc_rx_bd {
 	struct {

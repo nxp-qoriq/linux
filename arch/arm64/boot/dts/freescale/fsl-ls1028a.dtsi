@@ -12,6 +12,14 @@
 	#address-cells= <2>;
 	#size-cells= <2>;
 
+	aliases {
+		rcie_enetc = &rcie_enetc;
+	};
+
+	aliases {
+		rcie_enetc = &rcie_enetc;
+	};
+
 	cpus{
 		#address-cells= <0x1>;
 		#size-cells= <0x0>;
@@ -324,6 +332,21 @@
 				<0000 0 0 4 &gic 0 0 0 117 0x4>;
 	};
 
+       rcie_enetc: pcie@1F0000000{         /* rcie_enetc */
+               compatible= "pci-host-ecam-generic";
+               reg= <0x01 0xF0000000 0x0 0x100000>;
+               #address-cells= <3>;
+               #size-cells= <2>;
+               #interrupt-cells = <1>;
+               device_type= "pci";
+               bus-range= <0x0 0x0>;
+               iommu-map = <0 &smmu 23 3>;
+               ranges= <0x82000000 0x0 0x00000000  0x1 0xff000000  0x0 0x100000     /* non-prefetchable memory */
+                        0xc2000000 0x0 0x00000000  0x1 0xff100000  0x0 0x100000     /* prefetchable memory */
+                        0x82000000 0x0 0x00000000  0x1 0xff200000  0x0 0x100000     /* non-prefetchable memory */
+                        0xc2000000 0x0 0x00000000  0x1 0xff300000  0x0 0x100000>;   /* prefetchable memory */
+       };
+
 
 	soc {
 		compatible = "simple-bus";
@@ -379,6 +402,8 @@
 				     <0 208 4>, <0 209 4>;
 		};
 	};
+
+
 
 	i2c0: i2c@2000000 {
 		compatible = "fsl,vf610-i2c";

@@ -1586,8 +1586,10 @@ int enetc_alloc_msix(struct enetc_ndev_priv *priv)
 	return 0;
 
 fail:
-	while (i--)
+	while (i--) {
+		netif_napi_del(&priv->int_vector[i]->napi);
 		kfree(priv->int_vector[i]);
+	}
 
 	pci_free_irq_vectors(pdev);
 

@@ -699,7 +699,7 @@
 			snps,dis-u1u2-when-u3-quirk;
 			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
 		};
-
+/*
 		usb2: usb3@3100000 {
 			compatible = "snps,dwc3";
 			reg = <0x0 0x3100000 0x0 0x10000>;
@@ -711,7 +711,7 @@
 			snps,dis-u1u2-when-u3-quirk;
 			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
 		};
-
+*/
 		sata: sata@3200000 {
 			compatible = "fsl,ls1043a-ahci";
 			reg = <0x0 0x3200000 0x0 0x10000>,

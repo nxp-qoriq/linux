@@ -15,6 +15,7 @@
 	compatible = "fsl,ls1043a-qds", "fsl,ls1043a";
 
 	aliases {
+		crypto = &crypto;
 		gpio0 = &gpio1;
 		gpio1 = &gpio2;
 		gpio2 = &gpio3;
@@ -23,6 +24,7 @@
 		serial1 = &duart1;
 		serial2 = &duart2;
 		serial3 = &duart3;
+/*
 		sgmii_riser_s1_p1 = &sgmii_phy_s1_p1;
 		sgmii_riser_s2_p1 = &sgmii_phy_s2_p1;
 		sgmii_riser_s3_p1 = &sgmii_phy_s3_p1;
@@ -39,10 +41,44 @@
 		emi1_slot2 = &ls1043mdio_s2;
 		emi1_slot3 = &ls1043mdio_s3;
 		emi1_slot4 = &ls1043mdio_s4;
+*/
 	};
 
 	chosen {
 		stdout-path = "serial0:115200n8";
+	};
+};
+
+&dspi0 {
+	bus-num = <0>;
+	status = "okay";
+
+	flash@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "sst25wf040b", "jedec,spi-nor";
+		spi-cpol;
+		spi-cpha;
+		reg = <0>;
+		spi-max-frequency = <10000000>;
+	};
+
+	flash@1 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "en25s64", "jedec,spi-nor";
+		spi-cpol;
+		spi-cpha;
+		reg = <1>;
+		spi-max-frequency = <10000000>;
+	};
+
+	flash@2 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "n25q512a", "jedec,spi-nor";
+		reg = <2>;
+		spi-max-frequency = <10000000>;
 	};
 };
 
@@ -54,33 +90,6 @@
 	status = "okay";
 };
 
-&ifc {
-	#address-cells = <2>;
-	#size-cells = <1>;
-	/* NOR, NAND Flashes and FPGA on board */
-	ranges = <0x0 0x0 0x0 0x60000000 0x08000000
-		  0x1 0x0 0x0 0x7e800000 0x00010000
-		  0x2 0x0 0x0 0x7fb00000 0x00000100>;
-	status = "okay";
-
-	nor@0,0 {
-		compatible = "cfi-flash";
-		reg = <0x0 0x0 0x8000000>;
-		bank-width = <2>;
-		device-width = <1>;
-	};
-
-	nand@1,0 {
-		compatible = "fsl,ifc-nand";
-		reg = <0x1 0x0 0x10000>;
-	};
-
-	fpga: board-control@2,0 {
-		compatible = "fsl,ls1043aqds-fpga", "fsl,fpga-qixis";
-		reg = <0x2 0x0 0x0000100>;
-	};
-};
-
 &i2c0 {
 	status = "okay";
 
@@ -89,19 +98,6 @@
 		reg = <0x77>;
 		#address-cells = <1>;
 		#size-cells = <0>;
-
-		i2c@0 {
-			#address-cells = <1>;
-			#size-cells = <0>;
-			reg = <0x0>;
-
-			rtc@68 {
-				compatible = "dallas,ds3232";
-				reg = <0x68>;
-				/* IRQ10_B */
-				interrupts = <0 150 0x4>;
-			};
-		};
 
 		i2c@2 {
 			#address-cells = <1>;
@@ -136,27 +132,30 @@
 				reg = <0x57>;
 			};
 
-			temp-sensor@4c {
-				compatible = "adi,adt7461a";
+			sa56004@4c {
+				compatible = "nxp,sa56004";
 				reg = <0x4c>;
+			};
+
+			rtc@51 {
+				compatible = "nxp,pcf2129";
+				reg = <0x51>;
 			};
 		};
 	};
 };
 
-&lpuart0 {
-	status = "okay";
-};
-
 &qspi {
+	num-cs = <1>;
 	bus-num = <0>;
 	status = "okay";
 
-	qflash0: s25fl128s@0 {
+	qflash0: s25fs512s@0 {
 		compatible = "spansion,m25p80";
 		#address-cells = <1>;
 		#size-cells = <1>;
 		spi-max-frequency = <20000000>;
+		m25p,fast-read;
 		reg = <0>;
 		spi-rx-bus-width = <4>;
 		spi-tx-bus-width = <4>;
@@ -167,13 +166,13 @@
 
 &fman0 {
 	ethernet@e0000 {
-		phy-handle = <&qsgmii_phy_s2_p1>;
-		phy-connection-type = "sgmii";
+		phy-handle = <&qsgmii_phy1>;
+		phy-connection-type = "qsgmii";
 	};
 
 	ethernet@e2000 {
-		phy-handle = <&qsgmii_phy_s2_p2>;
-		phy-connection-type = "sgmii";
+		phy-handle = <&qsgmii_phy2>;
+		phy-connection-type = "qsgmii";
 	};
 
 	ethernet@e4000 {
@@ -187,124 +186,49 @@
 	};
 
 	ethernet@e8000 {
-		phy-handle = <&qsgmii_phy_s2_p3>;
-		phy-connection-type = "sgmii";
+		phy-handle = <&qsgmii_phy3>;
+		phy-connection-type = "qsgmii";
 	};
 
 	ethernet@ea000 {
-		phy-handle = <&qsgmii_phy_s2_p4>;
+		phy-handle = <&qsgmii_phy4>;
+		phy-connection-type = "qsgmii";
+	};
+
+	/* fixed-link = <1 1 2500 0 0>; */
+	ethernet@f0000 { /* DTSEC9/10GEC1 */
+		phy-handle = <&sgmii_phy1>;
 		phy-connection-type = "sgmii";
 	};
 
-	ethernet@f0000 { /* DTSEC9/10GEC1 */
-		fixed-link = <1 1 10000 0 0>;
-		phy-connection-type = "xgmii";
-	};
-};
+	mdio@fc000 {
 
-&fpga {
-	mdio-mux-emi1 {
-		compatible = "mdio-mux-mmioreg", "mdio-mux";
-		mdio-parent-bus = <&mdio0>;
-		#address-cells = <1>;
-		#size-cells = <0>;
-		reg = <0x54 1>;    /* BRDCFG4 */
-		mux-mask = <0xe0>; /* EMI1 */
-
-		/* On-board RGMII1 PHY */
-		ls1043mdio0: mdio@0 {
-			reg = <0>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			rgmii_phy1: ethernet-phy@1 { /* MAC3 */
-				reg = <0x1>;
-			};
+		sgmii_phy1: ethernet-phy@1 {
+			reg = <0x1>;
 		};
 
-		/* On-board RGMII2 PHY */
-		ls1043mdio1: mdio@1 {
-			reg = <0x20>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			rgmii_phy2: ethernet-phy@2 { /* MAC4 */
-				reg = <0x2>;
-			};
+		rgmii_phy1: ethernet-phy@1 {
+			reg = <0x1>;
 		};
 
-		/* Slot 1 */
-		ls1043mdio_s1: mdio@2 {
-			reg = <0x40>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-			status = "disabled";
-
-			qsgmii_phy_s1_p1: ethernet-phy@4 {
-				reg = <0x4>;
-			};
-			qsgmii_phy_s1_p2: ethernet-phy@5 {
-				reg = <0x5>;
-			};
-			qsgmii_phy_s1_p3: ethernet-phy@6 {
-				reg = <0x6>;
-			};
-			qsgmii_phy_s1_p4: ethernet-phy@7 {
-				reg = <0x7>;
-			};
-
-			sgmii_phy_s1_p1: ethernet-phy@1c {
-				reg = <0x1c>;
-			};
+		rgmii_phy2: ethernet-phy@5 {
+			reg = <0x5>;
 		};
 
-		/* Slot 2 */
-		ls1043mdio_s2: mdio@3 {
-			reg = <0x60>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-			status = "disabled";
-
-			qsgmii_phy_s2_p1: ethernet-phy@8 {
-				reg = <0x8>;
-			};
-			qsgmii_phy_s2_p2: ethernet-phy@9 {
-				reg = <0x9>;
-			};
-			qsgmii_phy_s2_p3: ethernet-phy@a {
-				reg = <0xa>;
-			};
-			qsgmii_phy_s2_p4: ethernet-phy@b {
-				reg = <0xb>;
-			};
-
-			sgmii_phy_s2_p1: ethernet-phy@1c {
-				reg = <0x1c>;
-			};
+		qsgmii_phy1: ethernet-phy@8 {
+			reg = <0x8>;
 		};
 
-		/* Slot 3 */
-		ls1043mdio_s3: mdio@4 {
-			reg = <0x80>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-			status = "disabled";
-
-			sgmii_phy_s3_p1: ethernet-phy@1c {
-				reg = <0x1c>;
-			};
+		qsgmii_phy2: ethernet-phy@9 {
+			reg = <0x9>;
 		};
 
-		/* Slot 4 */
-		ls1043mdio_s4: mdio@5 {
-			reg = <0xa0>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-			status = "disabled";
+		qsgmii_phy3: ethernet-phy@a {
+			reg = <0xa>;
+		};
 
-			sgmii_phy_s4_p1: ethernet-phy@1c {
-				reg = <0x1c>;
-			};
+		qsgmii_phy4: ethernet-phy@b {
+			reg = <0xb>;
 		};
 	};
 };

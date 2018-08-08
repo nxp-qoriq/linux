@@ -277,13 +277,10 @@
 	};
 
 	pcie@3400000 {
-		compatible = "fsl,ls-pcie", "fsl,ls2085a-pcie", "fsl,ls1088a-pcie",
-			     "snps,dw-pcie";
-		reg = <0x00 0x03400000 0x0 0x80000
-			0x00 0x03480000 0x0 0x40000   /* lut registers */
-			0x00 0x034c0000 0x0 0x40000  /* pf controls registers */
+		compatible = "fsl,ls1028a-pcie";
+		reg =  <0x00 0x03400000 0x0 0x100000
 			0x80 0x00000000 0x0 0x20000>; /* configuration space */
-		reg-names = "dbi", "lut", "ctrl", "config";
+		reg-names = "regs", "config";
 		interrupts = <0 108 0x4>; /* aer interrupt */
 		interrupt-names = "aer";
 		#address-cells = <3>;
@@ -304,13 +301,10 @@
 	};
 
 	pcie@3500000 {
-		compatible = "fsl,ls-pcie", "fsl,ls2085a-pcie", "fsl,ls1088a-pcie",
-			     "snps,dw-pcie";
-		reg = <0x00 0x03500000 0x0 0x80000
-			0x00 0x03580000 0x0 0x40000   /* lut registers */
-			0x00 0x035c0000 0x0 0x40000  /* pf controls registers */
+		compatible = "fsl,ls1028a-pcie";
+		reg =  <0x00 0x03500000 0x0 0x100000
 			0x88 0x00000000 0x0 0x20000>; /* configuration space */
-		reg-names = "dbi", "lut", "ctrl", "config";
+		reg-names = "regs", "config";
 		interrupts = <0 113 0x4>; /* aer interrupt */
 		interrupt-names = "aer";
 		#address-cells = <3>;

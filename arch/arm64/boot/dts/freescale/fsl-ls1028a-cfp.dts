@@ -49,7 +49,7 @@
 #include "fsl-ls1028a.dtsi"
 
 / {
-	model = "Layerscape 1028A software Simulator model";
+	model = "Layerscape 1028A CFP model";
 	compatible = "fsl,ls1028a-simu", "fsl,ls1028a";
 
 	aliases {

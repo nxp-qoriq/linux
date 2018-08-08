@@ -2639,8 +2639,14 @@ serial8250_do_set_termios(struct uart_port *port, struct ktermios *termios,
 	cval = serial8250_compute_lcr(up, termios->c_cflag);
 
 	baud = serial8250_get_baud_rate(port, termios, old);
-//	quot = 0x01;          //pxp
-	quot = 0x07;          //cfp
+#if defined(CONFIG_PXP)
+        quot = 0x01;          //pxp
+#elif defined(CONFIG_CFP)
+        quot = 0x07;          //cfp
+#else
+	quot = serial8250_get_divisor(up, baud, &frac); 	// default / simulator
+#endif
+
 
 	/*
 	 * Ok, we're now changing the port state.  Do it with

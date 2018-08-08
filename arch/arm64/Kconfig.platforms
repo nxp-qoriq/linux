@@ -1,5 +1,25 @@
 menu "Platform selection"
 
+choice
+	prompt "Choose NXP platform..."
+        default PXP
+
+config PXP
+        bool "PXP"
+        help
+          Build Linux image for PXP platform
+
+config CFP
+        bool "CFP"
+        help
+          Build Linux image for CFP platform
+
+config SIMU
+        bool "SIMU"
+        help
+          Build Linux image for Simulator platform		  
+endchoice
+
 config ARCH_ACTIONS
 	bool "Actions Semi Platforms"
 	select OWL_TIMER

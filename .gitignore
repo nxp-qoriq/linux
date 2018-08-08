@@ -19,7 +19,6 @@
 *.dwo
 *.elf
 *.gcno
-*.gz
 *.i
 *.ko
 *.ll

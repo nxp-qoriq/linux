@@ -39,7 +39,7 @@
 /* Sudhanshu : 2017-04-05 : Commented for later use.
  *	gpu_2d: gpu@F0C0000 {
  *		compatible = "vivante,gc";
- *		reg = <0x0 0x0F0C0000 0x0 0x1000>;
+ *		reg = <0x0 0x0F0C0000 0x0 0x10000>;
  *		interrupts = <0 10 IRQ_TYPE_LEVEL_HIGH>;
  *		clocks = <&clks IMX6QDL_CLK_GPU2D_AXI>,
  *			<&clks IMX6QDL_CLK_GPU2D_CORE>;
@@ -57,23 +57,25 @@
 
 	clockgen:clocking@1300000 {	/* Clock Generation Unit  CGU_CGA*/
 		compatible= "fsl,ls1028a-clockgen";
-		reg= <0x0 0x1300000 0x0 0x1000>;
+		reg= <0x0 0x1300000 0x0 0x10000>;
 		#clock-cells= <2>;
 		clocks= <&sysclk>;
 	};
 
 	gic:interrupt-controller@6000000 {
 		compatible= "arm,gic-v3";
+		#address-cells = <2>;
+		#size-cells = <2>;
 		reg= <0x0 0x06000000 0 0x10000>, /* GIC Dist */
-		     <0x0 0x06020000 0 0x10000>; /* GIC Registers */
+			<0x0 0x06040000 0 0x40000>; /* GIC Redistributor */
 		#interrupt-cells= <3>;
 		interrupt-controller;
 		interrupts= <1 9 0x4>;/* modify interrupts specifiers */
-		gic-its@6030000{
+		gic-its@6020000{
 			compatible= "arm,gic-v3-its";
 			msi-controller;
 			#msi-cells= <1>;
-			reg= <0x0 0x06030000 0 0x10000>;	/* GIC Translater */
+			reg= <0x0 0x06020000 0 0x20000>;/* GIC Translater */
 		};
 	};
 
@@ -131,49 +133,49 @@
 
 	flextimer5: flextimer@2840000 {
 		compatible = "fsl,flextimer";
-		reg = <0x0 0x02840000 0 0x10000>, /* FTMR5 */
-		interrupts = <0 243 0x8>;
+		reg = <0x0 0x02840000 0 0x10000>; /* FTMR5 */
+		interrupts = <0 244 0x8>;
 	};
 
 	flextimer6: flextimer@2850000 {
 		compatible = "fsl,flextimer";
-		reg = <0x0 0x02850000 0 0x10000>, /* FTMR6 */
-		interrupts = <0 243 0x8>;
+		reg = <0x0 0x02850000 0 0x10000>; /* FTMR6 */
+		interrupts = <0 245 0x8>;
 	};
 
 	flextimer7: flextimer@2860000 {
 		compatible = "fsl,flextimer";
-		reg = <0x0 0x02860000 0 0x10000>, /* FTMR7 */
-		interrupts = <0 243 0x8>;
+		reg = <0x0 0x02860000 0 0x10000>; /* FTMR7 */
+		interrupts = <0 246 0x8>;
 	};
 
 	flextimer8: flextimer@2870000 {
 		compatible = "fsl,flextimer";
 		reg = <0x0 0x02870000 0 0x10000>; /* FTMR8 */
-		interrupts = <0 243 0x8>;
+		interrupts = <0 247 0x8>;
 	};
 
-	serial0: serial@21C0000 {		/* DUART */
+	serial0: serial@21C0500 {		/* DUART */
 		device_type= "serial";
 		compatible= "fsl,ns16550", "ns16550a";
-		reg= <0x0 0x21C0000 0x0 0x1000>;
+		reg= <0x0 0x21C0500 0x0 0x10000>;
 		clock-frequency= <0>;	/* Updated by bootloader */
-		interrupts = <1 0 0x1>; /* SP Interrupt = 1 & edge triggered */
+		interrupts = <0 32 0x4>;	/* IRQ_TYPE_LEVEL_HIGH */
 	};
 
 	serial1: serial@2260000 {		/* LPUART */
 		device_type= "serial";
 		compatible= "fsl,ns16550", "ns16550a";
-		reg= <0x0 0x2260000 0x0 0x1000>;
+		reg = <0x0 0x2260000 0x0 0x10000>;
 		clock-frequency= <0>;	/* Updated by bootloader */
-		interrupts = <1 50 0x1>; /* SP Interrupt = 1 & edge triggered */
+		interrupts = <0 32 0x4>;	/* IRQ_TYPE_LEVEL_HIGH */
 	};
 
 	dspi1:dspi@2100000 {
 		compatible= "fsl,vf610-dspi";
 		#address-cells= <1>;
 		#size-cells= <0>;
-		reg= <0x0 0x2100000 0x0 0x1000>;
+		reg = <0x0 0x2100000 0x0 0x10000>;
 		interrupts= <0 26 0x4>; /* Level high type */
 		num-cs= <6>;
 	};
@@ -205,7 +207,7 @@
 		compatible = "samsung,exynos4210-sdhci";
 		reg = <0x0 0x02140000 0x0 0x1000>;
 		interrupts = <0 28 0x4>;
-		clocks = <&clock CLK_SDMMC0>, <&clock CLK_SCLK_MMC0>;
+		//clocks = <&clock CLK_SDMMC0>, <&clock CLK_SCLK_MMC0>;
 		clock-names = "hsmmc", "mmc_busclk.2";
 		status = "disabled";
 	};
@@ -214,7 +216,7 @@
 		compatible = "samsung,exynos4210-sdhci";
 		reg = <0x0 0x02150000 0x0 0x1000>;
 		interrupts = <0 63 0x4>;
-		clocks = <&clock CLK_SDMMC1>, <&clock CLK_SCLK_MMC1>;
+		//clocks = <&clock CLK_SDMMC1>, <&clock CLK_SCLK_MMC1>;
 		clock-names = "hsmmc", "mmc_busclk.2";
 		status = "disabled";
 	};
@@ -223,7 +225,7 @@
 		compatible= "marvell,orion-sata";
 		reg= <0X0 0X03200000 0X0 0x1000>;
 		interrupts= <0 133 0x4>; /* Level high type */
-		clocks= <&gateclk 14>, <&gateclk 20>;/* add appropriate clocks */
+		//clocks= <&gateclk 14>, <&gateclk 20>;/* add appropriate clocks */
 		clock-names= "0", "1";
 		status= "disabled";
 	};
@@ -267,7 +269,7 @@
 		reg = <0x0 0x2000000 0x0 0x1000>;
 		interrupts = <0 66 0x4>;/* Interrupt lines of i2c1,2 are ORed */
 		clock-names = "i2c";
-		clocks = <&platform_clk 1>;
+		//clocks = <&platform_clk 1>;
 		status = "disabled";
 	};
 
@@ -278,7 +280,7 @@
 		reg = <0x0 0x2010000 0x0 0x1000>;
 		interrupts = <0 66 0x4>;/* Interrupt lines of i2c1,2 are ORed */
 		clock-names = "i2c";
-		clocks = <&platform_clk 1>;
+		//clocks = <&platform_clk 1>;
 		status = "disabled";
 	};
 
@@ -289,7 +291,7 @@
 		reg = <0x0 0x2020000 0x0 0x1000>;
 		interrupts = <0 67 0x4>;/* Interrupt lines of i2c3,4 are ORed */
 		clock-names = "i2c";
-		clocks = <&platform_clk 1>;
+		//clocks = <&platform_clk 1>;
 		status = "disabled";
 	};
 
@@ -300,7 +302,7 @@
 		reg = <0x0 0x2030000 0x0 0x1000>;
 		interrupts = <0 67 0x4>;/* Interrupt lines of i2c3,4 are ORed */
 		clock-names = "i2c";
-		clocks = <&platform_clk 1>;
+		//clocks = <&platform_clk 1>;
 		status = "disabled";
 	};
 
@@ -311,7 +313,7 @@
 		reg = <0x0 0x2040000 0x0 0x1000>;
 		interrupts = <0 106 0x4>;/* Interrupt lines of i2c6,7 are ORed*/
 		clock-names = "i2c";
-		clocks = <&platform_clk 1>;
+		//clocks = <&platform_clk 1>;
 		status = "disabled";
 	};
 
@@ -322,7 +324,7 @@
 		reg = <0x0 0x2050000 0x0 0x1000>;
 		interrupts = <0 106 0x4>;/* Interrupt lines of i2c6,7 are ORed*/
 		clock-names = "i2c";
-		clocks = <&platform_clk 1>;
+		//clocks = <&platform_clk 1>;
 		status = "disabled";
 	};
 
@@ -333,7 +335,7 @@
 		reg = <0x0 0x2060000 0x0 0x1000>;
 		interrupts = <0 107 0x4>;/* Interrupt lines of i2c7,8 are ORed*/
 		clock-names = "i2c";
-		clocks = <&platform_clk 1>;
+		//clocks = <&platform_clk 1>;
 		status = "disabled";
 	};
 
@@ -344,7 +346,7 @@
 		reg = <0x0 0x2070000 0x0 0x1000>;
 		interrupts = <0 107 0x4>;/* Interrupt lines of i2c7,8 are ORed*/
 		clock-names = "i2c";
-		clocks = <&platform_clk 1>;
+		//clocks = <&platform_clk 1>;
 		status = "disabled";
 	};
 
@@ -352,8 +354,8 @@
 		compatible = "fsl,imx6ul-flexcan", "fsl,imx6q-flexcan";
 		reg = <0x0 0x02180000 0x0 0x1000>;
 		interrupts = <0 21 0x4>;
-		clocks = <&clks IMX6UL_CLK_CAN1_IPG>,
-			 <&clks IMX6UL_CLK_CAN1_SERIAL>;
+		//clocks = <&clks IMX6UL_CLK_CAN1_IPG>,
+		//	<&clks IMX6UL_CLK_CAN1_SERIAL>;
 		clock-names = "ipg", "per";
 		status = "disabled";
 	};
@@ -362,8 +364,8 @@
 		compatible = "fsl,imx6ul-flexcan", "fsl,imx6q-flexcan";
 		reg = <0x0 0x02190000 0x0 0x1000>;
 		interrupts = <0 22 0x4>;
-		clocks = <&clks IMX6UL_CLK_CAN2_IPG>,
-			 <&clks IMX6UL_CLK_CAN2_SERIAL>;
+		//clocks = <&clks IMX6UL_CLK_CAN2_IPG>,
+		//	 <&clks IMX6UL_CLK_CAN2_SERIAL>;
 		clock-names = "ipg", "per";
 		status = "disabled";
 	};

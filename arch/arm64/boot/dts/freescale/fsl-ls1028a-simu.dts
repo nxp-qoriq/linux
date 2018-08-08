@@ -46,7 +46,7 @@
 
 /dts-v1/;
 
-/include/ "fsl-l1028a.dtsi"
+/include/ "fsl-ls1028a.dtsi"
 
 / {
 	model = "Layerscape 1028A software Simulator model";

@@ -233,6 +233,7 @@
 		clocks = <&clockgen 1>;
 		clock-names = "dspi";
 		spi-num-chipselects = <5>;
+		status = "disabled";
 	};
 
 	dspi2:dspi@2110000 {
@@ -244,6 +245,7 @@
 		clocks = <&clockgen 1>;
 		clock-names = "dspi";
 		spi-num-chipselects = <5>;
+		status = "disabled";
 	};
 
 	usb0:usb3@3100000 {
@@ -251,6 +253,7 @@
 		reg= <0x0 0x3100000 0x0 0x10000>;
 		interrupts= <0 80 0x4>;
 		dr_mode= "host";
+		status = "disabled";
 	};
 
 	usb1:usb3@3110000 {
@@ -258,6 +261,7 @@
 		reg= <0x0 0x3110000 0x0 0x10000>;
 		interrupts= <0 81 0x4>;
 		dr_mode= "host";
+		status = "disabled";
 	};
 
 	sdhci_0: sdhci@02140000 {
@@ -295,6 +299,7 @@
 		#size-cells = <2>;
 		device_type = "pci";
 		dma-coherent;
+		status = "disabled";
 		num-lanes = <4>;
 		bus-range = <0x0 0xff>;
 		ranges = <0x81000000 0x0 0x00000000 0x80 0x00020000 0x0 0x00010000   /* downstream I/O */
@@ -319,6 +324,7 @@
 		#size-cells = <2>;
 		device_type = "pci";
 		dma-coherent;
+		status = "disabled";
 		num-lanes = <4>;
 		bus-range = <0x0 0xff>;
 		ranges = <0x81000000 0x0 0x00000000 0x88 0x00020000 0x0 0x00010000   /* downstream I/O */
@@ -340,6 +346,7 @@
                #interrupt-cells = <1>;
                device_type= "pci";
                bus-range= <0x0 0x0>;
+               status = "disabled";
                iommu-map = <0 &smmu 23 3>;
                ranges= <0x82000000 0x0 0x00000000  0x1 0xff000000  0x0 0x100000     /* non-prefetchable memory */
                         0xc2000000 0x0 0x00000000  0x1 0xff100000  0x0 0x100000     /* prefetchable memory */
@@ -522,6 +529,7 @@
 		#gpio-cells = <2>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
+		status = "disabled";
 	};
 
 	gpio1: gpio@2310000 {
@@ -533,6 +541,7 @@
 		#gpio-cells = <2>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
+		status = "disabled";
 	};
 
 	gpio2: gpio@2320000 {
@@ -544,6 +553,7 @@
 		#gpio-cells = <2>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
+		status = "disabled";
 	};
 
 	fspi: flexspi@20C0000 {

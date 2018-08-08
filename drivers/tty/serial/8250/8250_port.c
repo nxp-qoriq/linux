@@ -2639,7 +2639,8 @@ serial8250_do_set_termios(struct uart_port *port, struct ktermios *termios,
 	cval = serial8250_compute_lcr(up, termios->c_cflag);
 
 	baud = serial8250_get_baud_rate(port, termios, old);
-	quot = 0x01;
+//	quot = 0x01;          //pxp
+	quot = 0x07;          //cfp
 
 	/*
 	 * Ok, we're now changing the port state.  Do it with

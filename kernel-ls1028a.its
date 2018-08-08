@@ -33,7 +33,9 @@
 		};
 		ramdisk@1 {
 			description = "LS2 Ramdisk";
-			data = /incbin/("./fsl-image-core-ls1028a-20170524.rootfs.ext2.gz");
+//			data = /incbin/("./fsl-image-core-ls1028a-20170524.rootfs.ext2.gz");
+//			data = /incbin/("./fsl-image-busybox-ls1028.cpio.gz");
+			data = /incbin/("./fsl-image-busybox-lx2.cpio.gz");
 			type = "ramdisk";
 			arch = "arm64";
 			os = "linux";

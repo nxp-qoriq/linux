@@ -732,6 +732,10 @@
 					<0000 0 0 4 &gic GIC_SPI 154 IRQ_TYPE_LEVEL_HIGH>;
 		};
 
+		serdes1: serdes@1ea0000 {
+			reg = <0x0 0x1ea0000 0 0x00002000>;
+		};
+
 	};
 
 	reserved-memory {

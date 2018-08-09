@@ -516,8 +516,9 @@
 		ftm0: ftm0@29d0000 {
 			compatible = "fsl,ls1021a-ftm";
 			reg = <0x0 0x29d0000 0x0 0x10000>,
-			      <0x0 0x1ee2144 0x0 0x4>;
-			reg-names = "ftm", "FlexTimer1";
+			      <0x0 0x1ee2144 0x0 0x4>,
+			      <0x0 0x0157051c 0x0 0x4>;
+			reg-names = "ftm", "FlexTimer1", "scrachpad";
 			interrupts = <GIC_SPI 118 IRQ_TYPE_LEVEL_HIGH>;
 			big-endian;
 			status = "okay";

@@ -449,6 +449,18 @@ static int lx_pcie_ep_probe(struct platform_device *pdev)
 	val |= 1 << 0;
 	mv_pcie_writel_csr(mv_pci, PAB_INTP_AXI_MISC_ENB, val);
 
+	/*
+	 * Errata: unsupported request error on inbound posted write
+	 * transaction, PCIe controller reports advisory error instead
+	 * of uncorrectable error message to RC.
+	 * workaround: set the bit20(unsupported_request_Error_severity) with
+	 * value 1 in uncorrectable_Error_Severity_Register, make the
+	 * unsupported request error generate the fatal error.
+	 */
+	val =  mv_pcie_readl_csr(mv_pci, CFG_UNCORRECTABLE_ERROR_SEVERITY);
+	val |= 1 << UNSUPPORTED_REQUEST_ERROR_SHIFT;
+	mv_pcie_writel_csr(mv_pci, CFG_UNCORRECTABLE_ERROR_SEVERITY, val);
+
 	ret = lx_pcie_ep_init(pcie);
 	if (ret)
 		return ret;

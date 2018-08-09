@@ -2642,7 +2642,7 @@ serial8250_do_set_termios(struct uart_port *port, struct ktermios *termios,
 #if defined(CONFIG_PXP)
         quot = 0x01;          //pxp
 #elif defined(CONFIG_CFP)
-        quot = 0x07;          //cfp
+        quot = 0x02;          //cfp
 #else
 	quot = serial8250_get_divisor(up, baud, &frac); 	// default / simulator
 #endif

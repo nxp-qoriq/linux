@@ -492,6 +492,14 @@
 				  0xc2000000 0x0 0x00000000  0x1 0xf8230000  0x0 0x020000     /* PF1, VF-BAR1 - prefetchable memory */
 				  0x82000000 0x0 0x00000000  0x1 0xfc000000  0x0 0x400000>;   /* PF2/PF5, BAR4 - non-prefetchable memory */
 		};
+
+		mdio0: mdio@1f8101c00 {
+			compatible = "fsl,enetc-mdio";
+			device_type = "mdio";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x1 0xf8101c00 0x0 0x2c>;
+		};
 	};
 };
 

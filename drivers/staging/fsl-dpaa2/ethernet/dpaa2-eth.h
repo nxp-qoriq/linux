@@ -412,6 +412,7 @@ struct dpaa2_eth_priv {
 
 	/* enabled ethtool hashing bits */
 	u64 rx_hash_fields;
+	u64 rx_cls_fields;
 	struct dpaa2_eth_cls_rule *cls_rule;
 	u8 rx_cls_enabled;
 #ifdef CONFIG_FSL_DPAA2_ETH_DEBUGFS
@@ -569,8 +570,10 @@ static inline int dpaa2_eth_ch_count(struct dpaa2_eth_priv *priv)
 }
 
 int dpaa2_eth_set_hash(struct net_device *net_dev, u64 flags);
-int dpaa2_eth_cls_key_size(void);
+int dpaa2_eth_set_cls(struct net_device *net_dev, u64 key);
+int dpaa2_eth_cls_key_size(u64 key);
 int dpaa2_eth_cls_fld_off(int prot, int field);
+void dpaa2_eth_cls_trim_rule(void *key_mem, u64 fields);
 
 int set_rx_taildrop(struct dpaa2_eth_priv *priv);
 

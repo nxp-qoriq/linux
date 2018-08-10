@@ -24,12 +24,16 @@
 /* Number of microseconds to wait for a register to respond */
 #define TIMEOUT	1000
 
+struct fsl_mdio_regs {
+	u32	mdio_stat;	/* MDIO configuration and status */
+	u32	mdio_ctl;	/* MDIO control */
+	u32	mdio_data;	/* MDIO data */
+	u32	mdio_addr;	/* MDIO address */
+};
+
 struct tgec_mdio_controller {
-	__be32	reserved[12];
-	__be32	mdio_stat;	/* MDIO configuration and status */
-	__be32	mdio_ctl;	/* MDIO control */
-	__be32	mdio_data;	/* MDIO data */
-	__be32	mdio_addr;	/* MDIO address */
+	u32	reserved[12];
+	struct fsl_mdio_regs regs;
 } __packed;
 
 #define MDIO_STAT_ENC		BIT(6)
@@ -47,8 +51,13 @@ struct tgec_mdio_controller {
 #define MDIO_DATA_BSY		BIT(31)
 
 struct mdio_fsl_priv {
-	struct	tgec_mdio_controller __iomem *mdio_base;
+	void __iomem *map;
+	struct	fsl_mdio_regs __iomem *mdio_base;
 	bool	is_little_endian;
+};
+
+struct xgmac_mdio_data {
+	unsigned int regs_offset;
 };
 
 static u32 xgmac_read32(void __iomem *regs,
@@ -74,7 +83,7 @@ static void xgmac_write32(u32 value,
  * Wait until the MDIO bus is free
  */
 static int xgmac_wait_until_free(struct device *dev,
-				 struct tgec_mdio_controller __iomem *regs,
+				 struct fsl_mdio_regs __iomem *regs,
 				 bool is_little_endian)
 {
 	unsigned int timeout;
@@ -99,7 +108,7 @@ static int xgmac_wait_until_free(struct device *dev,
  * Wait till the MDIO read or write operation is complete
  */
 static int xgmac_wait_until_done(struct device *dev,
-				 struct tgec_mdio_controller __iomem *regs,
+				 struct fsl_mdio_regs __iomem *regs,
 				 bool is_little_endian)
 {
 	unsigned int timeout;
@@ -128,7 +137,7 @@ static int xgmac_wait_until_done(struct device *dev,
 static int xgmac_mdio_write(struct mii_bus *bus, int phy_id, int regnum, u16 value)
 {
 	struct mdio_fsl_priv *priv = (struct mdio_fsl_priv *)bus->priv;
-	struct tgec_mdio_controller __iomem *regs = priv->mdio_base;
+	struct fsl_mdio_regs __iomem *regs = priv->mdio_base;
 	uint16_t dev_addr;
 	u32 mdio_ctl, mdio_stat;
 	int ret;
@@ -182,7 +191,7 @@ static int xgmac_mdio_write(struct mii_bus *bus, int phy_id, int regnum, u16 val
 static int xgmac_mdio_read(struct mii_bus *bus, int phy_id, int regnum)
 {
 	struct mdio_fsl_priv *priv = (struct mdio_fsl_priv *)bus->priv;
-	struct tgec_mdio_controller __iomem *regs = priv->mdio_base;
+	struct fsl_mdio_regs __iomem *regs = priv->mdio_base;
 	uint16_t dev_addr;
 	uint32_t mdio_stat;
 	uint32_t mdio_ctl;
@@ -239,13 +248,48 @@ static int xgmac_mdio_read(struct mii_bus *bus, int phy_id, int regnum)
 	return value;
 }
 
+static const struct of_device_id xgmac_mdio_match[] = {
+	{
+		.compatible = "fsl,fman-xmdio",
+		.data = &(struct xgmac_mdio_data) {
+			.regs_offset = offsetof(struct tgec_mdio_controller, regs),
+		},
+	},
+	{
+		.compatible = "fsl,fman-memac-mdio",
+		.data = &(struct xgmac_mdio_data) {
+			.regs_offset = offsetof(struct tgec_mdio_controller, regs),
+		},
+	},
+	{
+		.compatible = "fsl,enetc-mdio",
+		.data = &(struct xgmac_mdio_data) {
+			.regs_offset = 0,
+		},
+	},
+	{},
+};
+MODULE_DEVICE_TABLE(of, xgmac_mdio_match);
+
 static int xgmac_mdio_probe(struct platform_device *pdev)
 {
+	const struct of_device_id *id =
+		of_match_device(xgmac_mdio_match, &pdev->dev);
 	struct device_node *np = pdev->dev.of_node;
+	const struct xgmac_mdio_data *data;
 	struct mii_bus *bus;
 	struct resource res;
 	struct mdio_fsl_priv *priv;
 	int ret;
+
+	if (!id) {
+		dev_err(&pdev->dev, "Failed to match device\n");
+		return -ENODEV;
+	}
+
+	data = id->data;
+
+	dev_info(&pdev->dev, "found %s compatible node\n", id->compatible);
 
 	ret = of_address_to_resource(np, 0, &res);
 	if (ret) {
@@ -265,12 +309,13 @@ static int xgmac_mdio_probe(struct platform_device *pdev)
 
 	/* Set the PHY base address */
 	priv = bus->priv;
-	priv->mdio_base = of_iomap(np, 0);
-	if (!priv->mdio_base) {
+	priv->map = of_iomap(np, 0);
+	if (!priv->map) {
 		ret = -ENOMEM;
 		goto err_ioremap;
 	}
 
+	priv->mdio_base = priv->map + data->regs_offset;
 	priv->is_little_endian = of_property_read_bool(pdev->dev.of_node,
 						       "little-endian");
 
@@ -285,7 +330,7 @@ static int xgmac_mdio_probe(struct platform_device *pdev)
 	return 0;
 
 err_registration:
-	iounmap(priv->mdio_base);
+	iounmap(priv->map);
 
 err_ioremap:
 	mdiobus_free(bus);
@@ -296,24 +341,15 @@ err_ioremap:
 static int xgmac_mdio_remove(struct platform_device *pdev)
 {
 	struct mii_bus *bus = platform_get_drvdata(pdev);
+	struct mdio_fsl_priv *priv = bus->priv;
 
 	mdiobus_unregister(bus);
+	iounmap(priv->map);
 	iounmap(bus->priv);
 	mdiobus_free(bus);
 
 	return 0;
 }
-
-static const struct of_device_id xgmac_mdio_match[] = {
-	{
-		.compatible = "fsl,fman-xmdio",
-	},
-	{
-		.compatible = "fsl,fman-memac-mdio",
-	},
-	{},
-};
-MODULE_DEVICE_TABLE(of, xgmac_mdio_match);
 
 static struct platform_driver xgmac_mdio_driver = {
 	.driver = {

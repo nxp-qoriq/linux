@@ -1,6 +1,7 @@
 config FSL_ENETC
 	tristate "ENETC PF driver"
 	depends on PCI
+	select FSL_XGMAC_MDIO
 	---help---
 	  TBD
 

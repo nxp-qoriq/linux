@@ -383,8 +383,8 @@ union enetc_tx_bd {
 };
 
 #define ENETC_TXBD_FLAGS_L4CS	BIT(0)
+#define ENETC_TXBD_FLAGS_W	BIT(2)
 #define ENETC_TXBD_FLAGS_CSUM	BIT(3)
-#define ENETC_TXBD_FLAGS_TSTMP	BIT(4)
 #define ENETC_TXBD_FLAGS_EX	BIT(6)
 #define ENETC_TXBD_FLAGS_F	BIT(7)
 

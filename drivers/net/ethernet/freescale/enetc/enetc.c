@@ -356,7 +356,7 @@ static void enetc_get_tx_tstamp(struct enetc_hw *hw, union enetc_tx_bd *txbd,
 {
 	u32 lo, hi;
 
-	if (txbd->flags & ENETC_TXBD_FLAGS_TSTMP) {
+	if (txbd->flags & ENETC_TXBD_FLAGS_W) {
 		lo = enetc_rd(hw, ENETC_SICTR0);
 		hi = enetc_rd(hw, ENETC_SICTR1);
 		if (lo <= txbd->ext.tstamp)

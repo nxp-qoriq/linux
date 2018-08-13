@@ -858,10 +858,17 @@ static int flexcan_chip_start(struct net_device *dev)
 	 * set max mailbox number
 	 */
 	reg_mcr = priv->read(&regs->mcr);
-	reg_mcr &= ~FLEXCAN_MCR_MAXMB(0xff);
+	reg_mcr &= ~(FLEXCAN_MCR_MAXMB(0xff) | FLEXCAN_MCR_SRX_DIS);
 	reg_mcr |= FLEXCAN_MCR_FRZ | FLEXCAN_MCR_FEN | FLEXCAN_MCR_HALT |
-		FLEXCAN_MCR_SUPV | FLEXCAN_MCR_WRN_EN | FLEXCAN_MCR_SRX_DIS |
-		FLEXCAN_MCR_IDAM_C | FLEXCAN_MCR_MAXMB(FLEXCAN_TX_BUF_ID);
+		FLEXCAN_MCR_SUPV | FLEXCAN_MCR_WRN_EN | FLEXCAN_MCR_IDAM_C |
+		FLEXCAN_MCR_MAXMB(FLEXCAN_TX_BUF_ID);
+	/* NOTE: In loopback mode, the CAN_MCR[SRXDIS] cannot be asserted
+	 * because this will impede the self reception of a transmitted message.
+	 * This is not documented in earlier versions of flexcan block guide.
+	 */
+	if (likely(!(priv->can.ctrlmode & CAN_CTRLMODE_LOOPBACK)))
+		reg_mcr |= FLEXCAN_MCR_SRX_DIS;
+
 	netdev_dbg(dev, "%s: writing mcr=0x%08x", __func__, reg_mcr);
 	priv->write(reg_mcr, &regs->mcr);
 

@@ -130,6 +130,13 @@
 		clock-output-names= "pclk";
 	};
 
+	coreclk: coreclk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <162500000>;
+		clock-output-names= "coreclk";
+	};
+
 	reboot {
 		compatible ="syscon-reboot";
 		regmap = <&dcfg>;
@@ -621,24 +628,24 @@
 		compatible = "fsl,ls1028a-dp";
 		reg = <0x0 0xf200000 0x0 0x100000>;
 		interrupts = <0 221 0x4>;
-		clocks = <&pclk>,
-			 <&pclk>,
-			 <&pclk>,
-			 <&pclk>,
+		clocks = <&coreclk>,
+			 <&coreclk>,
+			 <&coreclk>,
+			 <&coreclk>,
 			 <&dpclk>,
 			 <&dpclk>,
 			 <&dpclk>,
-			 <&pclk>,
-			 <&pclk>,
-			 <&pclk>,
-			 <&pclk>,
-			 <&pclk>,
-			 <&pclk>,
-			 <&pclk>,
-			 <&pclk>,
+			 <&coreclk>,
+			 <&coreclk>,
+			 <&coreclk>,
+			 <&coreclk>,
+			 <&coreclk>,
+			 <&coreclk>,
+			 <&coreclk>,
+			 <&coreclk>,
 			 <&dpclk>,
-			 <&pclk>,
-			 <&pclk>;
+			 <&coreclk>,
+			 <&coreclk>;
 		clock-names = "dig_pll", "av_pll", "clk_ipg",
 			      "clk_core", "clk_pxl", "clk_pxl_mux",
 			      "clk_pxl_link", "clk_hdp", "clk_phy",

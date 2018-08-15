@@ -6,10 +6,15 @@
  */ 
 
 #include <linux/clk.h>
+#include <linux/io.h>
+#include <linux/of.h>
+#include <linux/of_address.h>
 #include "mhdp_firmware.h"
 #include "imx-hdp.h"
 #include "imx-hdmi.h"
 #include "imx-dp.h"
+
+#define EDP_PHY_RESET	0x230
 
 void dp_fw_load(state_struct *state)
 {
@@ -45,9 +50,22 @@ void dp_fw_init(state_struct *state, u32 core_rate)
 		ADDR_SOURCD_PHY + (LANES_CONFIG << 2), 0x0040001b);
 }
 
+static const struct of_device_id scfg_device_ids[] = {
+	{ .compatible = "fsl,ls1028a-scfg", },
+	{}
+};
+
 void dp_phy_init(state_struct *state, int num_lanes, int max_link_rate, int tmp)
 {
 	int ret;
+	struct device_node *scfg_node;
+	void __iomem *scfg_base = NULL;
+
+	scfg_node = of_find_matching_node(NULL, scfg_device_ids);
+	if (scfg_node)
+		scfg_base = of_iomap(scfg_node, 0);
+
+	iowrite32(0, scfg_base + EDP_PHY_RESET);
 
 	/* PHY initialization while phy reset pin is active */
 	AFE_init(state, num_lanes, (ENUM_AFE_LINK_RATE)max_link_rate);
@@ -56,6 +74,9 @@ void dp_phy_init(state_struct *state, int num_lanes, int max_link_rate, int tmp)
 	/* In this point the phy reset should be deactivated */
 	hdp_phy_reset(1);
 #endif
+
+	iowrite32(0x1, scfg_base + EDP_PHY_RESET);
+	iounmap(scfg_base);
 
 	/* PHY power set */
 	AFE_power(state, num_lanes, (ENUM_AFE_LINK_RATE)max_link_rate);

@@ -544,8 +544,8 @@
 				 <&clockgen 4 3>, <&clockgen 4 3>;
 			clock-names = "bus", "mclk1", "mclk2", "mclk3";
 			dma-names = "tx", "rx";
-			dmas = <&edma0 1 47>,
-			       <&edma0 1 46>;
+			dmas = <&edma0 1 4>,
+			       <&edma0 1 3>;
 			status = "disabled";
 		};
 
@@ -558,8 +558,8 @@
 				 <&clockgen 4 3>, <&clockgen 4 3>;
 			clock-names = "bus", "mclk1", "mclk2", "mclk3";
 			dma-names = "tx", "rx";
-			dmas = <&edma0 1 45>,
-			       <&edma0 1 44>;
+			dmas = <&edma0 1 6>,
+			       <&edma0 1 5>;
 			status = "disabled";
 		};
 	};

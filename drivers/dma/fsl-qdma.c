@@ -117,6 +117,8 @@
 #define QDMA_SG_LEN_MASK		GENMASK(29, 0)
 
 #define QDMA_BIG_ENDIAN			0x00000001
+#define	COMP_TIMEOUT			1000
+#define COMMAND_QUEUE_OVERFLLOW		10
 
 #define QDMA_IN(fsl_qdma_engine, addr)					\
 	(((fsl_qdma_engine)->big_endian & QDMA_BIG_ENDIAN) ?		\
@@ -225,10 +227,8 @@ struct fsl_qdma_chan {
 	struct virt_dma_chan		vchan;
 	struct virt_dma_desc		vdesc;
 	enum dma_status			status;
-	u32				slave_id;
 	struct fsl_qdma_engine		*qdma;
 	struct fsl_qdma_queue		*queue;
-	struct list_head		qcomp;
 };
 
 struct fsl_qdma_queue {
@@ -273,6 +273,7 @@ struct fsl_qdma_engine {
 	int			block_number;
 	int			block_offset;
 	int			irq_base;
+	int			desc_allocated;
 
 };
 
@@ -300,6 +301,9 @@ static struct fsl_qdma_comp *to_fsl_qdma_comp(struct virt_dma_desc *vd)
 static void fsl_qdma_free_chan_resources(struct dma_chan *chan)
 {
 	struct fsl_qdma_chan *fsl_chan = to_fsl_qdma_chan(chan);
+	struct fsl_qdma_queue *fsl_queue = fsl_chan->queue;
+	struct fsl_qdma_engine *fsl_qdma = fsl_chan->qdma;
+	struct fsl_qdma_comp *comp_temp, *_comp_temp;
 	unsigned long flags;
 	LIST_HEAD(head);
 
@@ -308,6 +312,40 @@ static void fsl_qdma_free_chan_resources(struct dma_chan *chan)
 	spin_unlock_irqrestore(&fsl_chan->vchan.lock, flags);
 
 	vchan_dma_desc_free_list(&fsl_chan->vchan, &head);
+
+	if (!fsl_queue->comp_pool && !fsl_queue->comp_pool)
+		return;
+
+	list_for_each_entry_safe(comp_temp, _comp_temp,
+				&fsl_queue->comp_used,	list) {
+		dma_pool_free(fsl_queue->comp_pool,
+					 comp_temp->virt_addr,
+					 comp_temp->bus_addr);
+		dma_pool_free(fsl_queue->desc_pool,
+				comp_temp->desc_virt_addr,
+				comp_temp->desc_bus_addr);
+		list_del(&comp_temp->list);
+		kfree(comp_temp);
+	}
+
+	list_for_each_entry_safe(comp_temp, _comp_temp,
+				&fsl_queue->comp_free, list) {
+		dma_pool_free(fsl_queue->comp_pool,
+					 comp_temp->virt_addr,
+					 comp_temp->bus_addr);
+		dma_pool_free(fsl_queue->desc_pool,
+				comp_temp->desc_virt_addr,
+				comp_temp->desc_bus_addr);
+		list_del(&comp_temp->list);
+		kfree(comp_temp);
+	}
+
+	dma_pool_destroy(fsl_queue->comp_pool);
+	dma_pool_destroy(fsl_queue->desc_pool);
+
+	fsl_qdma->desc_allocated--;
+	fsl_queue->comp_pool = NULL;
+	fsl_queue->desc_pool = NULL;
 }
 
 static void fsl_qdma_comp_fill_memcpy(struct fsl_qdma_comp *fsl_comp,
@@ -358,7 +396,7 @@ static int fsl_qdma_pre_request_enqueue_comp_desc(struct fsl_qdma_queue *queue)
 	struct fsl_qdma_comp *comp_temp;
 	int i;
 
-	for (i = 0; i < queue->n_cq; i++) {
+	for (i = 0; i < queue->n_cq + COMMAND_QUEUE_OVERFLLOW; i++) {
 		comp_temp = kzalloc(sizeof(*comp_temp), GFP_KERNEL);
 		if (!comp_temp)
 			return -ENOMEM;
@@ -366,8 +404,10 @@ static int fsl_qdma_pre_request_enqueue_comp_desc(struct fsl_qdma_queue *queue)
 						      GFP_KERNEL,
 						      &comp_temp->bus_addr);
 
-		if (!comp_temp->virt_addr)
+		if (!comp_temp->virt_addr) {
+			kfree(comp_temp);
 			return -ENOMEM;
+		}
 
 		list_add_tail(&comp_temp->list, &queue->comp_free);
 	}
@@ -403,42 +443,26 @@ static struct fsl_qdma_comp *fsl_qdma_request_enqueue_desc(
 	struct fsl_qdma_comp *comp_temp;
 	struct fsl_qdma_queue *queue = fsl_chan->queue;
 	unsigned long flags;
+	int timeout = COMP_TIMEOUT;
 
-	spin_lock_irqsave(&queue->queue_lock, flags);
-	if (list_empty(&queue->comp_free)) {
-		spin_unlock_irqrestore(&queue->queue_lock, flags);
-		comp_temp = kzalloc(sizeof(*comp_temp), GFP_KERNEL);
-		if (!comp_temp)
-			return NULL;
-		comp_temp->virt_addr = dma_pool_alloc(queue->comp_pool,
-						      GFP_KERNEL,
-						      &comp_temp->bus_addr);
-		if (!comp_temp->virt_addr) {
-			kfree(comp_temp);
-			return NULL;
-		}
-
-		comp_temp->desc_virt_addr = dma_pool_alloc(queue->desc_pool,
-					GFP_KERNEL,
-					&comp_temp->desc_bus_addr);
-		if (!comp_temp->desc_virt_addr) {
-			dma_pool_free(queue->comp_pool,
-					 comp_temp->virt_addr,
-					 comp_temp->bus_addr);
-			kfree(comp_temp);
-			return NULL;
-		}
-
-	} else {
-		comp_temp = list_first_entry(&queue->comp_free,
+	while (timeout) {
+		spin_lock_irqsave(&queue->queue_lock, flags);
+		if (!list_empty(&queue->comp_free)) {
+			comp_temp = list_first_entry(&queue->comp_free,
 					     struct fsl_qdma_comp,
 					     list);
-		list_del(&comp_temp->list);
-		spin_unlock_irqrestore(&queue->queue_lock, flags);
-	}
-	comp_temp->qchan = fsl_chan;
+			list_del(&comp_temp->list);
 
-	return comp_temp;
+			spin_unlock_irqrestore(&queue->queue_lock, flags);
+			comp_temp->qchan = fsl_chan;
+			return comp_temp;
+		}
+		spin_unlock_irqrestore(&queue->queue_lock, flags);
+		udelay(1);
+		timeout--;
+	}
+
+	return NULL;
 }
 
 static struct fsl_qdma_queue *fsl_qdma_alloc_queue_resources(
@@ -492,45 +516,9 @@ static struct fsl_qdma_queue *fsl_qdma_alloc_queue_resources(
 			queue_temp->virt_head = queue_temp->cq;
 			queue_temp->virt_tail = queue_temp->cq;
 			/*
-			 * The dma pool for queue command buffer
-			 */
-			queue_temp->comp_pool =
-			dma_pool_create("comp_pool",
-				       &pdev->dev,
-				       FSL_QDMA_COMMAND_BUFFER_SIZE,
-				       64, 0);
-			if (!queue_temp->comp_pool) {
-				dma_free_coherent(&pdev->dev,
-					 sizeof(struct fsl_qdma_format) *
-					 queue_size[i],
-					 queue_temp->cq,
-					 queue_temp->bus_addr);
-				return NULL;
-			}
-
-			/*
-			 * The dma pool for Descriptor(SD/DD) buffer
-			 */
-			queue_temp->desc_pool =
-			dma_pool_create("desc_pool",
-				       &pdev->dev,
-				       FSL_QDMA_DESCRIPTOR_BUFFER_SIZE,
-				       32, 0);
-			if (!queue_temp->desc_pool) {
-				dma_free_coherent(&pdev->dev,
-					 sizeof(struct fsl_qdma_format) *
-					 queue_size[i],
-					 queue_temp->cq,
-					 queue_temp->bus_addr);
-				dma_pool_destroy(queue_temp->comp_pool);
-				return NULL;
-			}
-
-			/*
 			 * List for queue command buffer
 			 */
 			INIT_LIST_HEAD(&queue_temp->comp_used);
-			INIT_LIST_HEAD(&queue_temp->comp_free);
 			spin_lock_init(&queue_temp->queue_lock);
 		}
 	}
@@ -680,7 +668,7 @@ static int fsl_qdma_queue_transfer_complete(
 
 		}
 
-			if (duplicate_handle) {
+		if (duplicate_handle) {
 			reg = qdma_readl(fsl_qdma, block + FSL_QDMA_BSQMR);
 			reg |= FSL_QDMA_BSQMR_DI;
 			qdma_desc_addr_set64(status_addr, 0x0);
@@ -923,6 +911,7 @@ static int fsl_qdma_reg_init(struct fsl_qdma_engine *fsl_qdma)
 		reg = FSL_QDMA_BSQMR_EN;
 		reg |= FSL_QDMA_BSQMR_CQ_SIZE(ilog2(
 			fsl_qdma->status[j]->n_cq) - 6);
+
 		qdma_writel(fsl_qdma, reg, block + FSL_QDMA_BSQMR);
 		reg = qdma_readl(fsl_qdma, block + FSL_QDMA_BSQMR);
 
@@ -1019,15 +1008,92 @@ static void fsl_qdma_issue_pending(struct dma_chan *chan)
 	spin_unlock_irqrestore(&fsl_queue->queue_lock, flags);
 }
 
+static void fsl_qdma_synchronize(struct dma_chan *chan)
+{
+	struct fsl_qdma_chan *fsl_chan = to_fsl_qdma_chan(chan);
+
+	vchan_synchronize(&fsl_chan->vchan);
+}
+
+static int fsl_qdma_terminate_all(struct dma_chan *chan)
+{
+	struct fsl_qdma_chan *fsl_chan = to_fsl_qdma_chan(chan);
+	unsigned long flags;
+	LIST_HEAD(head);
+
+	spin_lock_irqsave(&fsl_chan->vchan.lock, flags);
+	vchan_get_all_descriptors(&fsl_chan->vchan, &head);
+	spin_unlock_irqrestore(&fsl_chan->vchan.lock, flags);
+	vchan_dma_desc_free_list(&fsl_chan->vchan, &head);
+	return 0;
+}
+
+static int fsl_qdma_alloc_chan_resources(struct dma_chan *chan)
+{
+	struct fsl_qdma_chan *fsl_chan = to_fsl_qdma_chan(chan);
+	struct fsl_qdma_queue *fsl_queue = fsl_chan->queue;
+	struct fsl_qdma_engine *fsl_qdma = fsl_chan->qdma;
+	int ret;
+
+	if (fsl_queue->comp_pool && fsl_queue->desc_pool)
+		return fsl_qdma->desc_allocated;
+
+	INIT_LIST_HEAD(&fsl_queue->comp_free);
+
+	/*
+	 * The dma pool for queue command buffer
+	 */
+	fsl_queue->comp_pool =
+	dma_pool_create("comp_pool",
+		       chan->device->dev,
+		       FSL_QDMA_COMMAND_BUFFER_SIZE,
+		       64, 0);
+	if (!fsl_queue->comp_pool)
+		return -ENOMEM;
+
+	/*
+	 * The dma pool for Descriptor(SD/DD) buffer
+	 */
+	fsl_queue->desc_pool =
+	dma_pool_create("desc_pool",
+		       chan->device->dev,
+		       FSL_QDMA_DESCRIPTOR_BUFFER_SIZE,
+		       32, 0);
+	if (!fsl_queue->desc_pool)
+		goto err_desc_pool;
+
+	ret = fsl_qdma_pre_request_enqueue_comp_desc(fsl_queue);
+	if (ret) {
+		dev_err(chan->device->dev, "failed to alloc dma buffer for "
+				"comp S/G descriptor\n");
+		goto err_mem;
+	}
+
+	ret = fsl_qdma_pre_request_enqueue_sd_desc(fsl_queue);
+	if (ret) {
+		dev_err(chan->device->dev, "failed to alloc dma buffer for "
+				"S/D descriptor\n");
+		goto err_mem;
+	}
+
+	fsl_qdma->desc_allocated++;
+	return fsl_qdma->desc_allocated;
+
+err_mem:
+	dma_pool_destroy(fsl_queue->desc_pool);
+err_desc_pool:
+	dma_pool_destroy(fsl_queue->comp_pool);
+	return -ENOMEM;
+}
+
 static int fsl_qdma_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
 	struct fsl_qdma_engine *fsl_qdma;
 	struct fsl_qdma_chan *fsl_chan;
-	struct fsl_qdma_queue *fsl_queue;
 	struct resource *res;
 	unsigned int len, chans, queues;
-	int ret, i, j;
+	int ret, i;
 	int blk_num;
 	int blk_off;
 
@@ -1077,6 +1143,7 @@ static int fsl_qdma_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	fsl_qdma->desc_allocated = 0;
 	fsl_qdma->n_chans = chans;
 	fsl_qdma->n_queues = queues;
 	fsl_qdma->block_number = blk_num;
@@ -1084,9 +1151,9 @@ static int fsl_qdma_probe(struct platform_device *pdev)
 
 	mutex_init(&fsl_qdma->fsl_qdma_mutex);
 
-	for (j = 0; j < fsl_qdma->block_number; j++) {
-		fsl_qdma->status[j] = fsl_qdma_prep_status_queue(pdev);
-		if (!fsl_qdma->status[j])
+	for (i = 0; i < fsl_qdma->block_number; i++) {
+		fsl_qdma->status[i] = fsl_qdma_prep_status_queue(pdev);
+		if (!fsl_qdma->status[i])
 			return -ENOMEM;
 	}
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
@@ -1103,7 +1170,6 @@ static int fsl_qdma_probe(struct platform_device *pdev)
 	fsl_qdma->block_base = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(fsl_qdma->block_base))
 		return PTR_ERR(fsl_qdma->block_base);
-
 	fsl_qdma->queue = fsl_qdma_alloc_queue_resources(pdev, fsl_qdma);
 	if (!fsl_qdma->queue)
 		return -ENOMEM;
@@ -1123,44 +1189,21 @@ static int fsl_qdma_probe(struct platform_device *pdev)
 		fsl_chan->queue = fsl_qdma->queue + i % (fsl_qdma->n_queues *
 							fsl_qdma->block_number);
 		fsl_chan->vchan.desc_free = fsl_qdma_free_desc;
-		INIT_LIST_HEAD(&fsl_chan->qcomp);
 		vchan_init(&fsl_chan->vchan, &fsl_qdma->dma_dev);
 	}
-
-	for (j = 0; j < fsl_qdma->block_number; j++)
-		for (i = 0; i < fsl_qdma->n_queues; i++) {
-			fsl_queue = fsl_qdma->queue + i +
-					(j * fsl_qdma->n_queues);
-			ret = fsl_qdma_pre_request_enqueue_comp_desc(fsl_queue);
-			if (ret) {
-				dev_err(&pdev->dev, "failed to alloc dma buffer for "
-					"blk %d\t queue %d comp S/G descriptor\n",
-					j, i);
-				return ret;
-			}
-		}
-
-	for (j = 0; j < fsl_qdma->block_number; j++)
-		for (i = 0; i < fsl_qdma->n_queues; i++) {
-			fsl_queue = fsl_qdma->queue + i +
-					(j * fsl_qdma->n_queues);
-			ret = fsl_qdma_pre_request_enqueue_sd_desc(fsl_queue);
-			if (ret) {
-				dev_err(&pdev->dev, "failed to alloc dma buffer for "
-					"blk %d\t queue %d S/D descriptor\n",
-					j, i);
-				return ret;
-			}
-		}
 
 	dma_cap_set(DMA_MEMCPY, fsl_qdma->dma_dev.cap_mask);
 
 	fsl_qdma->dma_dev.dev = &pdev->dev;
 	fsl_qdma->dma_dev.device_free_chan_resources
 		= fsl_qdma_free_chan_resources;
+	fsl_qdma->dma_dev.device_alloc_chan_resources
+		= fsl_qdma_alloc_chan_resources;
 	fsl_qdma->dma_dev.device_tx_status = fsl_qdma_tx_status;
 	fsl_qdma->dma_dev.device_prep_dma_memcpy = fsl_qdma_prep_memcpy;
 	fsl_qdma->dma_dev.device_issue_pending = fsl_qdma_issue_pending;
+	fsl_qdma->dma_dev.device_synchronize = fsl_qdma_synchronize;
+	fsl_qdma->dma_dev.device_terminate_all = fsl_qdma_terminate_all;
 
 	dma_set_mask(&pdev->dev, DMA_BIT_MASK(40));
 
@@ -1197,51 +1240,13 @@ static int fsl_qdma_remove(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
 	struct fsl_qdma_engine *fsl_qdma = platform_get_drvdata(pdev);
-	struct fsl_qdma_queue *queue_temp;
 	struct fsl_qdma_queue *status;
-	struct fsl_qdma_comp *comp_temp, *_comp_temp;
-	int i, j;
+	int i;
 
 	fsl_qdma_irq_exit(pdev, fsl_qdma);
 	fsl_qdma_cleanup_vchan(&fsl_qdma->dma_dev);
 	of_dma_controller_free(np);
 	dma_async_device_unregister(&fsl_qdma->dma_dev);
-
-	/* Free descriptor areas */
-	for (j = 0; j < fsl_qdma->block_number; j++) {
-		for (i = 0; i < fsl_qdma->n_queues; i++) {
-			queue_temp = fsl_qdma->queue + i + j *
-					fsl_qdma->n_queues;
-			list_for_each_entry_safe(comp_temp, _comp_temp,
-						&queue_temp->comp_used,	list) {
-				dma_pool_free(queue_temp->comp_pool,
-							 comp_temp->virt_addr,
-							 comp_temp->bus_addr);
-				dma_pool_free(queue_temp->desc_pool,
-						comp_temp->desc_virt_addr,
-						comp_temp->desc_bus_addr);
-				list_del(&comp_temp->list);
-				kfree(comp_temp);
-			}
-			list_for_each_entry_safe(comp_temp, _comp_temp,
-						&queue_temp->comp_free, list) {
-				dma_pool_free(queue_temp->comp_pool,
-							 comp_temp->virt_addr,
-							 comp_temp->bus_addr);
-				dma_pool_free(queue_temp->desc_pool,
-						comp_temp->desc_virt_addr,
-						comp_temp->desc_bus_addr);
-				list_del(&comp_temp->list);
-				kfree(comp_temp);
-			}
-			dma_free_coherent(&pdev->dev,
-					 sizeof(struct fsl_qdma_format) *
-					 queue_temp->n_cq, queue_temp->cq,
-					 queue_temp->bus_addr);
-			dma_pool_destroy(queue_temp->comp_pool);
-			dma_pool_destroy(queue_temp->desc_pool);
-		}
-	}
 
 	for (i = 0; i < fsl_qdma->block_number; i++) {
 		status = fsl_qdma->status[i];

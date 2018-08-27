@@ -4,6 +4,7 @@
  * Author: Shaohui Xie <Shaohui.Xie@freescale.com>
  *
  * Copyright 2015 Freescale Semiconductor, Inc.
+ * Copyright 2018 NXP
  *
  * This file is licensed under the terms of the GNU General Public License
  * version 2.  This program is licensed "as is" without any warranty of any
@@ -29,6 +30,10 @@
 				 SUPPORTED_1000baseT_Full | \
 				 SUPPORTED_100baseT_Full | \
 				 PHY_DEFAULT_FEATURES)
+
+#define MDIO_PMA_CTRL1_AQ_SPEED10	0
+#define MDIO_PMA_CTRL1_AQ_SPEED2500	0x2058
+#define MDIO_PMA_CTRL1_AQ_SPEED5000	0x205c
 
 static int aquantia_config_aneg(struct phy_device *phydev)
 {
@@ -88,29 +93,35 @@ static int aquantia_read_status(struct phy_device *phydev)
 	int reg;
 
 	reg = phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_STAT1);
-	reg = phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_STAT1);
 	if (reg & MDIO_STAT1_LSTATUS)
 		phydev->link = 1;
 	else
 		phydev->link = 0;
 
-	reg = phy_read_mmd(phydev, MDIO_MMD_AN, 0xc800);
 	mdelay(10);
-	reg = phy_read_mmd(phydev, MDIO_MMD_AN, 0xc800);
+	reg = phy_read_mmd(phydev, MDIO_MMD_PMAPMD, MDIO_CTRL1);
 
-	switch (reg) {
-	case 0x9:
+	switch (reg &  MDIO_CTRL1_SPEEDSEL) {
+	case MDIO_PMA_CTRL1_AQ_SPEED5000:
+		phydev->speed = SPEED_5000;
+		break;
+	case MDIO_PMA_CTRL1_AQ_SPEED2500:
 		phydev->speed = SPEED_2500;
 		break;
-	case 0x5:
-		phydev->speed = SPEED_1000;
+	case MDIO_PMA_CTRL1_AQ_SPEED10:
+		phydev->speed = SPEED_10;
 		break;
-	case 0x3:
+	case MDIO_PMA_CTRL1_SPEED100:
 		phydev->speed = SPEED_100;
 		break;
-	case 0x7:
-	default:
+	case MDIO_PMA_CTRL1_SPEED1000:
+		phydev->speed = SPEED_1000;
+		break;
+	case MDIO_CTRL1_SPEED10G:
 		phydev->speed = SPEED_10000;
+		break;
+	default:
+		phydev->speed = SPEED_UNKNOWN;
 		break;
 	}
 	phydev->duplex = DUPLEX_FULL;

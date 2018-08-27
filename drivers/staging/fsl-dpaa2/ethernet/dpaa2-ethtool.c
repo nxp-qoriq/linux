@@ -105,8 +105,8 @@ static void dpaa2_eth_get_drvinfo(struct net_device *net_dev,
 		sizeof(drvinfo->bus_info));
 }
 
-static int dpaa2_eth_get_settings(struct net_device *net_dev,
-				  struct ethtool_cmd *cmd)
+static int dpaa2_eth_get_link_ksettings(struct net_device *net_dev,
+					struct ethtool_link_ksettings *cmd)
 {
 	struct dpni_link_state state = {0};
 	int err = 0;
@@ -124,17 +124,18 @@ static int dpaa2_eth_get_settings(struct net_device *net_dev,
 	 * beyond the DPNI attributes.
 	 */
 	if (state.options & DPNI_LINK_OPT_AUTONEG)
-		cmd->autoneg = AUTONEG_ENABLE;
+		cmd->base.autoneg = AUTONEG_ENABLE;
+
 	if (!(state.options & DPNI_LINK_OPT_HALF_DUPLEX))
-		cmd->duplex = DUPLEX_FULL;
-	ethtool_cmd_speed_set(cmd, state.rate);
+		cmd->base.duplex = DUPLEX_FULL;
+	cmd->base.speed = state.rate;
 
 out:
 	return err;
 }
 
-static int dpaa2_eth_set_settings(struct net_device *net_dev,
-				  struct ethtool_cmd *cmd)
+static int dpaa2_eth_set_link_ksettings(struct net_device *net_dev,
+					const struct ethtool_link_ksettings *cmd)
 {
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 	struct dpni_link_state state = {0};
@@ -151,12 +152,13 @@ static int dpaa2_eth_set_settings(struct net_device *net_dev,
 	}
 
 	cfg.options = state.options;
-	cfg.rate = ethtool_cmd_speed(cmd);
-	if (cmd->autoneg == AUTONEG_ENABLE)
+	cfg.rate = cmd->base.speed;
+	if (cmd->base.autoneg == AUTONEG_ENABLE)
 		cfg.options |= DPNI_LINK_OPT_AUTONEG;
 	else
 		cfg.options &= ~DPNI_LINK_OPT_AUTONEG;
-	if (cmd->duplex  == DUPLEX_HALF)
+
+	if (cmd->base.duplex  == DUPLEX_HALF)
 		cfg.options |= DPNI_LINK_OPT_HALF_DUPLEX;
 	else
 		cfg.options &= ~DPNI_LINK_OPT_HALF_DUPLEX;
@@ -865,8 +867,6 @@ static int dpaa2_eth_get_rxnfc(struct net_device *net_dev,
 const struct ethtool_ops dpaa2_ethtool_ops = {
 	.get_drvinfo = dpaa2_eth_get_drvinfo,
 	.get_link = ethtool_op_get_link,
-	.get_settings = dpaa2_eth_get_settings,
-	.set_settings = dpaa2_eth_set_settings,
 	.get_pauseparam = dpaa2_eth_get_pauseparam,
 	.set_pauseparam = dpaa2_eth_set_pauseparam,
 	.get_sset_count = dpaa2_eth_get_sset_count,
@@ -874,4 +874,6 @@ const struct ethtool_ops dpaa2_ethtool_ops = {
 	.get_strings = dpaa2_eth_get_strings,
 	.get_rxnfc = dpaa2_eth_get_rxnfc,
 	.set_rxnfc = dpaa2_eth_set_rxnfc,
+	.get_link_ksettings = dpaa2_eth_get_link_ksettings,
+	.set_link_ksettings = dpaa2_eth_set_link_ksettings,
 };

@@ -23,10 +23,13 @@
 struct can_rx_offload {
 	struct net_device *dev;
 
-	unsigned int (*mailbox_read)(struct can_rx_offload *offload, struct can_frame *cf,
+	unsigned int (*mailbox_read)(struct can_rx_offload *offload,
+				     struct sk_buff *skb,
 				     u32 *timestamp, unsigned int mb);
 
 	struct sk_buff_head skb_queue;
+	struct sk_buff *skb_overflow;
+
 	u32 skb_queue_len_max;
 
 	unsigned int mb_first;
@@ -34,6 +37,7 @@ struct can_rx_offload {
 
 	struct napi_struct napi;
 
+	bool fd_enable;
 	bool inc;
 };
 

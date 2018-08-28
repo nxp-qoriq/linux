@@ -324,6 +324,8 @@ struct dpni_cmd_set_link_cfg {
 	__le32 pad1;
 	/* cmd word 2 */
 	__le64 options;
+	/* cmd word 3 */
+	__le64 advertising;
 };
 
 #define DPNI_LINK_STATE_SHIFT		0
@@ -340,6 +342,10 @@ struct dpni_rsp_get_link_state {
 	__le32 pad2;
 	/* response word 2 */
 	__le64 options;
+	/* cmd word 3 */
+	__le64 supported;
+	/* cmd word 4 */
+	__le64 advertising;
 };
 
 #define DPNI_COUPLED_SHIFT	0

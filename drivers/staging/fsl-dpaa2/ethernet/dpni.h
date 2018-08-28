@@ -551,6 +551,7 @@ int dpni_reset_statistics(struct fsl_mc_io *mc_io,
 struct dpni_link_cfg {
 	u32 rate;
 	u64 options;
+	u64 advertising;
 };
 
 int dpni_set_link_cfg(struct fsl_mc_io			*mc_io,
@@ -568,6 +569,8 @@ struct dpni_link_state {
 	u32	rate;
 	u64	options;
 	int	up;
+	u64	supported;
+	u64	advertising;
 };
 
 int dpni_get_link_state(struct fsl_mc_io	*mc_io,

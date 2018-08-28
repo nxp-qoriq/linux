@@ -137,6 +137,8 @@ struct dpmac_rsp_get_attributes {
 struct dpmac_rsp_get_link_cfg {
 	u64 options;
 	u32 rate;
+	u32 pad;
+	u64 advertising;
 };
 
 #define DPMAC_STATE_SIZE	1
@@ -148,6 +150,9 @@ struct dpmac_cmd_set_link_state {
 	u32 pad;
 	/* only least significant bit is valid */
 	u8 up;
+	u8 pad0[7];
+	u64 supported;
+	u64 advertising;
 };
 
 struct dpmac_cmd_get_counter {

@@ -123,6 +123,12 @@ static int dpaa2_eth_get_link_ksettings(struct net_device *net_dev,
 	 * no DPMAC at all. So for now we just don't report anything
 	 * beyond the DPNI attributes.
 	 */
+
+	ethtool_convert_legacy_u32_to_link_mode(cmd->link_modes.supported,
+						state.supported);
+	ethtool_convert_legacy_u32_to_link_mode(cmd->link_modes.advertising,
+						state.advertising);
+
 	if (state.options & DPNI_LINK_OPT_AUTONEG)
 		cmd->base.autoneg = AUTONEG_ENABLE;
 
@@ -162,6 +168,9 @@ static int dpaa2_eth_set_link_ksettings(struct net_device *net_dev,
 		cfg.options |= DPNI_LINK_OPT_HALF_DUPLEX;
 	else
 		cfg.options &= ~DPNI_LINK_OPT_HALF_DUPLEX;
+
+	ethtool_convert_link_mode_to_legacy_u32((u32 *)&cfg.advertising,
+						cmd->link_modes.advertising);
 
 	err = dpni_set_link_cfg(priv->mc_io, 0, priv->mc_token, &cfg);
 	if (err)

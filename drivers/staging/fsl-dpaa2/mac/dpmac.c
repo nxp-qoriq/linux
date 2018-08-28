@@ -488,6 +488,7 @@ int dpmac_get_link_cfg(struct fsl_mc_io *mc_io,
 	rsp_params = (struct dpmac_rsp_get_link_cfg *)cmd.params;
 	cfg->options = le64_to_cpu(rsp_params->options);
 	cfg->rate = le32_to_cpu(rsp_params->rate);
+	cfg->advertising = le64_to_cpu(rsp_params->advertising);
 
 	return 0;
 }
@@ -517,6 +518,8 @@ int dpmac_set_link_state(struct fsl_mc_io *mc_io,
 	cmd_params->options = cpu_to_le64(link_state->options);
 	cmd_params->rate = cpu_to_le32(link_state->rate);
 	cmd_params->up = dpmac_get_field(link_state->up, STATE);
+	cmd_params->supported = cpu_to_le64(link_state->supported);
+	cmd_params->advertising = cpu_to_le64(link_state->advertising);
 
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);

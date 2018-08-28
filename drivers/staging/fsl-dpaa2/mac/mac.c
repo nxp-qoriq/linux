@@ -102,6 +102,9 @@ static void dpaa2_mac_link_changed(struct net_device *netdev)
 		if (phydev->autoneg)
 			state.options |= DPMAC_LINK_OPT_AUTONEG;
 
+                state.supported = phydev->supported;
+                state.advertising = phydev->advertising;
+
 		netif_carrier_on(netdev);
 	} else {
 		netif_carrier_off(netdev);
@@ -343,10 +346,14 @@ static void configure_link(struct dpaa2_mac_priv *priv,
 	phydev->duplex  = !!(cfg->options & DPMAC_LINK_OPT_HALF_DUPLEX);
 
 	if (cfg->options & DPMAC_LINK_OPT_AUTONEG) {
-		phydev->autoneg = 1;
+		phydev->autoneg = AUTONEG_ENABLE;
+
+		if (cfg->advertising != 0)
+			phydev->advertising = (u32)cfg->advertising;
+
 		phydev->advertising |= ADVERTISED_Autoneg;
 	} else {
-		phydev->autoneg = 0;
+		phydev->autoneg = AUTONEG_DISABLE;
 		phydev->advertising &= ~ADVERTISED_Autoneg;
 	}
 

@@ -209,6 +209,7 @@ int dpmac_get_attributes(struct fsl_mc_io *mc_io,
 struct dpmac_link_cfg {
 	u32 rate;
 	u64 options;
+	u64 advertising;
 };
 
 int dpmac_get_link_cfg(struct fsl_mc_io *mc_io,
@@ -223,9 +224,11 @@ int dpmac_get_link_cfg(struct fsl_mc_io *mc_io,
  * @up: Link state
  */
 struct dpmac_link_state {
-	u32 rate;
 	u64 options;
+	u32 rate;
 	int up;
+	u64 supported;
+	u64 advertising;
 };
 
 int dpmac_set_link_state(struct fsl_mc_io *mc_io,

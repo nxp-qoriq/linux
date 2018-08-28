@@ -877,6 +877,7 @@ int dpni_set_link_cfg(struct fsl_mc_io *mc_io,
 	cmd_params = (struct dpni_cmd_set_link_cfg *)cmd.params;
 	cmd_params->rate = cpu_to_le32(cfg->rate);
 	cmd_params->options = cpu_to_le64(cfg->options);
+	cmd_params->advertising = cpu_to_le64(cfg->advertising);
 
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
@@ -915,6 +916,8 @@ int dpni_get_link_state(struct fsl_mc_io *mc_io,
 	state->up = dpni_get_field(rsp_params->flags, LINK_STATE);
 	state->rate = le32_to_cpu(rsp_params->rate);
 	state->options = le64_to_cpu(rsp_params->options);
+	state->supported = le64_to_cpu(rsp_params->supported);
+	state->advertising = le64_to_cpu(rsp_params->advertising);
 
 	return 0;
 }

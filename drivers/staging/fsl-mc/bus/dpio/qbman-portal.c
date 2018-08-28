@@ -209,6 +209,9 @@ struct qbman_swp *qbman_swp_init(const struct qbman_swp_desc *d)
 	p->addr_cena = d->cena_bar;
 	p->addr_cinh = d->cinh_bar;
 
+	if ((p->desc->qman_version & QMAN_REV_MASK) >= QMAN_REV_5000)
+		memset(p->addr_cena, 0, 64 * 1024);
+
 	reg = qbman_set_swp_cfg(p->dqrr.dqrr_size,
 			0, /* Writes cacheable */
 			0, /* EQCR_CI stashing threshold */

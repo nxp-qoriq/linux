@@ -39,6 +39,7 @@
 #include <linux/if_vlan.h>
 #include "../../fsl-mc/include/dpaa2-io.h"
 #include "dpni.h"
+#include "dpni-cmd.h"
 #include "net.h"
 
 #include "dpaa2-eth-debugfs.h"
@@ -391,6 +392,8 @@ struct dpaa2_eth_priv {
 
 	int dpni_id;
 	struct dpni_attr dpni_attrs;
+	u16 dpni_ver_major;
+	u16 dpni_ver_minor;
 	struct fsl_mc_device *dpbp_dev;
 
 	struct fsl_mc_io *mc_io;
@@ -447,6 +450,14 @@ struct dpaa2_eth_priv {
 
 extern const struct ethtool_ops dpaa2_ethtool_ops;
 extern const char dpaa2_eth_drv_version[];
+
+static inline int dpaa2_eth_cmp_dpni_ver(struct dpaa2_eth_priv *priv,
+					 u16 ver_major, u16 ver_minor)
+{
+	if (priv->dpni_ver_major == ver_major)
+		return priv->dpni_ver_minor - ver_minor;
+	return priv->dpni_ver_major - ver_major;
+}
 
 /* Hardware only sees DPAA2_ETH_RX_BUF_SIZE, but the skb built around
  * the buffer also needs space for its shared info struct, and we need

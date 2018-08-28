@@ -2012,6 +2012,21 @@ static int setup_dpni(struct fsl_mc_device *ls_dev)
 		goto err_open;
 	}
 
+	/* Check if we can work with this DPNI object */
+	err = dpni_get_api_version(priv->mc_io, 0, &priv->dpni_ver_major,
+				   &priv->dpni_ver_minor);
+	if (err) {
+		dev_err(dev, "dpni_get_api_version() failed\n");
+		goto err_version;
+	}
+	if (dpaa2_eth_cmp_dpni_ver(priv, DPNI_VER_MAJOR, DPNI_VER_MINOR) < 0) {
+		dev_err(dev, "DPNI version %u.%u not supported, need >= %u.%u\n",
+			priv->dpni_ver_major, priv->dpni_ver_minor,
+			DPNI_VER_MAJOR, DPNI_VER_MINOR);
+		err = -ENOTSUPP;
+		goto err_version;
+	}
+
 	ls_dev->mc_io = priv->mc_io;
 	ls_dev->mc_handle = priv->mc_token;
 
@@ -2140,6 +2155,7 @@ err_set_rx_queues:
 err_set_tx_queues:
 err_get_attr:
 err_reset:
+err_version:
 	dpni_close(priv->mc_io, 0, priv->mc_token);
 err_open:
 	return err;

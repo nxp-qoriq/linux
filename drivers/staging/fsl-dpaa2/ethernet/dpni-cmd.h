@@ -690,4 +690,10 @@ struct dpni_rsp_get_congestion_notification {
 	u32 threshold_entry;
 	u32 threshold_exit;
 };
+
+struct dpni_rsp_get_api_version {
+        __le16 major;
+        __le16 minor;
+};
+
 #endif /* _FSL_DPNI_CMD_H */

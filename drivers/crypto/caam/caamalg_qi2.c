@@ -1930,7 +1930,6 @@ static int ablkcipher_givencrypt(struct skcipher_givcrypt_request *greq)
 	struct crypto_ablkcipher *ablkcipher = crypto_ablkcipher_reqtfm(req);
 	struct caam_ctx *ctx = crypto_ablkcipher_ctx(ablkcipher);
 	struct caam_request *caam_req = ablkcipher_request_ctx(req);
-	int ivsize = crypto_ablkcipher_ivsize(ablkcipher);
 	int ret;
 
 	/* allocate extended descriptor */
@@ -1960,6 +1959,7 @@ static int ablkcipher_decrypt(struct ablkcipher_request *req)
 	struct crypto_ablkcipher *ablkcipher = crypto_ablkcipher_reqtfm(req);
 	struct caam_ctx *ctx = crypto_ablkcipher_ctx(ablkcipher);
 	struct caam_request *caam_req = ablkcipher_request_ctx(req);
+	int ivsize = crypto_ablkcipher_ivsize(ablkcipher);
 	int ret;
 
 	/* allocate extended descriptor */

@@ -42,11 +42,6 @@
 #define QMAN_REV_5000   0x05000000
 #define QMAN_REV_MASK   0xffff0000
 
-/* Forcing the pre-QMAN 5.0 behavior until
- * we can verify behavior/performance on hardware.
- */
-#define CONFIG_FSL_MC_QMAN_NOT_SHARABLE_MEMORY_CACHE 1
-
 struct dpaa2_dq;
 struct qbman_swp;
 

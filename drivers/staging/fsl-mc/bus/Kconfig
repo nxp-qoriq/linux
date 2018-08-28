@@ -32,12 +32,6 @@ config FSL_QBMAN_DEBUG
 	help
 	  QBMan debug assistant APIs.
 
-config FSL_MC_QMAN_NOT_SHARABLE_MEMORY_CACHE
-        tristate "Force using the interface before qman 5.0"
-        depends on FSL_MC_BUS
-        help
-          Do not use the memory mapped cache interface for QMAN.
-
 config FSL_MC_UAPI_SUPPORT
 	bool "Management Complex (MC) userspace support"
 	depends on FSL_MC_BUS

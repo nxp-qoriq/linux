@@ -186,12 +186,11 @@ struct qbman_swp *qbman_swp_init(const struct qbman_swp_desc *d)
 	p->sdq |= qbman_sdqcr_dct_prio_ics << QB_SDQCR_DCT_SHIFT;
 	p->sdq |= qbman_sdqcr_fc_up_to_3 << QB_SDQCR_FC_SHIFT;
 	p->sdq |= QMAN_SDQCR_TOKEN << QB_SDQCR_TOK_SHIFT;
-	if ((p->desc->qman_version & QMAN_REV_MASK) >= QMAN_REV_5000
-	    && !IS_ENABLED(CONFIG_FSL_MC_QMAN_NOT_SHARABLE_MEMORY_CACHE))
+	if ((p->desc->qman_version & QMAN_REV_MASK) >= QMAN_REV_5000)
 		printk("Using QMAN sharable memory cache\n");
 	else
 		printk("Using QMAN not sharable memory cache\n");
-	if ((p->desc->qman_version & QMAN_REV_MASK) >= QMAN_REV_5000 && !IS_ENABLED(CONFIG_FSL_MC_QMAN_NOT_MEMORY_MAPPED))
+	if ((p->desc->qman_version & QMAN_REV_MASK) >= QMAN_REV_5000)
 		p->mr.valid_bit = QB_VALID_BIT;
 
 	atomic_set(&p->vdq.available, 1);
@@ -222,8 +221,7 @@ struct qbman_swp *qbman_swp_init(const struct qbman_swp_desc *d)
 			1, /* dequeue stashing priority == TRUE */
 			0, /* dequeue stashing enable == FALSE */
 			0); /* EQCR_CI stashing priority == FALSE */
-	if ((p->desc->qman_version & QMAN_REV_MASK) >= QMAN_REV_5000
-	    && !IS_ENABLED(CONFIG_FSL_MC_QMAN_NOT_SHARABLE_MEMORY_CACHE))
+	if ((p->desc->qman_version & QMAN_REV_MASK) >= QMAN_REV_5000)
 		reg |= 1 << SWP_CFG_CPBS_SHIFT | /* memory-backed mode */
 		       1 << SWP_CFG_VPM_SHIFT |  /* VDQCR read triggered mode */
 		       1 << SWP_CFG_CPM_SHIFT;   /* CR read triggered mode */
@@ -235,8 +233,7 @@ struct qbman_swp *qbman_swp_init(const struct qbman_swp_desc *d)
 		return NULL;
 	}
 
-	if ((p->desc->qman_version & QMAN_REV_MASK) >= QMAN_REV_5000
-	    && !IS_ENABLED(CONFIG_FSL_MC_QMAN_NOT_SHARABLE_MEMORY_CACHE)) {
+	if ((p->desc->qman_version & QMAN_REV_MASK) >= QMAN_REV_5000) {
 		qbman_write_register(p, QBMAN_CINH_SWP_EQCR_PI, QMAN_RT_MODE);
 		qbman_write_register(p, QBMAN_CINH_SWP_RCR_PI, QMAN_RT_MODE);
 	}
@@ -334,8 +331,7 @@ void qbman_swp_interrupt_set_inhibit(struct qbman_swp *p, int inhibit)
  */
 void *qbman_swp_mc_start(struct qbman_swp *p)
 {
-	if ((p->desc->qman_version & QMAN_REV_MASK) < QMAN_REV_5000
-	    || IS_ENABLED(CONFIG_FSL_MC_QMAN_NOT_SHARABLE_MEMORY_CACHE))
+	if ((p->desc->qman_version & QMAN_REV_MASK) < QMAN_REV_5000)
 		return qbman_get_cmd(p, QBMAN_CENA_SWP_CR);
 	else
 		return qbman_get_cmd(p, QBMAN_CENA_SWP_CR_MEM);
@@ -349,8 +345,7 @@ void qbman_swp_mc_submit(struct qbman_swp *p, void *cmd, u8 cmd_verb)
 {
 	u8 *v = cmd;
 
-	if ((p->desc->qman_version & QMAN_REV_MASK) < QMAN_REV_5000
-	    || IS_ENABLED(CONFIG_FSL_MC_QMAN_NOT_SHARABLE_MEMORY_CACHE)) {
+	if ((p->desc->qman_version & QMAN_REV_MASK) < QMAN_REV_5000) {
 		dma_wmb();
 		*v = cmd_verb | p->mc.valid_bit;
 		clean(cmd);
@@ -369,8 +364,7 @@ void *qbman_swp_mc_result(struct qbman_swp *p)
 {
 	u32 *ret, verb;
 
-	if ((p->desc->qman_version & QMAN_REV_MASK) < QMAN_REV_5000
-	    || IS_ENABLED(CONFIG_FSL_MC_QMAN_NOT_SHARABLE_MEMORY_CACHE)) {
+	if ((p->desc->qman_version & QMAN_REV_MASK) < QMAN_REV_5000) {
 		qbman_inval_prefetch(p, QBMAN_CENA_SWP_RR(p->mc.valid_bit));
 		ret = qbman_get_cmd(p, QBMAN_CENA_SWP_RR(p->mc.valid_bit));
 		/* Remove the valid-bit - command completed if the rest
@@ -504,8 +498,7 @@ int qbman_swp_enqueue(struct qbman_swp *s, const struct qbman_eq_desc *d,
 	memcpy(&p->dca, &d->dca, 31);
 	memcpy(&p->fd, fd, sizeof(*fd));
 
-	if ((s->desc->qman_version & QMAN_REV_MASK) < QMAN_REV_5000
-	    || IS_ENABLED(CONFIG_FSL_MC_QMAN_NOT_SHARABLE_MEMORY_CACHE)) {
+	if ((s->desc->qman_version & QMAN_REV_MASK) < QMAN_REV_5000) {
 		/* Set the verb byte, have to substitute in the valid-bit */
 		dma_wmb();
 		p->verb = d->verb | EQAR_VB(eqar);
@@ -715,8 +708,7 @@ int qbman_swp_pull(struct qbman_swp *s, struct qbman_pull_desc *d)
 		return -EBUSY;
 	}
 	s->vdq.storage = (void *)d->rsp_addr_virt;
-	if ((s->desc->qman_version & QMAN_REV_MASK) < QMAN_REV_5000
-	    || IS_ENABLED(CONFIG_FSL_MC_QMAN_NOT_SHARABLE_MEMORY_CACHE))
+	if ((s->desc->qman_version & QMAN_REV_MASK) < QMAN_REV_5000)
 		p = qbman_get_cmd(s, QBMAN_CENA_SWP_VDQCR);
 	else
 		p = qbman_get_cmd(s, QBMAN_CENA_SWP_VDQCR_MEM);
@@ -725,8 +717,7 @@ int qbman_swp_pull(struct qbman_swp *s, struct qbman_pull_desc *d)
 	p->dq_src = d->dq_src;
 	p->rsp_addr = d->rsp_addr;
 	p->rsp_addr_virt = d->rsp_addr_virt;
-	if ((s->desc->qman_version & QMAN_REV_MASK) < QMAN_REV_5000
-	    || IS_ENABLED(CONFIG_FSL_MC_QMAN_NOT_SHARABLE_MEMORY_CACHE)) {
+	if ((s->desc->qman_version & QMAN_REV_MASK) < QMAN_REV_5000) {
 		dma_wmb();
 		/* Set the verb byte, have to substitute in the valid-bit */
 		p->verb = d->verb | s->vdq.valid_bit;
@@ -794,8 +785,7 @@ const struct dpaa2_dq *qbman_swp_dqrr_next(struct qbman_swp *s)
 		qbman_inval_prefetch(s,	QBMAN_CENA_SWP_DQRR(s->dqrr.next_idx));
 	}
 
-	if ((s->desc->qman_version & QMAN_REV_MASK) < QMAN_REV_5000
-	    || IS_ENABLED(CONFIG_FSL_MC_QMAN_NOT_SHARABLE_MEMORY_CACHE))
+	if ((s->desc->qman_version & QMAN_REV_MASK) < QMAN_REV_5000)
 		p = qbman_get_cmd(s, QBMAN_CENA_SWP_DQRR(s->dqrr.next_idx));
 	else
 		p = qbman_get_cmd(s, QBMAN_CENA_SWP_DQRR_MEM(s->dqrr.next_idx));
@@ -949,8 +939,7 @@ int qbman_swp_release(struct qbman_swp *s, const struct qbman_release_desc *d,
 		return -EBUSY;
 
 	/* Start the release command */
-	if ((s->desc->qman_version & QMAN_REV_MASK) < QMAN_REV_5000
-	    || IS_ENABLED(CONFIG_FSL_MC_QMAN_NOT_SHARABLE_MEMORY_CACHE))
+	if ((s->desc->qman_version & QMAN_REV_MASK) < QMAN_REV_5000)
 		p = qbman_get_cmd(s, QBMAN_CENA_SWP_RCR(RAR_IDX(rar)));
 	else
 		p = qbman_get_cmd(s, QBMAN_CENA_SWP_RCR_MEM(RAR_IDX(rar)));
@@ -959,8 +948,7 @@ int qbman_swp_release(struct qbman_swp *s, const struct qbman_release_desc *d,
 		p->buf[i] = cpu_to_le64(buffers[i]);
 	p->bpid = d->bpid;
 
-	if ((s->desc->qman_version & QMAN_REV_MASK) < QMAN_REV_5000
-	    || IS_ENABLED(CONFIG_FSL_MC_QMAN_NOT_SHARABLE_MEMORY_CACHE)) {
+	if ((s->desc->qman_version & QMAN_REV_MASK) < QMAN_REV_5000) {
 		/*
 		 * Set the verb byte, have to substitute in the valid-bit
 		 * and the number of buffers.

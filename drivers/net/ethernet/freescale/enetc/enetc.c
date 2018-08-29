@@ -36,6 +36,7 @@
 #include "enetc.h"
 #include <linux/tcp.h>
 #include <linux/udp.h>
+#include <linux/of_mdio.h>
 
 static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 			      bool tstamp);
@@ -1269,12 +1270,30 @@ static void enetc_disable_interrupts(struct enetc_ndev_priv *priv)
 		enetc_rxbdr_wr(&priv->si->hw, i, ENETC_RBIER, 0);
 }
 
+static void adjust_link(struct net_device *ndev)
+{
+	struct phy_device *phydev = ndev->phydev;
+
+	phy_print_status(phydev);
+}
+
 int enetc_open(struct net_device *ndev)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	int i, err;
 
-	netif_carrier_on(ndev);
+	if (priv->phy_node) {
+		struct phy_device *phydev;
+
+		phydev = of_phy_connect(ndev, priv->phy_node, &adjust_link,
+					0, priv->if_mode);
+		if (!phydev) {
+			dev_err(&ndev->dev, "could not attach to PHY\n");
+			return -ENODEV;
+		}
+
+		phy_attached_info(phydev);
+	}
 
 	err = enetc_alloc_tx_resources(priv);
 	if (err)
@@ -1293,6 +1312,11 @@ int enetc_open(struct net_device *ndev)
 	err = netif_set_real_num_rx_queues(ndev, priv->num_rx_rings);
 	if (err)
 		goto err_set_queues;
+
+	if (ndev->phydev)
+		phy_start(ndev->phydev);
+	else
+		netif_carrier_on(ndev);
 
 	for (i = 0; i < priv->bdr_int_num; i++)
 		napi_enable(&priv->int_vector[i]->napi);
@@ -1317,7 +1341,6 @@ int enetc_close(struct net_device *ndev)
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	int i;
 
-	netif_carrier_off(ndev);
 	netif_tx_stop_all_queues(ndev);
 
 	enetc_disable_interrupts(priv);
@@ -1325,6 +1348,13 @@ int enetc_close(struct net_device *ndev)
 	for (i = 0; i < priv->bdr_int_num; i++) {
 		napi_synchronize(&priv->int_vector[i]->napi);
 		napi_disable(&priv->int_vector[i]->napi);
+	}
+
+	if (ndev->phydev) {
+		phy_stop(ndev->phydev);
+		phy_disconnect(ndev->phydev);
+	} else {
+		netif_carrier_off(ndev);
 	}
 
 	enetc_free_rxtx_rings(priv);

@@ -1,35 +1,7 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
 /*
  * Copyright 2015-2016 Freescale Semiconductor Inc.
- * Copyright 2017 NXP
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *     * Redistributions of source code must retain the above copyright
- *	 notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above copyright
- *	 notice, this list of conditions and the following disclaimer in the
- *	 documentation and/or other materials provided with the distribution.
- *     * Neither the names of the above-listed copyright holders nor the
- *	 names of any contributors may be used to endorse or promote products
- *	 derived from this software without specific prior written permission.
- *
- *
- * ALTERNATIVELY, this software may be distributed under the terms of the
- * GNU General Public License ("GPL") as published by the Free Software
- * Foundation, either version 2 of that License or (at your option) any
- * later version.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * Copyright 2017-2018 NXP
  */
 
 #include <linux/fsl/mc.h>
@@ -81,6 +53,12 @@ struct caam_alg_entry {
 
 struct caam_aead_alg {
 	struct aead_alg aead;
+	struct caam_alg_entry caam;
+	bool registered;
+};
+
+struct caam_skcipher_alg {
+	struct skcipher_alg skcipher;
 	struct caam_alg_entry caam;
 	bool registered;
 };
@@ -153,9 +131,8 @@ static inline void qi_cache_free(void *obj)
 static struct caam_request *to_caam_req(struct crypto_async_request *areq)
 {
 	switch (crypto_tfm_alg_type(areq->tfm)) {
-	case CRYPTO_ALG_TYPE_ABLKCIPHER:
-	case CRYPTO_ALG_TYPE_GIVCIPHER:
-		return ablkcipher_request_ctx(ablkcipher_request_cast(areq));
+	case CRYPTO_ALG_TYPE_SKCIPHER:
+		return skcipher_request_ctx(skcipher_request_cast(areq));
 	case CRYPTO_ALG_TYPE_AEAD:
 		return aead_request_ctx(container_of(areq, struct aead_request,
 						     base));
@@ -169,8 +146,7 @@ static struct caam_request *to_caam_req(struct crypto_async_request *areq)
 static void caam_unmap(struct device *dev, struct scatterlist *src,
 		       struct scatterlist *dst, int src_nents,
 		       int dst_nents, dma_addr_t iv_dma, int ivsize,
-		       enum optype op_type, dma_addr_t qm_sg_dma,
-		       int qm_sg_bytes)
+		       dma_addr_t qm_sg_dma, int qm_sg_bytes)
 {
 	if (dst != src) {
 		if (src_nents)
@@ -181,9 +157,7 @@ static void caam_unmap(struct device *dev, struct scatterlist *src,
 	}
 
 	if (iv_dma)
-		dma_unmap_single(dev, iv_dma, ivsize,
-				 op_type == GIVENCRYPT ? DMA_FROM_DEVICE :
-							 DMA_TO_DEVICE);
+		dma_unmap_single(dev, iv_dma, ivsize, DMA_TO_DEVICE);
 
 	if (qm_sg_bytes)
 		dma_unmap_single(dev, qm_sg_dma, qm_sg_bytes, DMA_TO_DEVICE);
@@ -399,9 +373,8 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 	int qm_sg_index = 0, qm_sg_nents = 0, qm_sg_bytes;
 	int in_len, out_len;
 	struct dpaa2_sg_entry *sg_table;
-	enum optype op_type = encrypt ? ENCRYPT : DECRYPT;
 
-	/* allocate space for base edesc and link tables */
+	/* allocate space for base edesc, link tables and IV */
 	edesc = qi_cache_zalloc(GFP_DMA | flags);
 	if (unlikely(!edesc)) {
 		dev_err(dev, "could not allocate extended descriptor\n");
@@ -471,17 +444,8 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 		}
 	}
 
-	if ((alg->caam.rfc3686 && encrypt) || !alg->caam.geniv) {
+	if ((alg->caam.rfc3686 && encrypt) || !alg->caam.geniv)
 		ivsize = crypto_aead_ivsize(aead);
-		iv_dma = dma_map_single(dev, req->iv, ivsize, DMA_TO_DEVICE);
-		if (dma_mapping_error(dev, iv_dma)) {
-			dev_err(dev, "unable to map IV\n");
-			caam_unmap(dev, req->src, req->dst, src_nents,
-				   dst_nents, 0, 0, op_type, 0, 0);
-			qi_cache_free(edesc);
-			return ERR_PTR(-ENOMEM);
-		}
-	}
 
 	/*
 	 * Create S/G table: req->assoclen, [IV,] req->src [, req->dst].
@@ -489,16 +453,33 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 	 */
 	qm_sg_nents = 1 + !!ivsize + mapped_src_nents +
 		      (mapped_dst_nents > 1 ? mapped_dst_nents : 0);
-	if (unlikely(qm_sg_nents > CAAM_QI_MAX_AEAD_SG)) {
-		dev_err(dev, "Insufficient S/G entries: %d > %lu\n",
-			qm_sg_nents, CAAM_QI_MAX_AEAD_SG);
-		caam_unmap(dev, req->src, req->dst, src_nents, dst_nents,
-			   iv_dma, ivsize, op_type, 0, 0);
+	sg_table = &edesc->sgt[0];
+	qm_sg_bytes = qm_sg_nents * sizeof(*sg_table);
+	if (unlikely(offsetof(struct aead_edesc, sgt) + qm_sg_bytes + ivsize >
+		     CAAM_QI_MEMCACHE_SIZE)) {
+		dev_err(dev, "No space for %d S/G entries and/or %dB IV\n",
+			qm_sg_nents, ivsize);
+		caam_unmap(dev, req->src, req->dst, src_nents, dst_nents, 0,
+			   0, 0, 0);
 		qi_cache_free(edesc);
 		return ERR_PTR(-ENOMEM);
 	}
-	sg_table = &edesc->sgt[0];
-	qm_sg_bytes = qm_sg_nents * sizeof(*sg_table);
+
+	if (ivsize) {
+		u8 *iv = (u8 *)(sg_table + qm_sg_nents);
+
+		/* Make sure IV is located in a DMAable area */
+		memcpy(iv, req->iv, ivsize);
+
+		iv_dma = dma_map_single(dev, iv, ivsize, DMA_TO_DEVICE);
+		if (dma_mapping_error(dev, iv_dma)) {
+			dev_err(dev, "unable to map IV\n");
+			caam_unmap(dev, req->src, req->dst, src_nents,
+				   dst_nents, 0, 0, 0, 0);
+			qi_cache_free(edesc);
+			return ERR_PTR(-ENOMEM);
+		}
+	}
 
 	edesc->src_nents = src_nents;
 	edesc->dst_nents = dst_nents;
@@ -510,7 +491,7 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 	if (dma_mapping_error(dev, edesc->assoclen_dma)) {
 		dev_err(dev, "unable to map assoclen\n");
 		caam_unmap(dev, req->src, req->dst, src_nents, dst_nents,
-			   iv_dma, ivsize, op_type, 0, 0);
+			   iv_dma, ivsize, 0, 0);
 		qi_cache_free(edesc);
 		return ERR_PTR(-ENOMEM);
 	}
@@ -533,7 +514,7 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 		dev_err(dev, "unable to map S/G table\n");
 		dma_unmap_single(dev, edesc->assoclen_dma, 4, DMA_TO_DEVICE);
 		caam_unmap(dev, req->src, req->dst, src_nents, dst_nents,
-			   iv_dma, ivsize, op_type, 0, 0);
+			   iv_dma, ivsize, 0, 0);
 		qi_cache_free(edesc);
 		return ERR_PTR(-ENOMEM);
 	}
@@ -593,10 +574,10 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req,
 	struct tls_edesc *edesc;
 	dma_addr_t qm_sg_dma, iv_dma = 0;
 	int ivsize = 0;
+	u8 *iv;
 	int qm_sg_index, qm_sg_ents = 0, qm_sg_bytes;
 	int in_len, out_len;
 	struct dpaa2_sg_entry *sg_table;
-	enum optype op_type = encrypt ? ENCRYPT : DECRYPT;
 	struct scatterlist *dst;
 
 	if (encrypt) {
@@ -607,7 +588,7 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req,
 		authsize = ctx->authsize;
 	}
 
-	/* allocate space for base edesc and link tables */
+	/* allocate space for base edesc, link tables and IV */
 	edesc = qi_cache_zalloc(GFP_DMA | flags);
 	if (unlikely(!edesc)) {
 		dev_err(dev, "could not allocate extended descriptor\n");
@@ -677,16 +658,6 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req,
 		}
 	}
 
-	ivsize = crypto_aead_ivsize(tls);
-	iv_dma = dma_map_single(dev, req->iv, ivsize, DMA_TO_DEVICE);
-	if (dma_mapping_error(dev, iv_dma)) {
-		dev_err(dev, "unable to map IV\n");
-		caam_unmap(dev, req->src, dst, src_nents, dst_nents, 0, 0,
-			   op_type, 0, 0);
-		qi_cache_free(edesc);
-		return ERR_PTR(-ENOMEM);
-	}
-
 	/*
 	 * Create S/G table: IV, src, dst.
 	 * Input is not contiguous.
@@ -695,6 +666,19 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req,
 		     (mapped_dst_nents > 1 ? mapped_dst_nents : 0);
 	sg_table = &edesc->sgt[0];
 	qm_sg_bytes = qm_sg_ents * sizeof(*sg_table);
+
+	ivsize = crypto_aead_ivsize(tls);
+	iv = (u8 *)(sg_table + qm_sg_ents);
+	/* Make sure IV is located in a DMAable area */
+	memcpy(iv, req->iv, ivsize);
+	iv_dma = dma_map_single(dev, iv, ivsize, DMA_TO_DEVICE);
+	if (dma_mapping_error(dev, iv_dma)) {
+		dev_err(dev, "unable to map IV\n");
+		caam_unmap(dev, req->src, dst, src_nents, dst_nents, 0, 0, 0,
+			   0);
+		qi_cache_free(edesc);
+		return ERR_PTR(-ENOMEM);
+	}
 
 	edesc->src_nents = src_nents;
 	edesc->dst_nents = dst_nents;
@@ -715,7 +699,7 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req,
 	if (dma_mapping_error(dev, qm_sg_dma)) {
 		dev_err(dev, "unable to map S/G table\n");
 		caam_unmap(dev, req->src, dst, src_nents, dst_nents, iv_dma,
-			   ivsize, op_type, 0, 0);
+			   ivsize, 0, 0);
 		qi_cache_free(edesc);
 		return ERR_PTR(-ENOMEM);
 	}
@@ -1152,20 +1136,21 @@ static int rfc4543_setkey(struct crypto_aead *aead,
 	return rfc4543_set_sh_desc(aead);
 }
 
-static int ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
-			     const u8 *key, unsigned int keylen)
+static int skcipher_setkey(struct crypto_skcipher *skcipher, const u8 *key,
+			   unsigned int keylen)
 {
-	struct caam_ctx *ctx = crypto_ablkcipher_ctx(ablkcipher);
-	struct crypto_tfm *tfm = crypto_ablkcipher_tfm(ablkcipher);
-	const char *alg_name = crypto_tfm_alg_name(tfm);
+	struct caam_ctx *ctx = crypto_skcipher_ctx(skcipher);
+	struct caam_skcipher_alg *alg =
+		container_of(crypto_skcipher_alg(skcipher),
+			     struct caam_skcipher_alg, skcipher);
 	struct device *dev = ctx->dev;
 	struct caam_flc *flc;
-	unsigned int ivsize = crypto_ablkcipher_ivsize(ablkcipher);
+	unsigned int ivsize = crypto_skcipher_ivsize(skcipher);
 	u32 *desc;
 	u32 ctx1_iv_off = 0;
 	const bool ctr_mode = ((ctx->cdata.algtype & OP_ALG_AAI_MASK) ==
 			       OP_ALG_AAI_CTR_MOD128);
-	const bool is_rfc3686 = (ctr_mode && strstr(alg_name, "rfc3686"));
+	const bool is_rfc3686 = alg->caam.rfc3686;
 
 #ifdef DEBUG
 	print_hex_dump(KERN_ERR, "key in @" __stringify(__LINE__)": ",
@@ -1193,7 +1178,7 @@ static int ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 	ctx->cdata.key_virt = key;
 	ctx->cdata.key_inline = true;
 
-	/* ablkcipher_encrypt shared descriptor */
+	/* skcipher_encrypt shared descriptor */
 	flc = &ctx->flc[ENCRYPT];
 	desc = flc->sh_desc;
 	cnstr_shdsc_ablkcipher_encap(desc, &ctx->cdata, ivsize,
@@ -1203,7 +1188,7 @@ static int ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 				   sizeof(flc->flc) + desc_bytes(desc),
 				   ctx->dir);
 
-	/* ablkcipher_decrypt shared descriptor */
+	/* skcipher_decrypt shared descriptor */
 	flc = &ctx->flc[DECRYPT];
 	desc = flc->sh_desc;
 	cnstr_shdsc_ablkcipher_decap(desc, &ctx->cdata, ivsize,
@@ -1213,31 +1198,20 @@ static int ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 				   sizeof(flc->flc) + desc_bytes(desc),
 				   ctx->dir);
 
-	/* ablkcipher_givencrypt shared descriptor */
-	flc = &ctx->flc[GIVENCRYPT];
-	desc = flc->sh_desc;
-	cnstr_shdsc_ablkcipher_givencap(desc, &ctx->cdata,
-					ivsize, is_rfc3686, ctx1_iv_off);
-	flc->flc[1] = cpu_to_caam32(desc_len(desc)); /* SDL */
-	dma_sync_single_for_device(dev, ctx->flc_dma[GIVENCRYPT],
-				   sizeof(flc->flc) + desc_bytes(desc),
-				   ctx->dir);
-
 	return 0;
 }
 
-static int xts_ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
-				 const u8 *key, unsigned int keylen)
+static int xts_skcipher_setkey(struct crypto_skcipher *skcipher, const u8 *key,
+			       unsigned int keylen)
 {
-	struct caam_ctx *ctx = crypto_ablkcipher_ctx(ablkcipher);
+	struct caam_ctx *ctx = crypto_skcipher_ctx(skcipher);
 	struct device *dev = ctx->dev;
 	struct caam_flc *flc;
 	u32 *desc;
 
 	if (keylen != 2 * AES_MIN_KEY_SIZE  && keylen != 2 * AES_MAX_KEY_SIZE) {
 		dev_err(dev, "key size mismatch\n");
-		crypto_ablkcipher_set_flags(ablkcipher,
-					    CRYPTO_TFM_RES_BAD_KEY_LEN);
+		crypto_skcipher_set_flags(skcipher, CRYPTO_TFM_RES_BAD_KEY_LEN);
 		return -EINVAL;
 	}
 
@@ -1245,7 +1219,7 @@ static int xts_ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 	ctx->cdata.key_virt = key;
 	ctx->cdata.key_inline = true;
 
-	/* xts_ablkcipher_encrypt shared descriptor */
+	/* xts_skcipher_encrypt shared descriptor */
 	flc = &ctx->flc[ENCRYPT];
 	desc = flc->sh_desc;
 	cnstr_shdsc_xts_ablkcipher_encap(desc, &ctx->cdata);
@@ -1254,7 +1228,7 @@ static int xts_ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 				   sizeof(flc->flc) + desc_bytes(desc),
 				   ctx->dir);
 
-	/* xts_ablkcipher_decrypt shared descriptor */
+	/* xts_skcipher_decrypt shared descriptor */
 	flc = &ctx->flc[DECRYPT];
 	desc = flc->sh_desc;
 	cnstr_shdsc_xts_ablkcipher_decap(desc, &ctx->cdata);
@@ -1266,38 +1240,36 @@ static int xts_ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 	return 0;
 }
 
-static struct ablkcipher_edesc *ablkcipher_edesc_alloc(struct ablkcipher_request
-						       *req, bool encrypt)
+static struct skcipher_edesc *skcipher_edesc_alloc(struct skcipher_request *req)
 {
-	struct crypto_ablkcipher *ablkcipher = crypto_ablkcipher_reqtfm(req);
-	struct caam_request *req_ctx = ablkcipher_request_ctx(req);
+	struct crypto_skcipher *skcipher = crypto_skcipher_reqtfm(req);
+	struct caam_request *req_ctx = skcipher_request_ctx(req);
 	struct dpaa2_fl_entry *in_fle = &req_ctx->fd_flt[1];
 	struct dpaa2_fl_entry *out_fle = &req_ctx->fd_flt[0];
-	struct caam_ctx *ctx = crypto_ablkcipher_ctx(ablkcipher);
+	struct caam_ctx *ctx = crypto_skcipher_ctx(skcipher);
 	struct device *dev = ctx->dev;
 	gfp_t flags = (req->base.flags & CRYPTO_TFM_REQ_MAY_SLEEP) ?
 		       GFP_KERNEL : GFP_ATOMIC;
 	int src_nents, mapped_src_nents, dst_nents = 0, mapped_dst_nents = 0;
-	struct ablkcipher_edesc *edesc;
+	struct skcipher_edesc *edesc;
 	dma_addr_t iv_dma;
-	bool in_contig;
-	int ivsize = crypto_ablkcipher_ivsize(ablkcipher);
-	int dst_sg_idx, qm_sg_ents;
+	u8 *iv;
+	int ivsize = crypto_skcipher_ivsize(skcipher);
+	int dst_sg_idx, qm_sg_ents, qm_sg_bytes;
 	struct dpaa2_sg_entry *sg_table;
-	enum optype op_type = encrypt ? ENCRYPT : DECRYPT;
 
-	src_nents = sg_nents_for_len(req->src, req->nbytes);
+	src_nents = sg_nents_for_len(req->src, req->cryptlen);
 	if (unlikely(src_nents < 0)) {
 		dev_err(dev, "Insufficient bytes (%d) in src S/G\n",
-			req->nbytes);
+			req->cryptlen);
 		return ERR_PTR(src_nents);
 	}
 
 	if (unlikely(req->dst != req->src)) {
-		dst_nents = sg_nents_for_len(req->dst, req->nbytes);
+		dst_nents = sg_nents_for_len(req->dst, req->cryptlen);
 		if (unlikely(dst_nents < 0)) {
 			dev_err(dev, "Insufficient bytes (%d) in dst S/G\n",
-				req->nbytes);
+				req->cryptlen);
 			return ERR_PTR(dst_nents);
 		}
 
@@ -1324,52 +1296,50 @@ static struct ablkcipher_edesc *ablkcipher_edesc_alloc(struct ablkcipher_request
 		}
 	}
 
-	iv_dma = dma_map_single(dev, req->info, ivsize, DMA_TO_DEVICE);
-	if (dma_mapping_error(dev, iv_dma)) {
-		dev_err(dev, "unable to map IV\n");
-		caam_unmap(dev, req->src, req->dst, src_nents, dst_nents, 0,
-			   0, 0, 0, 0);
-		return ERR_PTR(-ENOMEM);
-	}
-
-	if (mapped_src_nents == 1 &&
-	    iv_dma + ivsize == sg_dma_address(req->src)) {
-		in_contig = true;
-		qm_sg_ents = 0;
-	} else {
-		in_contig = false;
-		qm_sg_ents = 1 + mapped_src_nents;
-	}
+	qm_sg_ents = 1 + mapped_src_nents;
 	dst_sg_idx = qm_sg_ents;
 
 	qm_sg_ents += mapped_dst_nents > 1 ? mapped_dst_nents : 0;
-	if (unlikely(qm_sg_ents > CAAM_QI_MAX_ABLKCIPHER_SG)) {
-		dev_err(dev, "Insufficient S/G entries: %d > %lu\n",
-			qm_sg_ents, CAAM_QI_MAX_ABLKCIPHER_SG);
-		caam_unmap(dev, req->src, req->dst, src_nents, dst_nents,
-			   iv_dma, ivsize, op_type, 0, 0);
+	qm_sg_bytes = qm_sg_ents * sizeof(struct dpaa2_sg_entry);
+	if (unlikely(offsetof(struct skcipher_edesc, sgt) + qm_sg_bytes +
+		     ivsize > CAAM_QI_MEMCACHE_SIZE)) {
+		dev_err(dev, "No space for %d S/G entries and/or %dB IV\n",
+			qm_sg_ents, ivsize);
+		caam_unmap(dev, req->src, req->dst, src_nents, dst_nents, 0,
+			   0, 0, 0);
 		return ERR_PTR(-ENOMEM);
 	}
 
-	/* allocate space for base edesc and link tables */
+	/* allocate space for base edesc, link tables and IV */
 	edesc = qi_cache_zalloc(GFP_DMA | flags);
 	if (unlikely(!edesc)) {
 		dev_err(dev, "could not allocate extended descriptor\n");
-		caam_unmap(dev, req->src, req->dst, src_nents, dst_nents,
-			   iv_dma, ivsize, op_type, 0, 0);
+		caam_unmap(dev, req->src, req->dst, src_nents, dst_nents, 0,
+			   0, 0, 0);
+		return ERR_PTR(-ENOMEM);
+	}
+
+	/* Make sure IV is located in a DMAable area */
+	sg_table = &edesc->sgt[0];
+	iv = (u8 *)(sg_table + qm_sg_ents);
+	memcpy(iv, req->iv, ivsize);
+
+	iv_dma = dma_map_single(dev, iv, ivsize, DMA_TO_DEVICE);
+	if (dma_mapping_error(dev, iv_dma)) {
+		dev_err(dev, "unable to map IV\n");
+		caam_unmap(dev, req->src, req->dst, src_nents, dst_nents, 0,
+			   0, 0, 0);
+		qi_cache_free(edesc);
 		return ERR_PTR(-ENOMEM);
 	}
 
 	edesc->src_nents = src_nents;
 	edesc->dst_nents = dst_nents;
 	edesc->iv_dma = iv_dma;
-	sg_table = &edesc->sgt[0];
-	edesc->qm_sg_bytes = qm_sg_ents * sizeof(*sg_table);
+	edesc->qm_sg_bytes = qm_sg_bytes;
 
-	if (!in_contig) {
-		dma_to_qm_sg_one(sg_table, iv_dma, ivsize, 0);
-		sg_to_qm_sg_last(req->src, mapped_src_nents, sg_table + 1, 0);
-	}
+	dma_to_qm_sg_one(sg_table, iv_dma, ivsize, 0);
+	sg_to_qm_sg_last(req->src, mapped_src_nents, sg_table + 1, 0);
 
 	if (mapped_dst_nents > 1)
 		sg_to_qm_sg_last(req->dst, mapped_dst_nents, sg_table +
@@ -1380,180 +1350,24 @@ static struct ablkcipher_edesc *ablkcipher_edesc_alloc(struct ablkcipher_request
 	if (dma_mapping_error(dev, edesc->qm_sg_dma)) {
 		dev_err(dev, "unable to map S/G table\n");
 		caam_unmap(dev, req->src, req->dst, src_nents, dst_nents,
-			   iv_dma, ivsize, op_type, 0, 0);
+			   iv_dma, ivsize, 0, 0);
 		qi_cache_free(edesc);
 		return ERR_PTR(-ENOMEM);
 	}
 
 	memset(&req_ctx->fd_flt, 0, sizeof(req_ctx->fd_flt));
 	dpaa2_fl_set_final(in_fle, true);
-	dpaa2_fl_set_len(in_fle, req->nbytes + ivsize);
-	dpaa2_fl_set_len(out_fle, req->nbytes);
+	dpaa2_fl_set_len(in_fle, req->cryptlen + ivsize);
+	dpaa2_fl_set_len(out_fle, req->cryptlen);
 
-	if (!in_contig) {
-		dpaa2_fl_set_format(in_fle, dpaa2_fl_sg);
-		dpaa2_fl_set_addr(in_fle, edesc->qm_sg_dma);
-	} else {
-		dpaa2_fl_set_format(in_fle, dpaa2_fl_single);
-		dpaa2_fl_set_addr(in_fle, iv_dma);
-	}
+	dpaa2_fl_set_format(in_fle, dpaa2_fl_sg);
+	dpaa2_fl_set_addr(in_fle, edesc->qm_sg_dma);
 
 	if (req->src == req->dst) {
-		if (!in_contig) {
-			dpaa2_fl_set_format(out_fle, dpaa2_fl_sg);
-			dpaa2_fl_set_addr(out_fle, edesc->qm_sg_dma +
-					  sizeof(*sg_table));
-		} else {
-			dpaa2_fl_set_format(out_fle, dpaa2_fl_single);
-			dpaa2_fl_set_addr(out_fle, sg_dma_address(req->src));
-		}
-	} else if (mapped_dst_nents > 1) {
 		dpaa2_fl_set_format(out_fle, dpaa2_fl_sg);
-		dpaa2_fl_set_addr(out_fle, edesc->qm_sg_dma + dst_sg_idx *
+		dpaa2_fl_set_addr(out_fle, edesc->qm_sg_dma +
 				  sizeof(*sg_table));
-	} else {
-		dpaa2_fl_set_format(out_fle, dpaa2_fl_single);
-		dpaa2_fl_set_addr(out_fle, sg_dma_address(req->dst));
-	}
-
-	return edesc;
-}
-
-static struct ablkcipher_edesc *ablkcipher_giv_edesc_alloc(
-	struct skcipher_givcrypt_request *greq)
-{
-	struct ablkcipher_request *req = &greq->creq;
-	struct crypto_ablkcipher *ablkcipher = crypto_ablkcipher_reqtfm(req);
-	struct caam_request *req_ctx = ablkcipher_request_ctx(req);
-	struct dpaa2_fl_entry *in_fle = &req_ctx->fd_flt[1];
-	struct dpaa2_fl_entry *out_fle = &req_ctx->fd_flt[0];
-	struct caam_ctx *ctx = crypto_ablkcipher_ctx(ablkcipher);
-	struct device *dev = ctx->dev;
-	gfp_t flags = (req->base.flags & CRYPTO_TFM_REQ_MAY_SLEEP) ?
-		       GFP_KERNEL : GFP_ATOMIC;
-	int src_nents, mapped_src_nents, dst_nents, mapped_dst_nents;
-	struct ablkcipher_edesc *edesc;
-	dma_addr_t iv_dma;
-	bool out_contig;
-	int ivsize = crypto_ablkcipher_ivsize(ablkcipher);
-	struct dpaa2_sg_entry *sg_table;
-	int dst_sg_idx, qm_sg_ents;
-
-	src_nents = sg_nents_for_len(req->src, req->nbytes);
-	if (unlikely(src_nents < 0)) {
-		dev_err(dev, "Insufficient bytes (%d) in src S/G\n",
-			req->nbytes);
-		return ERR_PTR(src_nents);
-	}
-
-	if (unlikely(req->dst != req->src)) {
-		dst_nents = sg_nents_for_len(req->dst, req->nbytes);
-		if (unlikely(dst_nents < 0)) {
-			dev_err(dev, "Insufficient bytes (%d) in dst S/G\n",
-				req->nbytes);
-			return ERR_PTR(dst_nents);
-		}
-
-		mapped_src_nents = dma_map_sg(dev, req->src, src_nents,
-					      DMA_TO_DEVICE);
-		if (unlikely(!mapped_src_nents)) {
-			dev_err(dev, "unable to map source\n");
-			return ERR_PTR(-ENOMEM);
-		}
-
-		mapped_dst_nents = dma_map_sg(dev, req->dst, dst_nents,
-					      DMA_FROM_DEVICE);
-		if (unlikely(!mapped_dst_nents)) {
-			dev_err(dev, "unable to map destination\n");
-			dma_unmap_sg(dev, req->src, src_nents, DMA_TO_DEVICE);
-			return ERR_PTR(-ENOMEM);
-		}
-	} else {
-		mapped_src_nents = dma_map_sg(dev, req->src, src_nents,
-					      DMA_BIDIRECTIONAL);
-		if (unlikely(!mapped_src_nents)) {
-			dev_err(dev, "unable to map source\n");
-			return ERR_PTR(-ENOMEM);
-		}
-
-		dst_nents = src_nents;
-		mapped_dst_nents = src_nents;
-	}
-
-	iv_dma = dma_map_single(dev, greq->giv, ivsize, DMA_FROM_DEVICE);
-	if (dma_mapping_error(dev, iv_dma)) {
-		dev_err(dev, "unable to map IV\n");
-		caam_unmap(dev, req->src, req->dst, src_nents, dst_nents, 0,
-			   0, 0, 0, 0);
-		return ERR_PTR(-ENOMEM);
-	}
-
-	qm_sg_ents = mapped_src_nents > 1 ? mapped_src_nents : 0;
-	dst_sg_idx = qm_sg_ents;
-	if (mapped_dst_nents == 1 &&
-	    iv_dma + ivsize == sg_dma_address(req->dst)) {
-		out_contig = true;
-	} else {
-		out_contig = false;
-		qm_sg_ents += 1 + mapped_dst_nents;
-	}
-
-	if (unlikely(qm_sg_ents > CAAM_QI_MAX_ABLKCIPHER_SG)) {
-		dev_err(dev, "Insufficient S/G entries: %d > %lu\n",
-			qm_sg_ents, CAAM_QI_MAX_ABLKCIPHER_SG);
-		caam_unmap(dev, req->src, req->dst, src_nents, dst_nents,
-			   iv_dma, ivsize, GIVENCRYPT, 0, 0);
-		return ERR_PTR(-ENOMEM);
-	}
-
-	/* allocate space for base edesc and link tables */
-	edesc = qi_cache_zalloc(GFP_DMA | flags);
-	if (!edesc) {
-		dev_err(dev, "could not allocate extended descriptor\n");
-		caam_unmap(dev, req->src, req->dst, src_nents, dst_nents,
-			   iv_dma, ivsize, GIVENCRYPT, 0, 0);
-		return ERR_PTR(-ENOMEM);
-	}
-
-	edesc->src_nents = src_nents;
-	edesc->dst_nents = dst_nents;
-	edesc->iv_dma = iv_dma;
-	sg_table = &edesc->sgt[0];
-	edesc->qm_sg_bytes = qm_sg_ents * sizeof(*sg_table);
-
-	if (mapped_src_nents > 1)
-		sg_to_qm_sg_last(req->src, mapped_src_nents, sg_table, 0);
-
-	if (!out_contig) {
-		dma_to_qm_sg_one(sg_table + dst_sg_idx, iv_dma, ivsize, 0);
-		sg_to_qm_sg_last(req->dst, mapped_dst_nents, sg_table +
-				 dst_sg_idx + 1, 0);
-	}
-
-	edesc->qm_sg_dma = dma_map_single(dev, sg_table, edesc->qm_sg_bytes,
-					  DMA_TO_DEVICE);
-	if (dma_mapping_error(dev, edesc->qm_sg_dma)) {
-		dev_err(dev, "unable to map S/G table\n");
-		caam_unmap(dev, req->src, req->dst, src_nents, dst_nents,
-			   iv_dma, ivsize, GIVENCRYPT, 0, 0);
-		qi_cache_free(edesc);
-		return ERR_PTR(-ENOMEM);
-	}
-
-	memset(&req_ctx->fd_flt, 0, sizeof(req_ctx->fd_flt));
-	dpaa2_fl_set_final(in_fle, true);
-	dpaa2_fl_set_len(in_fle, req->nbytes);
-	dpaa2_fl_set_len(out_fle, ivsize + req->nbytes);
-
-	if (mapped_src_nents > 1) {
-		dpaa2_fl_set_format(in_fle, dpaa2_fl_sg);
-		dpaa2_fl_set_addr(in_fle, edesc->qm_sg_dma);
-	} else {
-		dpaa2_fl_set_format(in_fle, dpaa2_fl_single);
-		dpaa2_fl_set_addr(in_fle, sg_dma_address(req->src));
-	}
-
-	if (!out_contig) {
+	} else if (mapped_dst_nents > 1) {
 		dpaa2_fl_set_format(out_fle, dpaa2_fl_sg);
 		dpaa2_fl_set_addr(out_fle, edesc->qm_sg_dma + dst_sg_idx *
 				  sizeof(*sg_table));
@@ -1570,11 +1384,9 @@ static void aead_unmap(struct device *dev, struct aead_edesc *edesc,
 {
 	struct crypto_aead *aead = crypto_aead_reqtfm(req);
 	int ivsize = crypto_aead_ivsize(aead);
-	struct caam_request *caam_req = aead_request_ctx(req);
 
 	caam_unmap(dev, req->src, req->dst, edesc->src_nents, edesc->dst_nents,
-		   edesc->iv_dma, ivsize, caam_req->op_type,
-		   edesc->qm_sg_dma, edesc->qm_sg_bytes);
+		   edesc->iv_dma, ivsize, edesc->qm_sg_dma, edesc->qm_sg_bytes);
 	dma_unmap_single(dev, edesc->assoclen_dma, 4, DMA_TO_DEVICE);
 }
 
@@ -1583,24 +1395,20 @@ static void tls_unmap(struct device *dev, struct tls_edesc *edesc,
 {
 	struct crypto_aead *tls = crypto_aead_reqtfm(req);
 	int ivsize = crypto_aead_ivsize(tls);
-	struct caam_request *caam_req = aead_request_ctx(req);
 
 	caam_unmap(dev, req->src, edesc->dst, edesc->src_nents,
-		   edesc->dst_nents, edesc->iv_dma, ivsize, caam_req->op_type,
-		   edesc->qm_sg_dma, edesc->qm_sg_bytes);
+		   edesc->dst_nents, edesc->iv_dma, ivsize, edesc->qm_sg_dma,
+		   edesc->qm_sg_bytes);
 }
 
-static void ablkcipher_unmap(struct device *dev,
-			     struct ablkcipher_edesc *edesc,
-			     struct ablkcipher_request *req)
+static void skcipher_unmap(struct device *dev, struct skcipher_edesc *edesc,
+			   struct skcipher_request *req)
 {
-	struct crypto_ablkcipher *ablkcipher = crypto_ablkcipher_reqtfm(req);
-	int ivsize = crypto_ablkcipher_ivsize(ablkcipher);
-	struct caam_request *caam_req = ablkcipher_request_ctx(req);
+	struct crypto_skcipher *skcipher = crypto_skcipher_reqtfm(req);
+	int ivsize = crypto_skcipher_ivsize(skcipher);
 
 	caam_unmap(dev, req->src, req->dst, edesc->src_nents, edesc->dst_nents,
-		   edesc->iv_dma, ivsize, caam_req->op_type,
-		   edesc->qm_sg_dma, edesc->qm_sg_bytes);
+		   edesc->iv_dma, ivsize, edesc->qm_sg_dma, edesc->qm_sg_bytes);
 }
 
 static void aead_encrypt_done(void *cbk_ctx, u32 status)
@@ -1675,7 +1483,6 @@ static int aead_encrypt(struct aead_request *req)
 
 	caam_req->flc = &ctx->flc[ENCRYPT];
 	caam_req->flc_dma = ctx->flc_dma[ENCRYPT];
-	caam_req->op_type = ENCRYPT;
 	caam_req->cbk = aead_encrypt_done;
 	caam_req->ctx = &req->base;
 	caam_req->edesc = edesc;
@@ -1704,7 +1511,6 @@ static int aead_decrypt(struct aead_request *req)
 
 	caam_req->flc = &ctx->flc[DECRYPT];
 	caam_req->flc_dma = ctx->flc_dma[DECRYPT];
-	caam_req->op_type = DECRYPT;
 	caam_req->cbk = aead_decrypt_done;
 	caam_req->ctx = &req->base;
 	caam_req->edesc = edesc;
@@ -1790,7 +1596,6 @@ static int tls_encrypt(struct aead_request *req)
 
 	caam_req->flc = &ctx->flc[ENCRYPT];
 	caam_req->flc_dma = ctx->flc_dma[ENCRYPT];
-	caam_req->op_type = ENCRYPT;
 	caam_req->cbk = tls_encrypt_done;
 	caam_req->ctx = &req->base;
 	caam_req->edesc = edesc;
@@ -1819,7 +1624,6 @@ static int tls_decrypt(struct aead_request *req)
 
 	caam_req->flc = &ctx->flc[DECRYPT];
 	caam_req->flc_dma = ctx->flc_dma[DECRYPT];
-	caam_req->op_type = DECRYPT;
 	caam_req->cbk = tls_decrypt_done;
 	caam_req->ctx = &req->base;
 	caam_req->edesc = edesc;
@@ -1849,16 +1653,16 @@ static int ipsec_gcm_decrypt(struct aead_request *req)
 	return aead_decrypt(req);
 }
 
-static void ablkcipher_done(void *cbk_ctx, u32 status)
+static void skcipher_encrypt_done(void *cbk_ctx, u32 status)
 {
 	struct crypto_async_request *areq = cbk_ctx;
-	struct ablkcipher_request *req = ablkcipher_request_cast(areq);
+	struct skcipher_request *req = skcipher_request_cast(areq);
 	struct caam_request *req_ctx = to_caam_req(areq);
-	struct crypto_ablkcipher *ablkcipher = crypto_ablkcipher_reqtfm(req);
-	struct caam_ctx *ctx = crypto_ablkcipher_ctx(ablkcipher);
-	struct ablkcipher_edesc *edesc = req_ctx->edesc;
+	struct crypto_skcipher *skcipher = crypto_skcipher_reqtfm(req);
+	struct caam_ctx *ctx = crypto_skcipher_ctx(skcipher);
+	struct skcipher_edesc *edesc = req_ctx->edesc;
 	int ecode = 0;
-	int ivsize = crypto_ablkcipher_ivsize(ablkcipher);
+	int ivsize = crypto_skcipher_ivsize(skcipher);
 
 #ifdef DEBUG
 	dev_err(ctx->dev, "%s %d: err 0x%x\n", __func__, __LINE__, status);
@@ -1871,136 +1675,135 @@ static void ablkcipher_done(void *cbk_ctx, u32 status)
 
 #ifdef DEBUG
 	print_hex_dump(KERN_ERR, "dstiv  @" __stringify(__LINE__)": ",
-		       DUMP_PREFIX_ADDRESS, 16, 4, req->info,
+		       DUMP_PREFIX_ADDRESS, 16, 4, req->iv,
 		       edesc->src_nents > 1 ? 100 : ivsize, 1);
 	caam_dump_sg(KERN_ERR, "dst    @" __stringify(__LINE__)": ",
 		     DUMP_PREFIX_ADDRESS, 16, 4, req->dst,
-		     edesc->dst_nents > 1 ? 100 : req->nbytes, 1);
+		     edesc->dst_nents > 1 ? 100 : req->cryptlen, 1);
 #endif
 
-	ablkcipher_unmap(ctx->dev, edesc, req);
-	qi_cache_free(edesc);
+	skcipher_unmap(ctx->dev, edesc, req);
 
 	/*
-	 * The crypto API expects us to set the IV (req->info) to the last
+	 * The crypto API expects us to set the IV (req->iv) to the last
 	 * ciphertext block. This is used e.g. by the CTS mode.
 	 */
-	scatterwalk_map_and_copy(req->info, req->dst, req->nbytes - ivsize,
+	scatterwalk_map_and_copy(req->iv, req->dst, req->cryptlen - ivsize,
 				 ivsize, 0);
 
-	ablkcipher_request_complete(req, ecode);
+	qi_cache_free(edesc);
+	skcipher_request_complete(req, ecode);
 }
 
-static int ablkcipher_encrypt(struct ablkcipher_request *req)
+static void skcipher_decrypt_done(void *cbk_ctx, u32 status)
 {
-	struct ablkcipher_edesc *edesc;
-	struct crypto_ablkcipher *ablkcipher = crypto_ablkcipher_reqtfm(req);
-	struct caam_ctx *ctx = crypto_ablkcipher_ctx(ablkcipher);
-	struct caam_request *caam_req = ablkcipher_request_ctx(req);
+	struct crypto_async_request *areq = cbk_ctx;
+	struct skcipher_request *req = skcipher_request_cast(areq);
+	struct caam_request *req_ctx = to_caam_req(areq);
+	struct crypto_skcipher *skcipher = crypto_skcipher_reqtfm(req);
+	struct caam_ctx *ctx = crypto_skcipher_ctx(skcipher);
+	struct skcipher_edesc *edesc = req_ctx->edesc;
+	int ecode = 0;
+#ifdef DEBUG
+	int ivsize = crypto_skcipher_ivsize(skcipher);
+
+	dev_err(ctx->dev, "%s %d: err 0x%x\n", __func__, __LINE__, status);
+#endif
+
+	if (unlikely(status)) {
+		caam_qi2_strstatus(ctx->dev, status);
+		ecode = -EIO;
+	}
+
+#ifdef DEBUG
+	print_hex_dump(KERN_ERR, "dstiv  @" __stringify(__LINE__)": ",
+		       DUMP_PREFIX_ADDRESS, 16, 4, req->iv,
+		       edesc->src_nents > 1 ? 100 : ivsize, 1);
+	caam_dump_sg(KERN_ERR, "dst    @" __stringify(__LINE__)": ",
+		     DUMP_PREFIX_ADDRESS, 16, 4, req->dst,
+		     edesc->dst_nents > 1 ? 100 : req->cryptlen, 1);
+#endif
+
+	skcipher_unmap(ctx->dev, edesc, req);
+	qi_cache_free(edesc);
+	skcipher_request_complete(req, ecode);
+}
+
+static int skcipher_encrypt(struct skcipher_request *req)
+{
+	struct skcipher_edesc *edesc;
+	struct crypto_skcipher *skcipher = crypto_skcipher_reqtfm(req);
+	struct caam_ctx *ctx = crypto_skcipher_ctx(skcipher);
+	struct caam_request *caam_req = skcipher_request_ctx(req);
 	int ret;
 
 	/* allocate extended descriptor */
-	edesc = ablkcipher_edesc_alloc(req, true);
+	edesc = skcipher_edesc_alloc(req);
 	if (IS_ERR(edesc))
 		return PTR_ERR(edesc);
 
 	caam_req->flc = &ctx->flc[ENCRYPT];
 	caam_req->flc_dma = ctx->flc_dma[ENCRYPT];
-	caam_req->op_type = ENCRYPT;
-	caam_req->cbk = ablkcipher_done;
+	caam_req->cbk = skcipher_encrypt_done;
 	caam_req->ctx = &req->base;
 	caam_req->edesc = edesc;
 	ret = dpaa2_caam_enqueue(ctx->dev, caam_req);
 	if (ret != -EINPROGRESS &&
 	    !(ret == -EBUSY && req->base.flags & CRYPTO_TFM_REQ_MAY_BACKLOG)) {
-		ablkcipher_unmap(ctx->dev, edesc, req);
+		skcipher_unmap(ctx->dev, edesc, req);
 		qi_cache_free(edesc);
 	}
 
 	return ret;
 }
 
-static int ablkcipher_givencrypt(struct skcipher_givcrypt_request *greq)
+static int skcipher_decrypt(struct skcipher_request *req)
 {
-	struct ablkcipher_request *req = &greq->creq;
-	struct ablkcipher_edesc *edesc;
-	struct crypto_ablkcipher *ablkcipher = crypto_ablkcipher_reqtfm(req);
-	struct caam_ctx *ctx = crypto_ablkcipher_ctx(ablkcipher);
-	struct caam_request *caam_req = ablkcipher_request_ctx(req);
+	struct skcipher_edesc *edesc;
+	struct crypto_skcipher *skcipher = crypto_skcipher_reqtfm(req);
+	struct caam_ctx *ctx = crypto_skcipher_ctx(skcipher);
+	struct caam_request *caam_req = skcipher_request_ctx(req);
+	int ivsize = crypto_skcipher_ivsize(skcipher);
 	int ret;
 
 	/* allocate extended descriptor */
-	edesc = ablkcipher_giv_edesc_alloc(greq);
+	edesc = skcipher_edesc_alloc(req);
 	if (IS_ERR(edesc))
 		return PTR_ERR(edesc);
 
-	caam_req->flc = &ctx->flc[GIVENCRYPT];
-	caam_req->flc_dma = ctx->flc_dma[GIVENCRYPT];
-	caam_req->op_type = GIVENCRYPT;
-	caam_req->cbk = ablkcipher_done;
-	caam_req->ctx = &req->base;
-	caam_req->edesc = edesc;
-	ret = dpaa2_caam_enqueue(ctx->dev, caam_req);
-	if (ret != -EINPROGRESS &&
-	    !(ret == -EBUSY && req->base.flags & CRYPTO_TFM_REQ_MAY_BACKLOG)) {
-		ablkcipher_unmap(ctx->dev, edesc, req);
-		qi_cache_free(edesc);
-	}
-
-	return ret;
-}
-
-static int ablkcipher_decrypt(struct ablkcipher_request *req)
-{
-	struct ablkcipher_edesc *edesc;
-	struct crypto_ablkcipher *ablkcipher = crypto_ablkcipher_reqtfm(req);
-	struct caam_ctx *ctx = crypto_ablkcipher_ctx(ablkcipher);
-	struct caam_request *caam_req = ablkcipher_request_ctx(req);
-	int ret;
-
-	/* allocate extended descriptor */
-	edesc = ablkcipher_edesc_alloc(req, false);
-	if (IS_ERR(edesc))
-		return PTR_ERR(edesc);
+	/*
+	 * The crypto API expects us to set the IV (req->iv) to the last
+	 * ciphertext block.
+	 */
+	scatterwalk_map_and_copy(req->iv, req->src, req->cryptlen - ivsize,
+				 ivsize, 0);
 
 	caam_req->flc = &ctx->flc[DECRYPT];
 	caam_req->flc_dma = ctx->flc_dma[DECRYPT];
-	caam_req->op_type = DECRYPT;
-	caam_req->cbk = ablkcipher_done;
+	caam_req->cbk = skcipher_decrypt_done;
 	caam_req->ctx = &req->base;
 	caam_req->edesc = edesc;
 	ret = dpaa2_caam_enqueue(ctx->dev, caam_req);
 	if (ret != -EINPROGRESS &&
 	    !(ret == -EBUSY && req->base.flags & CRYPTO_TFM_REQ_MAY_BACKLOG)) {
-		ablkcipher_unmap(ctx->dev, edesc, req);
+		skcipher_unmap(ctx->dev, edesc, req);
 		qi_cache_free(edesc);
 	}
 
 	return ret;
 }
 
-struct caam_crypto_alg {
-	struct list_head entry;
-	struct crypto_alg crypto_alg;
-	struct caam_alg_entry caam;
-};
-
-static int caam_cra_init(struct crypto_tfm *tfm, bool uses_dkp)
+static int caam_cra_init(struct caam_ctx *ctx, struct caam_alg_entry *caam,
+			 bool uses_dkp)
 {
-	struct crypto_alg *alg = tfm->__crt_alg;
-	struct caam_crypto_alg *caam_alg = container_of(alg, typeof(*caam_alg),
-							crypto_alg);
-	struct caam_ctx *ctx = crypto_tfm_ctx(tfm);
 	dma_addr_t dma_addr;
 	int i;
 
 	/* copy descriptor header template value */
-	ctx->cdata.algtype = OP_TYPE_CLASS1_ALG |
-			     caam_alg->caam.class1_alg_type;
-	ctx->adata.algtype = OP_TYPE_CLASS2_ALG |
-			     caam_alg->caam.class2_alg_type;
+	ctx->cdata.algtype = OP_TYPE_CLASS1_ALG | caam->class1_alg_type;
+	ctx->adata.algtype = OP_TYPE_CLASS2_ALG | caam->class2_alg_type;
 
-	ctx->dev = caam_alg->caam.dev;
+	ctx->dev = caam->dev;
 	ctx->dir = uses_dkp ? DMA_BIDIRECTIONAL : DMA_TO_DEVICE;
 
 	dma_addr = dma_map_single_attrs(ctx->dev, ctx->flc,
@@ -2018,21 +1821,24 @@ static int caam_cra_init(struct crypto_tfm *tfm, bool uses_dkp)
 	return 0;
 }
 
-static int caam_cra_init_ablkcipher(struct crypto_tfm *tfm)
+static int caam_cra_init_skcipher(struct crypto_skcipher *tfm)
 {
-	struct ablkcipher_tfm *ablkcipher_tfm =
-		crypto_ablkcipher_crt(__crypto_ablkcipher_cast(tfm));
+	struct skcipher_alg *alg = crypto_skcipher_alg(tfm);
+	struct caam_skcipher_alg *caam_alg =
+		container_of(alg, typeof(*caam_alg), skcipher);
 
-	ablkcipher_tfm->reqsize = sizeof(struct caam_request);
-	return caam_cra_init(tfm, false);
+	crypto_skcipher_set_reqsize(tfm, sizeof(struct caam_request));
+	return caam_cra_init(crypto_skcipher_ctx(tfm), &caam_alg->caam, false);
 }
 
 static int caam_cra_init_aead(struct crypto_aead *tfm)
 {
 	struct aead_alg *alg = crypto_aead_alg(tfm);
+	struct caam_aead_alg *caam_alg = container_of(alg, typeof(*caam_alg),
+						      aead);
 
 	crypto_aead_set_reqsize(tfm, sizeof(struct caam_request));
-	return caam_cra_init(crypto_aead_tfm(tfm),
+	return caam_cra_init(crypto_aead_ctx(tfm), &caam_alg->caam,
 			     (alg->setkey == aead_setkey) ||
 			     (alg->setkey == tls_setkey));
 }
@@ -2044,9 +1850,9 @@ static void caam_exit_common(struct caam_ctx *ctx)
 			       DMA_ATTR_SKIP_CPU_SYNC);
 }
 
-static void caam_cra_exit(struct crypto_tfm *tfm)
+static void caam_cra_exit(struct crypto_skcipher *tfm)
 {
-	caam_exit_common(crypto_tfm_ctx(tfm));
+	caam_exit_common(crypto_skcipher_ctx(tfm));
 }
 
 static void caam_cra_exit_aead(struct crypto_aead *tfm)
@@ -2054,122 +1860,111 @@ static void caam_cra_exit_aead(struct crypto_aead *tfm)
 	caam_exit_common(crypto_aead_ctx(tfm));
 }
 
-#define template_ablkcipher	template_u.ablkcipher
-struct caam_alg_template {
-	char name[CRYPTO_MAX_ALG_NAME];
-	char driver_name[CRYPTO_MAX_ALG_NAME];
-	unsigned int blocksize;
-	u32 type;
-	union {
-		struct ablkcipher_alg ablkcipher;
-	} template_u;
-	u32 class1_alg_type;
-	u32 class2_alg_type;
-};
-
-static struct caam_alg_template driver_algs[] = {
-	/* ablkcipher descriptor */
+static struct caam_skcipher_alg driver_algs[] = {
 	{
-		.name = "cbc(aes)",
-		.driver_name = "cbc-aes-caam-qi2",
-		.blocksize = AES_BLOCK_SIZE,
-		.type = CRYPTO_ALG_TYPE_GIVCIPHER,
-		.template_ablkcipher = {
-			.setkey = ablkcipher_setkey,
-			.encrypt = ablkcipher_encrypt,
-			.decrypt = ablkcipher_decrypt,
-			.givencrypt = ablkcipher_givencrypt,
-			.geniv = "<built-in>",
+		.skcipher = {
+			.base = {
+				.cra_name = "cbc(aes)",
+				.cra_driver_name = "cbc-aes-caam-qi2",
+				.cra_blocksize = AES_BLOCK_SIZE,
+			},
+			.setkey = skcipher_setkey,
+			.encrypt = skcipher_encrypt,
+			.decrypt = skcipher_decrypt,
 			.min_keysize = AES_MIN_KEY_SIZE,
 			.max_keysize = AES_MAX_KEY_SIZE,
 			.ivsize = AES_BLOCK_SIZE,
 		},
-		.class1_alg_type = OP_ALG_ALGSEL_AES | OP_ALG_AAI_CBC,
+		.caam.class1_alg_type = OP_ALG_ALGSEL_AES | OP_ALG_AAI_CBC,
 	},
 	{
-		.name = "cbc(des3_ede)",
-		.driver_name = "cbc-3des-caam-qi2",
-		.blocksize = DES3_EDE_BLOCK_SIZE,
-		.type = CRYPTO_ALG_TYPE_GIVCIPHER,
-		.template_ablkcipher = {
-			.setkey = ablkcipher_setkey,
-			.encrypt = ablkcipher_encrypt,
-			.decrypt = ablkcipher_decrypt,
-			.givencrypt = ablkcipher_givencrypt,
-			.geniv = "<built-in>",
+		.skcipher = {
+			.base = {
+				.cra_name = "cbc(des3_ede)",
+				.cra_driver_name = "cbc-3des-caam-qi2",
+				.cra_blocksize = DES3_EDE_BLOCK_SIZE,
+			},
+			.setkey = skcipher_setkey,
+			.encrypt = skcipher_encrypt,
+			.decrypt = skcipher_decrypt,
 			.min_keysize = DES3_EDE_KEY_SIZE,
 			.max_keysize = DES3_EDE_KEY_SIZE,
 			.ivsize = DES3_EDE_BLOCK_SIZE,
 		},
-		.class1_alg_type = OP_ALG_ALGSEL_3DES | OP_ALG_AAI_CBC,
+		.caam.class1_alg_type = OP_ALG_ALGSEL_3DES | OP_ALG_AAI_CBC,
 	},
 	{
-		.name = "cbc(des)",
-		.driver_name = "cbc-des-caam-qi2",
-		.blocksize = DES_BLOCK_SIZE,
-		.type = CRYPTO_ALG_TYPE_GIVCIPHER,
-		.template_ablkcipher = {
-			.setkey = ablkcipher_setkey,
-			.encrypt = ablkcipher_encrypt,
-			.decrypt = ablkcipher_decrypt,
-			.givencrypt = ablkcipher_givencrypt,
-			.geniv = "<built-in>",
+		.skcipher = {
+			.base = {
+				.cra_name = "cbc(des)",
+				.cra_driver_name = "cbc-des-caam-qi2",
+				.cra_blocksize = DES_BLOCK_SIZE,
+			},
+			.setkey = skcipher_setkey,
+			.encrypt = skcipher_encrypt,
+			.decrypt = skcipher_decrypt,
 			.min_keysize = DES_KEY_SIZE,
 			.max_keysize = DES_KEY_SIZE,
 			.ivsize = DES_BLOCK_SIZE,
 		},
-		.class1_alg_type = OP_ALG_ALGSEL_DES | OP_ALG_AAI_CBC,
+		.caam.class1_alg_type = OP_ALG_ALGSEL_DES | OP_ALG_AAI_CBC,
 	},
 	{
-		.name = "ctr(aes)",
-		.driver_name = "ctr-aes-caam-qi2",
-		.blocksize = 1,
-		.type = CRYPTO_ALG_TYPE_ABLKCIPHER,
-		.template_ablkcipher = {
-			.setkey = ablkcipher_setkey,
-			.encrypt = ablkcipher_encrypt,
-			.decrypt = ablkcipher_decrypt,
-			.geniv = "chainiv",
+		.skcipher = {
+			.base = {
+				.cra_name = "ctr(aes)",
+				.cra_driver_name = "ctr-aes-caam-qi2",
+				.cra_blocksize = 1,
+			},
+			.setkey = skcipher_setkey,
+			.encrypt = skcipher_encrypt,
+			.decrypt = skcipher_decrypt,
 			.min_keysize = AES_MIN_KEY_SIZE,
 			.max_keysize = AES_MAX_KEY_SIZE,
 			.ivsize = AES_BLOCK_SIZE,
+			.chunksize = AES_BLOCK_SIZE,
 		},
-		.class1_alg_type = OP_ALG_ALGSEL_AES | OP_ALG_AAI_CTR_MOD128,
+		.caam.class1_alg_type = OP_ALG_ALGSEL_AES |
+					OP_ALG_AAI_CTR_MOD128,
 	},
 	{
-		.name = "rfc3686(ctr(aes))",
-		.driver_name = "rfc3686-ctr-aes-caam-qi2",
-		.blocksize = 1,
-		.type = CRYPTO_ALG_TYPE_GIVCIPHER,
-		.template_ablkcipher = {
-			.setkey = ablkcipher_setkey,
-			.encrypt = ablkcipher_encrypt,
-			.decrypt = ablkcipher_decrypt,
-			.givencrypt = ablkcipher_givencrypt,
-			.geniv = "<built-in>",
+		.skcipher = {
+			.base = {
+				.cra_name = "rfc3686(ctr(aes))",
+				.cra_driver_name = "rfc3686-ctr-aes-caam-qi2",
+				.cra_blocksize = 1,
+			},
+			.setkey = skcipher_setkey,
+			.encrypt = skcipher_encrypt,
+			.decrypt = skcipher_decrypt,
 			.min_keysize = AES_MIN_KEY_SIZE +
 				       CTR_RFC3686_NONCE_SIZE,
 			.max_keysize = AES_MAX_KEY_SIZE +
 				       CTR_RFC3686_NONCE_SIZE,
 			.ivsize = CTR_RFC3686_IV_SIZE,
+			.chunksize = AES_BLOCK_SIZE,
 		},
-		.class1_alg_type = OP_ALG_ALGSEL_AES | OP_ALG_AAI_CTR_MOD128,
+		.caam = {
+			.class1_alg_type = OP_ALG_ALGSEL_AES |
+					   OP_ALG_AAI_CTR_MOD128,
+			.rfc3686 = true,
+		},
 	},
 	{
-		.name = "xts(aes)",
-		.driver_name = "xts-aes-caam-qi2",
-		.blocksize = AES_BLOCK_SIZE,
-		.type = CRYPTO_ALG_TYPE_ABLKCIPHER,
-		.template_ablkcipher = {
-			.setkey = xts_ablkcipher_setkey,
-			.encrypt = ablkcipher_encrypt,
-			.decrypt = ablkcipher_decrypt,
-			.geniv = "eseqiv",
+		.skcipher = {
+			.base = {
+				.cra_name = "xts(aes)",
+				.cra_driver_name = "xts-aes-caam-qi2",
+				.cra_blocksize = AES_BLOCK_SIZE,
+			},
+			.setkey = xts_skcipher_setkey,
+			.encrypt = skcipher_encrypt,
+			.decrypt = skcipher_decrypt,
 			.min_keysize = 2 * AES_MIN_KEY_SIZE,
 			.max_keysize = 2 * AES_MAX_KEY_SIZE,
 			.ivsize = AES_BLOCK_SIZE,
 		},
-		.class1_alg_type = OP_ALG_ALGSEL_AES | OP_ALG_AAI_XTS,
+		.caam.class1_alg_type = OP_ALG_ALGSEL_AES | OP_ALG_AAI_XTS,
 	}
 };
 
@@ -3355,46 +3150,17 @@ static struct caam_aead_alg driver_aeads[] = {
 	},
 };
 
-static struct caam_crypto_alg *caam_alg_alloc(struct caam_alg_template
-					      *template)
+static void caam_skcipher_alg_init(struct caam_skcipher_alg *t_alg)
 {
-	struct caam_crypto_alg *t_alg;
-	struct crypto_alg *alg;
+	struct skcipher_alg *alg = &t_alg->skcipher;
 
-	t_alg = kzalloc(sizeof(*t_alg), GFP_KERNEL);
-	if (!t_alg)
-		return ERR_PTR(-ENOMEM);
+	alg->base.cra_module = THIS_MODULE;
+	alg->base.cra_priority = CAAM_CRA_PRIORITY;
+	alg->base.cra_ctxsize = sizeof(struct caam_ctx);
+	alg->base.cra_flags = CRYPTO_ALG_ASYNC | CRYPTO_ALG_KERN_DRIVER_ONLY;
 
-	alg = &t_alg->crypto_alg;
-
-	snprintf(alg->cra_name, CRYPTO_MAX_ALG_NAME, "%s", template->name);
-	snprintf(alg->cra_driver_name, CRYPTO_MAX_ALG_NAME, "%s",
-		 template->driver_name);
-	alg->cra_module = THIS_MODULE;
-	alg->cra_exit = caam_cra_exit;
-	alg->cra_priority = CAAM_CRA_PRIORITY;
-	alg->cra_blocksize = template->blocksize;
-	alg->cra_alignmask = 0;
-	alg->cra_ctxsize = sizeof(struct caam_ctx);
-	alg->cra_flags = CRYPTO_ALG_ASYNC | CRYPTO_ALG_KERN_DRIVER_ONLY |
-			 template->type;
-	switch (template->type) {
-	case CRYPTO_ALG_TYPE_GIVCIPHER:
-		alg->cra_init = caam_cra_init_ablkcipher;
-		alg->cra_type = &crypto_givcipher_type;
-		alg->cra_ablkcipher = template->template_ablkcipher;
-		break;
-	case CRYPTO_ALG_TYPE_ABLKCIPHER:
-		alg->cra_init = caam_cra_init_ablkcipher;
-		alg->cra_type = &crypto_ablkcipher_type;
-		alg->cra_ablkcipher = template->template_ablkcipher;
-		break;
-	}
-
-	t_alg->caam.class1_alg_type = template->class1_alg_type;
-	t_alg->caam.class2_alg_type = template->class2_alg_type;
-
-	return t_alg;
+	alg->init = caam_cra_init_skcipher;
+	alg->exit = caam_cra_exit;
 }
 
 static void caam_aead_alg_init(struct caam_aead_alg *t_alg)
@@ -5479,7 +5245,7 @@ static int __cold dpaa2_dpseci_setup(struct fsl_mc_device *ls_dev)
 
 	i = 0;
 	for_each_online_cpu(cpu) {
-		dev_info(dev, "prio %d: rx queue %d, tx queue %d\n", i,
+		dev_info(dev, "pair %d: rx queue %d, tx queue %d\n", i,
 			 priv->rx_queue_attr[i].fqid,
 			 priv->tx_queue_attr[i].fqid);
 
@@ -5561,7 +5327,6 @@ static int __cold dpaa2_dpseci_disable(struct dpaa2_caam_priv *priv)
 	return 0;
 }
 
-static struct list_head alg_list;
 static struct list_head hash_list;
 
 static int dpaa2_caam_probe(struct fsl_mc_device *dpseci_dev)
@@ -5651,11 +5416,9 @@ static int dpaa2_caam_probe(struct fsl_mc_device *dpseci_dev)
 	}
 
 	/* register crypto algorithms the device supports */
-	INIT_LIST_HEAD(&alg_list);
 	for (i = 0; i < ARRAY_SIZE(driver_algs); i++) {
-		struct caam_crypto_alg *t_alg;
-		struct caam_alg_template *alg = driver_algs + i;
-		u32 alg_sel = alg->class1_alg_type & OP_ALG_ALGSEL_MASK;
+		struct caam_skcipher_alg *t_alg = driver_algs + i;
+		u32 alg_sel = t_alg->caam.class1_alg_type & OP_ALG_ALGSEL_MASK;
 
 		/* Skip DES algorithms if not supported by device */
 		if (!priv->sec_attr.des_acc_num &&
@@ -5668,24 +5431,17 @@ static int dpaa2_caam_probe(struct fsl_mc_device *dpseci_dev)
 		    (alg_sel == OP_ALG_ALGSEL_AES))
 			continue;
 
-		t_alg = caam_alg_alloc(alg);
-		if (IS_ERR(t_alg)) {
-			err = PTR_ERR(t_alg);
-			dev_warn(dev, "%s alg allocation failed: %d\n",
-				 alg->driver_name, err);
-			continue;
-		}
 		t_alg->caam.dev = dev;
+		caam_skcipher_alg_init(t_alg);
 
-		err = crypto_register_alg(&t_alg->crypto_alg);
+		err = crypto_register_skcipher(&t_alg->skcipher);
 		if (err) {
 			dev_warn(dev, "%s alg registration failed: %d\n",
-				 t_alg->crypto_alg.cra_driver_name, err);
-			kfree(t_alg);
+				 t_alg->skcipher.base.cra_driver_name, err);
 			continue;
 		}
 
-		list_add_tail(&t_alg->entry, &alg_list);
+		t_alg->registered = true;
 		registered = true;
 	}
 
@@ -5819,14 +5575,11 @@ static int __cold dpaa2_caam_remove(struct fsl_mc_device *ls_dev)
 			crypto_unregister_aead(&t_alg->aead);
 	}
 
-	if (alg_list.next) {
-		struct caam_crypto_alg *t_alg, *n;
+	for (i = 0; i < ARRAY_SIZE(driver_algs); i++) {
+		struct caam_skcipher_alg *t_alg = driver_algs + i;
 
-		list_for_each_entry_safe(t_alg, n, &alg_list, entry) {
-			crypto_unregister_alg(&t_alg->crypto_alg);
-			list_del(&t_alg->entry);
-			kfree(t_alg);
-		}
+		if (t_alg->registered)
+			crypto_unregister_skcipher(&t_alg->skcipher);
 	}
 
 	if (hash_list.next) {

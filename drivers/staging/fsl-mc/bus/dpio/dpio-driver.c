@@ -89,6 +89,7 @@ static int dpaa2_dpio_probe(struct fsl_mc_device *dpio_dev)
 	int err = -ENOMEM;
 	struct device *dev = &dpio_dev->dev;
 	static int next_cpu = -1;
+	int possible_next_cpu;
 
 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
@@ -137,16 +138,16 @@ static int dpaa2_dpio_probe(struct fsl_mc_device *dpio_dev)
 
 	/* get the cpu to use for the affinity hint */
 	if (next_cpu == -1)
-		next_cpu = cpumask_first(cpu_online_mask);
+		possible_next_cpu = cpumask_first(cpu_online_mask);
 	else
-		next_cpu = cpumask_next(next_cpu, cpu_online_mask);
+		possible_next_cpu = cpumask_next(next_cpu, cpu_online_mask);
 
-	if (!cpu_possible(next_cpu)) {
+	if (possible_next_cpu >= nr_cpu_ids) {
 		dev_err(dev, "probe failed. Number of DPIOs exceeds NR_CPUS.\n");
 		err = -ERANGE;
 		goto err_allocate_irqs;
 	}
-	desc.cpu = next_cpu;
+	desc.cpu = next_cpu = possible_next_cpu;
 
 	/*
 	 * Set the CENA regs to be the cache enabled area of the portal to

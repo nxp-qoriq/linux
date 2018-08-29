@@ -40,6 +40,7 @@
 #include <linux/skbuff.h>
 #include <linux/ethtool.h>
 #include <linux/if_vlan.h>
+#include <linux/phy.h>
 #include <net/tsn.h>
 
 #include "enetc_hw.h"
@@ -236,6 +237,9 @@ struct enetc_ndev_priv {
 	struct enetc_bdr *rx_ring[16];
 
 	struct enetc_cls_rule *cls_rules;
+
+	struct device_node *phy_node;
+	phy_interface_t if_mode;
 };
 
 /* Messaging */

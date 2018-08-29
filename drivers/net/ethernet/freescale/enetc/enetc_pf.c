@@ -33,6 +33,8 @@
  */
 
 #include <linux/module.h>
+#include <linux/of_mdio.h>
+#include <linux/of_net.h>
 #include "enetc_pf.h"
 
 #define ENETC_DRV_VER_MAJ 0
@@ -692,6 +694,45 @@ static void enetc_pf_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 	enetc_get_primary_mac_addr(&si->hw, ndev->dev_addr);
 }
 
+static int enetc_of_get_phy(struct enetc_ndev_priv *priv)
+{
+	struct device_node *np = priv->dev->of_node;
+	int err;
+
+	if (!np) {
+		dev_err(priv->dev, "missing ENETC port node\n");
+		return -ENODEV;
+	}
+
+	priv->phy_node = of_parse_phandle(np, "phy-handle", 0);
+	if (!priv->phy_node) {
+		if (!of_phy_is_fixed_link(np)) {
+			dev_err(priv->dev, "PHY not specified\n");
+			return -ENODEV;
+		}
+
+		err = of_phy_register_fixed_link(np);
+		if (err < 0) {
+			dev_err(priv->dev, "fixed link registration failed\n");
+			return err;
+		}
+
+		priv->phy_node = of_node_get(np);
+	}
+
+	priv->if_mode = of_get_phy_mode(np);
+	if (priv->if_mode < 0) {
+		dev_err(priv->dev, "missing phy type\n");
+		of_node_put(priv->phy_node);
+		if (of_phy_is_fixed_link(np))
+			of_phy_deregister_fixed_link(np);
+
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 static int enetc_pf_probe(struct pci_dev *pdev,
 			  const struct pci_device_id *ent)
 {
@@ -757,6 +798,10 @@ static int enetc_pf_probe(struct pci_dev *pdev,
 	if (err)
 		goto err_setup_irq;
 
+	err = enetc_of_get_phy(priv);
+	if (err)
+		goto err_of_get_phy;
+
 	netif_carrier_off(ndev);
 
 	netif_info(priv, probe, ndev, "%s v%s\n",
@@ -764,6 +809,8 @@ static int enetc_pf_probe(struct pci_dev *pdev,
 
 	return 0;
 
+err_of_get_phy:
+	enetc_free_irqs(priv);
 err_setup_irq:
 	unregister_netdev(ndev);
 err_reg_netdev:
@@ -793,6 +840,10 @@ static void enetc_pf_remove(struct pci_dev *pdev)
 	netif_info(priv, drv, si->ndev, "%s v%s remove\n",
 		   enetc_drv_name, enetc_drv_ver);
 	unregister_netdev(si->ndev);
+
+	if (of_phy_is_fixed_link(priv->dev->of_node))
+		of_phy_deregister_fixed_link(priv->dev->of_node);
+	of_node_put(priv->phy_node);
 
 	enetc_free_irqs(priv);
 	enetc_free_msix(priv);

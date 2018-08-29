@@ -1664,9 +1664,11 @@ u32 __enetc_tsn_get_cap(struct enetc_si *si)
 
 	if (reg & ENETC_PCAPR0_PSFP)
 		cap |= TSN_CAP_QCI;
-	else if (reg & ENETC_PCAPR0_TSN)
+
+	if (reg & ENETC_PCAPR0_TSN)
 		cap |= TSN_CAP_QBV;
-	else if (reg & ENETC_PCAPR0_QBU)
+
+	if (reg & ENETC_PCAPR0_QBU)
 		cap |= TSN_CAP_QBU;
 
 	cap |= TSN_CAP_CBS;

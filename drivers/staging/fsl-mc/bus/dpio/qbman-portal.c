@@ -43,7 +43,7 @@
 /* QBMan portal management command codes */
 #define QBMAN_MC_ACQUIRE       0x30
 #define QBMAN_WQCHAN_CONFIGURE 0x46
-#define QBMAN_MC_ORP		0x63
+#define QBMAN_MC_ORP           0x63
 
 /* CINH register offsets */
 #define QBMAN_CINH_SWP_EQCR_PI      0x800

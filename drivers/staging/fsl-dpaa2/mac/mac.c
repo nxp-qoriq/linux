@@ -57,7 +57,17 @@ struct dpaa2_mac_priv {
 	struct fsl_mc_device		*mc_dev;
 	struct dpmac_attr		attr;
 	struct dpmac_link_state		old_state;
+	u16				dpmac_ver_major;
+	u16				dpmac_ver_minor;
 };
+
+static inline int dpaa2_mac_cmp_dpni_ver(struct dpaa2_mac_priv *priv,
+					 u16 ver_major, u16 ver_minor)
+{
+	if (priv->dpmac_ver_major == ver_major)
+		return priv->dpmac_ver_minor - ver_minor;
+	return priv->dpmac_ver_major - ver_major;
+}
 
 /* TODO: fix the 10G modes, mapping can't be right:
  *  XGMII is paralel
@@ -158,6 +168,18 @@ static netdev_tx_t dpaa2_mac_drop_frame(struct sk_buff *skb,
 	/* we don't support I/O for now, drop the frame */
 	dev_kfree_skb_any(skb);
 	return NETDEV_TX_OK;
+}
+
+static void dpaa2_mac_get_drvinfo(struct net_device *net_dev,
+				  struct ethtool_drvinfo *drvinfo)
+{
+	struct dpaa2_mac_priv *priv = netdev_priv(net_dev);
+
+	strlcpy(drvinfo->driver, KBUILD_MODNAME, sizeof(drvinfo->driver));
+	snprintf(drvinfo->fw_version, sizeof(drvinfo->fw_version),
+		 "%u.%u", priv->dpmac_ver_major, priv->dpmac_ver_minor);
+	strlcpy(drvinfo->bus_info, dev_name(net_dev->dev.parent->parent),
+		sizeof(drvinfo->bus_info));
 }
 
 static int dpaa2_mac_get_link_ksettings(struct net_device *netdev,
@@ -327,6 +349,7 @@ static const struct net_device_ops dpaa2_mac_ndo_ops = {
 };
 
 static const struct ethtool_ops dpaa2_mac_ethtool_ops = {
+	.get_drvinfo		= &dpaa2_mac_get_drvinfo,
 	.get_strings		= &dpaa2_mac_get_strings,
 	.get_ethtool_stats	= &dpaa2_mac_get_ethtool_stats,
 	.get_sset_count		= &dpaa2_mac_get_sset_count,
@@ -522,6 +545,22 @@ static int dpaa2_mac_probe(struct fsl_mc_device *mc_dev)
 		goto err_free_mcp;
 	}
 
+	/* Check if we can work with this DPMAC object */
+	err = dpmac_get_api_version(mc_dev->mc_io, 0, &priv->dpmac_ver_major,
+				    &priv->dpmac_ver_minor);
+	if (err) {
+		dev_err(dev, "dpmac_get_api_version() failed\n");
+		goto err_version;
+	}
+
+	if (dpaa2_mac_cmp_dpni_ver(priv, DPMAC_VER_MAJOR, DPMAC_VER_MINOR) < 0) {
+		dev_err(dev, "DPMAC version %u.%u not supported, need >= %u.%u\n",
+			priv->dpmac_ver_major, priv->dpmac_ver_minor,
+			DPMAC_VER_MAJOR, DPMAC_VER_MINOR);
+		err = -ENOTSUPP;
+		goto err_version;
+	}
+
 	err = dpmac_get_attributes(mc_dev->mc_io, 0,
 				   mc_dev->mc_handle, &priv->attr);
 	if (err) {
@@ -633,6 +672,7 @@ err_no_phy:
 err_free_irq:
 #endif
 	teardown_irqs(mc_dev);
+err_version:
 err_close:
 	dpmac_close(mc_dev->mc_io, 0, mc_dev->mc_handle);
 err_free_mcp:

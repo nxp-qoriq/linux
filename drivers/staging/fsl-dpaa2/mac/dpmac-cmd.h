@@ -34,7 +34,7 @@
 
 /* DPMAC Version */
 #define DPMAC_VER_MAJOR				4
-#define DPMAC_VER_MINOR				2
+#define DPMAC_VER_MINOR				0
 #define DPMAC_CMD_BASE_VERSION			1
 #define DPMAC_CMD_2ND_VERSION			2
 #define DPMAC_CMD_ID_OFFSET			4

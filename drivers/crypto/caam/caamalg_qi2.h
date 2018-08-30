@@ -192,7 +192,7 @@ struct tls_edesc {
 };
 
 /*
- * ablkcipher_edesc - s/w-extended ablkcipher descriptor
+ * skcipher_edesc - s/w-extended skcipher descriptor
  * @src_nents: number of segments in input scatterlist
  * @dst_nents: number of segments in output scatterlist
  * @iv_dma: dma address of iv for checking continuity and link table
@@ -200,7 +200,7 @@ struct tls_edesc {
  * @qm_sg_dma: I/O virtual address of h/w link table
  * @sgt: the h/w link table, followed by IV
  */
-struct ablkcipher_edesc {
+struct skcipher_edesc {
 	int src_nents;
 	int dst_nents;
 	dma_addr_t iv_dma;
@@ -238,7 +238,6 @@ struct caam_flc {
 enum optype {
 	ENCRYPT = 0,
 	DECRYPT,
-	GIVENCRYPT,
 	NUM_OP
 };
 
@@ -251,17 +250,15 @@ enum optype {
  * @fd_flt_dma: DMA address for the frame list table
  * @flc: Flow Context
  * @flc_dma: I/O virtual address of Flow Context
- * @op_type: operation type
  * @cbk: Callback function to invoke when job is completed
  * @ctx: arbit context attached with request by the application
- * @edesc: extended descriptor; points to one of {ablkcipher,aead}_edesc
+ * @edesc: extended descriptor; points to one of {skcipher,aead}_edesc
  */
 struct caam_request {
 	struct dpaa2_fl_entry fd_flt[2];
 	dma_addr_t fd_flt_dma;
 	struct caam_flc *flc;
 	dma_addr_t flc_dma;
-	enum optype op_type;
 	void (*cbk)(void *ctx, u32 err);
 	void *ctx;
 	void *edesc;

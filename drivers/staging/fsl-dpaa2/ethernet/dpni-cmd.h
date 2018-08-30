@@ -330,6 +330,8 @@ struct dpni_cmd_set_link_cfg {
 
 #define DPNI_LINK_STATE_SHIFT		0
 #define DPNI_LINK_STATE_SIZE		1
+#define DPNI_STATE_VALID_SHIFT		1
+#define DPNI_STATE_VALID_SIZE		1
 
 struct dpni_rsp_get_link_state {
 	/* response word 0 */

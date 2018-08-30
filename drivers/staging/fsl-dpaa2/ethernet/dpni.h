@@ -569,6 +569,7 @@ struct dpni_link_state {
 	u32	rate;
 	u64	options;
 	int	up;
+	int	state_valid;
 	u64	supported;
 	u64	advertising;
 };

@@ -93,6 +93,7 @@ static void dpaa2_mac_link_changed(struct net_device *netdev)
 	/* the PHY just notified us of link state change */
 	phydev = netdev->phydev;
 
+	state.state_valid = 1;
 	state.up = !!phydev->link;
 	if (phydev->link) {
 		state.rate = phydev->speed;

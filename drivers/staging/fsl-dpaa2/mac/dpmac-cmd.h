@@ -146,6 +146,9 @@ struct dpmac_rsp_get_link_cfg {
 #define DPMAC_STATE_SIZE	1
 #define DPMAC_STATE_SHIFT	0
 
+#define DPMAC_STATE_VALID_SIZE	1
+#define DPMAC_STATE_VALID_SHIFT	1
+
 struct dpmac_cmd_set_link_state {
 	u64 options;
 	u32 rate;

@@ -914,6 +914,7 @@ int dpni_get_link_state(struct fsl_mc_io *mc_io,
 	/* retrieve response parameters */
 	rsp_params = (struct dpni_rsp_get_link_state *)cmd.params;
 	state->up = dpni_get_field(rsp_params->flags, LINK_STATE);
+	state->state_valid = dpni_get_field(rsp_params->flags, STATE_VALID);
 	state->rate = le32_to_cpu(rsp_params->rate);
 	state->options = le64_to_cpu(rsp_params->options);
 	state->supported = le64_to_cpu(rsp_params->supported);

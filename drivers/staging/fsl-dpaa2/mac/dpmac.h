@@ -227,6 +227,7 @@ struct dpmac_link_state {
 	u64 options;
 	u32 rate;
 	int up;
+	int state_valid;
 	u64 supported;
 	u64 advertising;
 };

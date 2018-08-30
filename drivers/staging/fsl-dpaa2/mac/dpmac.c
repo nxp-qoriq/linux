@@ -518,6 +518,7 @@ int dpmac_set_link_state(struct fsl_mc_io *mc_io,
 	cmd_params->options = cpu_to_le64(link_state->options);
 	cmd_params->rate = cpu_to_le32(link_state->rate);
 	cmd_params->up = dpmac_get_field(link_state->up, STATE);
+	dpmac_set_field(cmd_params->up, STATE_VALID, link_state->state_valid);
 	cmd_params->supported = cpu_to_le64(link_state->supported);
 	cmd_params->advertising = cpu_to_le64(link_state->advertising);
 

@@ -190,8 +190,8 @@ int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 	tmp_align = PTR_ALIGN(tmp, RFSE_ALIGN);
 	memcpy(tmp_align, rfse, sizeof(*rfse));
 
-	cbd.addr[0] = lower_32_bits(dma_align);
-	cbd.addr[1] = upper_32_bits(dma_align);
+	cbd.addr[0] = cpu_to_le32(lower_32_bits(dma_align));
+	cbd.addr[1] = cpu_to_le32(upper_32_bits(dma_align));
 
 	if (async)
 		cbd.status_flags |= ENETC_CBD_FLAGS_IE;
@@ -235,10 +235,10 @@ static int enetc_cmd_rss_table(struct enetc_si *si, u32 *table, int count,
 	/* fill up the descriptor */
 	cbd.cmd = read ? 2 : 1;
 	cbd.cls = 3;
-	cbd.length = count;
+	cbd.length = cpu_to_le16(count);
 
-	cbd.addr[0] = lower_32_bits(dma_align);
-	cbd.addr[1] = upper_32_bits(dma_align);
+	cbd.addr[0] = cpu_to_le32(lower_32_bits(dma_align));
+	cbd.addr[1] = cpu_to_le32(upper_32_bits(dma_align));
 
 	err = enetc_send_cmd(si, &cbd, false);
 	if (err)

@@ -41,6 +41,7 @@
 
 static void __iomem *ftm1_base;
 static void __iomem *rcpm_ftm_addr;
+static void __iomem *scfg_scrachpad_addr;
 static u32 alarm_freq;
 static bool big_endian;
 
@@ -61,7 +62,7 @@ static struct rcpm_cfg ls1012a_rcpm_cfg = {
 
 static struct rcpm_cfg ls1021a_rcpm_cfg = {
 	.big_endian = BIG_ENDIAN,
-	.flextimer_set_bit = 0x20000,
+	.flextimer_set_bit = 0x30000000,
 };
 
 static struct rcpm_cfg ls1043a_rcpm_cfg = {
@@ -308,6 +309,12 @@ static int ftm_alarm_probe(struct platform_device *pdev)
 			iowrite32be(ippdexpcr, rcpm_ftm_addr);
 		else
 			iowrite32(ippdexpcr, rcpm_ftm_addr);
+
+		r = platform_get_resource_byname(pdev, IORESOURCE_MEM, "scrachpad");
+		if (r) {
+			scfg_scrachpad_addr = devm_ioremap_resource(&pdev->dev, r);
+			iowrite32(ippdexpcr, scfg_scrachpad_addr);
+		}
 	}
 
 	irq = irq_of_parse_and_map(np, 0);

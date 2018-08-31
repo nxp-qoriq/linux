@@ -658,7 +658,7 @@ static inline int qm_dqrr_init(struct qm_portal *portal,
 			qm_dqrr_cce_consume(portal, dqrr->fill);
 			break;
 		case qm_dqrr_cdc:
-			qm_dqrr_cdc_consume_n(portal, (QM_DQRR_SIZE - 1));
+			qm_dqrr_cdc_consume_n(portal, (1<<QM_DQRR_SIZE) - 1);
 			break;
 		default:
 			DPA_ASSERT(0);
@@ -682,6 +682,9 @@ static inline int qm_dqrr_init(struct qm_portal *portal,
 		(0 ? 0x10 : 0);				/* Ignore SP */
 	qm_out(CFG, cfg);
 	qm_dqrr_set_maxfill(portal, max_fill);
+
+	/* Recalculate cursor as we may have consumed frames */
+	dqrr->cursor = dqrr->ring + dqrr->ci;
 	return 0;
 }
 

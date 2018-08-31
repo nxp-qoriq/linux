@@ -912,7 +912,7 @@ struct aead_edesc {
  * @tmp: array of scatterlists used by 'scatterwalk_ffwd'
  * @qm_sg_dma: bus physical mapped address of h/w link table
  * @drv_req: driver-specific request structure
- * @sgt: the h/w link table
+ * @sgt: the h/w link table, followed by IV
  */
 struct tls_edesc {
 	int src_nents;
@@ -1378,6 +1378,7 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req, bool encrypt)
 	struct tls_edesc *edesc;
 	dma_addr_t qm_sg_dma, iv_dma = 0;
 	int ivsize = 0;
+	u8 *iv;
 	int qm_sg_index, qm_sg_ents = 0, qm_sg_bytes;
 	int in_len, out_len;
 	struct qm_sg_entry *sg_table, *fd_sgt;
@@ -1397,7 +1398,7 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req, bool encrypt)
 	if (unlikely(IS_ERR_OR_NULL(drv_ctx)))
 		return (struct tls_edesc *)drv_ctx;
 
-	/* allocate space for base edesc and hw desc commands, link tables */
+	/* allocate space for base edesc, link tables and IV */
 	edesc = qi_cache_alloc(GFP_DMA | flags);
 	if (unlikely(!edesc)) {
 		dev_err(qidev, "could not allocate extended descriptor\n");
@@ -1467,16 +1468,6 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req, bool encrypt)
 		}
 	}
 
-	ivsize = crypto_aead_ivsize(aead);
-	iv_dma = dma_map_single(qidev, req->iv, ivsize, DMA_TO_DEVICE);
-	if (dma_mapping_error(qidev, iv_dma)) {
-		dev_err(qidev, "unable to map IV\n");
-		caam_unmap(qidev, req->src, dst, src_nents, dst_nents, 0, 0,
-			   op_type, 0, 0);
-		qi_cache_free(edesc);
-		return ERR_PTR(-ENOMEM);
-	}
-
 	/*
 	 * Create S/G table: IV, src, dst.
 	 * Input is not contiguous.
@@ -1485,6 +1476,19 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req, bool encrypt)
 		     (mapped_dst_nents > 1 ? mapped_dst_nents : 0);
 	sg_table = &edesc->sgt[0];
 	qm_sg_bytes = qm_sg_ents * sizeof(*sg_table);
+
+	ivsize = crypto_aead_ivsize(aead);
+	iv = (u8 *)(sg_table + qm_sg_ents);
+	/* Make sure IV is located in a DMAable area */
+	memcpy(iv, req->iv, ivsize);
+	iv_dma = dma_map_single(qidev, iv, ivsize, DMA_TO_DEVICE);
+	if (dma_mapping_error(qidev, iv_dma)) {
+		dev_err(qidev, "unable to map IV\n");
+		caam_unmap(qidev, req->src, dst, src_nents, dst_nents, 0, 0, 0,
+			   0, 0);
+		qi_cache_free(edesc);
+		return ERR_PTR(-ENOMEM);
+	}
 
 	edesc->src_nents = src_nents;
 	edesc->dst_nents = dst_nents;

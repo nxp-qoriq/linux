@@ -79,8 +79,8 @@ struct dpaa2_caam_priv {
 
 	struct dpseci_attr dpseci_attr;
 	struct dpseci_sec_attr sec_attr;
-	struct dpseci_rx_queue_attr rx_queue_attr[DPSECI_PRIO_NUM];
-	struct dpseci_tx_queue_attr tx_queue_attr[DPSECI_PRIO_NUM];
+	struct dpseci_rx_queue_attr rx_queue_attr[DPSECI_MAX_QUEUE_NUM];
+	struct dpseci_tx_queue_attr tx_queue_attr[DPSECI_MAX_QUEUE_NUM];
 	int num_pairs;
 
 	/* congestion */
@@ -156,7 +156,7 @@ struct dpaa2_caam_priv_per_cpu {
  * @qm_sg_dma: bus physical mapped address of h/w link table
  * @assoclen: associated data length, in CAAM endianness
  * @assoclen_dma: bus physical mapped address of req->assoclen
- * @sgt: the h/w link table
+ * @sgt: the h/w link table, followed by IV
  */
 struct aead_edesc {
 	int src_nents;
@@ -166,9 +166,6 @@ struct aead_edesc {
 	dma_addr_t qm_sg_dma;
 	unsigned int assoclen;
 	dma_addr_t assoclen_dma;
-#define CAAM_QI_MAX_AEAD_SG						\
-	((CAAM_QI_MEMCACHE_SIZE - offsetof(struct aead_edesc, sgt)) /	\
-	 sizeof(struct dpaa2_sg_entry))
 	struct dpaa2_sg_entry sgt[0];
 };
 
@@ -181,7 +178,7 @@ struct aead_edesc {
  * @qm_sg_dma: bus physical mapped address of h/w link table
  * @tmp: array of scatterlists used by 'scatterwalk_ffwd'
  * @dst: pointer to output scatterlist, usefull for unmapping
- * @sgt: the h/w link table
+ * @sgt: the h/w link table, followed by IV
  */
 struct tls_edesc {
 	int src_nents;
@@ -195,23 +192,20 @@ struct tls_edesc {
 };
 
 /*
- * ablkcipher_edesc - s/w-extended ablkcipher descriptor
+ * skcipher_edesc - s/w-extended skcipher descriptor
  * @src_nents: number of segments in input scatterlist
  * @dst_nents: number of segments in output scatterlist
  * @iv_dma: dma address of iv for checking continuity and link table
  * @qm_sg_bytes: length of dma mapped qm_sg space
  * @qm_sg_dma: I/O virtual address of h/w link table
- * @sgt: the h/w link table
+ * @sgt: the h/w link table, followed by IV
  */
-struct ablkcipher_edesc {
+struct skcipher_edesc {
 	int src_nents;
 	int dst_nents;
 	dma_addr_t iv_dma;
 	int qm_sg_bytes;
 	dma_addr_t qm_sg_dma;
-#define CAAM_QI_MAX_ABLKCIPHER_SG					    \
-	((CAAM_QI_MEMCACHE_SIZE - offsetof(struct ablkcipher_edesc, sgt)) / \
-	 sizeof(struct dpaa2_sg_entry))
 	struct dpaa2_sg_entry sgt[0];
 };
 
@@ -244,7 +238,6 @@ struct caam_flc {
 enum optype {
 	ENCRYPT = 0,
 	DECRYPT,
-	GIVENCRYPT,
 	NUM_OP
 };
 
@@ -257,17 +250,15 @@ enum optype {
  * @fd_flt_dma: DMA address for the frame list table
  * @flc: Flow Context
  * @flc_dma: I/O virtual address of Flow Context
- * @op_type: operation type
  * @cbk: Callback function to invoke when job is completed
  * @ctx: arbit context attached with request by the application
- * @edesc: extended descriptor; points to one of {ablkcipher,aead}_edesc
+ * @edesc: extended descriptor; points to one of {skcipher,aead}_edesc
  */
 struct caam_request {
 	struct dpaa2_fl_entry fd_flt[2];
 	dma_addr_t fd_flt_dma;
 	struct caam_flc *flc;
 	dma_addr_t flc_dma;
-	enum optype op_type;
 	void (*cbk)(void *ctx, u32 err);
 	void *ctx;
 	void *edesc;

@@ -547,6 +547,7 @@ int dpni_reset_statistics(struct fsl_mc_io *mc_io,
  * struct - Structure representing DPNI link configuration
  * @rate: Rate
  * @options: Mask of available options; use 'DPNI_LINK_OPT_<X>' values
+ * @advertising: Speeds that are advertised for autoneg (bitmap)
  */
 struct dpni_link_cfg {
 	u32 rate;
@@ -559,11 +560,19 @@ int dpni_set_link_cfg(struct fsl_mc_io			*mc_io,
 		      u16				token,
 		      const struct dpni_link_cfg	*cfg);
 
+int dpni_set_link_cfg_v2(struct fsl_mc_io		*mc_io,
+			 u32				cmd_flags,
+			 u16				token,
+			 const struct dpni_link_cfg	*cfg);
+
 /**
  * struct dpni_link_state - Structure representing DPNI link state
  * @rate: Rate
  * @options: Mask of available options; use 'DPNI_LINK_OPT_<X>' values
  * @up: Link state; '0' for down, '1' for up
+ * @state_valid: Ignore/Update the state of the link
+ * @supported: Speeds capability of the phy (bitmap)
+ * @advertising: Speeds that are advertised for autoneg (bitmap)
  */
 struct dpni_link_state {
 	u32	rate;
@@ -578,6 +587,11 @@ int dpni_get_link_state(struct fsl_mc_io	*mc_io,
 			u32			cmd_flags,
 			u16			token,
 			struct dpni_link_state	*state);
+
+int dpni_get_link_state_v2(struct fsl_mc_io		*mc_io,
+			   u32				cmd_flags,
+			   u16				token,
+			   struct dpni_link_state	*state);
 
 /**
  * struct dpni_tx_shaping - Structure representing DPNI tx shaping configuration

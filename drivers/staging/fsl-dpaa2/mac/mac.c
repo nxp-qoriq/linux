@@ -52,6 +52,9 @@
 #include "dpmac.h"
 #include "dpmac-cmd.h"
 
+#define DPMAC_VER_AUTONEG_MAJOR		4
+#define DPMAC_VER_AUTONEG_MINOR		3
+
 struct dpaa2_mac_priv {
 	struct net_device		*netdev;
 	struct fsl_mc_device		*mc_dev;
@@ -61,7 +64,7 @@ struct dpaa2_mac_priv {
 	u16				dpmac_ver_minor;
 };
 
-static inline int dpaa2_mac_cmp_dpni_ver(struct dpaa2_mac_priv *priv,
+static inline int dpaa2_mac_cmp_dpmac_ver(struct dpaa2_mac_priv *priv,
 					 u16 ver_major, u16 ver_minor)
 {
 	if (priv->dpmac_ver_major == ver_major)
@@ -131,8 +134,13 @@ static void dpaa2_mac_link_changed(struct net_device *netdev)
 	/* We must interrogate MC at all times, because we don't know
 	 * when and whether a potential DPNI may have read the link state.
 	 */
-	err = dpmac_set_link_state(priv->mc_dev->mc_io, 0,
-				   priv->mc_dev->mc_handle, &state);
+	if (dpaa2_mac_cmp_dpmac_ver(priv, DPMAC_VER_AUTONEG_MAJOR,
+				   DPMAC_VER_AUTONEG_MINOR) < 0)
+		err = dpmac_set_link_state(priv->mc_dev->mc_io, 0,
+					   priv->mc_dev->mc_handle, &state);
+	else
+		err = dpmac_set_link_state_v2(priv->mc_dev->mc_io, 0,
+					      priv->mc_dev->mc_handle, &state);
 	if (unlikely(err))
 		dev_err(&priv->mc_dev->dev, "dpmac_set_link_state: %d\n", err);
 }
@@ -400,8 +408,15 @@ static irqreturn_t dpaa2_mac_irq_handler(int irq_num, void *arg)
 
 	/* DPNI-initiated link configuration; 'ifconfig up' also calls this */
 	if (status & DPMAC_IRQ_EVENT_LINK_CFG_REQ) {
-		err = dpmac_get_link_cfg(mc_dev->mc_io, 0, mc_dev->mc_handle,
-					 &link_cfg);
+		if (dpaa2_mac_cmp_dpmac_ver(priv, DPMAC_VER_AUTONEG_MAJOR,
+					   DPMAC_VER_AUTONEG_MINOR) < 0)
+			err = dpmac_get_link_cfg(mc_dev->mc_io, 0,
+						 mc_dev->mc_handle,
+						 &link_cfg);
+		else
+			err = dpmac_get_link_cfg_v2(mc_dev->mc_io, 0,
+						    mc_dev->mc_handle,
+						    &link_cfg);
 		if (unlikely(err))
 			goto out;
 
@@ -553,7 +568,8 @@ static int dpaa2_mac_probe(struct fsl_mc_device *mc_dev)
 		goto err_version;
 	}
 
-	if (dpaa2_mac_cmp_dpni_ver(priv, DPMAC_VER_MAJOR, DPMAC_VER_MINOR) < 0) {
+	if (dpaa2_mac_cmp_dpmac_ver(priv, DPMAC_VER_MAJOR,
+				   DPMAC_VER_MINOR) < 0) {
 		dev_err(dev, "DPMAC version %u.%u not supported, need >= %u.%u\n",
 			priv->dpmac_ver_major, priv->dpmac_ver_minor,
 			DPMAC_VER_MAJOR, DPMAC_VER_MINOR);

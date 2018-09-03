@@ -94,6 +94,9 @@ static char dpaa2_ethtool_extras[][ETH_GSTRING_LEN] = {
 
 #define DPAA2_ETH_NUM_EXTRA_STATS	ARRAY_SIZE(dpaa2_ethtool_extras)
 
+#define DPNI_VER_AUTONEG_MAJOR		7
+#define DPNI_VER_AUTONEG_MINOR		8
+
 static void dpaa2_eth_get_drvinfo(struct net_device *net_dev,
 				  struct ethtool_drvinfo *drvinfo)
 {
@@ -115,7 +118,14 @@ static int dpaa2_eth_get_link_ksettings(struct net_device *net_dev,
 	int err = 0;
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 
-	err = dpni_get_link_state(priv->mc_io, 0, priv->mc_token, &state);
+	if (dpaa2_eth_cmp_dpni_ver(priv, DPNI_VER_AUTONEG_MAJOR,
+				   DPNI_VER_AUTONEG_MINOR) < 0)
+		err = dpni_get_link_state(priv->mc_io, 0,
+					  priv->mc_token, &state);
+	else
+		err = dpni_get_link_state_v2(priv->mc_io, 0,
+					     priv->mc_token, &state);
+
 	if (err) {
 		netdev_err(net_dev, "ERROR %d getting link state", err);
 		goto out;
@@ -154,7 +164,14 @@ static int dpaa2_eth_set_link_ksettings(struct net_device *net_dev,
 	netdev_dbg(net_dev, "Setting link parameters...");
 
 	/* Need to interrogate on link state to get flow control params */
-	err = dpni_get_link_state(priv->mc_io, 0, priv->mc_token, &state);
+	if (dpaa2_eth_cmp_dpni_ver(priv, DPNI_VER_AUTONEG_MAJOR,
+				   DPNI_VER_AUTONEG_MINOR) < 0)
+		err = dpni_get_link_state(priv->mc_io, 0,
+					  priv->mc_token, &state);
+	else
+		err = dpni_get_link_state_v2(priv->mc_io, 0,
+					     priv->mc_token, &state);
+
 	if (err) {
 		netdev_err(net_dev, "ERROR %d getting link state", err);
 		goto out;
@@ -175,7 +192,14 @@ static int dpaa2_eth_set_link_ksettings(struct net_device *net_dev,
 	ethtool_convert_link_mode_to_legacy_u32((u32 *)&cfg.advertising,
 						cmd->link_modes.advertising);
 
-	err = dpni_set_link_cfg(priv->mc_io, 0, priv->mc_token, &cfg);
+	if (dpaa2_eth_cmp_dpni_ver(priv, DPNI_VER_AUTONEG_MAJOR,
+				   DPNI_VER_AUTONEG_MINOR) < 0)
+		err = dpni_set_link_cfg(priv->mc_io, 0,
+					priv->mc_token, &cfg);
+	else
+		err = dpni_set_link_cfg_v2(priv->mc_io, 0,
+					   priv->mc_token, &cfg);
+
 	if (err)
 		/* ethtool will be loud enough if we return an error; no point
 		 * in putting our own error message on the console by default

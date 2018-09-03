@@ -205,6 +205,7 @@ int dpmac_get_attributes(struct fsl_mc_io *mc_io,
  * struct dpmac_link_cfg - Structure representing DPMAC link configuration
  * @rate: Link's rate - in Mbps
  * @options: Enable/Disable DPMAC link cfg features (bitmap)
+ * @advertising: Speeds that are advertised for autoneg (bitmap)
  */
 struct dpmac_link_cfg {
 	u32 rate;
@@ -217,11 +218,19 @@ int dpmac_get_link_cfg(struct fsl_mc_io *mc_io,
 		       u16 token,
 		       struct dpmac_link_cfg *cfg);
 
+int dpmac_get_link_cfg_v2(struct fsl_mc_io *mc_io,
+			  u32 cmd_flags,
+			  u16 token,
+			  struct dpmac_link_cfg *cfg);
+
 /**
  * struct dpmac_link_state - DPMAC link configuration request
  * @rate: Rate in Mbps
  * @options: Enable/Disable DPMAC link cfg features (bitmap)
  * @up: Link state
+ * @state_valid: Ignore/Update the state of the link
+ * @supported: Speeds capability of the phy (bitmap)
+ * @advertising: Speeds that are advertised for autoneg (bitmap)
  */
 struct dpmac_link_state {
 	u64 options;
@@ -236,6 +245,11 @@ int dpmac_set_link_state(struct fsl_mc_io *mc_io,
 			 u32 cmd_flags,
 			 u16 token,
 			 struct dpmac_link_state *link_state);
+
+int dpmac_set_link_state_v2(struct fsl_mc_io *mc_io,
+			    u32 cmd_flags,
+			    u16 token,
+			    struct dpmac_link_state *link_state);
 
 /**
  * enum dpmac_counter - DPMAC counter types

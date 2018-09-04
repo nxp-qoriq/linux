@@ -111,6 +111,24 @@
 	};
 };
 
+/* Update DPMAC connections to backplane PHYs, under SerDes 0x2a_0xXX.
+ * &dpmac1 {
+ *	phy-handle = <&pcs_phy1>;
+ * };
+ *
+ * &dpmac2 {
+ *	phy-handle = <&pcs_phy2>;
+ * };
+ *
+ * &dpmac3 {
+ *	phy-handle = <&pcs_phy3>;
+ * };
+ *
+ * &dpmac4 {
+ *	phy-handle = <&pcs_phy4>;
+ * };
+ */
+
 /* Update DPMAC connections to external PHYs, under SerDes 0x2a_0x49. */
 &dpmac9 {
 	phy-handle = <&mdio0_phy12>;

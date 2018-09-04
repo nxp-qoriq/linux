@@ -562,6 +562,20 @@
 			       <&edma0 1 5>;
 			status = "disabled";
 		};
+
+		sai4: sai@f130000 {
+			#sound-dai-cells = <0>;
+			compatible = "fsl,vf610-sai";
+			reg = <0x0 0xf130000 0x0 0x10000>;
+			interrupts = <0 83 0x4>;
+			clocks = <&clockgen 4 3>, <&clockgen 4 3>,
+				 <&clockgen 4 3>, <&clockgen 4 3>;
+			clock-names = "bus", "mclk1", "mclk2", "mclk3";
+			dma-names = "tx", "rx";
+			dmas = <&edma0 1 10>,
+			       <&edma0 1 9>;
+			status = "disabled";
+		};
 	};
 };
 

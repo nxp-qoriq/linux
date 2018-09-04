@@ -107,6 +107,10 @@
 	};
 };
 
+&dp0 {
+	status = "okay";
+};
+
 &dspi0 {
 	bus-num = <0>;
 	status = "okay";

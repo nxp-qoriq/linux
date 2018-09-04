@@ -55,3 +55,7 @@
 	aliases {
 	};
 };
+
+&dp0 {
+	status = "okay";
+};

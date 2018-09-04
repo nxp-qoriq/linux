@@ -223,3 +223,7 @@
 	status = "okay";
 };
 
+&dp0 {
+	status = "okay";
+};
+

@@ -109,6 +109,27 @@
 		clock-output-names = "sysclk";
 	};
 
+	dpclk: dpclk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <27000000>;
+		clock-output-names= "dpclk";
+	};
+
+	aclk: aclk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <650000000>;
+		clock-output-names= "aclk";
+	};
+
+	pclk: pclk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <325000000>;
+		clock-output-names= "pclk";
+	};
+
 	reboot {
 		compatible ="syscon-reboot";
 		regmap = <&dcfg>;
@@ -576,6 +597,18 @@
 			       <&edma0 1 9>;
 			status = "disabled";
 		};
+	};
+
+	dp0: malidp@f080000 {
+		compatible = "arm,mali-dp500";
+		reg = <0x0 0xf080000 0x0 0x10000>;
+		interrupts = <0 222 0x4>,
+			     <0 223 0x4>;
+		interrupt-names = "DE", "SE";
+		clocks = <&dpclk>, <&aclk>,
+			 <&aclk>, <&pclk>;
+		clock-names = "pxlclk", "mclk", "aclk", "pclk";
+		arm,malidp-output-port-lines = /bits/ 8 <8 8 8>;
 	};
 };
 

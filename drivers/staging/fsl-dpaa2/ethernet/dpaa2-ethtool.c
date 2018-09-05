@@ -111,6 +111,40 @@ static void dpaa2_eth_get_drvinfo(struct net_device *net_dev,
 		sizeof(drvinfo->bus_info));
 }
 
+static void dpaa2_map_adv_linux_dpni(const unsigned long *linux_adv,
+				     u64 *dpni_adv)
+{
+	if (test_bit(ETHTOOL_LINK_MODE_10baseT_Full_BIT, linux_adv))
+		*dpni_adv |= DPNI_ADVERTISED_10BASET_FULL;
+	if (test_bit(ETHTOOL_LINK_MODE_100baseT_Full_BIT, linux_adv))
+		*dpni_adv |= DPNI_ADVERTISED_100BASET_FULL;
+	if (test_bit(ETHTOOL_LINK_MODE_1000baseT_Full_BIT, linux_adv))
+		*dpni_adv |= DPNI_ADVERTISED_1000BASET_FULL;
+	if (test_bit(ETHTOOL_LINK_MODE_Autoneg_BIT, linux_adv))
+		*dpni_adv |= DPNI_ADVERTISED_AUTONEG;
+	if (test_bit(ETHTOOL_LINK_MODE_10000baseT_Full_BIT, linux_adv))
+		*dpni_adv |= DPNI_ADVERTISED_10000BASET_FULL;
+	if (test_bit(ETHTOOL_LINK_MODE_2500baseX_Full_BIT, linux_adv))
+		*dpni_adv |= DPNI_ADVERTISED_2500BASEX_FULL;
+}
+
+static void dpaa2_map_adv_dpni_linux(unsigned long *linux_adv,
+				     u64 dpni_adv)
+{
+	if (dpni_adv & DPNI_ADVERTISED_10BASET_FULL)
+		__set_bit(ETHTOOL_LINK_MODE_10baseT_Full_BIT, linux_adv);
+	if (dpni_adv & DPNI_ADVERTISED_100BASET_FULL)
+		__set_bit(ETHTOOL_LINK_MODE_100baseT_Full_BIT, linux_adv);
+	if (dpni_adv & DPNI_ADVERTISED_1000BASET_FULL)
+		__set_bit(ETHTOOL_LINK_MODE_1000baseT_Full_BIT, linux_adv);
+	if (dpni_adv & DPNI_ADVERTISED_AUTONEG)
+		__set_bit(ETHTOOL_LINK_MODE_Autoneg_BIT, linux_adv);
+	if (dpni_adv & DPNI_ADVERTISED_10000BASET_FULL)
+		__set_bit(ETHTOOL_LINK_MODE_10000baseT_Full_BIT, linux_adv);
+	if (dpni_adv & DPNI_ADVERTISED_2500BASEX_FULL)
+		__set_bit(ETHTOOL_LINK_MODE_2500baseX_Full_BIT, linux_adv);
+}
+
 static int dpaa2_eth_get_link_ksettings(struct net_device *net_dev,
 					struct ethtool_link_ksettings *cmd)
 {
@@ -137,10 +171,10 @@ static int dpaa2_eth_get_link_ksettings(struct net_device *net_dev,
 	 * beyond the DPNI attributes.
 	 */
 
-	ethtool_convert_legacy_u32_to_link_mode(cmd->link_modes.supported,
-						state.supported);
-	ethtool_convert_legacy_u32_to_link_mode(cmd->link_modes.advertising,
-						state.advertising);
+	dpaa2_map_adv_dpni_linux(cmd->link_modes.supported,
+				 state.supported);
+	dpaa2_map_adv_dpni_linux(cmd->link_modes.advertising,
+				 state.advertising);
 
 	if (state.options & DPNI_LINK_OPT_AUTONEG)
 		cmd->base.autoneg = AUTONEG_ENABLE;
@@ -189,8 +223,8 @@ static int dpaa2_eth_set_link_ksettings(struct net_device *net_dev,
 	else
 		cfg.options &= ~DPNI_LINK_OPT_HALF_DUPLEX;
 
-	ethtool_convert_link_mode_to_legacy_u32((u32 *)&cfg.advertising,
-						cmd->link_modes.advertising);
+	cfg.advertising = 0;
+	dpaa2_map_adv_linux_dpni(cmd->link_modes.advertising, &cfg.advertising);
 
 	if (dpaa2_eth_cmp_dpni_ver(priv, DPNI_VER_AUTONEG_MAJOR,
 				   DPNI_VER_AUTONEG_MINOR) < 0)

@@ -1,4 +1,5 @@
 /* Copyright 2013-2016 Freescale Semiconductor Inc.
+ * Copyright 2018 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -200,6 +201,30 @@ int dpmac_get_attributes(struct fsl_mc_io *mc_io,
  * Enable a-symmetric pause frames
  */
 #define DPMAC_LINK_OPT_ASYM_PAUSE	0x0000000000000008ULL
+/**
+ * Advertise 10MB full duplex
+ */
+#define DPMAC_ADVERTISED_10BASET_FULL		0x0000000000000001ULL
+/**
+ * Advertise 100MB full duplex
+ */
+#define DPMAC_ADVERTISED_100BASET_FULL		0x0000000000000002ULL
+/**
+ * Advertise 1GB full duplex
+ */
+#define DPMAC_ADVERTISED_1000BASET_FULL		0x0000000000000004ULL
+/**
+ * Advertise auto-negotiation enable
+ */
+#define DPMAC_ADVERTISED_AUTONEG		0x0000000000000008ULL
+/**
+ * Advertise 10GB full duplex
+ */
+#define DPMAC_ADVERTISED_10000BASET_FULL	0x0000000000000010ULL
+/**
+ * Advertise 2.5GB full duplex
+ */
+#define DPMAC_ADVERTISED_2500BASEX_FULL		0x0000000000000020ULL
 
 /**
  * struct dpmac_link_cfg - Structure representing DPMAC link configuration

@@ -1,4 +1,5 @@
 /* Copyright 2015 Freescale Semiconductor Inc.
+ * Copyright 2018 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -96,6 +97,39 @@ static phy_interface_t dpaa2_mac_iface_mode[] =  {
 
 };
 
+static void dpaa2_map_adv_linux_dpmac(u32 linux_adv, u64 *dpmac_adv)
+{
+	if (linux_adv & __ETHTOOL_LINK_MODE_LEGACY_MASK(10baseT_Full))
+		*dpmac_adv |= DPMAC_ADVERTISED_10BASET_FULL;
+	if (linux_adv & __ETHTOOL_LINK_MODE_LEGACY_MASK(100baseT_Full))
+		*dpmac_adv |= DPMAC_ADVERTISED_100BASET_FULL;
+	if (linux_adv & __ETHTOOL_LINK_MODE_LEGACY_MASK(1000baseT_Full))
+		*dpmac_adv |= DPMAC_ADVERTISED_1000BASET_FULL;
+	if (linux_adv & __ETHTOOL_LINK_MODE_LEGACY_MASK(Autoneg))
+		*dpmac_adv |= DPMAC_ADVERTISED_AUTONEG;
+	if (linux_adv & __ETHTOOL_LINK_MODE_LEGACY_MASK(10000baseT_Full))
+		*dpmac_adv |= DPMAC_ADVERTISED_10000BASET_FULL;
+	if (linux_adv & __ETHTOOL_LINK_MODE_LEGACY_MASK(2500baseX_Full))
+		*dpmac_adv |= DPMAC_ADVERTISED_2500BASEX_FULL;
+}
+
+static void dpaa2_map_adv_dpmac_linux(u32 *linux_adv, u64 dpmac_adv)
+{
+	if (dpmac_adv & DPMAC_ADVERTISED_10BASET_FULL)
+		*linux_adv |= __ETHTOOL_LINK_MODE_LEGACY_MASK(10baseT_Full);
+	if (dpmac_adv & DPMAC_ADVERTISED_100BASET_FULL)
+		*linux_adv |= __ETHTOOL_LINK_MODE_LEGACY_MASK(100baseT_Full);
+	if (dpmac_adv & DPMAC_ADVERTISED_1000BASET_FULL)
+		*linux_adv |= __ETHTOOL_LINK_MODE_LEGACY_MASK(1000baseT_Full);
+	if (dpmac_adv & DPMAC_ADVERTISED_AUTONEG)
+		*linux_adv |= __ETHTOOL_LINK_MODE_LEGACY_MASK(Autoneg);
+	if (dpmac_adv & DPMAC_ADVERTISED_10000BASET_FULL)
+		*linux_adv |= __ETHTOOL_LINK_MODE_LEGACY_MASK(10000baseT_Full);
+	if (dpmac_adv & DPMAC_ADVERTISED_2500BASEX_FULL)
+		*linux_adv |= __ETHTOOL_LINK_MODE_LEGACY_MASK(2500baseX_Full);
+}
+
+
 static void dpaa2_mac_link_changed(struct net_device *netdev)
 {
 	struct phy_device	*phydev;
@@ -116,8 +150,10 @@ static void dpaa2_mac_link_changed(struct net_device *netdev)
 		if (phydev->autoneg)
 			state.options |= DPMAC_LINK_OPT_AUTONEG;
 
-                state.supported = phydev->supported;
-                state.advertising = phydev->advertising;
+		dpaa2_map_adv_linux_dpmac(phydev->supported,
+					  &state.supported);
+		dpaa2_map_adv_linux_dpmac(phydev->advertising,
+					  &state.advertising);
 
 		netif_carrier_on(netdev);
 	} else {
@@ -377,12 +413,14 @@ static void configure_link(struct dpaa2_mac_priv *priv,
 	phydev->speed = cfg->rate;
 	phydev->duplex  = !!(cfg->options & DPMAC_LINK_OPT_HALF_DUPLEX);
 
+	if (cfg->advertising != 0) {
+		phydev->advertising = 0;
+		dpaa2_map_adv_dpmac_linux(&phydev->advertising,
+					  cfg->advertising);
+	}
+
 	if (cfg->options & DPMAC_LINK_OPT_AUTONEG) {
 		phydev->autoneg = AUTONEG_ENABLE;
-
-		if (cfg->advertising != 0)
-			phydev->advertising = (u32)cfg->advertising;
-
 		phydev->advertising |= ADVERTISED_Autoneg;
 	} else {
 		phydev->autoneg = AUTONEG_DISABLE;

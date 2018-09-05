@@ -544,6 +544,31 @@ int dpni_reset_statistics(struct fsl_mc_io *mc_io,
 #define DPNI_LINK_OPT_PFC_PAUSE		0x0000000000000010ULL
 
 /**
+ * Advertise 10MB full duplex
+ */
+#define DPNI_ADVERTISED_10BASET_FULL           0x0000000000000001ULL
+/**
+ * Advertise 100MB full duplex
+ */
+#define DPNI_ADVERTISED_100BASET_FULL          0x0000000000000002ULL
+/**
+ * Advertise 1GB full duplex
+ */
+#define DPNI_ADVERTISED_1000BASET_FULL         0x0000000000000004ULL
+/**
+ * Advertise auto-negotiation enable
+ */
+#define DPNI_ADVERTISED_AUTONEG                0x0000000000000008ULL
+/**
+ * Advertise 10GB full duplex
+ */
+#define DPNI_ADVERTISED_10000BASET_FULL        0x0000000000000010ULL
+/**
+ * Advertise 2.5GB full duplex
+ */
+#define DPNI_ADVERTISED_2500BASEX_FULL         0x0000000000000020ULL
+
+/**
  * struct - Structure representing DPNI link configuration
  * @rate: Rate
  * @options: Mask of available options; use 'DPNI_LINK_OPT_<X>' values

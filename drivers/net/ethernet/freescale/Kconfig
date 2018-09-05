@@ -95,6 +95,13 @@ config GIANFAR
 	  This driver supports the Gigabit TSEC on the MPC83xx, MPC85xx,
 	  and MPC86xx family of chips, the eTSEC on LS1021A and the FEC
 	  on the 8540.
+
+config FSL_ENETC_MDIO
+	tristate "External MDIO PCI endpoint for ENETC"
+	depends on PCI
+	---help---
+	  TBD
+
 source "drivers/net/ethernet/freescale/sdk_fman/Kconfig"
 source "drivers/net/ethernet/freescale/sdk_dpaa/Kconfig"
 source "drivers/net/ethernet/freescale/dpaa/Kconfig"

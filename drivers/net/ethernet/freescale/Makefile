@@ -26,3 +26,4 @@ obj-$(if $(CONFIG_FSL_SDK_DPAA_ETH),y) += sdk_dpaa/
 obj-$(CONFIG_FSL_FMAN) += fman/
 obj-$(CONFIG_FSL_DPAA_ETH) += dpaa/
 obj-$(CONFIG_FSL_ENETC) += enetc/
+obj-$(CONFIG_FSL_ENETC_MDIO) += enetc_mdio.o

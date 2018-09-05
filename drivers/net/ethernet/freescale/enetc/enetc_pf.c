@@ -376,6 +376,7 @@ static void enetc_set_loopback(struct net_device *ndev, bool en)
 		/* assume SGMII mode */
 		reg = enetc_port_rd(hw, ENETC_PM0_CMD_CFG);
 		reg = en ? reg | ENETC_PM0_CMD_XGLP : reg & ~ENETC_PM0_CMD_XGLP;
+		reg = en ? reg & ~ENETC_PM0_CMD_PHY_TX_EN : reg | ENETC_PM0_CMD_PHY_TX_EN;
 		enetc_port_wr(hw, ENETC_PM0_CMD_CFG, reg);
 		enetc_port_wr(hw, ENETC_PM1_CMD_CFG, reg);
 	}

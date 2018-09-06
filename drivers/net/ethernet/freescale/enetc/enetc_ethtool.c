@@ -617,6 +617,8 @@ const struct ethtool_ops enetc_pf_ethtool_ops = {
 	.set_rxfh = enetc_set_rxfh,
 	.get_ringparam = enetc_get_ringparam,
 	.get_ts_info = enetc_get_ts_info,
+	.get_link_ksettings = phy_ethtool_get_link_ksettings,
+	.set_link_ksettings = phy_ethtool_set_link_ksettings,
 };
 
 const struct ethtool_ops enetc_vf_ethtool_ops = {

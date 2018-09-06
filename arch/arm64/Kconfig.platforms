@@ -1,36 +1,3 @@
-menu "Platform selection"
-
-choice
-	prompt "Choose NXP platform..."
-        default PXP
-
-config PXP
-        bool "PXP"
-        help
-          Build Linux image for PXP platform
-
-config CFP
-        bool "CFP"
-        help
-          Build Linux image for CFP platform
-
-config SIMU
-        bool "SIMU"
-        help
-          Build Linux image for Simulator platform		  
-
-config QDS
-        bool "QDS"
-        help
-          Build Linux image for QDS platform
-
-config RDB
-        bool "RDB"
-        help
-          Build Linux image for RDB platform
-
-endchoice
-
 config ARCH_ACTIONS
 	bool "Actions Semi Platforms"
 	select OWL_TIMER
@@ -107,6 +74,28 @@ config ARCH_LAYERSCAPE
 	select EDAC_SUPPORT
 	help
 	  This enables support for the Freescale Layerscape SoC family.
+
+menu "Platform selection"
+choice
+	prompt "Choose Layerscape Platform..."
+	default SIMU
+
+config EMU_PXP
+	bool "PXP"
+	help
+	  Build Linux image for PXP platform
+
+config EMU_CFP
+	bool "CFP"
+	help
+	  Build Linux image for CFP platform
+
+config SIMU
+	bool "SIMU"
+	help
+	  Build Linux image for Simulator platform
+endchoice
+
 
 config ARCH_LG1K
 	bool "LG Electronics LG1K SoC Family"

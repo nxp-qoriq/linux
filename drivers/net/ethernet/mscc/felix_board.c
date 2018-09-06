@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: (GPL-2.0 OR MIT)
 /* Felix Switch driver
  *
- * Copyright (c) 2018 NXP
+ * Copyright 2018 NXP
  */
 
 #include <linux/module.h>

@@ -227,6 +227,36 @@ static int aquantia_ack_interrupt(struct phy_device *phydev)
 	return (reg < 0) ? reg : 0;
 }
 
+static int aquantia_read_advert(struct phy_device *phydev)
+{
+	int adv, adv1;
+
+	/* Setup standard advertisement */
+	adv = phy_read_mmd(phydev, MDIO_MMD_AN,
+			   MDIO_AN_10GBT_CTRL);
+
+	/* Aquantia vendor specific advertisments */
+	adv1 = phy_read_mmd(phydev, MDIO_MMD_AN,
+			    MDIO_AN_VENDOR_PROV_CTRL);
+
+	/*100BaseT_full is supported by default*/
+	phydev->advertising |= ADVERTISED_100baseT_Full;
+
+	if (adv & 0x1000)
+		phydev->advertising |= ADVERTISED_10000baseT_Full;
+	else
+		phydev->advertising &= ~ADVERTISED_10000baseT_Full;
+	if (adv1 & 0x8000)
+		phydev->advertising |= ADVERTISED_1000baseT_Full;
+	else
+		phydev->advertising &= ~ADVERTISED_1000baseT_Full;
+	if (adv1 & 0x400)
+		phydev->advertising |= ADVERTISED_2500baseX_Full;
+	else
+		phydev->advertising &= ~ADVERTISED_2500baseX_Full;
+	return 0;
+}
+
 static int aquantia_read_status(struct phy_device *phydev)
 {
 	int reg;
@@ -270,6 +300,8 @@ static int aquantia_read_status(struct phy_device *phydev)
 	}
 
 	phydev->duplex = DUPLEX_FULL;
+
+	aquantia_read_advert(phydev);
 
 	return 0;
 }

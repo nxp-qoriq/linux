@@ -240,7 +240,12 @@ static int aquantia_read_status(struct phy_device *phydev)
 	mdelay(10);
 	reg = phy_read_mmd(phydev, MDIO_MMD_PMAPMD, MDIO_CTRL1);
 
-	switch (reg &  MDIO_CTRL1_SPEEDSEL) {
+	if ((reg & MDIO_CTRL1_SPEEDSELEXT) == MDIO_CTRL1_SPEEDSELEXT)
+		reg &= MDIO_CTRL1_SPEEDSEL;
+	else
+		reg &= MDIO_CTRL1_SPEEDSELEXT;
+
+	switch (reg) {
 	case MDIO_PMA_CTRL1_AQ_SPEED5000:
 		phydev->speed = SPEED_5000;
 		break;
@@ -263,6 +268,7 @@ static int aquantia_read_status(struct phy_device *phydev)
 		phydev->speed = SPEED_UNKNOWN;
 		break;
 	}
+
 	phydev->duplex = DUPLEX_FULL;
 
 	return 0;

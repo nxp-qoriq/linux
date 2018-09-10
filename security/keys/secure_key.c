@@ -242,7 +242,7 @@ static long secure_read(const struct key *key, char __user *buffer,
 	char *bufp;
 	int i;
 
-	p = dereference_key_locked(key);
+	p = rcu_dereference_key(key);
 	if (!p)
 		return -EINVAL;
 

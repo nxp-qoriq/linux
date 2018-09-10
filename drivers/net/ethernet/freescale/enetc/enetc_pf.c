@@ -53,8 +53,8 @@ module_param(prune, uint, 0);
 
 static void enetc_pf_get_primary_mac_addr(struct enetc_hw *hw, int si, u8 *addr)
 {
-	u32 upper = enetc_port_rd(hw, ENETC_PSIPMAR0(si));
-	u16 lower = enetc_port_rd(hw, ENETC_PSIPMAR1(si));
+	u32 upper = __raw_readl(hw->port + ENETC_PSIPMAR0(si));
+	u16 lower = __raw_readw(hw->port + ENETC_PSIPMAR1(si));
 
 	*(u32 *)addr = upper;
 	*(u16 *)(addr + 4) = lower;
@@ -66,8 +66,8 @@ static void enetc_pf_set_primary_mac_addr(struct enetc_hw *hw, int si,
 	u32 upper = *(const u32 *)addr;
 	u16 lower = *(const u16 *)(addr + 4);
 
-	enetc_port_wr(hw, ENETC_PSIPMAR0(si), upper);
-	enetc_port_wr(hw, ENETC_PSIPMAR1(si), lower);
+	__raw_writel(upper, hw->port + ENETC_PSIPMAR0(si));
+	__raw_writew(lower, hw->port + ENETC_PSIPMAR1(si));
 }
 
 static int enetc_pf_set_mac_addr(struct net_device *ndev, void *addr)

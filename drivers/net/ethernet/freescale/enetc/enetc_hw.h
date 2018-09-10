@@ -338,7 +338,15 @@ struct enetc_hw {
 #define enetc_wr_reg(reg, val)	iowrite32((val), (reg))
 #define enetc_rd(hw, off)	enetc_rd_reg((hw)->reg + (off))
 #define enetc_wr(hw, off, val)	enetc_wr_reg((hw)->reg + (off), val)
+#ifdef ioread64
 #define enetc_rd_reg64(reg)		ioread64((reg))
+#else
+/* using this to read out stats on 32b systems */
+static inline u64 enetc_rd_reg64(void __iomem *reg)
+{
+	return __le64_to_cpu(*(u64*)reg);
+}
+#endif
 #define enetc_wr_reg64(reg)		iowrite64((val), (reg))
 #define enetc_rd64(hw, off)		enetc_rd_reg64((hw)->reg + (off))
 #define enetc_wr64(hw, off, val)	enetc_wr_reg64((hw)->reg + (off), val)

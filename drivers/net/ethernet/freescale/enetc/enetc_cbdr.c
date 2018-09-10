@@ -34,18 +34,17 @@
 
 #include "enetc.h"
 
-static void enetc_clean_cbdr(struct enetc_si *si)
+static int enetc_clean_cbdr(struct enetc_si *si)
 {
 	struct enetc_cbdr *ring = &si->cbd_ring;
 	struct enetc_cbd *dest_cbd;
-	int i;
+	int i, err = 0;
 
 	i = ring->next_to_clean;
 
 	while (enetc_rd_reg(ring->cisr) != i) {
 		dest_cbd = ENETC_CBD(*ring, i);
-		if (dest_cbd->status_flags & ENETC_CBD_STATUS_MASK)
-			WARN_ON(1);
+		err = dest_cbd->status_flags & ENETC_CBD_STATUS_MASK;
 
 		memset(dest_cbd, 0, sizeof(*dest_cbd));
 
@@ -53,6 +52,7 @@ static void enetc_clean_cbdr(struct enetc_si *si)
 	}
 
 	ring->next_to_clean = i;
+	return err;
 }
 
 static int enetc_send_cmd(struct enetc_si *si, struct enetc_cbd *cbd,
@@ -60,7 +60,7 @@ static int enetc_send_cmd(struct enetc_si *si, struct enetc_cbd *cbd,
 {
 	struct enetc_cbdr *ring = &si->cbd_ring;
 	struct enetc_cbd *dest_cbd;
-	int i;
+	int i, err;
 
 	if (!ring->bd_base)
 		return -EIO;
@@ -98,8 +98,13 @@ static int enetc_send_cmd(struct enetc_si *si, struct enetc_cbd *cbd,
 			return ENETC_CMD_TIMEOUT;
 	}
 
-	if (!async)
-		enetc_clean_cbdr(si);
+	if (!async) {
+		err = enetc_clean_cbdr(si);
+		if (err) {
+			dev_warn(&si->pdev->dev, "CMD err %04x for cmd %04x\n",
+				err, cbd->cmd);
+		}
+	}
 
 	return ENETC_CMD_OK;
 }

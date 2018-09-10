@@ -345,7 +345,6 @@ static int xgmac_mdio_remove(struct platform_device *pdev)
 
 	mdiobus_unregister(bus);
 	iounmap(priv->map);
-	iounmap(bus->priv);
 	mdiobus_free(bus);
 
 	return 0;

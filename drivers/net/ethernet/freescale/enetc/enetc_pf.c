@@ -805,7 +805,7 @@ static int enetc_pf_probe(struct pci_dev *pdev,
 
 	err = enetc_of_get_phy(priv);
 	if (err)
-		goto err_of_get_phy;
+		dev_warn(&pdev->dev, "Fallback to PHY-less operation\n");
 
 	netif_carrier_off(ndev);
 
@@ -814,8 +814,6 @@ static int enetc_pf_probe(struct pci_dev *pdev,
 
 	return 0;
 
-err_of_get_phy:
-	enetc_free_irqs(priv);
 err_setup_irq:
 	unregister_netdev(ndev);
 err_reg_netdev:
@@ -846,9 +844,10 @@ static void enetc_pf_remove(struct pci_dev *pdev)
 		   enetc_drv_name, enetc_drv_ver);
 	unregister_netdev(si->ndev);
 
-	if (of_phy_is_fixed_link(priv->dev->of_node))
-		of_phy_deregister_fixed_link(priv->dev->of_node);
-	of_node_put(priv->phy_node);
+	if (pdev->dev.of_node && of_phy_is_fixed_link(pdev->dev.of_node))
+		of_phy_deregister_fixed_link(pdev->dev.of_node);
+	if (priv->phy_node)
+		of_node_put(priv->phy_node);
 
 	enetc_free_irqs(priv);
 	enetc_free_msix(priv);

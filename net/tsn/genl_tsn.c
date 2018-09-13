@@ -472,36 +472,36 @@ static int cmd_cb_streamid_set(struct genl_info *info)
 
 	sidconf.type = iden_type;
 	switch (iden_type) {
-		case STREAMID_NULL:
-			if (!sid[TSN_STREAMID_ATTR_NDMAC] ||
-					!sid[TSN_STREAMID_ATTR_NTAGGED] ||
-					!sid[TSN_STREAMID_ATTR_NVID]) {
-				return -EINVAL;
-			}
-
-			sidconf.para.nid.dmac = nla_get_u64(sid[TSN_STREAMID_ATTR_NDMAC]);
-			sidconf.para.nid.tagged = nla_get_u8(sid[TSN_STREAMID_ATTR_NTAGGED]);
-			sidconf.para.nid.vid = nla_get_u16(sid[TSN_STREAMID_ATTR_NVID]);
-			break;
-		case STREAMID_SMAC_VLAN:
-			/* TODO: not supportted yet */
-			if (!sid[TSN_STREAMID_ATTR_SMAC] ||
-					!sid[TSN_STREAMID_ATTR_STAGGED] ||
-					!sid[TSN_STREAMID_ATTR_SVID]) {
-				return -EINVAL;
-			}
-
-			sidconf.para.sid.smac = nla_get_u64(sid[TSN_STREAMID_ATTR_SMAC]);
-			sidconf.para.sid.tagged = nla_get_u8(sid[TSN_STREAMID_ATTR_STAGGED]);
-			sidconf.para.sid.vid = nla_get_u16(sid[TSN_STREAMID_ATTR_SVID]);
-			break;
-		case STREAMID_DMAC_VLAN:
-
-		case STREAMID_IP:
-
-		default:
-			tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
+	case STREAMID_NULL:
+		if (!sid[TSN_STREAMID_ATTR_NDMAC] ||
+		    !sid[TSN_STREAMID_ATTR_NTAGGED] ||
+		    !sid[TSN_STREAMID_ATTR_NVID]) {
 			return -EINVAL;
+		}
+
+		sidconf.para.nid.dmac = nla_get_u64(sid[TSN_STREAMID_ATTR_NDMAC]);
+		sidconf.para.nid.tagged = nla_get_u8(sid[TSN_STREAMID_ATTR_NTAGGED]);
+		sidconf.para.nid.vid = nla_get_u16(sid[TSN_STREAMID_ATTR_NVID]);
+		break;
+	case STREAMID_SMAC_VLAN:
+		/* TODO: not supportted yet */
+		if (!sid[TSN_STREAMID_ATTR_SMAC] ||
+		    !sid[TSN_STREAMID_ATTR_STAGGED] ||
+		    !sid[TSN_STREAMID_ATTR_SVID]) {
+			return -EINVAL;
+		}
+
+		sidconf.para.sid.smac = nla_get_u64(sid[TSN_STREAMID_ATTR_SMAC]);
+		sidconf.para.sid.tagged = nla_get_u8(sid[TSN_STREAMID_ATTR_STAGGED]);
+		sidconf.para.sid.vid = nla_get_u16(sid[TSN_STREAMID_ATTR_SVID]);
+		break;
+	case STREAMID_DMAC_VLAN:
+
+	case STREAMID_IP:
+
+	default:
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
+		return -EINVAL;
 	}
 
 	if (sid[TSN_STREAMID_ATTR_STREAM_HANDLE])
@@ -622,21 +622,21 @@ static int cmd_cb_streamid_get(struct genl_info *info)
 	nla_put_u8(rep_skb, TSN_STREAMID_ATTR_TYPE, sidconf.type);
 
 	switch (sidconf.type) {
-		case STREAMID_NULL:
-			NLA_PUT_U64(rep_skb, TSN_STREAMID_ATTR_NDMAC, sidconf.para.nid.dmac);
-			nla_put_u16(rep_skb, TSN_STREAMID_ATTR_NTAGGED, sidconf.para.nid.vid);
-			nla_put_u8(rep_skb, TSN_STREAMID_ATTR_NVID, sidconf.para.nid.tagged);
-			break;
-		case STREAMID_SMAC_VLAN:
-			NLA_PUT_U64(rep_skb, TSN_STREAMID_ATTR_SMAC, sidconf.para.sid.smac);
-			nla_put_u16(rep_skb, TSN_STREAMID_ATTR_STAGGED, sidconf.para.sid.vid);
-			nla_put_u8(rep_skb, TSN_STREAMID_ATTR_SVID, sidconf.para.sid.tagged);
-			break;
-		case STREAMID_DMAC_VLAN:
-		case STREAMID_IP:
-		default:
-			tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
-			goto err;
+	case STREAMID_NULL:
+		NLA_PUT_U64(rep_skb, TSN_STREAMID_ATTR_NDMAC, sidconf.para.nid.dmac);
+		nla_put_u16(rep_skb, TSN_STREAMID_ATTR_NTAGGED, sidconf.para.nid.vid);
+		nla_put_u8(rep_skb, TSN_STREAMID_ATTR_NVID, sidconf.para.nid.tagged);
+		break;
+	case STREAMID_SMAC_VLAN:
+		NLA_PUT_U64(rep_skb, TSN_STREAMID_ATTR_SMAC, sidconf.para.sid.smac);
+		nla_put_u16(rep_skb, TSN_STREAMID_ATTR_STAGGED, sidconf.para.sid.vid);
+		nla_put_u8(rep_skb, TSN_STREAMID_ATTR_SVID, sidconf.para.sid.tagged);
+		break;
+	case STREAMID_DMAC_VLAN:
+	case STREAMID_IP:
+	default:
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
+		goto err;
 	}
 
 	if (tsnops->cb_streamid_counters_get == NULL) {

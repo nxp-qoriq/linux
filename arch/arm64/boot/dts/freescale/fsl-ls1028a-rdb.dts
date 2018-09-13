@@ -49,7 +49,7 @@
 
 / {
 	model = "LS1028A RDB Board";
-        compatible = "fsl,ls1028a-rdb", "fsl,ls1028a";
+	compatible = "fsl,ls1028a-rdb", "fsl,ls1028a";
 
 	aliases {
 		serial0 = &duart0;
@@ -213,11 +213,11 @@
 };
 
 &can0 {
-        status = "okay";
+	status = "okay";
 };
 
 &can1 {
-        status = "okay";
+	status = "okay";
 };
 
 &sai4 {

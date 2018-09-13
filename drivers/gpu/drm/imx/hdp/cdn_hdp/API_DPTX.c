@@ -100,7 +100,7 @@ CDN_API_STATUS CDN_API_DPTX_SetHostCap(state_struct *state, u8 maxLinkRate,
 				       u8 fastLinkTraining,
 				       u8 laneMapping, u8 enchanced)
 {
-	// fifth bit of lanesCount_SSC is used to declare eDP.
+	/* fifth bit of lanesCount_SSC is used to declare eDP. */
 	state->edp = ((lanesCount_SSC >> 5) & 1);
 	if (!state->running) {
 		if (!internal_apb_available(state))

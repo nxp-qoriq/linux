@@ -47,9 +47,9 @@ static const char enetc_drv_ver[] = ENETC_DRV_VER_STR;
 static const char enetc_drv_name[] = ENETC_DRV_NAME_STR;
 
 /* PF driver params */
-module_param(debug, uint, 0);
+module_param(debug, uint, 0000);
 static uint prune;
-module_param(prune, uint, 0);
+module_param(prune, uint, 0000);
 
 static void enetc_pf_get_primary_mac_addr(struct enetc_hw *hw, int si, u8 *addr)
 {
@@ -437,7 +437,7 @@ static void enetc_port_setup_primary_mac_address(struct enetc_si *si)
 	int i;
 
 	/* check MAC addresses for PF and all VFs, if any is 0 set it ro rand */
-	for (i=0; i<pf->total_vfs + 1; i++) {
+	for (i = 0; i < pf->total_vfs + 1; i++) {
 		enetc_pf_get_primary_mac_addr(hw, i, mac_addr);
 		if (!is_zero_ether_addr(mac_addr))
 			continue;

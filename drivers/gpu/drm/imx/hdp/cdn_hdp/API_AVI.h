@@ -24,4 +24,4 @@ CDN_API_STATUS CDN_API_Set_AVI(state_struct *state, VIC_MODES vicMode,
 			       VIC_PXL_ENCODING_FORMAT colorMode,
 			       BT_TYPE ITUver);
 
-#endif //API_AVI_H_
+#endif /* API_AVI_H_ */

@@ -59,7 +59,7 @@ struct frame_info {
 
 #define TARGET_OFFSET 24
 #define REG_MASK GENMASK(TARGET_OFFSET - 1, 0)
-#define REG(reg, offset) [reg & REG_MASK] = offset
+#define REG(reg, offset)[reg & REG_MASK] = offset
 
 enum ocelot_target {
 	ANA = 1,

@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0+
  *
- */ 
+ */
 
 #include <linux/clk.h>
 #include <linux/io.h>
@@ -174,7 +174,7 @@ void dp_mode_set(state_struct *state, int vic, int format, int color_depth, int 
 			printk("ERROR: Invalid ID:0x%.4X\n", eventId);
 			break;
 		}
-	}while (eventId != 0x08 && eventId != 0x10);
+	} while (eventId != 0x08 && eventId != 0x10);
 
 	ret = CDN_API_DPTX_ReadLinkStat_blocking(state, &rls);
 	printk("INFO: Get Read Link Status (ret = %d resp:\n"

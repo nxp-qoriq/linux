@@ -51,7 +51,7 @@ static void enetc_process_skb(struct enetc_bdr *rx_ring, struct sk_buff *skb);
 static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 			       struct napi_struct *napi, int work_limit);
 
-unsigned int debug = 0;
+unsigned int debug;
 
 static void enetc_dbg_print_skb(struct sk_buff *skb, int type)
 {
@@ -59,7 +59,7 @@ static void enetc_dbg_print_skb(struct sk_buff *skb, int type)
 	int i;
 
 	netdev_info(skb->dev, "\n[DBG] %s skb->data: %p, len: %d\n",
-		(type == RX) ? "RX" : "TX" ,skb->data, skb->len);
+		(type == RX) ? "RX" : "TX", skb->data, skb->len);
 
 	for (i = 0; i < skb->len; i++) {
 		if (i % 32 == 0)
@@ -1032,7 +1032,6 @@ static void enetc_configure_si(struct enetc_ndev_priv *priv)
 		rss_table[i] = i % priv->num_rx_rings;
 	/* TODO: fix the size, *2 is just to keep sim happy */
 	enetc_set_rss_table(si, rss_table, ENETC_RSS_TABLE_SIZE * 2);
-
 }
 
 void enetc_init_si_rings_params(struct enetc_ndev_priv *priv)

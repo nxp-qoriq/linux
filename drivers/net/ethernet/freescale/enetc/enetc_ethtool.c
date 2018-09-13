@@ -132,16 +132,16 @@ static struct {
 	{ ENETC_SITFRM, "SI tx frames" },
 	{ ENETC_SITUCA, "SI tx u-cast frames" },
 	{ ENETC_SITMCA, "SI tx m-cast frames" },
-	{ ENETC_RBDCR( 0), "Rx ring  0 discarded frames" },
-	{ ENETC_RBDCR( 1), "Rx ring  1 discarded frames" },
-	{ ENETC_RBDCR( 2), "Rx ring  2 discarded frames" },
-	{ ENETC_RBDCR( 3), "Rx ring  3 discarded frames" },
-	{ ENETC_RBDCR( 4), "Rx ring  4 discarded frames" },
-	{ ENETC_RBDCR( 5), "Rx ring  5 discarded frames" },
-	{ ENETC_RBDCR( 6), "Rx ring  6 discarded frames" },
-	{ ENETC_RBDCR( 7), "Rx ring  7 discarded frames" },
-	{ ENETC_RBDCR( 8), "Rx ring  8 discarded frames" },
-	{ ENETC_RBDCR( 9), "Rx ring  9 discarded frames" },
+	{ ENETC_RBDCR(0), "Rx ring  0 discarded frames" },
+	{ ENETC_RBDCR(1), "Rx ring  1 discarded frames" },
+	{ ENETC_RBDCR(2), "Rx ring  2 discarded frames" },
+	{ ENETC_RBDCR(3), "Rx ring  3 discarded frames" },
+	{ ENETC_RBDCR(4), "Rx ring  4 discarded frames" },
+	{ ENETC_RBDCR(5), "Rx ring  5 discarded frames" },
+	{ ENETC_RBDCR(6), "Rx ring  6 discarded frames" },
+	{ ENETC_RBDCR(7), "Rx ring  7 discarded frames" },
+	{ ENETC_RBDCR(8), "Rx ring  8 discarded frames" },
+	{ ENETC_RBDCR(9), "Rx ring  9 discarded frames" },
 	{ ENETC_RBDCR(10), "Rx ring 10 discarded frames" },
 	{ ENETC_RBDCR(11), "Rx ring 11 discarded frames" },
 	{ ENETC_RBDCR(12), "Rx ring 12 discarded frames" },
@@ -559,8 +559,7 @@ static void enetc_get_ringparam(struct net_device *ndev,
 	ring->tx_pending = priv->tx_bd_count;
 
 	/* do some h/w sanity checks for BDR length */
-	if (netif_running(ndev))
-	{
+	if (netif_running(ndev)) {
 		struct enetc_hw *hw = &priv->si->hw;
 		u32 val = enetc_rxbdr_rd(hw, 0, ENETC_RBLENR);
 

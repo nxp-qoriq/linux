@@ -420,61 +420,61 @@ void AFE_init(state_struct *state, int num_lanes,
 #if FPGA
 	volatile unsigned short temp;
 
-	//1.    Assert
-	//a.    Iddq_Enable_pad  = 1’b0       // reg12[27]
+	/* 1.    Assert
+	   a.    Iddq_Enable_pad  = 1’b0       // reg12[27] */
 
 	cdn_apb_read(0xc000c<<2, &temp);
 	temp = temp & (~(1<<27));
 	cdn_apb_write(0xc000c<<2, temp);
 
-	//b.    Pll_ats_eanble = 1’b0 //reg12[29]
+	/* b.    Pll_ats_eanble = 1’b0 //reg12[29] */
 	cdn_apb_read(0xc000c<<2, &temp);
 	temp = temp & (~(1<<29));
 	cdn_apb_write(0xc000c<<2, temp);
 
-	//2.    Assert all Reset pads to Low
-	//a.    Tap_trst_n = 1’b0 //reg12[3]
+	/* 2.    Assert all Reset pads to Low
+	   a.    Tap_trst_n = 1’b0 //reg12[3] */
 	cdn_apb_read(0xc000c<<2, &temp);
 	temp = temp & (~(1<<3));
 	cdn_apb_write(0xc000c<<2, temp);
 
-	//b.    Apb_preset_n = 1’b0 //reg12[2]
+	/* b.    Apb_preset_n = 1’b0 //reg12[2] */
 	cdn_apb_read(0xc000c<<2, &temp);
 	temp = temp & (~(1<<2));
 	cdn_apb_write(0xc000c<<2, temp);
 
-	//c.    Chip_rst_b = 1’b0 reg12[0]
+	/* c.    Chip_rst_b = 1’b0 reg12[0] */
 	cdn_apb_read(0xc000c<<2, &temp);
 	temp = temp & (~(1<<0));
 	cdn_apb_write(0xc000c<<2, temp);
 
-	//d.    Phy_reset_n = 1’b0 //reg12[1]
+	/* d.    Phy_reset_n = 1’b0 //reg12[1] */
 	cdn_apb_read(0xc000c<<2, &temp);
 	temp = temp & (~(1<<1));
 	cdn_apb_write(0xc000c<<2, temp);
 
-	//3.    Assert Chipmode[2:0] = 3’b000 reg11[2:0]
+	/* 3.    Assert Chipmode[2:0] = 3’b000 reg11[2:0] */
 	cdn_apb_read(0xc000b<<2, &temp);
 	temp = temp & (~(7<<0));
 	cdn_apb_write(0xc000b<<2, temp);
 
-	//4.    Assert Sel_Tap[1:0]= 2’b00  //reg11[4:3];
+	/* 4.    Assert Sel_Tap[1:0]= 2’b00  //reg11[4:3]; */
 	cdn_apb_read(0xc000b<<2, &temp);
 	temp = temp & (~(3<<3));
 	cdn_apb_write(0xc000b<<2, temp);
 
-	//5.    Assert
-	//a.    After 100ns, Apb_preset_n = 1’b1 //reg12[2]
+	/* 5.    Assert
+	   a.    After 100ns, Apb_preset_n = 1’b1 //reg12[2] */
 	cdn_apb_read(0xc000c<<2, &temp);
 	temp = temp | ((1<<2));
 	cdn_apb_write(0xc000c<<2, temp);
 
-	//b.    After 100ns, Chip_reset_b = 1’b1 // Reg12[0]
+	/* b.    After 100ns, Chip_reset_b = 1’b1 // Reg12[0] */
 	cdn_apb_read(0xc000c<<2, &temp);
 	temp = temp | ((1<<0));
 	cdn_apb_write(0xc000c<<2, temp);
 
-	//c.    After 100ns, Tap_trst_n = 1’b1 //reg12[3]
+	/* c.    After 100ns, Tap_trst_n = 1’b1 //reg12[3] */
 	cdn_apb_read(0xc000c<<2, &temp);
 	temp = temp | ((1<<3));
 	cdn_apb_write(0xc000c<<2, temp);
@@ -522,7 +522,7 @@ void AFE_init(state_struct *state, int num_lanes,
 	Afe_write(state, PHY_HDP_MODE_CTRL, 0x0004);
 
 #if FPGA
-	//Assert  Phy_reset_n = 1’b1
+	/* Assert  Phy_reset_n = 1’b1 */
 
 	cdn_apb_read(0xc000c<<2, &temp);
 	temp = temp | ((1<<1));

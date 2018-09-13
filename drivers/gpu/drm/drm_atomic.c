@@ -384,8 +384,8 @@ int drm_atomic_set_mode_for_crtc(struct drm_crtc_state *state,
 		drm_mode_convert_to_umode(&umode, mode);
 		state->mode_blob =
 			drm_property_create_blob(state->crtc->dev,
-		                                 sizeof(umode),
-		                                 &umode);
+						 sizeof(umode),
+						 &umode);
 		if (IS_ERR(state->mode_blob))
 			return PTR_ERR(state->mode_blob);
 
@@ -418,7 +418,7 @@ EXPORT_SYMBOL(drm_atomic_set_mode_for_crtc);
  * Zero on success, error code on failure. Cannot return -EDEADLK.
  */
 int drm_atomic_set_mode_prop_for_crtc(struct drm_crtc_state *state,
-                                      struct drm_property_blob *blob)
+				      struct drm_property_blob *blob)
 {
 	if (blob == state->mode_blob)
 		return 0;
@@ -431,8 +431,8 @@ int drm_atomic_set_mode_prop_for_crtc(struct drm_crtc_state *state,
 	if (blob) {
 		if (blob->length != sizeof(struct drm_mode_modeinfo) ||
 		    drm_mode_convert_umode(&state->mode,
-		                           (const struct drm_mode_modeinfo *)
-		                            blob->data))
+					   (const struct drm_mode_modeinfo *)
+					   blob->data))
 			return -EINVAL;
 
 		state->mode_blob = drm_property_blob_get(blob);
@@ -972,8 +972,8 @@ static int drm_atomic_plane_check(struct drm_plane *plane,
 	if (ret) {
 		struct drm_format_name_buf format_name;
 		DRM_DEBUG_ATOMIC("Invalid pixel format %s\n",
-		                 drm_get_format_name(state->fb->format->format,
-		                                     &format_name));
+				 drm_get_format_name(state->fb->format->format,
+						     &format_name));
 		return ret;
 	}
 
@@ -1030,7 +1030,7 @@ static void drm_atomic_plane_print_state(struct drm_printer *p,
 		struct drm_format_name_buf format_name;
 
 		drm_printf(p, "\t\tformat=%s\n",
-		              drm_get_format_name(fb->format->format, &format_name));
+			   drm_get_format_name(fb->format->format, &format_name));
 		drm_printf(p, "\t\t\tmodifier=0x%llx\n", fb->modifier);
 		drm_printf(p, "\t\tsize=%dx%d\n", fb->width, fb->height);
 		drm_printf(p, "\t\tlayers:\n");

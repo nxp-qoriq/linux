@@ -162,4 +162,4 @@
 #define PHY_HDP_TX_CTL_L2               0xC488
 #define PHY_HDP_TX_CTL_L3               0xC4C8
 
-#endif //API_AFE_MCU2_DP_H
+#endif /* API_AFE_MCU2_DP_H */

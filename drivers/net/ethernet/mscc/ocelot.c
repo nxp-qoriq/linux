@@ -1398,7 +1398,7 @@ static void ocelot_set_aggr_pgids(struct ocelot *ocelot)
 	int i, port, lag;
 
 	/* Reset destination and aggregation PGIDS */
-	for (port = 0; port < ocelot->num_phys_ports; port ++)
+	for (port = 0; port < ocelot->num_phys_ports; port++)
 		ocelot_write_rix(ocelot, BIT(port), ANA_PGID_PGID, port);
 
 	for (i = PGID_AGGR; i < PGID_SRC; i++)

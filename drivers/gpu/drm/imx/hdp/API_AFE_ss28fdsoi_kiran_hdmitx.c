@@ -523,11 +523,13 @@ int phy_cfg_hdp_ss28fdsoi(state_struct *state, int num_lanes, VIC_MODES vicMode,
 		Afe_write(state, 0xC810, 0x0013);	/* Assert cmn_macro_pwr_en */
 
 		/* PHY_PMA_ISO_CMN_CTRL */
-		while (!(Afe_read(state, 0xC810) & (1 << 5))) ;
+		while (!(Afe_read(state, 0xC810) & (1 << 5)))
+			;
 		/* wait for cmn_macro_pwr_en_ack */
 
 		/* PHY_PMA_CMN_CTRL1 */
-		while (!(Afe_read(state, 0xC800) & (1 << 0))) ;
+		while (!(Afe_read(state, 0xC800) & (1 << 0)))
+			;
 		/* wait for cmn_ready */
 	} else {
 		for (i = 0; i < num_lanes; i++) {
@@ -557,12 +559,14 @@ int hdmi_tx_kiran_power_configuration_seq(state_struct *state, int num_lanes)
 	/* Configure the power state. */
 
 	/* PHY_DP_MODE_CTL */
-	while (!(Afe_read(state, 0xC008) & (1 << 6)));
+	while (!(Afe_read(state, 0xC008) & (1 << 6)))
+		;
 
 	/* PHY_DP_MODE_CTL */
 	Afe_write(state, 0xC008, (((0x0F << num_lanes) & 0x0F) << 12) | 0x0001);
 
 	/* PHY_DP_MODE_CTL */
-	while (!(Afe_read(state, 0xC008) & (1 << 4)));
+	while (!(Afe_read(state, 0xC008) & (1 << 4)))
+		;
 	return 0;
 }

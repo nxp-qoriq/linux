@@ -1,4 +1,5 @@
 /*
+ *  Copyright 2018 NXP
  *  Base port operations for 8250/16550-type serial ports
  *
  *  Based on drivers/char/serial.c, by Linus Torvalds, Theodore Ts'o.

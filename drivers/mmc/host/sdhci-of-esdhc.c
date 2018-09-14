@@ -522,8 +522,9 @@ static void esdhc_of_set_clock(struct sdhci_host *host, unsigned int clock)
 		div++;
 
 	if (esdhc->quirk_limited_clk_division &&
-	    host->mmc->ios.timing == MMC_TIMING_MMC_HS400 &&
-	    clock == MMC_HS200_MAX_DTR) {
+	    clock == MMC_HS200_MAX_DTR &&
+	    (host->mmc->ios.timing == MMC_TIMING_MMC_HS400 ||
+	     host->flags & SDHCI_HS400_TUNING)) {
 		division = pre_div * div;
 		if (division <= 4) {
 			pre_div = 4;
@@ -744,6 +745,12 @@ static void esdhc_tuning_block_enable(struct sdhci_host *host, bool enable)
 static int esdhc_execute_tuning(struct mmc_host *mmc, u32 opcode)
 {
 	struct sdhci_host *host = mmc_priv(mmc);
+	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
+	struct sdhci_esdhc *esdhc = sdhci_pltfm_priv(pltfm_host);
+
+	if (esdhc->quirk_limited_clk_division &&
+	    host->flags & SDHCI_HS400_TUNING)
+		esdhc_of_set_clock(host, host->clock);
 
 	esdhc_tuning_block_enable(host, true);
 	return sdhci_execute_tuning(mmc, opcode);

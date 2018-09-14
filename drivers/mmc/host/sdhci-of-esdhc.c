@@ -522,7 +522,8 @@ static void esdhc_of_set_clock(struct sdhci_host *host, unsigned int clock)
 		div++;
 
 	if (esdhc->quirk_limited_clk_division &&
-		host->mmc->ios.timing == MMC_TIMING_MMC_HS400) {
+	    host->mmc->ios.timing == MMC_TIMING_MMC_HS400 &&
+	    clock == MMC_HS200_MAX_DTR) {
 		division = pre_div * div;
 		if (division <= 4) {
 			pre_div = 4;

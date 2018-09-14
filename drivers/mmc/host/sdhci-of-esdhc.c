@@ -737,18 +737,12 @@ static void esdhc_tuning_block_enable(struct sdhci_host *host, bool enable)
 {
 	u32 val;
 
-	esdhc_clock_enable(host, false);
-	val = sdhci_readl(host, ESDHC_DMA_SYSCTL);
-	val |= ESDHC_FLUSH_ASYNC_FIFO;
-	sdhci_writel(host, val, ESDHC_DMA_SYSCTL);
-
 	val = sdhci_readl(host, ESDHC_TBCTL);
 	if (enable)
 		val |= ESDHC_TB_EN;
 	else
 		val &= ~ESDHC_TB_EN;
 	sdhci_writel(host, val, ESDHC_TBCTL);
-	esdhc_clock_enable(host, true);
 }
 
 static int esdhc_execute_tuning(struct mmc_host *mmc, u32 opcode)
@@ -756,13 +750,31 @@ static int esdhc_execute_tuning(struct mmc_host *mmc, u32 opcode)
 	struct sdhci_host *host = mmc_priv(mmc);
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
 	struct sdhci_esdhc *esdhc = sdhci_pltfm_priv(pltfm_host);
+	bool hs400_tuning;
+	u32 val;
+	int ret;
 
 	if (esdhc->quirk_limited_clk_division &&
 	    host->flags & SDHCI_HS400_TUNING)
 		esdhc_of_set_clock(host, host->clock);
 
+	esdhc_clock_enable(host, false);
+	val = sdhci_readl(host, ESDHC_DMA_SYSCTL);
+	val |= ESDHC_FLUSH_ASYNC_FIFO;
+	sdhci_writel(host, val, ESDHC_DMA_SYSCTL);
 	esdhc_tuning_block_enable(host, true);
-	return sdhci_execute_tuning(mmc, opcode);
+	esdhc_clock_enable(host, true);
+
+	hs400_tuning = host->flags & SDHCI_HS400_TUNING;
+	ret = sdhci_execute_tuning(mmc, opcode);
+
+	if (hs400_tuning) {
+		val = sdhci_readl(host, ESDHC_SDTIMNGCTL);
+		val |= ESDHC_FLW_CTL_BG;
+		sdhci_writel(host, val, ESDHC_SDTIMNGCTL);
+	}
+
+	return ret;
 }
 
 static void esdhc_set_ddr_signaling(struct sdhci_host *host)
@@ -791,18 +803,10 @@ static void esdhc_set_ddr_signaling(struct sdhci_host *host)
 static void esdhc_set_uhs_signaling(struct sdhci_host *host,
 				    unsigned int timing)
 {
-	u32 val;
-
 	if (timing == MMC_TIMING_MMC_DDR52 ||
 	    timing == MMC_TIMING_UHS_DDR50) {
 		esdhc_set_ddr_signaling(host);
 	} else if (timing == MMC_TIMING_MMC_HS400) {
-		val = sdhci_readl(host, ESDHC_SDTIMNGCTL);
-		val |= ESDHC_FLW_CTL_BG;
-		sdhci_writel(host, val, ESDHC_SDTIMNGCTL);
-
-		esdhc_tuning_block_enable(host, false);
-		esdhc_set_ddr_signaling(host);
 		esdhc_tuning_block_enable(host, true);
 	} else {
 		sdhci_set_uhs_signaling(host, timing);
@@ -963,6 +967,12 @@ static void esdhc_init(struct platform_device *pdev, struct sdhci_host *host)
 	}
 }
 
+static int esdhc_prepare_ddr_to_hs400(struct mmc_host *mmc)
+{
+	esdhc_tuning_block_enable(mmc_priv(mmc), false);
+	return 0;
+}
+
 static int sdhci_esdhc_probe(struct platform_device *pdev)
 {
 	struct sdhci_host *host;
@@ -986,6 +996,7 @@ static int sdhci_esdhc_probe(struct platform_device *pdev)
 	host->mmc_host_ops.start_signal_voltage_switch =
 		esdhc_signal_voltage_switch;
 	host->mmc_host_ops.execute_tuning = esdhc_execute_tuning;
+	host->mmc_host_ops.prepare_ddr_to_hs400 = esdhc_prepare_ddr_to_hs400;
 	host->tuning_delay = 1;
 
 	esdhc_init(pdev, host);

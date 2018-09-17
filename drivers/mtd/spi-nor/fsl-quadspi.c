@@ -229,6 +229,7 @@ struct fsl_qspi_devtype_data {
 	enum fsl_qspi_devtype devtype;
 	int rxfifo;
 	int txfifo;
+	int invalid_mstrid;
 	int ahb_buf_size;
 	int driver_data;
 };
@@ -237,6 +238,7 @@ static const struct fsl_qspi_devtype_data vybrid_data = {
 	.devtype = FSL_QUADSPI_VYBRID,
 	.rxfifo = 128,
 	.txfifo = 64,
+	.invalid_mstrid = 0xe,
 	.ahb_buf_size = 1024,
 	.driver_data = QUADSPI_QUIRK_SWAP_ENDIAN,
 };
@@ -245,6 +247,7 @@ static const struct fsl_qspi_devtype_data imx6sx_data = {
 	.devtype = FSL_QUADSPI_IMX6SX,
 	.rxfifo = 128,
 	.txfifo = 512,
+	.invalid_mstrid = 0xe,
 	.ahb_buf_size = 1024,
 	.driver_data = QUADSPI_QUIRK_4X_INT_CLK
 		       | QUADSPI_QUIRK_TKT245618,
@@ -254,6 +257,7 @@ static const struct fsl_qspi_devtype_data imx7d_data = {
 	.devtype = FSL_QUADSPI_IMX7D,
 	.rxfifo = 512,
 	.txfifo = 512,
+	.invalid_mstrid = 0xe,
 	.ahb_buf_size = 1024,
 	.driver_data = QUADSPI_QUIRK_TKT253890
 		       | QUADSPI_QUIRK_4X_INT_CLK,
@@ -263,6 +267,7 @@ static const struct fsl_qspi_devtype_data imx6ul_data = {
 	.devtype = FSL_QUADSPI_IMX6UL,
 	.rxfifo = 128,
 	.txfifo = 512,
+	.invalid_mstrid = 0xe,
 	.ahb_buf_size = 1024,
 	.driver_data = QUADSPI_QUIRK_TKT253890
 		       | QUADSPI_QUIRK_4X_INT_CLK,
@@ -272,6 +277,7 @@ static struct fsl_qspi_devtype_data ls1021a_data = {
 	.devtype = FSL_QUADSPI_LS1021A,
 	.rxfifo = 128,
 	.txfifo = 64,
+	.invalid_mstrid = 0xe,
 	.ahb_buf_size = 1024,
 	.driver_data = 0,
 };
@@ -280,6 +286,7 @@ static struct fsl_qspi_devtype_data ls2080a_data = {
 	.devtype = FSL_QUADSPI_LS2080A,
 	.rxfifo = 128,
 	.txfifo = 64,
+	.invalid_mstrid = 0x0,
 	.ahb_buf_size = 1024,
 	.driver_data = QUADSPI_AMBA_BASE_INTERNAL | QUADSPI_QUIRK_TKT253890,
 };
@@ -860,11 +867,12 @@ static void fsl_qspi_init_abh_read(struct fsl_qspi *q)
 {
 	void __iomem *base = q->iobase;
 	int seqid;
+	int invalid_mstrid = q->devtype_data->invalid_mstrid;
 
 	/* AHB configuration for access buffer 0/1/2 .*/
-	qspi_writel(q, QUADSPI_BUFXCR_INVALID_MSTRID, base + QUADSPI_BUF0CR);
-	qspi_writel(q, QUADSPI_BUFXCR_INVALID_MSTRID, base + QUADSPI_BUF1CR);
-	qspi_writel(q, QUADSPI_BUFXCR_INVALID_MSTRID, base + QUADSPI_BUF2CR);
+	qspi_writel(q, invalid_mstrid, base + QUADSPI_BUF0CR);
+	qspi_writel(q, invalid_mstrid, base + QUADSPI_BUF1CR);
+	qspi_writel(q, invalid_mstrid, base + QUADSPI_BUF2CR);
 	/*
 	 * Set ADATSZ with the maximum AHB buffer size to improve the
 	 * read performance.

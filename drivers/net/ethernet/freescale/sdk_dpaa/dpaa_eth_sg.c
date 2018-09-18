@@ -823,15 +823,14 @@ static struct sk_buff *a010022_realign_skb(struct sk_buff *skb,
 	struct page *npage;
 	void *npage_addr;
 
-	/* The headroom needs to accommodate our private data (64 bytes) but
-	 * we reserve 256 bytes instead to guarantee 256 data alignment.
-	 */
 	headroom = DPAA_A010022_HEADROOM;
 
 	/* For the new skb we only need the old one's data (both non-paged and
 	 * paged). We can skip the old tailroom.
+	 *
+	 * Make sure the skb_shinfo is cache-line aligned.
 	 */
-	nsize = headroom + skb->len +
+	nsize = SMP_CACHE_BYTES + DPA_SKB_SIZE(headroom + skb->len) +
 		SKB_DATA_ALIGN(sizeof(struct skb_shared_info));
 
 	/* Reserve enough memory to accommodate Jumbo frames */

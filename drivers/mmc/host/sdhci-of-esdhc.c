@@ -737,12 +737,20 @@ static void esdhc_tuning_block_enable(struct sdhci_host *host, bool enable)
 {
 	u32 val;
 
+	esdhc_clock_enable(host, false);
+
+	val = sdhci_readl(host, ESDHC_DMA_SYSCTL);
+	val |= ESDHC_FLUSH_ASYNC_FIFO;
+	sdhci_writel(host, val, ESDHC_DMA_SYSCTL);
+
 	val = sdhci_readl(host, ESDHC_TBCTL);
 	if (enable)
 		val |= ESDHC_TB_EN;
 	else
 		val &= ~ESDHC_TB_EN;
 	sdhci_writel(host, val, ESDHC_TBCTL);
+
+	esdhc_clock_enable(host, true);
 }
 
 static int esdhc_execute_tuning(struct mmc_host *mmc, u32 opcode)
@@ -758,12 +766,7 @@ static int esdhc_execute_tuning(struct mmc_host *mmc, u32 opcode)
 	    host->flags & SDHCI_HS400_TUNING)
 		esdhc_of_set_clock(host, host->clock);
 
-	esdhc_clock_enable(host, false);
-	val = sdhci_readl(host, ESDHC_DMA_SYSCTL);
-	val |= ESDHC_FLUSH_ASYNC_FIFO;
-	sdhci_writel(host, val, ESDHC_DMA_SYSCTL);
 	esdhc_tuning_block_enable(host, true);
-	esdhc_clock_enable(host, true);
 
 	hs400_tuning = host->flags & SDHCI_HS400_TUNING;
 	ret = sdhci_execute_tuning(mmc, opcode);

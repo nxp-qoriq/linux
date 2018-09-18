@@ -171,6 +171,7 @@ struct enetc_si {
 	int num_rx_rings; /* how many rings are available in the SI */
 	int num_tx_rings;
 	int num_fs_entries;
+	int num_rss; /* number of RSS buckets */
 	unsigned short pad;
 #ifdef CONFIG_ENETC_TSN
 	 struct enetc_cbs *ecbs;

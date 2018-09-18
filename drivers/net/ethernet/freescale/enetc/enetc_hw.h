@@ -46,6 +46,13 @@
 #define ENETC_SIMR_EN	BIT(31)
 #define ENETC_SIMR_RSSE	BIT(0)
 
+#define ENETC_SICTRL	0x18
+#define ENETC_SICTRH	0x1c
+#define ENETC_SIPCAPR0	0x20
+#define ENETC_SIPCAPR0_RSS	BIT(8)
+#define ENETC_SIPCAPR1	0x24
+#define ENETC_SITGTGR	0x30
+
 #define ENETC_SIRBGCR	0x38
 
 /* Cache attribute registers for transactions initiated by ENETC */
@@ -126,6 +133,7 @@ static inline u32 enetc_vsi_set_msize(u32 size)
 #define ENETC_SIUEFDCR	0xe28
 
 #define ENETC_SIRFSCAPR	0x1200
+#define ENETC_SIRSSCAPR	0x1600
 
 /** SI BDR sub-blocks, n = 0..7 */
 enum enetc_bdr_type {TX, RX};
@@ -969,12 +977,6 @@ struct enetc_cbd {
 	u8 _res;
 	u8 status_flags;
 };
-
-#define ENETC_SICTRL		0x18
-#define ENETC_SICTRH		0x1c
-#define ENETC_SIPCAPR0	0x20
-#define ENETC_SIPCAPR1	0x24
-#define ENETC_SITGTGR	0x30
 
 #define ENETC_PTCFPR(n)		(0x1910 + (n) * 4) /* n = [0 ..7] */
 #define ENETC_FPE		BIT(31)

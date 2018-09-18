@@ -492,10 +492,10 @@ static u32 enetc_get_rxfh_key_size(struct net_device *ndev)
 
 static u32 enetc_get_rxfh_indir_size(struct net_device *ndev)
 {
-	/* return the size of the RX flow hash indirection table */
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 
-	/* TODO: use capabilities after moved to SI */
-	return ENETC_RSS_TABLE_SIZE;
+	/* return the size of the RX flow hash indirection table */
+	return priv->si->num_rss;
 }
 
 static int enetc_get_rxfh(struct net_device *ndev, u32 *indir, u8 *key,

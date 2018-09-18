@@ -784,6 +784,11 @@ void enetc_get_si_caps(struct enetc_si *si)
 	si->num_tx_rings = val & 0xff;
 	si->num_fs_entries = enetc_rd(hw, ENETC_SIRFSCAPR) & 0x7f;
 	si->num_fs_entries = min(si->num_fs_entries, ENETC_MAX_RFS_SIZE);
+	si->num_rss = ((enetc_rd(hw, ENETC_SIRSSCAPR) & 0xf) + 1) * 32;
+
+	val = enetc_rd(hw, ENETC_SIPCAPR0);
+	if (!(val & ENETC_SIPCAPR0_RSS))
+		si->num_rss = 0;
 }
 
 static int enetc_alloc_txbdr(struct enetc_bdr *txr)
@@ -1014,9 +1019,9 @@ static void enetc_setup_cbdr(struct enetc_hw *hw, struct enetc_cbdr *cbdr)
 
 static void enetc_configure_si(struct enetc_ndev_priv *priv)
 {
-	int rss_table[ENETC_RSS_TABLE_SIZE];
 	struct enetc_si *si = priv->si;
 	struct enetc_hw *hw = &si->hw;
+	int rss_table[si->num_rss];
 	int i;
 
 	enetc_setup_cbdr(hw, &si->cbd_ring);
@@ -1027,11 +1032,14 @@ static void enetc_configure_si(struct enetc_ndev_priv *priv)
 	/* enable SI, TODO: start RSS by default */
 	enetc_wr(hw, ENETC_SIMR, ENETC_SIMR_EN /*| ENETC_SIMR_RSSE*/);
 
-	/* Set up RSS table defaults */
-	for (i = 0; i < ENETC_RSS_TABLE_SIZE; i++)
-		rss_table[i] = i % priv->num_rx_rings;
-	/* TODO: fix the size, *2 is just to keep sim happy */
-	enetc_set_rss_table(si, rss_table, ENETC_RSS_TABLE_SIZE * 2);
+	if (si->num_rss) {
+		/* Set up RSS table defaults */
+		for (i = 0; i < si->num_rss; i++)
+			rss_table[i] = i % priv->num_rx_rings;
+		if (si->num_rss)
+			/* TODO: fix the size, *2 is just to keep sim happy */
+			enetc_set_rss_table(si, rss_table, si->num_rss * 2);
+	}
 }
 
 void enetc_init_si_rings_params(struct enetc_ndev_priv *priv)

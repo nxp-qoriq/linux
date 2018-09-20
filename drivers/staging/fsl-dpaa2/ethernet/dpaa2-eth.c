@@ -1115,7 +1115,7 @@ static void disable_ch_napi(struct dpaa2_eth_priv *priv)
 
 static int link_state_update(struct dpaa2_eth_priv *priv)
 {
-	struct dpni_link_state state;
+	struct dpni_link_state state = { 0 };
 	int err;
 
 	err = dpni_get_link_state(priv->mc_io, 0, priv->mc_token, &state);

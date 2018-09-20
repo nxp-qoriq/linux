@@ -442,7 +442,7 @@ EXPORT_SYMBOL_GPL(dpaa2_io_service_enqueue_qd);
  * Return 0 for success, and negative error code for failure.
  */
 int dpaa2_io_service_release(struct dpaa2_io *d,
-			     u32 bpid,
+			     u16 bpid,
 			     const u64 *buffers,
 			     unsigned int num_buffers)
 {
@@ -471,7 +471,7 @@ EXPORT_SYMBOL_GPL(dpaa2_io_service_release);
  * Eg. if the buffer pool is empty, this will return zero.
  */
 int dpaa2_io_service_acquire(struct dpaa2_io *d,
-			     u32 bpid,
+			     u16 bpid,
 			     u64 *buffers,
 			     unsigned int num_buffers)
 {
@@ -652,7 +652,7 @@ EXPORT_SYMBOL_GPL(dpaa2_io_query_fq_count);
  *
  * Return 0 for a successful query, and negative error code if query fails.
  */
-int dpaa2_io_query_bp_count(struct dpaa2_io *d, u32 bpid, u32 *num)
+int dpaa2_io_query_bp_count(struct dpaa2_io *d, u16 bpid, u32 *num)
 {
 	struct qbman_bp_query_rslt state;
 	struct qbman_swp *swp;

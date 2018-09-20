@@ -137,7 +137,22 @@
 				reg = <0xc0>;
 				#address-cells = <1>;
 				#size-cells = <0>;
-
+				mdio0_phy3: phy3@0 {
+					compatible = "ethernet-phy-ieee802.3-c45";
+					reg = <0x0>;
+				};
+				mdio0_phy4: phy4@1 {
+					compatible = "ethernet-phy-ieee802.3-c45";
+					reg = <0x1>;
+				};
+				mdio0_phy5: phy5@2 {
+					compatible = "ethernet-phy-ieee802.3-c45";
+					reg = <0x2>;
+				};
+				mdio0_phy6: phy6@3 {
+					compatible = "ethernet-phy-ieee802.3-c45";
+					reg = <0x3>;
+				};
 			};
 			mdio0_ioslot2@c8 {
 				reg = <0xc8>;
@@ -396,6 +411,25 @@
 		fsl,lane-reg = <0xE00 0x100>;/* lane G */
 	};
 };
+
+/*Update DPMAC connection to USXGMII raiser card*/
+&dpmac3 {
+	phy-handle = <&mdio0_phy3>;
+	phy-connection-type = "xgmii";
+};
+&dpmac4 {
+	phy-handle = <&mdio0_phy4>;
+	phy-connection-type = "xgmii";
+};
+&dpmac5 {
+	phy-handle = <&mdio0_phy5>;
+	phy-connection-type = "xgmii";
+};
+&dpmac6 {
+	phy-handle = <&mdio0_phy6>;
+	phy-connection-type = "xgmii";
+};
+
 
 /* Update DPMAC connections to backplane PHYs
  * &dpmac3 {

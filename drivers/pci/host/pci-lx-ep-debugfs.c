@@ -193,7 +193,7 @@ static int lx_pcie_ep_test_dma(struct lx_ep_test *test)
 							   dma_flags);
 		if (!dma_desc) {
 			pr_err("DMA desc constr failed...\n");
-			goto _err_desc;
+			goto _err;
 		}
 
 		dma_desc->callback = lx_pcie_ep_test_dma_cb;
@@ -220,7 +220,7 @@ static int lx_pcie_ep_test_dma(struct lx_ep_test *test)
 		if (status != DMA_COMPLETE) {
 			pr_err("got completion callback, but status is %s\n",
 			       status == DMA_ERROR ? "error" : "in progress");
-			goto _err;
+			goto _err_desc;
 		}
 
 		i++;

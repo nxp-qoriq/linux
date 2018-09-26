@@ -141,7 +141,11 @@ typedef struct {
  * \brief expands to blocking function body
  * \param x - function call
  */
+#ifdef CONFIG_EMU_PXP
+#define MAILBOX_FILL_TIMEOUT	5
+#else
 #define MAILBOX_FILL_TIMEOUT	15000
+#endif
 #define internal_block_function(x)					\
 do {									\
 	unsigned long end_jiffies = jiffies +				\

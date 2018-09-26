@@ -9,13 +9,16 @@
 #include <linux/io.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
+#ifdef DEBUG_FW_LOAD
 #include "mhdp_firmware.h"
+#endif
 #include "imx-hdp.h"
 #include "imx-hdmi.h"
 #include "imx-dp.h"
 
 #define EDP_PHY_RESET	0x230
 
+#ifdef DEBUG_FW_LOAD
 void dp_fw_load(state_struct *state)
 {
 	printk("Loading DP Firmware\n");
@@ -25,8 +28,9 @@ void dp_fw_load(state_struct *state)
 		(u8 *)mhdp_dram0_get_ptr(),
 		mhdp_dram0_get_size());
 }
+#endif
 
-void dp_fw_init(state_struct *state, u32 core_rate)
+int dp_fw_init(state_struct *state, u32 core_rate)
 {
 	u8 echo_msg[] = "echo test";
 	u8 echo_resp[sizeof(echo_msg) + 1];
@@ -40,6 +44,10 @@ void dp_fw_init(state_struct *state, u32 core_rate)
 	cdn_apb_write(state, APB_CTRL << 2, 0);
 
 	ret = CDN_API_CheckAlive_blocking(state);
+	if (ret != 0) {
+		DRM_ERROR("CDN_API_CheckAlive failed - check firmware!\n");
+		return -ENXIO;
+	}
 
 	CDN_API_General_getCurVersion(state, &ver, &verlib);
 	printk("FIRMWARE VERSION: %d, LIB VERSION: %d\n", ver, verlib);
@@ -49,6 +57,8 @@ void dp_fw_init(state_struct *state, u32 core_rate)
 
 	ret = CDN_API_General_Test_Echo_Ext_blocking(state, echo_msg, echo_resp,
 		sizeof(echo_msg), CDN_BUS_TYPE_APB);
+
+	return 0;
 }
 
 static const struct of_device_id scfg_device_ids[] = {

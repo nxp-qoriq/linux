@@ -83,11 +83,6 @@ static int dwc3_get_dr_mode(struct dwc3 *dwc)
 		mode = USB_DR_MODE_HOST;
 		break;
 	default:
-	       /* Adjust Frame Length */
-		if (dwc->configure_gfladj)
-		dwc3_writel(dwc->regs, DWC3_GFLADJ, GFLADJ_30MHZ_REG_SEL |
-				GFLADJ_30MHZ(GFLADJ_30MHZ_DEFAULT));
-
 		if (IS_ENABLED(CONFIG_USB_DWC3_HOST))
 			mode = USB_DR_MODE_HOST;
 		else if (IS_ENABLED(CONFIG_USB_DWC3_GADGET))
@@ -1103,12 +1098,6 @@ static void dwc3_get_properties(struct dwc3 *dwc)
 				"snps,usb3_lpm_capable");
 	dwc->dma_coherent = device_property_read_bool(dev,
 				"dma-coherent");
-
-	dwc->needs_fifo_resize = of_property_read_bool(node, "tx-fifo-resize");
-
-	dwc->configure_gfladj =
-			of_property_read_bool(node, "configure-gfladj");
-	dwc->dr_mode = of_usb_get_dr_mode(node);
 
 	dwc->disable_scramble_quirk = device_property_read_bool(dev,
 				"snps,disable_scramble_quirk");

@@ -1224,7 +1224,6 @@ static int dwc3_probe(struct platform_device *pdev)
 
 	void __iomem		*regs;
 
-	struct device_node      *node = dev->of_node;
 	dwc = devm_kzalloc(dev, sizeof(*dwc), GFP_KERNEL);
 	if (!dwc)
 		return -ENOMEM;
@@ -1242,11 +1241,6 @@ static int dwc3_probe(struct platform_device *pdev)
 					DWC3_XHCI_REGS_END;
 	dwc->xhci_resources[0].flags = res->flags;
 	dwc->xhci_resources[0].name = res->name;
-
-	if (node) {
-		dwc->configure_gfladj =
-			of_property_read_bool(node, "configure-gfladj");
-	}
 
 	res->start += DWC3_GLOBALS_REGS_START;
 
@@ -1277,11 +1271,6 @@ static int dwc3_probe(struct platform_device *pdev)
 	ret = pm_runtime_get_sync(dev);
 	if (ret < 0)
 		goto err1;
-
-	/* Adjust Frame Length */
-	if (dwc->configure_gfladj)
-	dwc3_writel(dwc->regs, DWC3_GFLADJ, GFLADJ_30MHZ_REG_SEL |
-		    GFLADJ_30MHZ(GFLADJ_30MHZ_DEFAULT));
 
 	pm_runtime_forbid(dev);
 

@@ -100,4 +100,24 @@ static inline u8 dpaa_cyc_diff(u8 ringsize, u8 first, u8 last)
 /* Offset applied to genalloc pools due to zero being an error return */
 #define DPAA_GENALLOC_OFF	0x80000000
 
+static inline int dpaa_set_portal_irq_affinity(struct device *dev,
+					       int irq, int cpu)
+{
+	int ret = 0;
+
+	if (!irq_can_set_affinity(irq)) {
+		dev_err(dev, "unable to set IRQ affinity\n");
+		return -EINVAL;
+	}
+
+	if (cpu == -1 || !cpu_online(cpu))
+		cpu = cpumask_any(cpu_online_mask);
+
+	ret = irq_set_affinity(irq, cpumask_of(cpu));
+	if (ret)
+		dev_err(dev, "irq_set_affinity() on CPU %d failed\n", cpu);
+
+	return ret;
+}
+
 #endif	/* __DPAA_SYS_H */

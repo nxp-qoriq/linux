@@ -81,6 +81,7 @@ struct sdhci_esdhc {
 	bool quirk_limited_clk_division;
 	bool quirk_unreliable_pulse_detection;
 	bool quirk_fixup_tuning;
+	bool quirk_incorrect_delay_chain;
 	unsigned int peripheral_clock;
 	const struct esdhc_clk_fixup *clk_fixup;
 	u32 div_ratio;
@@ -515,6 +516,11 @@ static unsigned int esdhc_of_get_min_clock(struct sdhci_host *host)
 	return clock / 256 / 16;
 }
 
+static struct soc_device_attribute soc_incorrect_delay_chain[] = {
+	{ .family = "QorIQ LX2160A", .revision = "1.0", },
+	{ },
+};
+
 static void esdhc_of_set_clock(struct sdhci_host *host, unsigned int clock)
 {
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
@@ -605,7 +611,10 @@ static void esdhc_of_set_clock(struct sdhci_host *host, unsigned int clock)
 		esdhc_clock_enable(host, true);
 
 		temp = sdhci_readl(host, ESDHC_DLLCFG0);
-		temp |= ESDHC_DLL_ENABLE | ESDHC_DLL_FREQ_SEL;
+		temp |= ESDHC_DLL_ENABLE;
+		if (host->mmc->actual_clock == MMC_HS200_MAX_DTR ||
+		    esdhc->quirk_incorrect_delay_chain == false)
+			temp |= ESDHC_DLL_FREQ_SEL;
 		sdhci_writel(host, temp, ESDHC_DLLCFG0);
 		temp = sdhci_readl(host, ESDHC_TBCTL);
 		sdhci_writel(host, temp | ESDHC_HS400_WNDW_ADJUST, ESDHC_TBCTL);
@@ -989,6 +998,11 @@ static void esdhc_init(struct platform_device *pdev, struct sdhci_host *host)
 		esdhc->quirk_unreliable_pulse_detection = true;
 	else
 		esdhc->quirk_unreliable_pulse_detection = false;
+
+	if (soc_device_match(soc_incorrect_delay_chain))
+		esdhc->quirk_incorrect_delay_chain = true;
+	else
+		esdhc->quirk_incorrect_delay_chain = false;
 
 	match = of_match_node(sdhci_esdhc_of_match, pdev->dev.of_node);
 	if (match)

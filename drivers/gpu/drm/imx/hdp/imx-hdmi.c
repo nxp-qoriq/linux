@@ -78,7 +78,6 @@ void hdmi_mode_set(state_struct *state, struct drm_display_mode *mode,
 		   int format, int color_depth, int temp)
 {
 	int ret;
-	GENERAL_Read_Register_response regresp;
 
 	/* B/W Balance Type: 0 no data, 1 IT601, 2 ITU709 */
 	BT_TYPE bw_type = 0;
@@ -96,12 +95,6 @@ void hdmi_mode_set(state_struct *state, struct drm_display_mode *mode,
 	ret = CDN_API_Set_AVI(state, mode, format, bw_type);
 
 	ret =  CDN_API_HDMITX_SetVic_blocking(state, mode, color_depth, format);
-
-	/* adjust the vsync/hsync polarity */
-	CDN_API_General_Read_Register_blocking(
-					state, ADDR_SOURCE_VIF + (HSYNC2VSYNC_POL_CTRL << 2), &regresp);
-	if ((regresp.val & 0x6) != 0)
-		__raw_writel(0x4, state->mem.ss_base);
 
 	msleep(50);
 }

@@ -159,8 +159,7 @@ struct imx_hdp {
 	char cable_state;
 	char fw_running;
 
-	void __iomem *regs_base; /* Controller regs base */
-	void __iomem *ss_base; /* HDP Subsystem regs base */
+	struct hdp_mem mem;
 
 	u8 load_fw;
 	u8 is_hdmi;

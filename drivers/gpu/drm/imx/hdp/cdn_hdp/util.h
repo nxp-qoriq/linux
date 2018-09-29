@@ -174,7 +174,7 @@ typedef struct {
 	u32 edp; /* use eDP */
 
 	struct mutex mutex;	//mutex may replace running
-	struct hdp_mem mem;
+	struct hdp_mem *mem;
 	struct hdp_rw_func *rw;
 } state_struct;
 /**

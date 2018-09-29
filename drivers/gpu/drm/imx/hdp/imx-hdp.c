@@ -68,7 +68,7 @@ static void imx_hdp_plmux_config(struct imx_hdp *hdp, struct drm_display_mode *m
 	if (mode->flags & DRM_MODE_FLAG_INTERLACE)
 		val |= 0x2;
 
-	writel(val, hdp->ss_base + CSR_PIXEL_LINK_MUX_CTL);
+	writel(val, hdp->mem.ss_base + CSR_PIXEL_LINK_MUX_CTL);
 }
 #endif
 
@@ -920,16 +920,16 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 
 	/* register map */
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	hdp->regs_base = devm_ioremap_resource(dev, res);
-	if (IS_ERR(hdp->regs_base)) {
+	hdp->mem.regs_base = devm_ioremap_resource(dev, res);
+	if (IS_ERR(hdp->mem.regs_base)) {
 		dev_err(dev, "Failed to get HDP CTRL base register\n");
 		return -EINVAL;
 	}
 
-#ifdef arch_imx
+#ifndef CONFIG_ARCH_LAYERSCAPE
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-	hdp->ss_base = devm_ioremap_resource(dev, res);
-	if (IS_ERR(hdp->ss_base)) {
+	hdp->mem.ss_base = devm_ioremap_resource(dev, res);
+	if (IS_ERR(hdp->mem.ss_base)) {
 		dev_err(dev, "Failed to get HDP CRS base register\n");
 		return -EINVAL;
 	}

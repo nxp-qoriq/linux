@@ -148,7 +148,7 @@ static const struct nla_policy qbv_ctrl_policy[TSN_QBV_ATTR_CTRL_MAX + 1] = {
 	[TSN_QBV_ATTR_CTRL_GATESTATE]		= { .type = NLA_U8},
 	[TSN_QBV_ATTR_CTRL_CYCLETIME]		= { .type = NLA_U32},
 	[TSN_QBV_ATTR_CTRL_CYCLETIMEEXT]	= { .type = NLA_U32},
-	[TSN_QBV_ATTR_CTRL_BASETIME]		= { .type = NLA_U32},
+	[TSN_QBV_ATTR_CTRL_BASETIME]		= { .type = NLA_U64},
 	[TSN_QBV_ATTR_CTRL_LISTENTRY]		= { .type = NLA_NESTED},
 };
 
@@ -267,8 +267,10 @@ static int tsn_prepare_reply(struct genl_info *info, u8 cmd, struct sk_buff **sk
 	if (!skb)
 		return -ENOMEM;
 
-	if (!info)
+	if (!info) {
+		nlmsg_free(skb);
 		return -EINVAL;
+	}
 
 	reply = genlmsg_put_reply(skb, info, &tsn_family, 0, cmd);
 	if (!reply) {
@@ -431,20 +433,7 @@ int tsn_init_check(struct genl_info *info, struct net_device **ndev)
 	}
 
 	*ndev = netdev;
-#if 0
-	tsnops = netdev->tsn_ops;
 
-	if (!netdev->tsn_ops->get_capability) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
-		pr_info("Need to implement the capability function first!\n");
-		return -EOPNOTSUPP;
-	}
-
-	if (!(netdev->tsn_ops->get_capability(netdev) & capability)) {
-		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
-		return -EOPNOTSUPP;
-	}
-#endif
 	return 0;
 }
 
@@ -1959,7 +1948,7 @@ static int cmd_qbv_get(struct genl_info *info)
 
 	nla_nest_end(rep_skb, qbv);
 
-	return tsn_send_reply(rep_skb, info);
+	tsn_send_reply(rep_skb, info);
 
 	nlmsg_free(rep_skb);
 	return ret;
@@ -2065,7 +2054,7 @@ static int cmd_qbv_status_get(struct genl_info *info)
 
 	nla_nest_end(rep_skb, qbv);
 
-	return tsn_send_reply(rep_skb, info);
+	tsn_send_reply(rep_skb, info);
 
 	nlmsg_free(rep_skb);
 	return ret;
@@ -2136,7 +2125,7 @@ static int tsn_cbs_set(struct sk_buff *skb, struct genl_info *info)
 	}
 
 	bw = nla_get_u8(cbsa[TSN_CBS_ATTR_BW]);
-	if (bw < 0 || bw > 100) {
+	if (bw > 100) {
 		pr_err("tsn: TSN_CBS_ATTR_BW isn't in the range of 0~100 \n");
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
@@ -2355,6 +2344,8 @@ static int tsn_tsd_set(struct sk_buff *skb, struct genl_info *info)
 	struct tsn_tsd tsd;
 	int ret;
 
+	memset(&tsd, 0, sizeof(struct tsn_tsd));
+
 	ret = tsn_init_check(info, &netdev);
 	if (ret)
 		return ret;
@@ -2372,6 +2363,9 @@ static int tsn_tsd_set(struct sk_buff *skb, struct genl_info *info)
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
+
+	if (!netdev->tsn_ops)
+		return -EINVAL;
 
 	tsnops = netdev->tsn_ops;
 

@@ -1873,10 +1873,9 @@ static void enetc_cbs_init(struct enetc_si *si)
 	si->ecbs->port_transmit_rate = get_ndev_speed(si->ndev);
 
 	/*This trick is used only for CFP*/
-#ifdef CONFIG_CFP
 	if (!si->ecbs->port_transmit_rate)
 		si->ecbs->port_transmit_rate = 1000000000;
-#endif
+
 	if (!si->ecbs->port_transmit_rate) {
 		dev_err(&si->pdev->dev, "Failure to get port speed for CBS\n");
 		kfree(si->ecbs);

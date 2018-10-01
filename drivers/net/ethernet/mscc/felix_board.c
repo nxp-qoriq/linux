@@ -9,6 +9,7 @@
 #include <linux/netdevice.h>
 #include <linux/phy_fixed.h>
 #include <linux/phy.h>
+#include <linux/of_mdio.h>
 
 #include "ocelot.h"
 
@@ -16,8 +17,8 @@ static const char felix_driver_string[] = "Felix Switch Driver";
 #define DRV_VERSION "0.2"
 static const char felix_driver_version[] = DRV_VERSION;
 
-#define NUM_PHY_PORTS		6
 #define FELIX_EXT_CPU_PORT	5
+#define FELIX_MAX_NUM_PHY_PORTS	6
 #define PORT_RES_START		(SYS + 1)
 
 #define PCI_DEVICE_ID_FELIX_PF5	0xEEF0
@@ -127,59 +128,124 @@ static struct regmap *felix_io_init(struct ocelot *ocelot, u8 target)
 				     &felix_regmap_config);
 }
 
-static struct phy_device *felix_fixed_phy_register(struct device *dev)
+static void felix_release_ports(struct ocelot_port **ports)
 {
-	struct phy_device *fixed_phy;
-	struct fixed_phy_status status = {
-			.link = 1,
-			.speed = 1000,
-			.duplex = 1,
-	};
+	struct phy_device *phydev;
+	struct device_node *dn;
+	int i;
 
-	fixed_phy = fixed_phy_register(PHY_POLL, &status, -1, NULL);
-	if (!fixed_phy || IS_ERR(fixed_phy)) {
-		dev_err(dev, "error trying to register fixed PHY\n");
-		fixed_phy = NULL;
+	if (!ports)
+		return;
+
+	for (i = 0; i < FELIX_MAX_NUM_PHY_PORTS; i++) {
+		if (!ports[i])
+			continue;
+
+		phydev = ports[i]->phy;
+		if (!phydev)
+			continue;
+
+		pr_info("%s: port:%d %s\n", __func__, i,
+			phy_is_pseudo_fixed_link(phydev)
+			? "fixed-link" : phydev->drv->name);
+
+		unregister_netdev(ports[i]->dev);
+		free_netdev(ports[i]->dev);
+
+		if (phy_is_pseudo_fixed_link(phydev)) {
+			dn = phydev->mdio.dev.of_node;
+			/* decr refcnt: of_phy_register_fixed_link */
+			of_phy_deregister_fixed_link(dn);
+		}
+		phy_device_free(phydev); /* decr refcnt: of_find_phy_device */
+		ports[i]->phy = NULL;
 	}
-	phy_start(fixed_phy);
-
-	return fixed_phy;
 }
 
 static int felix_ports_init(struct ocelot *ocelot)
 {
-	struct phy_device *fixed_phy;
+	struct device_node *np = ocelot->dev->of_node;
+	struct device_node *phy_node = NULL;
+	struct device_node *portnp = NULL;
+	struct phy_device *phydev = NULL;
+	struct resource *felix_res;
 	void __iomem *port_regs;
-	int port;
+	u32 port, totalp = 0;
 	int err;
 
-	for (port = 0; port < ocelot->num_phys_ports; port++) {
-		port_regs = devm_ioremap_resource(ocelot->dev,
-				&felix_switch_res[PORT_RES_START + port]);
+	ocelot->num_cpu_ports = 1; /* 1 port on the switch, two groups */
+	ocelot->num_phys_ports = FELIX_MAX_NUM_PHY_PORTS;
+	ocelot->ports = devm_kcalloc(ocelot->dev, ocelot->num_phys_ports,
+				     sizeof(struct ocelot_port *), GFP_KERNEL);
+
+	/* alloc netdev for each port */
+	err = ocelot_init(ocelot);
+	if (err)
+		return err;
+
+	for_each_available_child_of_node(np, portnp) {
+		if (!portnp || !portnp->name ||
+		    of_node_cmp(portnp->name, "port") ||
+		    of_property_read_u32(portnp, "reg", &port))
+			continue;
+		if (port >= FELIX_MAX_NUM_PHY_PORTS) {
+			dev_err(ocelot->dev, "invalid port num: %d\n", port);
+			continue;
+		}
+		if (ocelot->ports[port]) {
+			dev_warn(ocelot->dev, "port %d already defined\n",
+				 port);
+			continue;
+		}
+		felix_res = &felix_switch_res[PORT_RES_START + port];
+		port_regs = devm_ioremap_resource(ocelot->dev, felix_res);
 		if (IS_ERR(port_regs)) {
 			dev_err(ocelot->dev,
 				"failed to map registers for port %d\n", port);
-			goto release_ports;
+			continue;
 		}
+		if (phy_node) {
+			of_node_put(phy_node);
+			phy_node = NULL;
+		}
+		phy_node = of_parse_phandle(portnp, "phy-handle", 0);
+		if (!phy_node) {
+			if (!of_phy_is_fixed_link(portnp))
+				continue;
+			err = of_phy_register_fixed_link(portnp);
+			if (err < 0) {
+				dev_err(ocelot->dev,
+					"can't create fixed link for port:%d\n",
+					port);
+				continue;
+			}
+			phydev = of_phy_find_device(portnp);
+			/* TODO: check if FL phy require phy_start */
+		} else {
+			phydev = of_phy_find_device(phy_node);
+		}
+		if (!phydev)
+			continue;
 
-		fixed_phy = felix_fixed_phy_register(ocelot->dev);
-		if (!fixed_phy)
-			goto release_ports;
+		of_node_put(phy_node);
+		phy_node = NULL;
 
-		err = ocelot_probe_port(ocelot, port, port_regs, fixed_phy);
+		pr_info("%s: port:%d %s\n", __func__, port,
+			phy_is_pseudo_fixed_link(phydev)
+			? "fixed-link" : phydev->drv->name);
+
+		err = ocelot_probe_port(ocelot, port, port_regs, phydev);
 		if (err) {
-			dev_err(ocelot->dev, "failed to probe port %d\n", port);
+			dev_err(ocelot->dev, "failed to probe ports\n");
 			goto release_ports;
 		}
+		totalp++;
 	}
 
 	return 0;
 
 release_ports:
-	for (port--; port >= 0; port--) {
-		unregister_netdev(ocelot->ports[port]->dev);
-		free_netdev(ocelot->ports[port]->dev);
-	}
+	felix_release_ports(ocelot->ports);
 
 	return err;
 }
@@ -264,13 +330,6 @@ static int felix_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		dev_err(&pdev->dev, "Timeout waiting for memory to initialize\n");
 
 	regmap_field_write(ocelot->regfields[SYS_RESET_CFG_CORE_ENA], 1);
-
-	ocelot->num_cpu_ports = 1; /* 1 port on the switch, two groups */
-	ocelot->num_phys_ports = NUM_PHY_PORTS;
-	ocelot->ports = devm_kcalloc(&pdev->dev, ocelot->num_phys_ports,
-				     sizeof(struct ocelot_port *), GFP_KERNEL);
-
-	ocelot_init(ocelot);
 
 	err = felix_ports_init(ocelot);
 	if (err)

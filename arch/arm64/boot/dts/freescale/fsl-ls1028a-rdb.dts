@@ -233,6 +233,26 @@
 		compatible = "ethernet-phy-id004d.d074";
 		reg = <0x2>;
 	};
+
+	qsgmii_phy1: ethernet-phy@4 {
+		compatible = "ethernet-phy-id0007.0670";
+		reg = <0x4>;
+	};
+
+	qsgmii_phy2: ethernet-phy@5 {
+		compatible = "ethernet-phy-id0007.0670";
+		reg = <0x5>;
+	};
+
+	qsgmii_phy3: ethernet-phy@6 {
+		compatible = "ethernet-phy-id0007.0670";
+		reg = <0x6>;
+	};
+
+	qsgmii_phy4: ethernet-phy@7 {
+		compatible = "ethernet-phy-id0007.0670";
+		reg = <0x7>;
+	};
 };
 
 &enetc_port0 {
@@ -258,4 +278,25 @@
 		speed = <1000>;
 		full-duplex;
 	};
+};
+
+/* l2switch ports */
+&switch_port0 {
+	phy-handle = <&qsgmii_phy1>;
+	phy-connection-type = "qsgmii";
+};
+
+&switch_port1 {
+	phy-handle = <&qsgmii_phy2>;
+	phy-connection-type = "qsgmii";
+};
+
+&switch_port2 {
+	phy-handle = <&qsgmii_phy3>;
+	phy-connection-type = "qsgmii";
+};
+
+&switch_port3 {
+	phy-handle = <&qsgmii_phy3>;
+	phy-connection-type = "qsgmii";
 };

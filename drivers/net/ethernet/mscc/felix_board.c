@@ -363,11 +363,15 @@ static void felix_pci_remove(struct pci_dev *pdev)
 {
 	struct ocelot *ocelot;
 
-	unregister_netdevice_notifier(&ocelot_netdevice_nb);
-
 	ocelot = pci_get_drvdata(pdev);
 
+	/* stop workqueue thread */
 	ocelot_deinit(ocelot);
+
+	unregister_netdevice_notifier(&ocelot_netdevice_nb);
+
+	felix_release_ports(ocelot->ports);
+
 	pci_iounmap(pdev, regs);
 	kfree(ocelot);
 	pci_disable_device(pdev);

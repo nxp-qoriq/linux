@@ -34,6 +34,7 @@
 
 #include <linux/module.h>
 #include <linux/pci.h>
+#include "xgmac_mdio.h"
 
 #define ENETC_MDIO_DEV_ID	0xee01
 #define ENETC_DRV_NAME_STR "ENETC MDIO driver"
@@ -41,6 +42,9 @@
 static int enetc_mdio_probe(struct pci_dev *pdev,
 			    const struct pci_device_id *ent)
 {
+	const struct xgmac_mdio_cfg cfg = {
+		.bus_name = "Freescale ENETC MDIO Bus",
+	};
 	int err;
 
 	err = pci_enable_device_mem(pdev);
@@ -57,8 +61,14 @@ static int enetc_mdio_probe(struct pci_dev *pdev,
 
 	pci_set_master(pdev);
 
+	err = xgmac_mdio_probe(&pdev->dev, &pdev->resource[0], &cfg);
+	if (err)
+		goto err_xgmac_probe;
+
 	return 0;
 
+err_xgmac_probe:
+	pci_release_mem_regions(pdev);
 err_pci_mem_reg:
 	pci_disable_device(pdev);
 
@@ -67,6 +77,7 @@ err_pci_mem_reg:
 
 void enetc_mdio_remove(struct pci_dev *pdev)
 {
+	xgmac_mdio_remove(dev_get_drvdata(&pdev->dev));
 	pci_release_mem_regions(pdev);
 	pci_disable_device(pdev);
 }

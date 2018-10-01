@@ -99,8 +99,9 @@ config GIANFAR
 config FSL_ENETC_MDIO
 	tristate "External MDIO PCI endpoint for ENETC"
 	depends on PCI
+	select FSL_XGMAC_MDIO
 	---help---
-	  TBD
+	  Supports MDIO as an integrated PCI endpoint, on SoCs with ENETC.
 
 source "drivers/net/ethernet/freescale/sdk_fman/Kconfig"
 source "drivers/net/ethernet/freescale/sdk_dpaa/Kconfig"

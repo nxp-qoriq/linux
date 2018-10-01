@@ -11,15 +11,14 @@
  * kind, whether express or implied.
  */
 
-#include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/interrupt.h>
 #include <linux/module.h>
 #include <linux/phy.h>
-#include <linux/mdio.h>
 #include <linux/of_address.h>
 #include <linux/of_platform.h>
 #include <linux/of_mdio.h>
+#include "xgmac_mdio.h"
 
 /* Number of microseconds to wait for a register to respond */
 #define TIMEOUT	1000
@@ -49,16 +48,6 @@ struct tgec_mdio_controller {
 
 #define MDIO_DATA(x)		(x & 0xffff)
 #define MDIO_DATA_BSY		BIT(31)
-
-struct mdio_fsl_priv {
-	void __iomem *map;
-	struct	fsl_mdio_regs __iomem *mdio_base;
-	bool	is_little_endian;
-};
-
-struct xgmac_mdio_data {
-	unsigned int regs_offset;
-};
 
 static u32 xgmac_read32(void __iomem *regs,
 			bool is_little_endian)
@@ -248,84 +237,43 @@ static int xgmac_mdio_read(struct mii_bus *bus, int phy_id, int regnum)
 	return value;
 }
 
-static const struct of_device_id xgmac_mdio_match[] = {
-	{
-		.compatible = "fsl,fman-xmdio",
-		.data = &(struct xgmac_mdio_data) {
-			.regs_offset = offsetof(struct tgec_mdio_controller, regs),
-		},
-	},
-	{
-		.compatible = "fsl,fman-memac-mdio",
-		.data = &(struct xgmac_mdio_data) {
-			.regs_offset = offsetof(struct tgec_mdio_controller, regs),
-		},
-	},
-	{
-		.compatible = "fsl,enetc-mdio",
-		.data = &(struct xgmac_mdio_data) {
-			.regs_offset = 0,
-		},
-	},
-	{},
-};
-MODULE_DEVICE_TABLE(of, xgmac_mdio_match);
 
-static int xgmac_mdio_probe(struct platform_device *pdev)
+int xgmac_mdio_probe(struct device *dev, struct resource *res,
+		     const struct xgmac_mdio_cfg *cfg)
 {
-	const struct of_device_id *id =
-		of_match_device(xgmac_mdio_match, &pdev->dev);
-	struct device_node *np = pdev->dev.of_node;
-	const struct xgmac_mdio_data *data;
-	struct mii_bus *bus;
-	struct resource res;
 	struct mdio_fsl_priv *priv;
+	struct mii_bus *bus;
 	int ret;
-
-	if (!id) {
-		dev_err(&pdev->dev, "Failed to match device\n");
-		return -ENODEV;
-	}
-
-	data = id->data;
-
-	dev_info(&pdev->dev, "found %s compatible node\n", id->compatible);
-
-	ret = of_address_to_resource(np, 0, &res);
-	if (ret) {
-		dev_err(&pdev->dev, "could not obtain address\n");
-		return ret;
-	}
 
 	bus = mdiobus_alloc_size(sizeof(struct mdio_fsl_priv));
 	if (!bus)
 		return -ENOMEM;
 
-	bus->name = "Freescale XGMAC MDIO Bus";
+	bus->name = cfg->bus_name;
 	bus->read = xgmac_mdio_read;
 	bus->write = xgmac_mdio_write;
-	bus->parent = &pdev->dev;
-	snprintf(bus->id, MII_BUS_ID_SIZE, "%llx", (unsigned long long)res.start);
+	bus->parent = dev;
+	snprintf(bus->id, MII_BUS_ID_SIZE, "%llx",
+		 (unsigned long long)res->start);
 
 	/* Set the PHY base address */
 	priv = bus->priv;
-	priv->map = of_iomap(np, 0);
+	priv->map = ioremap(res->start, resource_size(res));
 	if (!priv->map) {
 		ret = -ENOMEM;
 		goto err_ioremap;
 	}
 
-	priv->mdio_base = priv->map + data->regs_offset;
-	priv->is_little_endian = of_property_read_bool(pdev->dev.of_node,
+	priv->mdio_base = priv->map + cfg->regs_offset;
+	priv->is_little_endian = of_property_read_bool(dev->of_node,
 						       "little-endian");
-
-	ret = of_mdiobus_register(bus, np);
+	ret = of_mdiobus_register(bus, dev->of_node);
 	if (ret) {
-		dev_err(&pdev->dev, "cannot register MDIO bus\n");
+		dev_err(dev, "cannot register MDIO bus\n");
 		goto err_registration;
 	}
 
-	platform_set_drvdata(pdev, bus);
+	dev_set_drvdata(dev, bus);
 
 	return 0;
 
@@ -337,10 +285,10 @@ err_ioremap:
 
 	return ret;
 }
+EXPORT_SYMBOL(xgmac_mdio_probe);
 
-static int xgmac_mdio_remove(struct platform_device *pdev)
+int xgmac_mdio_remove(struct mii_bus *bus)
 {
-	struct mii_bus *bus = platform_get_drvdata(pdev);
 	struct mdio_fsl_priv *priv = bus->priv;
 
 	mdiobus_unregister(bus);
@@ -349,14 +297,49 @@ static int xgmac_mdio_remove(struct platform_device *pdev)
 
 	return 0;
 }
+EXPORT_SYMBOL(xgmac_mdio_remove);
+
+static const struct of_device_id xgmac_mdio_match[] = {
+	{
+		.compatible = "fsl,fman-xmdio",
+	},
+	{
+		.compatible = "fsl,fman-memac-mdio",
+	},
+	{},
+};
+MODULE_DEVICE_TABLE(of, xgmac_mdio_match);
+
+static int xgmac_mdio_of_probe(struct platform_device *pdev)
+{
+	const struct xgmac_mdio_cfg cfg = {
+		.regs_offset = offsetof(struct tgec_mdio_controller, regs),
+		.bus_name = "Freescale XGMAC MDIO Bus",
+	};
+	struct resource res;
+	int ret;
+
+	ret = of_address_to_resource(pdev->dev.of_node, 0, &res);
+	if (ret) {
+		dev_err(&pdev->dev, "could not obtain address\n");
+		return ret;
+	}
+
+	return xgmac_mdio_probe(&pdev->dev, &res, &cfg);
+}
+
+static int xgmac_mdio_of_remove(struct platform_device *pdev)
+{
+	return xgmac_mdio_remove(dev_get_drvdata(&pdev->dev));
+}
 
 static struct platform_driver xgmac_mdio_driver = {
 	.driver = {
 		.name = "fsl-fman_xmdio",
 		.of_match_table = xgmac_mdio_match,
 	},
-	.probe = xgmac_mdio_probe,
-	.remove = xgmac_mdio_remove,
+	.probe = xgmac_mdio_of_probe,
+	.remove = xgmac_mdio_of_remove,
 };
 
 module_platform_driver(xgmac_mdio_driver);

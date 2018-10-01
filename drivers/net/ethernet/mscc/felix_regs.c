@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: (GPL-2.0 OR MIT)
-/*
- * Microsemi Ocelot Switch driver
+/* Felix Switch driver
  *
  * Copyright 2017 Microsemi Corporation
  * Copyright 2018 NXP
@@ -294,11 +293,16 @@ static const struct reg_field felix_regfields[] = {
 	[ANA_TABLES_MACACCESS_B_DOM] = REG_FIELD(ANA_TABLES_MACACCESS, 16, 16),
 	[ANA_TABLES_MACTINDX_BUCKET] = REG_FIELD(ANA_TABLES_MACTINDX, 11, 12),
 	[ANA_TABLES_MACTINDX_M_INDEX] = REG_FIELD(ANA_TABLES_MACTINDX, 0, 10),
-	[QSYS_TIMED_FRAME_ENTRY_TFRM_VLD] = REG_FIELD(QSYS_TIMED_FRAME_ENTRY, 19, 19),
-	[QSYS_TIMED_FRAME_ENTRY_TFRM_FP] = REG_FIELD(QSYS_TIMED_FRAME_ENTRY, 7, 18),
-	[QSYS_TIMED_FRAME_ENTRY_TFRM_PORTNO] = REG_FIELD(QSYS_TIMED_FRAME_ENTRY, 4, 6),
-	[QSYS_TIMED_FRAME_ENTRY_TFRM_TM_SEL] = REG_FIELD(QSYS_TIMED_FRAME_ENTRY, 1, 3),
-	[QSYS_TIMED_FRAME_ENTRY_TFRM_TM_T] = REG_FIELD(QSYS_TIMED_FRAME_ENTRY, 0, 0),
+	[QSYS_TIMED_FRAME_ENTRY_TFRM_VLD] =
+		REG_FIELD(QSYS_TIMED_FRAME_ENTRY, 19, 19),
+	[QSYS_TIMED_FRAME_ENTRY_TFRM_FP] =
+		REG_FIELD(QSYS_TIMED_FRAME_ENTRY, 7, 18),
+	[QSYS_TIMED_FRAME_ENTRY_TFRM_PORTNO] =
+		REG_FIELD(QSYS_TIMED_FRAME_ENTRY, 4, 6),
+	[QSYS_TIMED_FRAME_ENTRY_TFRM_TM_SEL] =
+		REG_FIELD(QSYS_TIMED_FRAME_ENTRY, 1, 3),
+	[QSYS_TIMED_FRAME_ENTRY_TFRM_TM_T] =
+		REG_FIELD(QSYS_TIMED_FRAME_ENTRY, 0, 0),
 	[SYS_RESET_CFG_CORE_ENA] = REG_FIELD(SYS_RESET_CFG, 0, 0),
 };
 
@@ -475,7 +479,8 @@ void felix_port_adjust_link(struct net_device *dev)
 			   DEV_MAC_ENA_CFG_TX_ENA, DEV_MAC_ENA_CFG);
 
 	/* Take MAC, Port, Phy (intern) and PCS (SGMII/Serdes) clock out of
-	 * reset */
+	 * reset
+	 */
 	ocelot_port_writel(port, DEV_CLOCK_CFG_LINK_SPEED(speed),
 			   DEV_CLOCK_CFG);
 
@@ -511,7 +516,8 @@ void felix_port_adjust_link(struct net_device *dev)
 	ocelot_write_rix(ocelot, 0, ANA_POL_FLOWC, p);
 
 	/* Tail dropping watermark */
-	atop_wm = (ocelot->shared_queue_sz - 9 * VLAN_ETH_FRAME_LEN) / OCELOT_BUFFER_CELL_SZ;
+	atop_wm = ocelot->shared_queue_sz - 9 * VLAN_ETH_FRAME_LEN;
+	atop_wm /= OCELOT_BUFFER_CELL_SZ;
 	ocelot_write_rix(ocelot, ocelot_wm_enc(9 * VLAN_ETH_FRAME_LEN),
 			 SYS_ATOP, p);
 	ocelot_write(ocelot, ocelot_wm_enc(atop_wm), SYS_ATOP_TOT_CFG);

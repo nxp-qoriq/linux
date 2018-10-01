@@ -17,8 +17,8 @@ static const char felix_driver_string[] = "Felix Switch Driver";
 #define DRV_VERSION "0.2"
 static const char felix_driver_version[] = DRV_VERSION;
 
-#define FELIX_EXT_CPU_PORT	5
 #define FELIX_MAX_NUM_PHY_PORTS	6
+#define FELIX_EXT_CPU_PORT_ID	5
 #define PORT_RES_START		(SYS + 1)
 
 #define PCI_DEVICE_ID_FELIX_PF5	0xEEF0
@@ -252,8 +252,8 @@ release_ports:
 
 static int felix_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 {
-	struct ocelot *ocelot;
 	resource_size_t offset;
+	struct ocelot *ocelot;
 	size_t len;
 	int timeout;
 	int i, err;
@@ -337,7 +337,7 @@ static int felix_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	/* set port for external CPU frame extraction/injection */
 	ocelot_write(ocelot, QSYS_EXT_CPU_CFG_EXT_CPUQ_MSK_M |
-		     QSYS_EXT_CPU_CFG_EXT_CPU_PORT(FELIX_EXT_CPU_PORT),
+		     QSYS_EXT_CPU_CFG_EXT_CPU_PORT(FELIX_EXT_CPU_PORT_ID),
 		     QSYS_EXT_CPU_CFG);
 
 	register_netdevice_notifier(&ocelot_netdevice_nb);

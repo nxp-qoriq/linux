@@ -499,15 +499,12 @@ static int dpaa2_ceetm_init_root(struct Qdisc *sch,
 	struct netdev_queue *dev_queue;
 	unsigned int i, parent_id;
 	struct Qdisc *qdisc;
-	int err;
 
 	pr_debug(KBUILD_BASENAME " : %s : qdisc %X\n", __func__, sch->handle);
 
 	/* Validate inputs */
 	if (sch->parent != TC_H_ROOT) {
-		pr_err("CEETM: a root ceetm qdisc can not be attached to a class\n");
-		tcf_block_put(priv->block);
-		qdisc_class_hash_destroy(&priv->clhash);
+		pr_err("CEETM: a root ceetm qdisc must be root\n");
 		return -EINVAL;
 	}
 
@@ -524,10 +521,8 @@ static int dpaa2_ceetm_init_root(struct Qdisc *sch,
 	priv->root.qdiscs = kcalloc(dev->num_tx_queues,
 				    sizeof(priv->root.qdiscs[0]),
 				    GFP_KERNEL);
-	if (!priv->root.qdiscs) {
-		err = -ENOMEM;
-		goto err_init_root;
-	}
+	if (!priv->root.qdiscs)
+		return -ENOMEM;
 
 	for (i = 0; i < dev->num_tx_queues; i++) {
 		dev_queue = netdev_get_tx_queue(dev, i);
@@ -536,10 +531,8 @@ static int dpaa2_ceetm_init_root(struct Qdisc *sch,
 
 		qdisc = qdisc_create_dflt(dev_queue, &pfifo_qdisc_ops,
 					  parent_id);
-		if (!qdisc) {
-			err = -ENOMEM;
-			goto err_init_root;
-		}
+		if (!qdisc)
+			return -ENOMEM;
 
 		priv->root.qdiscs[i] = qdisc;
 		qdisc->flags |= TCQ_F_ONETXQUEUE;
@@ -551,16 +544,11 @@ static int dpaa2_ceetm_init_root(struct Qdisc *sch,
 	if (!priv->root.qstats) {
 		pr_err(KBUILD_BASENAME " : %s : alloc_percpu() failed\n",
 		       __func__);
-		err = -ENOMEM;
-		goto err_init_root;
+		return -ENOMEM;
 	}
 
 	dpaa2_eth_ceetm_enable(priv_eth);
 	return 0;
-
-err_init_root:
-	dpaa2_ceetm_destroy(sch);
-	return err;
 }
 
 /* Configure a prio ceetm qdisc */
@@ -571,21 +559,18 @@ static int dpaa2_ceetm_init_prio(struct Qdisc *sch,
 	struct net_device *dev = qdisc_dev(sch);
 	struct dpaa2_ceetm_class *parent_cl;
 	struct Qdisc *parent_qdisc;
-	int err;
 
 	pr_debug(KBUILD_BASENAME " : %s : qdisc %X\n", __func__, sch->handle);
 
 	if (sch->parent == TC_H_ROOT) {
 		pr_err("CEETM: a prio ceetm qdisc can not be root\n");
-		err = -EINVAL;
-		goto err_init_prio;
+		return -EINVAL;
 	}
 
 	parent_qdisc = qdisc_lookup(dev, TC_H_MAJ(sch->parent));
 	if (strcmp(parent_qdisc->ops->id, dpaa2_ceetm_qdisc_ops.id)) {
 		pr_err("CEETM: a ceetm qdisc can not be attached to other qdisc/class types\n");
-		err = -EINVAL;
-		goto err_init_prio;
+		return -EINVAL;
 	}
 
 	/* Obtain the parent root ceetm_class */
@@ -593,20 +578,13 @@ static int dpaa2_ceetm_init_prio(struct Qdisc *sch,
 
 	if (!parent_cl || parent_cl->type != CEETM_ROOT) {
 		pr_err("CEETM: a prio ceetm qdiscs can be added only under a root ceetm class\n");
-		err = -EINVAL;
-		goto err_init_prio;
+		return -EINVAL;
 	}
 
 	priv->prio.parent = parent_cl;
 	parent_cl->child = sch;
 
-	err = dpaa2_ceetm_change_prio(sch, priv, qopt);
-
-	return 0;
-
-err_init_prio:
-	dpaa2_ceetm_destroy(sch);
-	return err;
+	return dpaa2_ceetm_change_prio(sch, priv, qopt);
 }
 
 /* Configure a generic ceetm qdisc */
@@ -676,7 +654,7 @@ static int dpaa2_ceetm_init(struct Qdisc *sch, struct nlattr *opt)
 		break;
 	default:
 		pr_err(KBUILD_BASENAME " : %s : invalid qdisc\n", __func__);
-		dpaa2_ceetm_destroy(sch);
+		/* Note: dpaa2_ceetm_destroy() will be called by our caller */
 		err = -EINVAL;
 	}
 

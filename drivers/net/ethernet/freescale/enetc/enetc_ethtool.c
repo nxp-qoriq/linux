@@ -516,8 +516,7 @@ static int enetc_get_rxfh(struct net_device *ndev, u32 *indir, u8 *key,
 
 	/* return RSS table */
 	if (indir)
-		err = enetc_get_rss_table(priv->si, indir,
-					  ENETC_RSS_TABLE_SIZE);
+		err = enetc_get_rss_table(priv->si, indir, priv->si->num_rss);
 
 	return err;
 }
@@ -542,10 +541,8 @@ static int enetc_set_rxfh(struct net_device *ndev, const u32 *indir,
 		enetc_set_rss_key(hw, key);
 
 	/* set RSS table */
-	if (indir) {
-		err = enetc_set_rss_table(priv->si, indir,
-					  ENETC_RSS_TABLE_SIZE);
-	}
+	if (indir)
+		err = enetc_set_rss_table(priv->si, indir, priv->si->num_rss);
 
 	return err;
 }

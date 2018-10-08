@@ -686,6 +686,7 @@
 			usb3-lpm-capable;
 			snps,dis-u1u2-when-u3-quirk;
 			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
+			configure-gfladj;
 		};
 
 		usb1: usb3@3000000 {
@@ -698,6 +699,7 @@
 			usb3-lpm-capable;
 			snps,dis-u1u2-when-u3-quirk;
 			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
+			configure-gfladj;
 		};
 /*
 		usb2: usb3@3100000 {

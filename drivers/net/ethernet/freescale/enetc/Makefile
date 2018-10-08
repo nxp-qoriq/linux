@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0
 obj-$(CONFIG_FSL_ENETC) += fsl-enetc.o
 fsl-enetc-$(CONFIG_FSL_ENETC) += enetc.o enetc_cbdr.o enetc_ethtool.o
 fsl-enetc-$(CONFIG_ENETC_TSN) += enetc_tsn.o

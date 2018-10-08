@@ -216,11 +216,18 @@ static void enetc_sync_mac_filters(struct enetc_pf *pf)
 
 		/* exact match filter */
 		if (em) {
+			int err;
+
 			enetc_clear_mac_ht_flt(&si->hw, 0, UC);
 
-			enetc_set_mac_flt_entry(si, pos, f->mac_addr,
-						BIT(0));
-			continue;
+			err = enetc_set_mac_flt_entry(si, pos, f->mac_addr,
+						      BIT(0));
+			if (!err)
+				continue;
+
+			/* fallback to HT filtering */
+			dev_warn(&si->pdev->dev, "fallback to HT filt (%d)\n",
+				 err);
 		}
 
 		/* hash table filter, clear EM filter for UC entries */

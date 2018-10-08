@@ -251,18 +251,9 @@ struct enetc_msg_cmd_set_primary_mac {
 	struct sockaddr mac;
 };
 
-#define ENETC_RING_UNUSED(R)	(((R)->next_to_clean - (R)->next_to_use - 1 \
-				 + (R)->bd_count) % (R)->bd_count)
-
 #define ENETC_CBD(R, i)	(&(((struct enetc_cbd *)((R).bd_base))[i]))
 
 #define ENETC_CBDR_TIMEOUT	1000 /* usecs */
-
-enum enetc_cbdr_stat {
-	ENETC_CMD_OK,
-	ENETC_CMD_BUSY,
-	ENETC_CMD_TIMEOUT,
-};
 
 /* SI common */
 int enetc_pci_probe(struct pci_dev *pdev, const char *name, int sizeof_priv);
@@ -289,9 +280,9 @@ int enetc_setup_tc(struct net_device *ndev, enum tc_setup_type type,
 void enetc_set_ethtool_ops(struct net_device *ndev);
 
 /* control buffer descriptor ring (CBDR) */
-void enetc_set_mac_flt_entry(struct enetc_si *si, int index,
-			     char *mac_addr, int si_map);
-void enetc_clear_mac_flt_entry(struct enetc_si *si, int index);
+int enetc_set_mac_flt_entry(struct enetc_si *si, int index,
+			    char *mac_addr, int si_map);
+int enetc_clear_mac_flt_entry(struct enetc_si *si, int index);
 int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 		       int index);
 void enetc_set_rss_key(struct enetc_hw *hw, const u8 *bytes);

@@ -487,7 +487,6 @@ struct enetc_cbd {
 #endif
 
 #define ENETC_CBD_FLAGS_SF	BIT(7) /* short format */
-#define ENETC_CBD_FLAGS_IE	BIT(6) /* interrupt enable */
 #define ENETC_CBD_STATUS_MASK	0xf
 
 struct enetc_cmd_rfse {

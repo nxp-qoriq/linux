@@ -155,6 +155,10 @@ static irqreturn_t caam_jr_interrupt(int irq, void *st_dev)
 	 */
 	if (irqstate & JRINT_JR_ERROR) {
 		dev_err(dev, "job ring error: irqstate: %08x\n", irqstate);
+		dev_err(dev, "FAR = %llx, FAICIDR = %x, FADR = %x\n",
+			rd_reg64(&jrp->rregs->perfmon.faultaddr),
+			rd_reg32(&jrp->rregs->perfmon.faultliodn),
+			rd_reg32(&jrp->rregs->perfmon.faultdetail));
 		BUG();
 	}
 
@@ -480,6 +484,9 @@ static int caam_jr_init(struct device *dev)
 	wr_reg64(&jrp->rregs->outring_base, outbusaddr);
 	wr_reg32(&jrp->rregs->inpring_size, JOBR_DEPTH);
 	wr_reg32(&jrp->rregs->outring_size, JOBR_DEPTH);
+
+	dev_info(dev, "input ring iova = %llx, output ring iova = %llx\n",
+		 inpbusaddr, outbusaddr);
 
 	jrp->ringsize = JOBR_DEPTH;
 

@@ -265,6 +265,7 @@
 					     "fsl,sec-v4.0-job-ring";
 				reg	= <0x10000 0x10000>;
 				interrupts = <GIC_SPI 140 IRQ_TYPE_LEVEL_HIGH>;
+				iommus = <&smmu 3>;
 			};
 
 			sec_jr1: jr@20000 {
@@ -272,6 +273,7 @@
 					     "fsl,sec-v4.0-job-ring";
 				reg	= <0x20000 0x10000>;
 				interrupts = <GIC_SPI 141 IRQ_TYPE_LEVEL_HIGH>;
+				iommus = <&smmu 4>;
 			};
 
 			sec_jr2: jr@30000 {
@@ -279,6 +281,7 @@
 					     "fsl,sec-v4.0-job-ring";
 				reg	= <0x30000 0x10000>;
 				interrupts = <GIC_SPI 142 IRQ_TYPE_LEVEL_HIGH>;
+				iommus = <&smmu 5>;
 			};
 
 			sec_jr3: jr@40000 {
@@ -286,6 +289,7 @@
 					     "fsl,sec-v4.0-job-ring";
 				reg	= <0x40000 0x10000>;
 				interrupts = <GIC_SPI 143 IRQ_TYPE_LEVEL_HIGH>;
+				iommus = <&smmu 6>;
 			};
 		};
 

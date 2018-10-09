@@ -300,3 +300,11 @@
 	phy-handle = <&qsgmii_phy3>;
 	phy-connection-type = "qsgmii";
 };
+
+&edp {
+	fsl,no_edid;
+	lane_mapping = <0x1b>;
+	edp_link_rate = <0x6>;
+	edp_num_lanes = <0x4>;
+	status = "okay";
+};

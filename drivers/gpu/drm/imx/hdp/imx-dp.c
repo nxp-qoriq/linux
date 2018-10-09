@@ -466,7 +466,11 @@ int dp_phy_init_t28hpc(state_struct *state,
 	}
 
 	/* PHY initialization while phy reset pin is active */
+#ifdef CONFIG_EMU_PXP
+	AFE_init(state, num_lanes, (ENUM_AFE_LINK_RATE)max_link_rate);
+#else
 	afe_init_t28hpc(state, num_lanes, (ENUM_AFE_LINK_RATE)max_link_rate);
+#endif
 	DRM_INFO("AFE_init\n");
 
 	/* In this point the phy reset should be deactivated */
@@ -474,7 +478,11 @@ int dp_phy_init_t28hpc(state_struct *state,
 	DRM_INFO("deasserted reset\n");
 
 	/* PHY power set */
+#ifdef CONFIG_EMU_PXP
+	AFE_power(state, num_lanes, (ENUM_AFE_LINK_RATE)max_link_rate);
+#else
 	afe_power_t28hpc(state, num_lanes, (ENUM_AFE_LINK_RATE)max_link_rate);
+#endif
 	DRM_INFO("AFE_power exit\n");
 
 	/* Video off */

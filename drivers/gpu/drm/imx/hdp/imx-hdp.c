@@ -537,7 +537,7 @@ void imx8qm_ipg_clock_set_rate(struct hdp_clks *clks)
 
 static u8 imx_hdp_link_rate(struct drm_display_mode *mode)
 {
-	if (mode->clock < 297000)
+	if (mode->clock < 74250)
 		return AFE_LINK_RATE_1_6;
 	else if (mode->clock > 297000)
 		return AFE_LINK_RATE_5_4;
@@ -559,7 +559,9 @@ static void imx_hdp_mode_setup(struct imx_hdp *hdp, struct drm_display_mode *mod
 	/* Config pixel link mux */
 	imx_hdp_call(hdp, pixel_link_mux, &hdp->state, mode);
 
+#ifndef CONFIG_EMU_PXP
 	hdp->link_rate = imx_hdp_link_rate(mode);
+#endif
 
 	/* mode set */
 	ret = imx_hdp_call(hdp, phy_init, &hdp->state, mode,
@@ -969,6 +971,12 @@ static struct hdp_ops ls1028a_dp_ops = {
 	.get_edid_block = dp_get_edid_block,
 	.get_hpd_state = dp_get_hpd_state,
 	.phy_reset = ls1028a_phy_reset,
+	.clock_init = imx8qm_clock_init,
+	.ipg_clock_enable = imx8qm_ipg_clock_enable,
+	.ipg_clock_disable = imx8qm_ipg_clock_disable,
+	.pixel_clock_set_rate = imx8qm_dp_pixel_clock_set_rate,
+	.pixel_clock_enable = imx8qm_pixel_clock_enable,
+	.pixel_clock_disable = imx8qm_pixel_clock_disable,
 };
 
 static struct hdp_devtype ls1028a_dp_devtype = {
@@ -1083,16 +1091,18 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 		return -EINVAL;
 	}
 
-#ifndef CONFIG_ARCH_LAYERSCAPE
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-	hdp->mem.ss_base = devm_ioremap_resource(dev, res);
-	if (IS_ERR(hdp->mem.ss_base)) {
-		dev_err(dev, "Failed to get HDP CRS base register\n");
-		return -EINVAL;
+	if (!of_device_is_compatible(dev->of_node, "fsl,ls1028a-dp")) {
+		res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+		hdp->mem.ss_base = devm_ioremap_resource(dev, res);
+		if (IS_ERR(hdp->mem.ss_base)) {
+			dev_err(dev, "Failed to get HDP CRS base register\n");
+			return -EINVAL;
+		}
 	}
-#endif
 
 	hdp->is_edp = of_property_read_bool(pdev->dev.of_node, "fsl,edp");
+
+	hdp->no_edid = of_property_read_bool(pdev->dev.of_node, "fsl,no_edid");
 
 	ret = of_property_read_u32(pdev->dev.of_node,
 				       "lane_mapping",

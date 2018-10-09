@@ -131,6 +131,7 @@ struct enetc_cbs {
 #define ENETC_REV1	0x1
 enum enetc_errata {
 	ENETC_ERR_TXCSUM	= BIT(0),
+	ENETC_ERR_VLAN_ISOL	= BIT(1),
 };
 
 /* PCI IEP device data */

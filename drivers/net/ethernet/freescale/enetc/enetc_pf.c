@@ -378,6 +378,9 @@ static int enetc_pf_set_vf_vlan(struct net_device *ndev, int vf, u16 vlan,
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	struct enetc_pf *pf = enetc_si_priv(priv->si);
 
+	if (priv->si->errata & ENETC_ERR_VLAN_ISOL)
+		return -EOPNOTSUPP;
+
 	if (vf >= pf->total_vfs)
 		return -EINVAL;
 

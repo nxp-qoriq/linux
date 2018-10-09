@@ -667,6 +667,11 @@ static void enetc_pf_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 	if (si->num_rss)
 		ndev->hw_features |= NETIF_F_RXHASH;
 
+	if (si->errata & ENETC_ERR_TXCSUM) {
+		ndev->hw_features &= ~NETIF_F_HW_CSUM;
+		ndev->features &= ~NETIF_F_HW_CSUM;
+	}
+
 	ndev->priv_flags |= IFF_UNICAST_FLT;
 
 	/* pick up primary MAC address from SI */

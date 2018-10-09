@@ -128,10 +128,16 @@ struct enetc_cbs {
 };
 #endif
 
+#define ENETC_REV1	0x1
+enum enetc_errata {
+	ENETC_ERR_TXCSUM	= BIT(0),
+};
+
 /* PCI IEP device data */
 struct enetc_si {
 	struct pci_dev *pdev;
 	struct enetc_hw hw;
+	enum enetc_errata errata;
 
 	struct net_device *ndev; /* back ref. */
 

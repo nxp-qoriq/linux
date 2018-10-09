@@ -1645,6 +1645,12 @@ static void enetc_kfree_si(struct enetc_si *si)
 	kfree(p);
 }
 
+static void enetc_detect_errata(struct enetc_si *si)
+{
+	if (si->pdev->revision == ENETC_REV1)
+		si->errata = ENETC_ERR_TXCSUM;
+}
+
 int enetc_pci_probe(struct pci_dev *pdev, const char *name, int sizeof_priv)
 {
 	struct enetc_si *si, *p;
@@ -1710,6 +1716,8 @@ int enetc_pci_probe(struct pci_dev *pdev, const char *name, int sizeof_priv)
 		hw->port = hw->reg + ENETC_PORT_BASE;
 	if (len > ENETC_GLOBAL_BASE)
 		hw->global = hw->reg + ENETC_GLOBAL_BASE;
+
+	enetc_detect_errata(si);
 
 	return 0;
 

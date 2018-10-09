@@ -55,7 +55,7 @@ CDN_API_STATUS CDN_API_DPTX_Read_DPCD_blocking(state_struct *state,
 					       DPTX_Read_DPCD_response *resp,
 					       CDN_BUS_TYPE bus_type)
 {
-	internal_block_function(CDN_API_DPTX_Read_DPCD
+	internal_block_function(&state->mutex, CDN_API_DPTX_Read_DPCD
 				(state, numOfBytes, addr, resp, bus_type));
 }
 
@@ -88,7 +88,7 @@ CDN_API_STATUS CDN_API_DPTX_Read_EDID_blocking(state_struct *state, u8 segment,
 					       u8 extension,
 					       DPTX_Read_EDID_response *resp)
 {
-	internal_block_function(CDN_API_DPTX_Read_EDID
+	internal_block_function(&state->mutex, CDN_API_DPTX_Read_EDID
 				(state, segment, extension, resp));
 }
 
@@ -128,7 +128,7 @@ CDN_API_STATUS CDN_API_DPTX_SetHostCap_blocking(state_struct *state,
 						u8 fastLinkTraining,
 						u8 laneMapping, u8 enchanced)
 {
-	internal_block_function(CDN_API_DPTX_SetHostCap
+	internal_block_function(&state->mutex, CDN_API_DPTX_SetHostCap
 				(state, maxLinkRate, lanesCount_SSC,
 				 maxVoltageSwing, maxPreemphasis,
 				 testPatternsSupported, fastLinkTraining,
@@ -153,7 +153,8 @@ CDN_API_STATUS CDN_API_DPTX_SetPowerMode(state_struct *state,
 CDN_API_STATUS CDN_API_DPTX_SetPowerMode_blocking(state_struct *state,
 						  CDN_API_PWR_MODE mode)
 {
-	internal_block_function(CDN_API_DPTX_SetPowerMode(state, mode));
+	internal_block_function(&state->mutex,
+				CDN_API_DPTX_SetPowerMode(state, mode));
 }
 
 CDN_API_STATUS CDN_API_DPTX_Control(state_struct *state, u32 mode)
@@ -172,7 +173,8 @@ CDN_API_STATUS CDN_API_DPTX_Control(state_struct *state, u32 mode)
 
 CDN_API_STATUS CDN_API_DPTX_Control_blocking(state_struct *state, u32 mode)
 {
-	internal_block_function(CDN_API_DPTX_Control(state, mode));
+	internal_block_function(&state->mutex,
+				CDN_API_DPTX_Control(state, mode));
 }
 
 CDN_API_STATUS CDN_API_DPTX_EDP_Training(state_struct *state,
@@ -201,7 +203,8 @@ CDN_API_STATUS CDN_API_DPTX_EDP_Training_blocking(state_struct *state, u8 mode,
 						  ENUM_AFE_LINK_RATE linkRate,
 						  u8 rateId)
 {
-	internal_block_function(CDN_API_DPTX_EDP_Training(state, mode,
+	internal_block_function(&state->mutex,
+				CDN_API_DPTX_EDP_Training(state, mode,
 							  linkRate, rateId));
 }
 
@@ -237,7 +240,7 @@ CDN_API_STATUS CDN_API_DPTX_Write_DPCD_blocking(state_struct *state,
 						DPTX_Write_DPCD_response *resp,
 						CDN_BUS_TYPE bus_type)
 {
-	internal_block_function(CDN_API_DPTX_Write_DPCD
+	internal_block_function(&state->mutex, CDN_API_DPTX_Write_DPCD
 				(state, numOfBytes, addr, buff, resp,
 				 bus_type));
 }
@@ -273,7 +276,7 @@ CDN_API_STATUS CDN_API_DPTX_Read_Register_blocking(state_struct *state,
 						   u8 base, u8 regNo,
 						   DPTX_Read_Register_response *resp)
 {
-	internal_block_function(CDN_API_DPTX_Read_Register
+	internal_block_function(&state->mutex, CDN_API_DPTX_Read_Register
 				(state, base, regNo, resp));
 }
 
@@ -297,7 +300,7 @@ CDN_API_STATUS CDN_API_DPTX_Write_Register(state_struct *state, u8 base,
 CDN_API_STATUS CDN_API_DPTX_Write_Register_blocking(state_struct *state,
 						    u8 base, u8 regNo, u32 val)
 {
-	internal_block_function(CDN_API_DPTX_Write_Register
+	internal_block_function(&state->mutex, CDN_API_DPTX_Write_Register
 				(state, base, regNo, val));
 }
 
@@ -324,7 +327,7 @@ CDN_API_STATUS CDN_API_DPTX_Write_Field_blocking(state_struct *state, u8 base,
 						 u8 startBit,
 						 u8 bitsNo, u32 val)
 {
-	internal_block_function(CDN_API_DPTX_Write_Field
+	internal_block_function(&state->mutex, CDN_API_DPTX_Write_Field
 				(state, base, regNo, startBit, bitsNo, val));
 }
 
@@ -355,7 +358,8 @@ CDN_API_STATUS CDN_API_DPTX_EnableEvent(state_struct *state, bool hpd,
 CDN_API_STATUS CDN_API_DPTX_EnableEvent_blocking(state_struct *state, bool hpd,
 						 bool training)
 {
-	internal_block_function(CDN_API_DPTX_EnableEvent(state, hpd, training));
+	internal_block_function(&state->mutex,
+				CDN_API_DPTX_EnableEvent(state, hpd, training));
 }
 
 CDN_API_STATUS CDN_API_DPTX_ReadEvent(state_struct *state, u8 *LinkeventId,
@@ -384,7 +388,7 @@ CDN_API_STATUS CDN_API_DPTX_ReadEvent(state_struct *state, u8 *LinkeventId,
 CDN_API_STATUS CDN_API_DPTX_ReadEvent_blocking(state_struct *state,
 					       u8 *LinkeventId, u8 *HPDevents)
 {
-	internal_block_function(CDN_API_DPTX_ReadEvent
+	internal_block_function(&state->mutex, CDN_API_DPTX_ReadEvent
 				(state, LinkeventId, HPDevents));
 }
 
@@ -759,7 +763,7 @@ CDN_API_STATUS CDN_API_DPTX_Set_VIC_blocking(state_struct *state,
 					     STEREO_VIDEO_ATTR steroVidAttr,
 					     BT_TYPE bt_type, int TU)
 {
-	internal_block_function(CDN_API_DPTX_Set_VIC
+	internal_block_function(&state->mutex, CDN_API_DPTX_Set_VIC
 				(state, mode, bitsPerPixel, NumOfLanes, rate,
 				 pxlencformat, steroVidAttr, bt_type, TU));
 }
@@ -773,7 +777,8 @@ CDN_API_STATUS CDN_API_DPTX_SetVideo(state_struct *state, u8 mode)
 
 CDN_API_STATUS CDN_API_DPTX_SetVideo_blocking(state_struct *state, u8 mode)
 {
-	internal_block_function(CDN_API_DPTX_SetVideo(state, mode));
+	internal_block_function(&state->mutex,
+				CDN_API_DPTX_SetVideo(state, mode));
 }
 
 CDN_API_STATUS CDN_API_DPTX_ReadLinkStat(state_struct *state,
@@ -792,7 +797,8 @@ CDN_API_STATUS CDN_API_DPTX_ReadLinkStat(state_struct *state,
 CDN_API_STATUS CDN_API_DPTX_ReadLinkStat_blocking(state_struct *state,
 						  S_LINK_STAT *stat)
 {
-	internal_block_function(CDN_API_DPTX_ReadLinkStat(state, stat));
+	internal_block_function(&state->mutex,
+				CDN_API_DPTX_ReadLinkStat(state, stat));
 }
 
 CDN_API_STATUS CDN_API_DPTX_TrainingControl(state_struct *state, u8 val)
@@ -806,7 +812,8 @@ CDN_API_STATUS CDN_API_DPTX_TrainingControl(state_struct *state, u8 val)
 CDN_API_STATUS CDN_API_DPTX_TrainingControl_blocking(state_struct *state,
 						     u8 val)
 {
-	internal_block_function(CDN_API_DPTX_TrainingControl(state, val));
+	internal_block_function(&state->mutex,
+				CDN_API_DPTX_TrainingControl(state, val));
 }
 
 CDN_API_STATUS CDN_API_DPTX_GetLastAuxStatus(state_struct *state, u8 *resp)
@@ -821,7 +828,8 @@ CDN_API_STATUS CDN_API_DPTX_GetLastAuxStatus(state_struct *state, u8 *resp)
 CDN_API_STATUS CDN_API_DPTX_GetLastAuxStatus_blocking(state_struct *state,
 						      u8 *resp)
 {
-	internal_block_function(CDN_API_DPTX_GetLastAuxStatus(state, resp));
+	internal_block_function(&state->mutex,
+				CDN_API_DPTX_GetLastAuxStatus(state, resp));
 }
 
 CDN_API_STATUS CDN_API_DPTX_GetHpdStatus(state_struct *state, u8 *resp)
@@ -836,7 +844,8 @@ CDN_API_STATUS CDN_API_DPTX_GetHpdStatus_blocking(state_struct *state,
 						  u8 *resp)
 {
 
-	internal_block_function(CDN_API_DPTX_GetHpdStatus(state, resp));
+	internal_block_function(&state->mutex,
+				CDN_API_DPTX_GetHpdStatus(state, resp));
 }
 
 CDN_API_STATUS CDN_API_DPTX_ForceLanes(state_struct *state, u8 linkRate,
@@ -879,7 +888,7 @@ CDN_API_STATUS CDN_API_DPTX_ForceLanes_blocking(state_struct *state,
 						u8 preemphasis_l3, u8 pattern,
 						u8 ssc)
 {
-	internal_block_function(CDN_API_DPTX_ForceLanes_blocking
+	internal_block_function(&state->mutex, CDN_API_DPTX_ForceLanes_blocking
 				(state, linkRate, numOfLanes, voltageSwing_l0,
 				 preemphasis_l0, voltageSwing_l1,
 				 preemphasis_l1, voltageSwing_l2,
@@ -916,5 +925,6 @@ CDN_API_STATUS CDN_API_DPTX_SetDbg(state_struct *state, uint32_t dbg_cfg)
 CDN_API_STATUS CDN_API_DPTX_SetDbg_blocking(state_struct *state,
 					    uint32_t dbg_cfg)
 {
-	internal_block_function(CDN_API_DPTX_SetDbg(state, dbg_cfg));
+	internal_block_function(&state->mutex,
+				CDN_API_DPTX_SetDbg(state, dbg_cfg));
 }

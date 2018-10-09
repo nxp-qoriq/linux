@@ -41,7 +41,7 @@ CDN_API_STATUS CDN_API_HDMITX_DDC_READ_blocking(state_struct *state,
 						HDMITX_TRANS_DATA *data_in,
 						HDMITX_TRANS_DATA *data_out)
 {
-	internal_block_function(CDN_API_HDMITX_DDC_READ
+	internal_block_function(&state->mutex, CDN_API_HDMITX_DDC_READ
 				(state, data_in, data_out));
 }
 
@@ -63,7 +63,7 @@ CDN_API_STATUS CDN_API_HDMITX_DDC_WRITE_blocking(state_struct *state,
 						 HDMITX_TRANS_DATA *data_in,
 						 HDMITX_TRANS_DATA *data_out)
 {
-	internal_block_function(CDN_API_HDMITX_DDC_WRITE
+	internal_block_function(&state->mutex, CDN_API_HDMITX_DDC_WRITE
 				(state, data_in, data_out));
 }
 
@@ -80,7 +80,7 @@ CDN_API_STATUS CDN_API_HDMITX_DDC_UPDATE_READ_blocking(state_struct *state,
 						       HDMITX_TRANS_DATA *
 						       data_out)
 {
-	internal_block_function(CDN_API_HDMITX_DDC_UPDATE_READ
+	internal_block_function(&state->mutex, CDN_API_HDMITX_DDC_UPDATE_READ
 				(state, data_out));
 }
 
@@ -100,7 +100,7 @@ CDN_API_STATUS CDN_API_HDMITX_READ_EDID_blocking(state_struct *state, u8 block,
 						 u8 segment,
 						 HDMITX_TRANS_DATA *data_out)
 {
-	internal_block_function(CDN_API_HDMITX_READ_EDID
+	internal_block_function(&state->mutex, CDN_API_HDMITX_READ_EDID
 				(state, block, segment, data_out));
 }
 
@@ -434,7 +434,8 @@ CDN_API_STATUS CDN_API_HDMITX_ReadEvents(state_struct *state,
 CDN_API_STATUS CDN_API_HDMITX_ReadEvents_blocking(state_struct *state,
 						  uint32_t *events)
 {
-	internal_block_function(CDN_API_HDMITX_ReadEvents(state, events));
+	internal_block_function(&state->mutex,
+				CDN_API_HDMITX_ReadEvents(state, events));
 }
 
 CDN_API_STATUS CDN_API_HDMITX_GetHpdStatus(state_struct *state, u8 *hpd_sts)
@@ -463,5 +464,6 @@ CDN_API_STATUS CDN_API_HDMITX_GetHpdStatus(state_struct *state, u8 *hpd_sts)
 CDN_API_STATUS CDN_API_HDMITX_GetHpdStatus_blocking(state_struct *state,
 						    u8 *hpd_sts)
 {
-	internal_block_function(CDN_API_HDMITX_GetHpdStatus(state, hpd_sts));
+	internal_block_function(&state->mutex,
+				CDN_API_HDMITX_GetHpdStatus(state, hpd_sts));
 }

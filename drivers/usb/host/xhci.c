@@ -178,6 +178,13 @@ int xhci_reset(struct xhci_hcd *xhci)
 		return 0;
 	}
 
+	/* USB 2.0 Kingston 16GB (DTGE9) require more 10 ms delay before reset HC,
+	 * when connected to boot, otherwise it will be regconized as 'GENERIC USB
+	 * Mass Storage' rather than 'Kingston DataTraveler' and could not work
+	 * properply, reason unknown.
+	 * */
+	mdelay(10);
+
 	xhci_dbg_trace(xhci, trace_xhci_dbg_init, "// Reset the HC");
 	command = readl(&xhci->op_regs->command);
 	command |= CMD_RESET;

@@ -63,7 +63,7 @@ int hdmi_phy_init(state_struct *state, struct drm_display_mode *mode,
 	character_freq_khz = phy_cfg_hdp_ss28fdsoi(state, 4, mode,
 						   color_depth, format);
 
-#ifdef arch_imx
+#ifndef CONFIG_ARCH_LAYERSCAPE
 	hdp_phy_reset(1);
 #endif
 

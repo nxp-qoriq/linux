@@ -6,6 +6,7 @@
  */
 #include <linux/clk.h>
 #include <linux/kthread.h>
+#include <linux/mutex.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/component.h>
@@ -70,9 +71,11 @@ static void imx_hdp_state_init(struct imx_hdp *hdp)
 	state->edp = hdp->is_edp;
 }
 
-#ifdef arch_imx
-static void imx_hdp_plmux_config(struct imx_hdp *hdp, struct drm_display_mode *mode)
+#ifndef CONFIG_ARCH_LAYERSCAPE
+static void imx8qm_pixel_link_mux(state_struct *state,
+				  struct drm_display_mode *mode)
 {
+	struct imx_hdp *hdp = state_to_imx_hdp(state);
 	u32 val;
 
 	val = 4; /* RGB */
@@ -86,44 +89,148 @@ static void imx_hdp_plmux_config(struct imx_hdp *hdp, struct drm_display_mode *m
 	writel(val, hdp->mem.ss_base + CSR_PIXEL_LINK_MUX_CTL);
 }
 
-void hdp_phy_reset(u8 reset)
+static int imx8qm_pixel_link_validate(state_struct *state)
 {
+	struct imx_hdp *hdp = state_to_imx_hdp(state);
 	sc_err_t sciErr;
-	sc_ipc_t ipcHndl = 0;
-	u32 mu_id;
 
-	sciErr = sc_ipc_getMuID(&mu_id);
+	sciErr = sc_ipc_getMuID(&hdp->mu_id);
 	if (sciErr != SC_ERR_NONE) {
-		pr_err("Cannot obtain MU ID\n");
-		return;
+		DRM_ERROR("Cannot obtain MU ID\n");
+		return -EINVAL;
 	}
 
-	sciErr = sc_ipc_open(&ipcHndl, mu_id);
+	sciErr = sc_ipc_open(&hdp->ipcHndl, hdp->mu_id);
 	if (sciErr != SC_ERR_NONE) {
-		pr_err("sc_ipc_open failed! (sciError = %d)\n", sciErr);
-		return;
+		DRM_ERROR("sc_ipc_open failed! (sciError = %d)\n", sciErr);
+		return -EINVAL;
 	}
 
-	/* set the pixel link mode and pixel type */
-	sc_misc_set_control(ipcHndl, SC_R_HDMI, SC_C_PHY_RESET, reset);
-	if (sciErr != SC_ERR_NONE)
-		pr_err("SC_R_HDMI PHY reset failed %d!\n", sciErr);
+	sciErr = sc_misc_set_control(hdp->ipcHndl, SC_R_DC_0,
+					SC_C_PXL_LINK_MST1_VLD, 1);
+	if (sciErr != SC_ERR_NONE) {
+		DRM_ERROR("SC_R_DC_0:SC_C_PXL_LINK_MST1_VLD sc_misc_set_");
+		DRM_ERROR("control failed! (sciError = %d)\n", sciErr);
+		return -EINVAL;
+	}
 
-	sc_ipc_close(mu_id);
+	sc_ipc_close(hdp->mu_id);
+
+	return 0;
 }
 
-static void clk_set_root(struct imx_hdp *hdp)
+static int imx8qm_pixel_link_invalidate(state_struct *state)
 {
-	sc_ipc_t ipcHndl = hdp->ipcHndl;
+	struct imx_hdp *hdp = state_to_imx_hdp(state);
+	sc_err_t sciErr;
 
-	/* set clock to bypass mode, source from av pll */
-	/* those clock default source from dig pll */
-	/* HDMI DI Pixel Link Mux Clock  */
-	sc_pm_set_clock_parent(ipcHndl, SC_R_HDMI, SC_PM_CLK_MISC0, 4);
-	/* HDMI DI Pixel Link Clock  */
-	sc_pm_set_clock_parent(ipcHndl, SC_R_HDMI, SC_PM_CLK_MISC1, 4);
-	/* HDMI DI Pixel Clock  */
-	sc_pm_set_clock_parent(ipcHndl, SC_R_HDMI, SC_PM_CLK_MISC3, 4);
+	sciErr = sc_ipc_getMuID(&hdp->mu_id);
+	if (sciErr != SC_ERR_NONE) {
+		DRM_ERROR("Cannot obtain MU ID\n");
+		return -EINVAL;
+	}
+
+	sciErr = sc_ipc_open(&hdp->ipcHndl, hdp->mu_id);
+	if (sciErr != SC_ERR_NONE) {
+		DRM_ERROR("sc_ipc_open failed! (sciError = %d)\n", sciErr);
+		return -EINVAL;
+	}
+
+	sciErr = sc_misc_set_control(hdp->ipcHndl, SC_R_DC_0,
+				     SC_C_PXL_LINK_MST1_VLD, 0);
+	if (sciErr != SC_ERR_NONE) {
+		DRM_ERROR("SC_R_DC_0:SC_C_PXL_LINK_MST1_VLD sc_misc_set_");
+		DRM_ERROR("control failed! (sciError = %d)\n", sciErr);
+		return -EINVAL;
+	}
+
+	sc_ipc_close(hdp->mu_id);
+
+	return 0;
+}
+
+static int imx8qm_pixel_link_sync_ctrl_enable(state_struct *state)
+{
+	struct imx_hdp *hdp = state_to_imx_hdp(state);
+	sc_err_t sciErr;
+
+	sciErr = sc_ipc_getMuID(&hdp->mu_id);
+	if (sciErr != SC_ERR_NONE) {
+		DRM_ERROR("Cannot obtain MU ID\n");
+		return -EINVAL;
+	}
+
+	sciErr = sc_ipc_open(&hdp->ipcHndl, hdp->mu_id);
+	if (sciErr != SC_ERR_NONE) {
+		DRM_ERROR("sc_ipc_open failed! (sciError = %d)\n", sciErr);
+		return -EINVAL;
+	}
+
+	sciErr = sc_misc_set_control(hdp->ipcHndl, SC_R_DC_0,
+				     SC_C_SYNC_CTRL0, 1);
+	if (sciErr != SC_ERR_NONE) {
+		DRM_ERROR("SC_R_DC_0:SC_C_SYNC_CTRL0 sc_misc_set_control ");
+		DRM_ERROR("failed! (sciError = %d)\n", sciErr);
+		return -EINVAL;
+	}
+
+	sc_ipc_close(hdp->mu_id);
+
+	return 0;
+}
+
+static int imx8qm_pixel_link_sync_ctrl_disable(state_struct *state)
+{
+	struct imx_hdp *hdp = state_to_imx_hdp(state);
+	sc_err_t sciErr;
+
+	sciErr = sc_ipc_getMuID(&hdp->mu_id);
+	if (sciErr != SC_ERR_NONE) {
+		DRM_ERROR("Cannot obtain MU ID\n");
+		return -EINVAL;
+	}
+
+	sciErr = sc_ipc_open(&hdp->ipcHndl, hdp->mu_id);
+	if (sciErr != SC_ERR_NONE) {
+		DRM_ERROR("sc_ipc_open failed! (sciError = %d)\n", sciErr);
+		return -EINVAL;
+	}
+
+	sciErr = sc_misc_set_control(hdp->ipcHndl, SC_R_DC_0,
+				     SC_C_SYNC_CTRL0, 0);
+	if (sciErr != SC_ERR_NONE) {
+		DRM_ERROR("SC_R_DC_0:SC_C_SYNC_CTRL0 sc_misc_set_control ");
+		DRM_ERROR("failed! (sciError = %d)\n", sciErr);
+		return -EINVAL;
+	}
+
+	sc_ipc_close(hdp->mu_id);
+
+	return 0;
+}
+
+void imx8qm_phy_reset(sc_ipc_t ipcHndl, struct hdp_mem *mem, u8 reset)
+{
+	sc_err_t sciErr;
+	/* set the pixel link mode and pixel type */
+	sciErr = sc_misc_set_control(ipcHndl, SC_R_HDMI, SC_C_PHY_RESET, reset);
+	if (sciErr != SC_ERR_NONE)
+		DRM_ERROR("SC_R_HDMI PHY reset failed %d!\n", sciErr);
+}
+
+void imx8mq_phy_reset(sc_ipc_t ipcHndl, struct hdp_mem *mem, u8 reset)
+{
+	void *tmp_addr = mem->rst_base;
+
+	if (reset)
+		__raw_writel(0x8,
+			     (unsigned int *)(tmp_addr+0x4)); /*set*/
+	else
+		__raw_writel(0x8,
+			     (unsigned int *)(tmp_addr+0x8)); /*clear*/
+
+
+	return;
 }
 #endif
 
@@ -144,284 +251,247 @@ void ls1028a_phy_reset(u8 reset)
 	iowrite32(reset, scfg_base + EDP_PHY_RESET);
 }
 
-static void hdp_ipg_clock_set_rate(struct imx_hdp *hdp)
+int imx8qm_clock_init(struct hdp_clks *clks)
 {
-#ifdef arch_imx
-	u32 clk_rate;
-#endif
-
-	if (hdp->is_hdmi == true) {
-		/* HDMI */
-#ifdef arch_imx
-		clk_set_root(hdp);
-#endif
-		clk_set_rate(hdp->clks.dig_pll, PLL_675MHZ);
-		clk_set_rate(hdp->clks.clk_core, PLL_675MHZ/5);
-		clk_set_rate(hdp->clks.clk_ipg, PLL_675MHZ/8);
-		/* Default pixel clock for HDMI */
-		clk_set_rate(hdp->clks.av_pll, 148500000);
-	} else {
-		/* DP */
-		clk_set_rate(hdp->clks.av_pll, 27000000);
-#ifdef arch_imx
-		clk_rate = clk_get_rate(hdp->clks.dig_pll);
-
-		if (clk_rate == PLL_1188MHZ) {
-			clk_set_rate(hdp->clks.dig_pll, PLL_1188MHZ);
-			clk_set_rate(hdp->clks.clk_core, PLL_1188MHZ/10);
-			clk_set_rate(hdp->clks.clk_ipg, PLL_1188MHZ/14);
-		} else {
-			clk_set_rate(hdp->clks.dig_pll, PLL_675MHZ);
-			clk_set_rate(hdp->clks.clk_core, PLL_675MHZ/5);
-			clk_set_rate(hdp->clks.clk_ipg, PLL_675MHZ/8);
-		}
-#endif
-	}
-}
-
-static void dp_pixel_clock_set_rate(struct imx_hdp *hdp)
-{
-	unsigned int pclock = hdp->video.cur_mode.clock * 1000;
-	u32 ret;
-
-	/* 24MHz for DP and pixel clock for HDMI */
-	if (hdp->dual_mode == true) {
-		clk_set_rate(hdp->clks.clk_pxl, pclock/2);
-		clk_set_rate(hdp->clks.clk_pxl_link, pclock/2);
-	} else {
-		ret = clk_set_rate(hdp->clks.clk_pxl, pclock);
-		if (ret < 0)
-			printk(KERN_ERR "clk_pxl set failed T %u,A %lu", pclock, clk_get_rate(hdp->clks.clk_pxl));
-		clk_set_rate(hdp->clks.clk_pxl_link, pclock);
-	}
-	clk_set_rate(hdp->clks.clk_pxl_mux, pclock);
-}
-
-static int dp_clock_init(struct imx_hdp *hdp)
-{
+	struct imx_hdp *hdp = clks_to_imx_hdp(clks);
 	struct device *dev = hdp->dev;
 
-	hdp->clks.av_pll = devm_clk_get(dev, "av_pll");
-	if (IS_ERR(hdp->clks.av_pll)) {
-		dev_err(dev, "failed to get av pll clk\n");
-		return PTR_ERR(hdp->clks.av_pll);
+	clks->av_pll = devm_clk_get(dev, "av_pll");
+	if (IS_ERR(clks->av_pll)) {
+		dev_warn(dev, "failed to get av pll clk\n");
+		return PTR_ERR(clks->av_pll);
 	}
 
-	hdp->clks.dig_pll = devm_clk_get(dev, "dig_pll");
-	if (IS_ERR(hdp->clks.dig_pll)) {
-		dev_err(dev, "failed to get dig pll clk\n");
-		return PTR_ERR(hdp->clks.dig_pll);
+	clks->dig_pll = devm_clk_get(dev, "dig_pll");
+	if (IS_ERR(clks->dig_pll)) {
+		dev_warn(dev, "failed to get dig pll clk\n");
+		return PTR_ERR(clks->dig_pll);
 	}
 
-	hdp->clks.clk_ipg = devm_clk_get(dev, "clk_ipg");
-	if (IS_ERR(hdp->clks.clk_ipg)) {
-		dev_err(dev, "failed to get dp ipg clk\n");
-		return PTR_ERR(hdp->clks.clk_ipg);
+	clks->clk_ipg = devm_clk_get(dev, "clk_ipg");
+	if (IS_ERR(clks->clk_ipg)) {
+		dev_warn(dev, "failed to get dp ipg clk\n");
+		return PTR_ERR(clks->clk_ipg);
 	}
 
-	hdp->clks.clk_core = devm_clk_get(dev, "clk_core");
-	if (IS_ERR(hdp->clks.clk_core)) {
-		dev_err(dev, "failed to get hdp core clk\n");
-		return PTR_ERR(hdp->clks.clk_core);
+	clks->clk_core = devm_clk_get(dev, "clk_core");
+	if (IS_ERR(clks->clk_core)) {
+		dev_warn(dev, "failed to get hdp core clk\n");
+		return PTR_ERR(clks->clk_core);
 	}
 
-	hdp->clks.clk_pxl = devm_clk_get(dev, "clk_pxl");
-	if (IS_ERR(hdp->clks.clk_pxl)) {
-		dev_err(dev, "failed to get pxl clk\n");
-		return PTR_ERR(hdp->clks.clk_pxl);
+	clks->clk_pxl = devm_clk_get(dev, "clk_pxl");
+	if (IS_ERR(clks->clk_pxl)) {
+		dev_warn(dev, "failed to get pxl clk\n");
+		return PTR_ERR(clks->clk_pxl);
 	}
 
-	hdp->clks.clk_pxl_mux = devm_clk_get(dev, "clk_pxl_mux");
-	if (IS_ERR(hdp->clks.clk_pxl_mux)) {
-		dev_err(dev, "failed to get pxl mux clk\n");
-		return PTR_ERR(hdp->clks.clk_pxl_mux);
+	clks->clk_pxl_mux = devm_clk_get(dev, "clk_pxl_mux");
+	if (IS_ERR(clks->clk_pxl_mux)) {
+		dev_warn(dev, "failed to get pxl mux clk\n");
+		return PTR_ERR(clks->clk_pxl_mux);
 	}
 
-	hdp->clks.clk_pxl_link = devm_clk_get(dev, "clk_pxl_link");
-	if (IS_ERR(hdp->clks.clk_pxl_mux)) {
-		dev_err(dev, "failed to get pxl link clk\n");
-		return PTR_ERR(hdp->clks.clk_pxl_link);
+	clks->clk_pxl_link = devm_clk_get(dev, "clk_pxl_link");
+	if (IS_ERR(clks->clk_pxl_mux)) {
+		dev_warn(dev, "failed to get pxl link clk\n");
+		return PTR_ERR(clks->clk_pxl_link);
 	}
 
-	hdp->clks.clk_hdp = devm_clk_get(dev, "clk_hdp");
-	if (IS_ERR(hdp->clks.clk_hdp)) {
-		dev_err(dev, "failed to get hdp clk\n");
-		return PTR_ERR(hdp->clks.clk_hdp);
+	clks->clk_hdp = devm_clk_get(dev, "clk_hdp");
+	if (IS_ERR(clks->clk_hdp)) {
+		dev_warn(dev, "failed to get hdp clk\n");
+		return PTR_ERR(clks->clk_hdp);
 	}
 
-	hdp->clks.clk_phy = devm_clk_get(dev, "clk_phy");
-	if (IS_ERR(hdp->clks.clk_phy)) {
-		dev_err(dev, "failed to get phy clk\n");
-		return PTR_ERR(hdp->clks.clk_phy);
+	clks->clk_phy = devm_clk_get(dev, "clk_phy");
+	if (IS_ERR(clks->clk_phy)) {
+		dev_warn(dev, "failed to get phy clk\n");
+		return PTR_ERR(clks->clk_phy);
 	}
-	hdp->clks.clk_apb = devm_clk_get(dev, "clk_apb");
-	if (IS_ERR(hdp->clks.clk_apb)) {
-		dev_err(dev, "failed to get apb clk\n");
-		return PTR_ERR(hdp->clks.clk_apb);
+	clks->clk_apb = devm_clk_get(dev, "clk_apb");
+	if (IS_ERR(clks->clk_apb)) {
+		dev_warn(dev, "failed to get apb clk\n");
+		return PTR_ERR(clks->clk_apb);
 	}
-	hdp->clks.clk_lis = devm_clk_get(dev, "clk_lis");
-	if (IS_ERR(hdp->clks.clk_lis)) {
-		dev_err(dev, "failed to get lis clk\n");
-		return PTR_ERR(hdp->clks.clk_lis);
+	clks->clk_lis = devm_clk_get(dev, "clk_lis");
+	if (IS_ERR(clks->clk_lis)) {
+		dev_warn(dev, "failed to get lis clk\n");
+		return PTR_ERR(clks->clk_lis);
 	}
-	hdp->clks.clk_msi = devm_clk_get(dev, "clk_msi");
-	if (IS_ERR(hdp->clks.clk_msi)) {
-		dev_err(dev, "failed to get msi clk\n");
-		return PTR_ERR(hdp->clks.clk_msi);
+	clks->clk_msi = devm_clk_get(dev, "clk_msi");
+	if (IS_ERR(clks->clk_msi)) {
+		dev_warn(dev, "failed to get msi clk\n");
+		return PTR_ERR(clks->clk_msi);
 	}
-	hdp->clks.clk_lpcg = devm_clk_get(dev, "clk_lpcg");
-	if (IS_ERR(hdp->clks.clk_lpcg)) {
-		dev_err(dev, "failed to get lpcg clk\n");
-		return PTR_ERR(hdp->clks.clk_lpcg);
+	clks->clk_lpcg = devm_clk_get(dev, "clk_lpcg");
+	if (IS_ERR(clks->clk_lpcg)) {
+		dev_warn(dev, "failed to get lpcg clk\n");
+		return PTR_ERR(clks->clk_lpcg);
 	}
-	hdp->clks.clk_even = devm_clk_get(dev, "clk_even");
-	if (IS_ERR(hdp->clks.clk_even)) {
-		dev_err(dev, "failed to get even clk\n");
-		return PTR_ERR(hdp->clks.clk_even);
+	clks->clk_even = devm_clk_get(dev, "clk_even");
+	if (IS_ERR(clks->clk_even)) {
+		dev_warn(dev, "failed to get even clk\n");
+		return PTR_ERR(clks->clk_even);
 	}
-	hdp->clks.clk_dbl = devm_clk_get(dev, "clk_dbl");
-	if (IS_ERR(hdp->clks.clk_dbl)) {
-		dev_err(dev, "failed to get dbl clk\n");
-		return PTR_ERR(hdp->clks.clk_dbl);
+	clks->clk_dbl = devm_clk_get(dev, "clk_dbl");
+	if (IS_ERR(clks->clk_dbl)) {
+		dev_warn(dev, "failed to get dbl clk\n");
+		return PTR_ERR(clks->clk_dbl);
 	}
-	hdp->clks.clk_vif = devm_clk_get(dev, "clk_vif");
-	if (IS_ERR(hdp->clks.clk_vif)) {
-		dev_err(dev, "failed to get vif clk\n");
-		return PTR_ERR(hdp->clks.clk_vif);
+	clks->clk_vif = devm_clk_get(dev, "clk_vif");
+	if (IS_ERR(clks->clk_vif)) {
+		dev_warn(dev, "failed to get vif clk\n");
+		return PTR_ERR(clks->clk_vif);
 	}
-	hdp->clks.clk_apb_csr = devm_clk_get(dev, "clk_apb_csr");
-	if (IS_ERR(hdp->clks.clk_apb_csr)) {
-		dev_err(dev, "failed to get apb csr clk\n");
-		return PTR_ERR(hdp->clks.clk_apb_csr);
+	clks->clk_apb_csr = devm_clk_get(dev, "clk_apb_csr");
+	if (IS_ERR(clks->clk_apb_csr)) {
+		dev_warn(dev, "failed to get apb csr clk\n");
+		return PTR_ERR(clks->clk_apb_csr);
 	}
-	hdp->clks.clk_apb_ctrl = devm_clk_get(dev, "clk_apb_ctrl");
-	if (IS_ERR(hdp->clks.clk_apb_ctrl)) {
-		dev_err(dev, "failed to get apb ctrl clk\n");
-		return PTR_ERR(hdp->clks.clk_apb_ctrl);
+	clks->clk_apb_ctrl = devm_clk_get(dev, "clk_apb_ctrl");
+	if (IS_ERR(clks->clk_apb_ctrl)) {
+		dev_warn(dev, "failed to get apb ctrl clk\n");
+		return PTR_ERR(clks->clk_apb_ctrl);
 	}
 
 	return true;
 }
 
-static int dp_pixel_clock_enable(struct imx_hdp *hdp)
+int imx8qm_pixel_clock_enable(struct hdp_clks *clks)
 {
+	struct imx_hdp *hdp = clks_to_imx_hdp(clks);
 	struct device *dev = hdp->dev;
 	int ret;
 
-	ret = clk_prepare_enable(hdp->clks.av_pll);
+	ret = clk_prepare_enable(clks->av_pll);
 	if (ret < 0) {
-		dev_err(dev, "%s, pre clk pxl error\n", __func__);
+		dev_err(dev, "%s, pre av pll error\n", __func__);
 		return ret;
 	}
 
-	ret = clk_prepare_enable(hdp->clks.clk_pxl);
+	ret = clk_prepare_enable(clks->clk_pxl);
 	if (ret < 0) {
 		dev_err(dev, "%s, pre clk pxl error\n", __func__);
 		return ret;
 	}
-	ret = clk_prepare_enable(hdp->clks.clk_pxl_mux);
+	ret = clk_prepare_enable(clks->clk_pxl_mux);
 	if (ret < 0) {
 		dev_err(dev, "%s, pre clk pxl mux error\n", __func__);
 		return ret;
 	}
 
-	ret = clk_prepare_enable(hdp->clks.clk_pxl_link);
+	ret = clk_prepare_enable(clks->clk_pxl_link);
 	if (ret < 0) {
 		dev_err(dev, "%s, pre clk pxl link error\n", __func__);
 		return ret;
 	}
-	return ret;
 
-}
-
-static void dp_pixel_clock_disable(struct imx_hdp *hdp)
-{
-	clk_disable_unprepare(hdp->clks.clk_pxl);
-	clk_disable_unprepare(hdp->clks.clk_pxl_link);
-	clk_disable_unprepare(hdp->clks.clk_pxl_mux);
-}
-
-static int dp_ipg_clock_enable(struct imx_hdp *hdp)
-{
-	struct device *dev = hdp->dev;
-	int ret;
-
-	ret = clk_prepare_enable(hdp->clks.av_pll);
+	ret = clk_prepare_enable(clks->clk_vif);
 	if (ret < 0) {
-		dev_err(dev, "%s, pre av pll error\n", __func__);
+		dev_err(dev, "%s, pre clk vif error\n", __func__);
 		return ret;
 	}
-	ret = clk_prepare_enable(hdp->clks.dig_pll);
+
+	return ret;
+}
+
+void imx8qm_pixel_clock_disable(struct hdp_clks *clks)
+{
+	clk_disable_unprepare(clks->clk_vif);
+	clk_disable_unprepare(clks->clk_pxl);
+	clk_disable_unprepare(clks->clk_pxl_link);
+	clk_disable_unprepare(clks->clk_pxl_mux);
+	clk_disable_unprepare(clks->av_pll);
+}
+
+void imx8qm_dp_pixel_clock_set_rate(struct hdp_clks *clks)
+{
+	struct imx_hdp *hdp = clks_to_imx_hdp(clks);
+	unsigned int pclock = hdp->video.cur_mode.clock * 1000;
+
+	if (hdp->dual_mode == true) {
+		clk_set_rate(clks->clk_pxl, pclock/2);
+		clk_set_rate(clks->clk_pxl_link, pclock/2);
+	} else {
+		clk_set_rate(clks->clk_pxl, pclock);
+		clk_set_rate(clks->clk_pxl_link, pclock);
+	}
+	clk_set_rate(clks->clk_pxl_mux, pclock);
+}
+
+int imx8qm_ipg_clock_enable(struct hdp_clks *clks)
+{
+	int ret;
+	struct imx_hdp *hdp = clks_to_imx_hdp(clks);
+	struct device *dev = hdp->dev;
+
+	ret = clk_prepare_enable(clks->dig_pll);
 	if (ret < 0) {
 		dev_err(dev, "%s, pre dig pll error\n", __func__);
 		return ret;
 	}
 
-	ret = clk_prepare_enable(hdp->clks.clk_ipg);
+	ret = clk_prepare_enable(clks->clk_ipg);
 	if (ret < 0) {
 		dev_err(dev, "%s, pre clk_ipg error\n", __func__);
 		return ret;
 	}
 
-	ret = clk_prepare_enable(hdp->clks.clk_core);
+	ret = clk_prepare_enable(clks->clk_core);
 	if (ret < 0) {
 		dev_err(dev, "%s, pre clk core error\n", __func__);
 		return ret;
 	}
 
-	ret = clk_prepare_enable(hdp->clks.clk_hdp);
+	ret = clk_prepare_enable(clks->clk_hdp);
 	if (ret < 0) {
 		dev_err(dev, "%s, pre clk hdp error\n", __func__);
 		return ret;
 	}
 
-	ret = clk_prepare_enable(hdp->clks.clk_phy);
+	ret = clk_prepare_enable(clks->clk_phy);
 	if (ret < 0) {
 		dev_err(dev, "%s, pre clk phy\n", __func__);
 		return ret;
 	}
 
-	ret = clk_prepare_enable(hdp->clks.clk_apb);
+	ret = clk_prepare_enable(clks->clk_apb);
 	if (ret < 0) {
 		dev_err(dev, "%s, pre clk apb error\n", __func__);
 		return ret;
 	}
-	ret = clk_prepare_enable(hdp->clks.clk_lis);
+	ret = clk_prepare_enable(clks->clk_lis);
 	if (ret < 0) {
 		dev_err(dev, "%s, pre clk lis error\n", __func__);
 		return ret;
 	}
-	ret = clk_prepare_enable(hdp->clks.clk_lpcg);
+	ret = clk_prepare_enable(clks->clk_lpcg);
 	if (ret < 0) {
 		dev_err(dev, "%s, pre clk lpcg error\n", __func__);
 		return ret;
 	}
-	ret = clk_prepare_enable(hdp->clks.clk_msi);
+	ret = clk_prepare_enable(clks->clk_msi);
 	if (ret < 0) {
 		dev_err(dev, "%s, pre clk msierror\n", __func__);
 		return ret;
 	}
-	ret = clk_prepare_enable(hdp->clks.clk_even);
+	ret = clk_prepare_enable(clks->clk_even);
 	if (ret < 0) {
 		dev_err(dev, "%s, pre clk even error\n", __func__);
 		return ret;
 	}
-	ret = clk_prepare_enable(hdp->clks.clk_dbl);
+	ret = clk_prepare_enable(clks->clk_dbl);
 	if (ret < 0) {
 		dev_err(dev, "%s, pre clk dbl error\n", __func__);
 		return ret;
 	}
-	ret = clk_prepare_enable(hdp->clks.clk_vif);
-	if (ret < 0) {
-		dev_err(dev, "%s, pre clk vif error\n", __func__);
-		return ret;
-	}
-	ret = clk_prepare_enable(hdp->clks.clk_apb_csr);
+	ret = clk_prepare_enable(clks->clk_apb_csr);
 	if (ret < 0) {
 		dev_err(dev, "%s, pre clk apb csr error\n", __func__);
 		return ret;
 	}
-	ret = clk_prepare_enable(hdp->clks.clk_apb_ctrl);
+	ret = clk_prepare_enable(clks->clk_apb_ctrl);
 	if (ret < 0) {
 		dev_err(dev, "%s, pre clk apb ctrl error\n", __func__);
 		return ret;
@@ -429,46 +499,74 @@ static int dp_ipg_clock_enable(struct imx_hdp *hdp)
 	return ret;
 }
 
-#ifdef arch_imx
-static void dp_pixel_link_config(struct imx_hdp *hdp)
+void imx8qm_ipg_clock_disable(struct hdp_clks *clks)
 {
-	sc_ipc_t ipcHndl = hdp->ipcHndl;
-
-	/* config dpu1 di0 to hdmi/dp mode */
-	sc_misc_set_control(ipcHndl, SC_R_DC_0, SC_C_PXL_LINK_MST1_ADDR, 1);
-	sc_misc_set_control(ipcHndl, SC_R_DC_0, SC_C_PXL_LINK_MST1_VLD, 1);
-	sc_misc_set_control(ipcHndl, SC_R_DC_0, SC_C_SYNC_CTRL0, 1);
 }
-#endif
 
-static int imx_hdp_deinit(struct imx_hdp *hdp)
+void imx8qm_ipg_clock_set_rate(struct hdp_clks *clks)
 {
-	u8 bresp;
-	u32 ret;
+	struct imx_hdp *hdp = clks_to_imx_hdp(clks);
+	u32 clk_rate, desired_rate;
 
-	/* Stop link training */
-	CDN_API_DPTX_TrainingControl_blocking(&hdp->state, 0);
+	if (hdp->is_digpll_dp_pclock)
+		desired_rate = PLL_1188MHZ;
+	else
+		desired_rate = PLL_675MHZ;
 
-	/* Disable HPD event and training */
-	CDN_API_DPTX_EnableEvent_blocking(&hdp->state, 0, 0);
+	/* hdmi/dp ipg/core clock */
+	clk_rate = clk_get_rate(clks->dig_pll);
 
-	/* turn off hdp controller IP activity 0-standby */
-	ret = CDN_API_MainControl_blocking(&hdp->state, 0, &bresp);
-	if (ret != CDN_OK)
-		return -1;
+	if (clk_rate != desired_rate) {
+		pr_warn("%s, dig_pll was %u MHz, changing to %u MHz\n",
+			__func__, clk_rate/1000000,
+			desired_rate/1000000);
+	}
 
-	return ret;
+	if (hdp->is_digpll_dp_pclock) {
+		clk_set_rate(clks->dig_pll,  desired_rate);
+		clk_set_rate(clks->clk_core, desired_rate/10);
+		clk_set_rate(clks->clk_ipg,  desired_rate/12);
+		clk_set_rate(clks->av_pll, 24000000);
+	} else {
+		clk_set_rate(clks->dig_pll,  desired_rate);
+		clk_set_rate(clks->clk_core, desired_rate/5);
+		clk_set_rate(clks->clk_ipg,  desired_rate/8);
+	}
+}
+
+static u8 imx_hdp_link_rate(struct drm_display_mode *mode)
+{
+	if (mode->clock < 297000)
+		return AFE_LINK_RATE_1_6;
+	else if (mode->clock > 297000)
+		return AFE_LINK_RATE_5_4;
+	else
+		return AFE_LINK_RATE_2_7;
 }
 
 static void imx_hdp_mode_setup(struct imx_hdp *hdp, struct drm_display_mode *mode)
 {
-	dp_pixel_clock_set_rate(hdp);
-	dp_pixel_clock_enable(hdp);
+	int ret;
 
-#ifdef arch_imx
-	imx_hdp_plmux_config(hdp, mode);
-#endif
+	/* set pixel clock before video mode setup */
+	imx_hdp_call(hdp, pixel_clock_disable, &hdp->clks);
 
+	imx_hdp_call(hdp, pixel_clock_set_rate, &hdp->clks);
+
+	imx_hdp_call(hdp, pixel_clock_enable, &hdp->clks);
+
+	/* Config pixel link mux */
+	imx_hdp_call(hdp, pixel_link_mux, &hdp->state, mode);
+
+	hdp->link_rate = imx_hdp_link_rate(mode);
+
+	/* mode set */
+	ret = imx_hdp_call(hdp, phy_init, &hdp->state, mode,
+			   hdp->format, hdp->bpc);
+	if (ret < 0) {
+		DRM_ERROR("Failed to initialise HDP PHY\n");
+		return;
+	}
 	imx_hdp_call(hdp, mode_set, &hdp->state, mode,
 		     hdp->format, hdp->bpc, hdp->link_rate);
 
@@ -483,7 +581,6 @@ static int imx_hdp_cable_plugin(struct imx_hdp *hdp)
 
 static int imx_hdp_cable_plugout(struct imx_hdp *hdp)
 {
-	dp_pixel_clock_disable(hdp);
 	return 0;
 }
 
@@ -633,114 +730,132 @@ static const struct drm_encoder_funcs imx_hdp_imx_encoder_funcs = {
 	.destroy = drm_encoder_cleanup,
 };
 
-static int mx8mq_hdp_read(struct hdp_mem *mem, unsigned int addr, unsigned int *value)
+static int imx8mq_hdp_read(struct hdp_mem *mem, unsigned int addr,
+			   unsigned int *value)
 {
 	unsigned int temp;
-	void *tmp_addr = mem->regs_base + addr;
+	void *tmp_addr;
 
-	temp = __raw_readl((volatile unsigned int *)tmp_addr);
+	mutex_lock(&mem->mutex);
+	tmp_addr = mem->regs_base + addr;
+	temp = __raw_readl((unsigned int *)tmp_addr);
 	*value = temp;
+	mutex_unlock(&mem->mutex);
 	return 0;
 }
 
-static int mx8mq_hdp_write(struct hdp_mem *mem, unsigned int addr, unsigned int value)
+static int imx8mq_hdp_write(struct hdp_mem *mem, unsigned int addr,
+			    unsigned int value)
 {
-	void *tmp_addr = mem->regs_base + addr;
+	void *tmp_addr;
 
-	__raw_writel(value, (volatile unsigned int *)tmp_addr);
+	mutex_lock(&mem->mutex);
+	tmp_addr = mem->regs_base + addr;
+	__raw_writel(value, (unsigned int *)tmp_addr);
+	mutex_unlock(&mem->mutex);
 	return 0;
 }
 
-static int mx8mq_hdp_sread(struct hdp_mem *mem, unsigned int addr, unsigned int *value)
+static int imx8mq_hdp_sread(struct hdp_mem *mem, unsigned int addr,
+			    unsigned int *value)
 {
 	unsigned int temp;
-	void *tmp_addr = mem->ss_base + addr;
+	void *tmp_addr;
 
-	temp = __raw_readl((volatile unsigned int *)tmp_addr);
+	mutex_lock(&mem->mutex);
+	tmp_addr = mem->ss_base + addr;
+	temp = __raw_readl((unsigned int *)tmp_addr);
 	*value = temp;
+	mutex_unlock(&mem->mutex);
 	return 0;
 }
 
-static int mx8mq_hdp_swrite(struct hdp_mem *mem, unsigned int addr, unsigned int value)
+static int imx8mq_hdp_swrite(struct hdp_mem *mem, unsigned int addr,
+			     unsigned int value)
 {
-	void *tmp_addr = mem->ss_base + addr;
+	void *tmp_addr;
 
-	__raw_writel(value, (volatile unsigned int *)tmp_addr);
+	mutex_lock(&mem->mutex);
+	tmp_addr = mem->ss_base + addr;
+	__raw_writel(value, (unsigned int *)tmp_addr);
+	mutex_unlock(&mem->mutex);
 	return 0;
 }
 
-static int mx8qm_hdp_read(struct hdp_mem *mem, unsigned int addr, unsigned int *value)
+static int imx8qm_hdp_read(struct hdp_mem *mem, unsigned int addr,
+			   unsigned int *value)
 {
 	unsigned int temp;
-	void *tmp_addr = (addr & 0xfff) + mem->regs_base;
-	void *off_addr = 0x8 + mem->ss_base;
+	void *tmp_addr;
+	void *off_addr;
 
+	mutex_lock(&mem->mutex);
+	tmp_addr = (addr & 0xfff) + mem->regs_base;
+	off_addr = 0x8 + mem->ss_base;
 	__raw_writel(addr >> 12, off_addr);
-	temp = __raw_readl((volatile unsigned int *)tmp_addr);
+	temp = __raw_readl((unsigned int *)tmp_addr);
 
 	*value = temp;
+	mutex_unlock(&mem->mutex);
 	return 0;
 }
 
-static int mx8qm_hdp_write(struct hdp_mem *mem, unsigned int addr, unsigned int value)
+static int imx8qm_hdp_write(struct hdp_mem *mem, unsigned int addr,
+			    unsigned int value)
 {
-	void *tmp_addr = (addr & 0xfff) + mem->regs_base;
-	void *off_addr = 0x8 + mem->ss_base;;
+	void *tmp_addr;
+	void *off_addr;
 
+	mutex_lock(&mem->mutex);
+	tmp_addr = (addr & 0xfff) + mem->regs_base;
+	off_addr = 0x8 + mem->ss_base;
 	__raw_writel(addr >> 12, off_addr);
 
-	__raw_writel(value, (volatile unsigned int *) tmp_addr);
+	__raw_writel(value, (unsigned int *) tmp_addr);
+	mutex_unlock(&mem->mutex);
 
 	return 0;
 }
 
-static int mx8qm_hdp_sread(struct hdp_mem *mem, unsigned int addr, unsigned int *value)
+static int imx8qm_hdp_sread(struct hdp_mem *mem, unsigned int addr,
+			    unsigned int *value)
 {
 	unsigned int temp;
-	void *tmp_addr = (addr & 0xfff) + mem->regs_base;
-	void *off_addr = 0xc + mem->ss_base;
+	void *tmp_addr;
+	void *off_addr;
 
+	mutex_lock(&mem->mutex);
+	tmp_addr = (addr & 0xfff) + mem->regs_base;
+	off_addr = 0xc + mem->ss_base;
 	__raw_writel(addr >> 12, off_addr);
 
-	temp = __raw_readl((volatile unsigned int *)tmp_addr);
+	temp = __raw_readl((unsigned int *)tmp_addr);
 	*value = temp;
+	mutex_unlock(&mem->mutex);
 	return 0;
 }
 
-static int mx8qm_hdp_swrite(struct hdp_mem *mem, unsigned int addr, unsigned int value)
+static int imx8qm_hdp_swrite(struct hdp_mem *mem, unsigned int addr,
+			     unsigned int value)
 {
-	void *tmp_addr = (addr & 0xfff) + mem->regs_base;
-	void *off_addr = 0xc + mem->ss_base;
+	void *tmp_addr;
+	void *off_addr;
 
+	mutex_lock(&mem->mutex);
+	tmp_addr = (addr & 0xfff) + mem->regs_base;
+	off_addr = 0xc + mem->ss_base;
 	__raw_writel(addr >> 12, off_addr);
-	__raw_writel(value, (volatile unsigned int *)tmp_addr);
+	__raw_writel(value, (unsigned int *)tmp_addr);
+	mutex_unlock(&mem->mutex);
 
-	return 0;
-}
-
-static int ls1028a_hdp_read(struct hdp_mem *mem, unsigned int addr, unsigned int *value)
-{
-	unsigned int temp;
-	void *tmp_addr = mem->regs_base + addr;
-
-	temp = __raw_readl((volatile unsigned int *)tmp_addr);
-	*value = temp;
-	return 0;
-}
-
-static int ls1028a_hdp_write(struct hdp_mem *mem, unsigned int addr, unsigned int value)
-{
-	void *tmp_addr = mem->regs_base + addr;
-
-	__raw_writel(value, (volatile unsigned int *)tmp_addr);
 	return 0;
 }
 
 static struct hdp_rw_func imx8qm_rw = {
-	.read_reg = mx8qm_hdp_read,
-	.write_reg = mx8qm_hdp_write,
-	.sread_reg = mx8qm_hdp_sread,
-	.swrite_reg = mx8qm_hdp_swrite,
+	.read_reg = imx8qm_hdp_read,
+	.write_reg = imx8qm_hdp_write,
+	.sread_reg = imx8qm_hdp_sread,
+	.swrite_reg = imx8qm_hdp_swrite,
 };
 
 static struct hdp_ops imx8qm_dp_ops = {
@@ -751,48 +866,69 @@ static struct hdp_ops imx8qm_dp_ops = {
 	.phy_init = dp_phy_init,
 	.mode_set = dp_mode_set,
 	.get_edid_block = dp_get_edid_block,
-};
-
-static struct hdp_ops imx8qm_hdmi_ops = {
-#ifdef DEBUG_FW_LOAD
-	.fw_load = hdmi_fw_load,
+#ifndef CONFIG_ARCH_LAYERSCAPE
+	.phy_reset = imx8qm_phy_reset,
+	.pixel_link_validate = imx8qm_pixel_link_validate,
+	.pixel_link_invalidate = imx8qm_pixel_link_invalidate,
+	.pixel_link_sync_ctrl_enable = imx8qm_pixel_link_sync_ctrl_enable,
+	.pixel_link_sync_ctrl_disable = imx8qm_pixel_link_sync_ctrl_disable,
+	.pixel_link_mux = imx8qm_pixel_link_mux,
 #endif
-	.fw_init = hdmi_fw_init,
-	.phy_init = hdmi_phy_init,
-	.mode_set = hdmi_mode_set,
-	.get_edid_block = hdmi_get_edid_block,
+	.clock_init = imx8qm_clock_init,
+	.ipg_clock_set_rate = imx8qm_ipg_clock_set_rate,
+	.ipg_clock_enable = imx8qm_ipg_clock_enable,
+	.ipg_clock_disable = imx8qm_ipg_clock_disable,
+	.pixel_clock_set_rate = imx8qm_dp_pixel_clock_set_rate,
+	.pixel_clock_enable = imx8qm_pixel_clock_enable,
+	.pixel_clock_disable = imx8qm_pixel_clock_disable,
 };
 
 static struct hdp_devtype imx8qm_dp_devtype = {
-	.load_fw = true,
-	.is_hdmi = false,
 	.ops = &imx8qm_dp_ops,
 	.rw = &imx8qm_rw,
 };
 
-static struct hdp_devtype imx8qm_hdmi_devtype = {
-	.load_fw = true,
-	.is_hdmi = true,
-	.ops = &imx8qm_hdmi_ops,
-	.rw = &imx8qm_rw,
-};
-
 static struct hdp_rw_func imx8mq_rw = {
-	.read_reg = mx8mq_hdp_read,
-	.write_reg = mx8mq_hdp_write,
-	.sread_reg = mx8mq_hdp_sread,
-	.swrite_reg = mx8mq_hdp_swrite,
+	.read_reg = imx8mq_hdp_read,
+	.write_reg = imx8mq_hdp_write,
+	.sread_reg = imx8mq_hdp_sread,
+	.swrite_reg = imx8mq_hdp_swrite,
 };
 
-static struct hdp_ops imx8mq_ops = {
+static struct hdp_ops imx8mq_dp_ops = {
+	.phy_init = dp_phy_init_t28hpc,
+	.mode_set = dp_mode_set,
+	.get_edid_block = dp_get_edid_block,
+	.get_hpd_state = dp_get_hpd_state,
+#ifndef CONFIG_ARCH_LAYERSCAPE
+	.phy_reset = imx8mq_phy_reset,
+#endif
 };
 
-static struct hdp_devtype imx8mq_hdmi_devtype = {
-	.load_fw = false,
-	.is_hdmi = true,
-	.ops = &imx8mq_ops,
+static struct hdp_devtype imx8mq_dp_devtype = {
+	.ops = &imx8mq_dp_ops,
 	.rw = &imx8mq_rw,
 };
+
+static int ls1028a_hdp_read(struct hdp_mem *mem, unsigned int addr,
+			    unsigned int *value)
+{
+	unsigned int temp;
+	void *tmp_addr = mem->regs_base + addr;
+
+	temp = __raw_readl((unsigned int *)tmp_addr);
+	*value = temp;
+	return 0;
+}
+
+static int ls1028a_hdp_write(struct hdp_mem *mem, unsigned int addr,
+			     unsigned int value)
+{
+	void *tmp_addr = mem->regs_base + addr;
+
+	__raw_writel(value, (unsigned int *)tmp_addr);
+	return 0;
+}
 
 static struct hdp_rw_func ls1028a_rw = {
 	.read_reg = ls1028a_hdp_read,
@@ -811,16 +947,13 @@ static struct hdp_ops ls1028a_dp_ops = {
 };
 
 static struct hdp_devtype ls1028a_dp_devtype = {
-	.load_fw = false,
-	.is_hdmi = false,
 	.ops = &ls1028a_dp_ops,
 	.rw = &ls1028a_rw,
 };
 
 static const struct of_device_id imx_hdp_dt_ids[] = {
-	{ .compatible = "fsl,imx8qm-hdmi", .data = &imx8qm_hdmi_devtype},
 	{ .compatible = "fsl,imx8qm-dp", .data = &imx8qm_dp_devtype},
-	{ .compatible = "fsl,imx8mq-hdmi", .data = &imx8mq_hdmi_devtype},
+	{ .compatible = "fsl,imx8mq-dp", .data = &imx8mq_dp_devtype},
 	{ .compatible = "fsl,ls1028a-dp", .data = &ls1028a_dp_devtype},
 	{ }
 };
@@ -910,10 +1043,6 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 	struct task_struct *hpd_worker;
 	int irq;
 	int ret;
-#ifdef arch_imx
-	sc_err_t sciErr;
-#endif
-	u32 core_rate;
 
 	if (!pdev->dev.of_node)
 		return -ENODEV;
@@ -935,6 +1064,7 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 		return irq;
 	}
 
+	mutex_init(&hdp->mem.mutex);
 	/* register map */
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	hdp->mem.regs_base = devm_ioremap_resource(dev, res);
@@ -951,9 +1081,6 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 		return -EINVAL;
 	}
 #endif
-
-	hdp->load_fw = devtype->load_fw;
-	hdp->is_hdmi = devtype->is_hdmi;
 
 	hdp->is_edp = of_property_read_bool(pdev->dev.of_node, "fsl,edp");
 
@@ -995,14 +1122,31 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 
 	hdp->dual_mode = false;
 
-	dp_clock_init(hdp);
+	ret = imx_hdp_call(hdp, clock_init, &hdp->clks);
+	if (ret < 0) {
+		DRM_ERROR("Failed to initialize clock\n");
+		return ret;
+	}
 
-	hdp_ipg_clock_set_rate(hdp);
+	imx_hdp_call(hdp, ipg_clock_set_rate, &hdp->clks);
 
-	dp_ipg_clock_enable(hdp);
+	ret = imx_hdp_call(hdp, ipg_clock_enable, &hdp->clks);
+	if (ret < 0) {
+		DRM_ERROR("Failed to initialize IPG clock\n");
+		return ret;
+	}
+
+	imx_hdp_call(hdp, pixel_clock_set_rate, &hdp->clks);
+
+	imx_hdp_call(hdp, pixel_clock_enable, &hdp->clks);
+
+#ifdef CONFIG_ARCH_LAYERSCAPE
+	imx_hdp_call(hdp, phy_reset, 0);
+#else
+	imx_hdp_call(hdp, phy_reset, hdp->ipcHndl, &hdp->mem, 0);
+#endif
 
 	imx_hdp_call(hdp, fw_load, &hdp->state);
-	core_rate = clk_get_rate(hdp->clks.clk_core);
 
 	ret = imx_hdp_call(hdp, fw_init, &hdp->state);
 	if (ret < 0) {
@@ -1087,10 +1231,7 @@ static void imx_hdp_imx_unbind(struct device *dev, struct device *master,
 {
 	struct imx_hdp *hdp = dev_get_drvdata(dev);
 
-	imx_hdp_deinit(hdp);
-#ifdef arch_imx
-	sc_ipc_close(hdp->mu_id);
-#endif
+	imx_hdp_call(hdp, pixel_clock_disable, &hdp->clks);
 }
 
 static const struct component_ops imx_hdp_imx_ops = {

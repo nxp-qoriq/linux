@@ -65,8 +65,13 @@
 	(!(hdp) ? -ENODEV : (((hdp)->ops && (hdp)->ops->operation) ?	\
 	 (hdp)->ops->operation(args) : -ENOIOCTLCMD))
 
+#define clks_to_imx_hdp(env) \
+	container_of(env, struct imx_hdp, clks)
+
 #define state_to_imx_hdp(env) \
 	container_of(env, struct imx_hdp, state)
+
+struct hdp_clks;
 
 struct hdp_ops {
 	void (*fw_load)(state_struct *state);
@@ -82,11 +87,25 @@ struct hdp_ops {
 #else
 	void (*phy_reset)(sc_ipc_t ipcHndl, struct hdp_mem *mem, u8 reset);
 #endif
+	int (*pixel_link_validate)(state_struct *state);
+	int (*pixel_link_invalidate)(state_struct *state);
+	int (*pixel_link_sync_ctrl_enable)(state_struct *state);
+	int (*pixel_link_sync_ctrl_disable)(state_struct *state);
+	void (*pixel_link_mux)(state_struct *state,
+			       struct drm_display_mode *mode);
+	void (*pixel_engine_reset)(state_struct *state);
+
+	int (*clock_init)(struct hdp_clks *clks);
+	int (*ipg_clock_enable)(struct hdp_clks *clks);
+	void (*ipg_clock_disable)(struct hdp_clks *clks);
+	void (*ipg_clock_set_rate)(struct hdp_clks *clks);
+	int (*pixel_clock_enable)(struct hdp_clks *clks);
+	void (*pixel_clock_disable)(struct hdp_clks *clks);
+	void (*pixel_clock_set_rate)(struct hdp_clks *clks);
+	int (*pixel_clock_range)(struct drm_display_mode *mode);
 };
 
 struct hdp_devtype {
-	u8 load_fw;
-	u8 is_hdmi;
 	struct hdp_ops *ops;
 	struct hdp_rw_func *rw;
 };
@@ -166,10 +185,8 @@ struct imx_hdp {
 
 	struct hdp_mem mem;
 
-	u8 load_fw;
-	u8 is_hdmi;
-
 	u8 is_edp;
+	u8 is_digpll_dp_pclock;
 	u32 lane_mapping;
 	u32 edp_link_rate;
 	u32 edp_num_lanes;
@@ -185,7 +202,7 @@ struct imx_hdp {
 	struct drm_dp_link dp_link;
 	S_LINK_STAT lkstat;
 	ENUM_AFE_LINK_RATE link_rate;
-#ifdef arch_imx
+#ifndef CONFIG_ARCH_LAYERSCAPE
 	sc_ipc_t ipcHndl;
 #endif
 	u32 mu_id;
@@ -200,8 +217,5 @@ struct imx_hdp {
 	VIC_PXL_ENCODING_FORMAT format;
 };
 
-int imx_hdpaux_init(struct device *dev,	struct imx_hdp *dp);
-void imx_hdpaux_destroy(struct device *dev, struct imx_hdp *dp);
-void hdp_phy_reset(u8 reset);
 
 #endif

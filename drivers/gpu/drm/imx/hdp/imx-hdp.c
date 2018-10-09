@@ -20,7 +20,7 @@
 
 struct drm_display_mode *g_mode;
 
-static const struct drm_display_mode edid_cea_modes[] = {
+static struct drm_display_mode edid_cea_modes[] = {
 	/* 3 - 720x480@60Hz */
 	{ DRM_MODE("720x480", DRM_MODE_TYPE_DRIVER, 27000, 720, 736,
 		   798, 858, 0, 480, 489, 495, 525, 0,
@@ -444,28 +444,8 @@ static int imx_hdp_deinit(struct imx_hdp *hdp)
 	return ret;
 }
 
-static int imx_get_vic_index(struct drm_display_mode *mode)
-{
-	int i;
-
-	for (i = 0; i < VIC_MODE_COUNT; i++) {
-		if (mode->hdisplay == vic_table[i][H_ACTIVE] &&
-			mode->vdisplay == vic_table[i][V_ACTIVE] &&
-			mode->clock == vic_table[i][PIXEL_FREQ_KHZ]) {
-				printk("VIC_MODE %d: hdisplay: %d, vdisplay: %d, clock: %d\n",
-					i, mode->hdisplay, mode->vdisplay, mode->clock);
-				return i;
-		}
-	}
-	/* Default 1080p60 */
-	printk(KERN_INFO "default vic 2\n");
-	return 2;
-}
-
 static void imx_hdp_mode_setup(struct imx_hdp *hdp, struct drm_display_mode *mode)
 {
-	int dp_vic;
-
 	dp_pixel_clock_set_rate(hdp);
 	dp_pixel_clock_enable(hdp);
 
@@ -473,9 +453,11 @@ static void imx_hdp_mode_setup(struct imx_hdp *hdp, struct drm_display_mode *mod
 	imx_hdp_plmux_config(hdp, mode);
 #endif
 
-	dp_vic = imx_get_vic_index(mode);
+	imx_hdp_call(hdp, mode_set, &hdp->state, mode,
+		     hdp->format, hdp->bpc, hdp->link_rate);
 
-	imx_hdp_call(hdp, mode_set, &hdp->state, dp_vic, 1, 8, hdp->link_rate);
+	/* Get vic of CEA-861 */
+	hdp->vic = drm_match_cea_mode(mode);
 }
 
 static int imx_hdp_cable_plugin(struct imx_hdp *hdp)
@@ -957,6 +939,38 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 	hdp->is_hdmi = devtype->is_hdmi;
 	hdp->ops = devtype->ops;
 	hdp->rw = devtype->rw;
+	hdp->bpc = 8;
+	hdp->format = PXL_RGB;
+
+	imx_hdp_state_init(hdp);
+
+	hdp->link_rate = AFE_LINK_RATE_5_4;
+
+	hdp->dual_mode = false;
+
+	dp_clock_init(hdp);
+
+	hdp_ipg_clock_set_rate(hdp);
+
+	dp_ipg_clock_enable(hdp);
+
+	imx_hdp_call(hdp, fw_load, &hdp->state);
+	core_rate = clk_get_rate(hdp->clks.clk_core);
+
+	ret = imx_hdp_call(hdp, fw_init, &hdp->state, core_rate);
+	if (ret < 0) {
+		DRM_ERROR("Failed to initialise HDP firmware\n");
+		return ret;
+	}
+
+	/* Pixel Format - 1 RGB, 2 YCbCr 444, 3 YCbCr 420 */
+	/* bpp (bits per subpixel) - 8 24bpp, 10 30bpp, 12 36bpp, 16 48bpp */
+	ret = imx_hdp_call(hdp, phy_init, &hdp->state, &edid_cea_modes[2],
+			   hdp->format, hdp->bpc);
+	if (ret < 0) {
+		DRM_ERROR("Failed to initialise HDP PHY\n");
+		return ret;
+	}
 
 	/* encoder */
 	encoder->possible_crtcs = drm_of_find_possible_crtcs(drm, dev->of_node);
@@ -996,56 +1010,6 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 	drm_mode_connector_attach_encoder(connector, encoder);
 
 	dev_set_drvdata(dev, hdp);
-
-	imx_hdp_state_init(hdp);
-
-#ifdef arch_imx
-	sciErr = sc_ipc_getMuID(&hdp->mu_id);
-	if (sciErr != SC_ERR_NONE) {
-		pr_err("Cannot obtain MU ID\n");
-		return -EINVAL;
-	}
-
-	sciErr = sc_ipc_open(&hdp->ipcHndl, hdp->mu_id);
-	if (sciErr != SC_ERR_NONE) {
-		pr_err("sc_ipc_open failed! (sciError = %d)\n", sciErr);
-		return -EINVAL;
-	}
-#endif
-
-	hdp->link_rate = AFE_LINK_RATE_5_4;
-
-	hdp->dual_mode = false;
-
-#ifdef arch_imx
-	dp_pixel_link_config(hdp);
-#endif
-	dp_clock_init(hdp);
-
-	hdp_ipg_clock_set_rate(hdp);
-
-	dp_ipg_clock_enable(hdp);
-
-	/* Pixel Format - 1 RGB, 2 YCbCr 444, 3 YCbCr 420 */
-	/* bpp (bits per subpixel) - 8 24bpp, 10 30bpp, 12 36bpp, 16 48bpp */
-#ifdef arch_imx
-	hdp_phy_reset(0);
-#endif
-
-	imx_hdp_call(hdp, fw_load, &hdp->state);
-	core_rate = clk_get_rate(hdp->clks.clk_core);
-
-	ret = imx_hdp_call(hdp, fw_init, &hdp->state, core_rate);
-	if (ret < 0) {
-		DRM_ERROR("Failed to initialise HDP firmware\n");
-		return ret;
-	}
-
-	if (hdp->is_hdmi == true)
-		/* default set hdmi to 1080p60 mode */
-		imx_hdp_call(hdp, phy_init, &hdp->state, 2, 1, 8);
-	else
-		imx_hdp_call(hdp, phy_init, &hdp->state, 4, hdp->link_rate, 0);
 
 #ifdef hdp_irq
 	ret = devm_request_threaded_irq(dev, irq,

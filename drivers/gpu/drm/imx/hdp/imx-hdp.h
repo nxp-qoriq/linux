@@ -46,6 +46,9 @@
 #define CSR_HDP_TX_CTRL_CTRL0		0x08
 #define CSR_HDP_TX_CTRL_CTRL1		0x0c
 
+#define VIC_MODE_96_50Hz 96
+#define VIC_MODE_97_60Hz 97
+
 /**
  * imx_hdp_call - Calls a struct imx hdp_operations operation on
  *	an entity
@@ -62,11 +65,16 @@
 	(!(hdp) ? -ENODEV : (((hdp)->ops && (hdp)->ops->operation) ?	\
 	 (hdp)->ops->operation(args) : -ENOIOCTLCMD))
 
+#define state_to_imx_hdp(env) \
+	container_of(env, struct imx_hdp, state)
+
 struct hdp_ops {
 	void (*fw_load)(state_struct *state);
 	int (*fw_init)(state_struct *state, u32 rate);
-	void (*phy_init)(state_struct *state, int vic, int format, int color_depth);
-	void (*mode_set)(state_struct *state, int vic, int format, int color_depth, int max_link);
+	int (*phy_init)(state_struct *state, struct drm_display_mode *mode,
+			int format, int color_depth);
+	void (*mode_set)(state_struct *state, struct drm_display_mode *mode,
+			 int format, int color_depth, int max_link);
 	int (*get_edid_block)(void *data, u8 *buf, u32 block, size_t len);
 	void (*get_hpd_state)(state_struct *state, u8 *hpd);
 };
@@ -177,7 +185,10 @@ struct imx_hdp {
 	struct hdp_rw_func *rw;
 	struct hdp_clks clks;
 	state_struct state;
+	int vic;
 
+	int bpc;
+	VIC_PXL_ENCODING_FORMAT format;
 };
 
 int imx_hdpaux_init(struct device *dev,	struct imx_hdp *dp);

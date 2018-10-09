@@ -50,12 +50,14 @@ int hdmi_fw_init(state_struct *state, u32 core_rate)
 	return 0;
 }
 
-void hdmi_phy_init(state_struct *state, int vic, int format, int color_depth)
+int hdmi_phy_init(state_struct *state, struct drm_display_mode *mode,
+		  int format, int color_depth)
 {
 	int ret;
 
 	/* Configure PHY */
-	character_freq_khz = phy_cfg_hdp_ss28fdsoi(state, 4, vic, color_depth, format);
+	character_freq_khz = phy_cfg_hdp_ss28fdsoi(state, 4, mode,
+						   color_depth, format);
 
 #ifdef arch_imx
 	hdp_phy_reset(1);
@@ -68,9 +70,12 @@ void hdmi_phy_init(state_struct *state, int vic, int format, int color_depth)
 		F_SOURCE_PHY_LANE0_SWAP(3) | F_SOURCE_PHY_LANE1_SWAP(0) |
 		F_SOURCE_PHY_LANE2_SWAP(1) | F_SOURCE_PHY_LANE3_SWAP(2) |
 		F_SOURCE_PHY_COMB_BYPASS(0) | F_SOURCE_PHY_20_10(1));
+
+	return true;
 }
 
-void hdmi_mode_set(state_struct *state, int vic, int format, int color_depth, int temp)
+void hdmi_mode_set(state_struct *state, struct drm_display_mode *mode,
+		   int format, int color_depth, int temp)
 {
 	int ret;
 	GENERAL_Read_Register_response regresp;
@@ -80,7 +85,7 @@ void hdmi_mode_set(state_struct *state, int vic, int format, int color_depth, in
 	/* Mode = 0 - DVI, 1 - HDMI1.4, 2 HDMI 2.0 */
 	HDMI_TX_MAIL_HANDLER_PROTOCOL_TYPE ptype = 1;
 
-	if (vic == VIC_MODE_97_60Hz)
+	if (drm_match_cea_mode(mode) == VIC_MODE_97_60Hz)
 		ptype = 2;
 
 	ret = CDN_API_HDMITX_Init_blocking(state);
@@ -88,9 +93,9 @@ void hdmi_mode_set(state_struct *state, int vic, int format, int color_depth, in
 	/* Set HDMI TX Mode */
 	ret = CDN_API_HDMITX_Set_Mode_blocking(state, ptype, character_freq_khz);
 
-	ret = CDN_API_Set_AVI(state, vic, format, bw_type);
+	ret = CDN_API_Set_AVI(state, mode, format, bw_type);
 
-	ret =  CDN_API_HDMITX_SetVic_blocking(state, vic, color_depth, format);
+	ret =  CDN_API_HDMITX_SetVic_blocking(state, mode, color_depth, format);
 
 	/* adjust the vsync/hsync polarity */
 	CDN_API_General_Read_Register_blocking(

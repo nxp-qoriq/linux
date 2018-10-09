@@ -66,8 +66,12 @@ static const struct of_device_id scfg_device_ids[] = {
 	{}
 };
 
-void dp_phy_init(state_struct *state, int num_lanes, int max_link_rate, int tmp)
+int dp_phy_init(state_struct *state, struct drm_display_mode *mode, int format,
+		int color_depth)
 {
+	struct imx_hdp *hdp = state_to_imx_hdp(state);
+	int max_link_rate = hdp->link_rate;
+	int num_lanes = 4;
 	int ret;
 	struct device_node *scfg_node;
 	void __iomem *scfg_base = NULL;
@@ -94,10 +98,18 @@ void dp_phy_init(state_struct *state, int num_lanes, int max_link_rate, int tmp)
 
 	/* Video off */
 	ret = CDN_API_DPTX_SetVideo_blocking(state, 0);
+
+	return true;
 }
 
-/* Max Link Rate: 06h (1.62Gbps), 0Ah (2.7Gbps), 14h (5.4Gbps), 1Eh (8.1Gbps)--N/A */
-void dp_mode_set(state_struct *state, int vic, int format, int color_depth, int max_link_rate)
+/* Max Link Rate: 06h (1.62Gbps), 0Ah (2.7Gbps), 14h (5.4Gbps),
+ * 1Eh (8.1Gbps)--N/A
+ */
+void dp_mode_set(state_struct *state,
+			struct drm_display_mode *mode,
+			int format,
+			int color_depth,
+			int max_link_rate)
 {
 	int ret;
 
@@ -207,7 +219,7 @@ void dp_mode_set(state_struct *state, int vic, int format, int color_depth, int 
 	}
 
 	ret = CDN_API_DPTX_Set_VIC_blocking(state,
-		vic,
+		mode,
 		bits_per_subpixel,
 		num_lanes,
 		sym_rate,

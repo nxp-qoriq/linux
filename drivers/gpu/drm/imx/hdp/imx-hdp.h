@@ -46,6 +46,8 @@
 #define CSR_HDP_TX_CTRL_CTRL0		0x08
 #define CSR_HDP_TX_CTRL_CTRL1		0x0c
 
+#define HOTPLUG_DEBOUNCE_MS		200
+
 #define VIC_MODE_96_50Hz 96
 #define VIC_MODE_97_60Hz 97
 
@@ -81,7 +83,7 @@ struct hdp_ops {
 	void (*mode_set)(state_struct *state, struct drm_display_mode *mode,
 			 int format, int color_depth, int max_link);
 	int (*get_edid_block)(void *data, u8 *buf, u32 block, size_t len);
-	void (*get_hpd_state)(state_struct *state, u8 *hpd);
+	int (*get_hpd_state)(state_struct *state, u8 *hpd);
 #ifdef CONFIG_ARCH_LAYERSCAPE
 	void (*phy_reset)(u8 reset);
 #else
@@ -173,6 +175,12 @@ struct hdp_clks {
 	struct clk *dig_pll_div;
 };
 
+enum hdp_tx_irq {
+	HPD_IRQ_IN,
+	HPD_IRQ_OUT,
+	HPD_IRQ_NUM,
+};
+
 struct imx_hdp {
 	struct device *dev;
 	struct drm_connector connector;
@@ -185,8 +193,10 @@ struct imx_hdp {
 
 	struct hdp_mem mem;
 
+	u8 is_hpd_irq;
 	u8 is_edp;
 	u8 is_digpll_dp_pclock;
+	u8 no_edid;
 	u32 lane_mapping;
 	u32 edp_link_rate;
 	u32 edp_num_lanes;
@@ -212,6 +222,8 @@ struct imx_hdp {
 	struct hdp_clks clks;
 	state_struct state;
 	int vic;
+	int irq[HPD_IRQ_NUM];
+	struct delayed_work hotplug_work;
 
 	int bpc;
 	VIC_PXL_ENCODING_FORMAT format;

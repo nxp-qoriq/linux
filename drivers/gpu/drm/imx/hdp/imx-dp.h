@@ -22,6 +22,6 @@ int dp_phy_init_t28hpc(state_struct *state,
 		       int format,
 		       int color_depth);
 int dp_get_edid_block(void *data, u8 *buf, u32 block, size_t len);
-void dp_get_hpd_state(state_struct *state, u8 *hpd);
+int dp_get_hpd_state(state_struct *state, u8 *hpd);
 
 #endif

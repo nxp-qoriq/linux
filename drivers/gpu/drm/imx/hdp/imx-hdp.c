@@ -5,6 +5,7 @@
  *
  */
 #include <linux/clk.h>
+#include <linux/irq.h>
 #include <linux/kthread.h>
 #include <linux/mutex.h>
 #include <linux/module.h>
@@ -574,17 +575,6 @@ static void imx_hdp_mode_setup(struct imx_hdp *hdp, struct drm_display_mode *mod
 	hdp->vic = drm_match_cea_mode(mode);
 }
 
-static int imx_hdp_cable_plugin(struct imx_hdp *hdp)
-{
-	return 0;
-}
-
-static int imx_hdp_cable_plugout(struct imx_hdp *hdp)
-{
-	return 0;
-}
-
-
 static void imx_hdp_bridge_mode_set(struct drm_bridge *bridge,
 				    struct drm_display_mode *orig_mode,
 				    struct drm_display_mode *mode)
@@ -612,48 +602,81 @@ static void imx_hdp_bridge_enable(struct drm_bridge *bridge)
 static enum drm_connector_status
 imx_hdp_connector_detect(struct drm_connector *connector, bool force)
 {
-	return connector_status_connected;
+	struct imx_hdp *hdp = container_of(connector,
+						struct imx_hdp, connector);
+	int ret;
+	u8 hpd = 0xf;
+
+	ret = imx_hdp_call(hdp, get_hpd_state, &hdp->state, &hpd);
+	if (ret > 0)
+		return connector_status_unknown;
+
+	/* Cable Connected */
+	if (hpd == 1)
+		return connector_status_connected;
+
+	/* Cable Disconnedted */
+	if (hpd == 0)
+		return connector_status_disconnected;
+
+	/* Cable status unknown */
+	DRM_INFO("Unknown cable status, hdp=%u\n", hpd);
+	return connector_status_unknown;
+}
+
+static int imx_hdp_default_video_modes(struct drm_connector *connector)
+{
+	struct drm_display_mode *mode;
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(edid_cea_modes); i++) {
+		mode = drm_mode_create(connector->dev);
+		if (!mode)
+			return -EINVAL;
+		drm_mode_copy(mode, &edid_cea_modes[i]);
+		mode->type |= DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
+		drm_mode_probed_add(connector, mode);
+	}
+	return i;
 }
 
 static int imx_hdp_connector_get_modes(struct drm_connector *connector)
 {
-	struct drm_display_mode *mode;
-	int num_modes = 0;
-	int i;
-
-#ifdef edid_enable
 	struct imx_hdp *hdp = container_of(connector, struct imx_hdp,
-					     connector);
+					   connector);
 	struct edid *edid;
+	int num_modes = 0;
 
-	edid = drm_do_get_edid(connector, hdp->ops->get_edid_block, &hdp->state);
-	if (edid) {
-		dev_dbg(hdp->dev, "got edid: width[%d] x height[%d]\n",
-			edid->width_cm, edid->height_cm);
-
-		printk(KERN_INFO "edid_head %x,%x,%x,%x,%x,%x,%x,%x\n",
-				edid->header[0], edid->header[1], edid->header[2], edid->header[3],
-				edid->header[4], edid->header[5], edid->header[6], edid->header[7]);
-		drm_mode_connector_update_edid_property(connector, edid);
-		ret = drm_add_edid_modes(connector, edid);
-		/* Store the ELD */
-		drm_edid_to_eld(connector, edid);
-		kfree(edid);
-	} else {
-		dev_dbg(hdp->dev, "failed to get edid\n");
-#endif
-		for (i = 0; i < ARRAY_SIZE(edid_cea_modes); i++) {
-			mode = drm_mode_create(connector->dev);
-			if (!mode)
-				return -EINVAL;
-			drm_mode_copy(mode, &edid_cea_modes[i]);
-			mode->type |= DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
-			drm_mode_probed_add(connector, mode);
+	if (!hdp->no_edid) {
+		edid = drm_do_get_edid(connector, hdp->ops->get_edid_block,
+				       &hdp->state);
+		if (edid) {
+			dev_dbg(hdp->dev, "%x,%x,%x,%x,%x,%x,%x,%x\n",
+				edid->header[0], edid->header[1],
+				edid->header[2], edid->header[3],
+				edid->header[4], edid->header[5],
+				edid->header[6], edid->header[7]);
+			drm_mode_connector_update_edid_property(connector,
+								edid);
+			num_modes = drm_add_edid_modes(connector, edid);
+			if (num_modes == 0) {
+				dev_dbg(hdp->dev, "Invalid edid, ");
+				dev_dbg(hdp->dev, "use default video modes\n");
+				num_modes =
+					imx_hdp_default_video_modes(connector);
+			} else
+				/* Store the ELD */
+				drm_edid_to_eld(connector, edid);
+			kfree(edid);
+		} else {
+			dev_dbg(hdp->dev, "failed to get edid, ");
+			dev_dbg(hdp->dev, "use default video modes\n");
+			num_modes = imx_hdp_default_video_modes(connector);
 		}
-		num_modes = i;
-#ifdef edid_enable
+	} else {
+		dev_dbg(hdp->dev, "No EDID function, use default video mode\n");
+		num_modes = imx_hdp_default_video_modes(connector);
 	}
-#endif
 
 	return num_modes;
 }
@@ -866,6 +889,7 @@ static struct hdp_ops imx8qm_dp_ops = {
 	.phy_init = dp_phy_init,
 	.mode_set = dp_mode_set,
 	.get_edid_block = dp_get_edid_block,
+	.get_hpd_state = dp_get_hpd_state,
 #ifndef CONFIG_ARCH_LAYERSCAPE
 	.phy_reset = imx8qm_phy_reset,
 	.pixel_link_validate = imx8qm_pixel_link_validate,
@@ -943,6 +967,7 @@ static struct hdp_ops ls1028a_dp_ops = {
 	.phy_init = dp_phy_init_t28hpc,
 	.mode_set = dp_mode_set,
 	.get_edid_block = dp_get_edid_block,
+	.get_hpd_state = dp_get_hpd_state,
 	.phy_reset = ls1028a_phy_reset,
 };
 
@@ -959,73 +984,50 @@ static const struct of_device_id imx_hdp_dt_ids[] = {
 };
 MODULE_DEVICE_TABLE(of, imx_hdp_dt_ids);
 
-#ifdef hdp_irq
-static irqreturn_t imx_hdp_irq_handler(int irq, void *data)
+static void hotplug_work_func(struct work_struct *work)
+{
+	struct imx_hdp *hdp = container_of(work, struct imx_hdp,
+					   hotplug_work.work);
+	struct drm_connector *connector = &hdp->connector;
+
+	drm_helper_hpd_irq_event(connector->dev);
+
+	if (connector->status == connector_status_connected) {
+		/* Cable Connected */
+		if (drm_mode_equal(&hdp->video.pre_mode, &edid_cea_modes[3]))
+			imx_hdp_mode_setup(hdp, &hdp->video.pre_mode);
+		DRM_INFO("HDMI/DP Cable Plug In\n");
+		if (hdp->is_hpd_irq)
+			enable_irq(hdp->irq[HPD_IRQ_OUT]);
+	} else if (connector->status == connector_status_disconnected) {
+		/* Cable Disconnedted  */
+		DRM_INFO("HDMI/DP Cable Plug Out\n");
+		if (hdp->is_hpd_irq)
+			enable_irq(hdp->irq[HPD_IRQ_IN]);
+	}
+}
+
+static irqreturn_t imx_hdp_irq_thread(int irq, void *data)
 {
 	struct imx_hdp *hdp = data;
-	u8 eventId;
-	u8 HPDevents;
-	u8 aux_sts;
-	u8 aux_hpd;
-	u32 evt;
-	u8 hpdevent;
 
-	CDN_API_Get_Event(&hdp->state, &evt);
+	disable_irq_nosync(irq);
 
-	if (evt & 0x1) {
-		/* HPD event */
-		printk(KERN_DEBUG "\nevt=%d\n", evt);
-		drm_helper_hpd_irq_event(hdp->connector.dev);
-		CDN_API_DPTX_ReadEvent_blocking(&hdp->state, &eventId, &HPDevents);
-		printk(KERN_DEBUG "ReadEvent  ID = %d HPD = %d\n", eventId, HPDevents);
-		CDN_API_DPTX_GetHpdStatus_blocking(&hdp->state, &aux_hpd);
-		printk(KERN_DEBUG "aux_hpd = 0xx\n", aux_hpd);
-	} else if (evt & 0x2) {
-		/* Link training event */
-	} else
-		printk(KERN_DEBUG ".\r");
+	mod_delayed_work(system_wq, &hdp->hotplug_work,
+			msecs_to_jiffies(HOTPLUG_DEBOUNCE_MS));
 
 	return IRQ_HANDLED;
 }
-#else
-static int hpd_det_worker(void *_dp)
+
+static int imx_hdp_hpd_thread(void *data)
 {
-	struct imx_hdp *hdp = (struct imx_hdp *) _dp;
-	u8 eventId;
-	u8 HPDevents;
-	u8 aux_hpd;
-	u32 evt;
+	struct imx_hdp *hdp = data;
 
-	for (;;) {
-		CDN_API_Get_Event(&hdp->state, &evt);
-		if (evt & 0x1) {
-			printk("Got HPD event\n");
-			/* HPD event */
-			CDN_API_DPTX_ReadEvent_blocking(&hdp->state, &eventId, &HPDevents);
-			CDN_API_DPTX_GetHpdStatus_blocking(&hdp->state, &aux_hpd);
-			if (HPDevents & 0x1) {
-				printk("HPD event: plugin\n");
-				imx_hdp_cable_plugin(hdp);
-				hdp->cable_state = true;
-				drm_kms_helper_hotplug_event(hdp->connector.dev);
-			} else if (HPDevents & 0x2) {
-				printk("HPD event: plugout\n");
-				hdp->cable_state = false;
-				imx_hdp_cable_plugout(hdp);
-				drm_kms_helper_hotplug_event(hdp->connector.dev);
-			}
-		} else if (evt & 0x2) {
-			/* Link training event */
-			CDN_API_DPTX_ReadEvent_blocking(&hdp->state, &eventId, &HPDevents);
-		} else if (evt & 0xf)
-			printk(KERN_DEBUG "evt=0x%x\n", evt);
-
-		schedule_timeout_idle(100000);
-	}
+	mod_delayed_work(system_wq, &hdp->hotplug_work,
+			msecs_to_jiffies(HOTPLUG_DEBOUNCE_MS));
 
 	return 0;
 }
-#endif
 
 static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 			    void *data)
@@ -1040,8 +1042,8 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 	struct drm_bridge *bridge;
 	struct drm_connector *connector;
 	struct resource *res;
-	struct task_struct *hpd_worker;
-	int irq;
+	struct task_struct *hpd_thread;
+	u8 hpd;
 	int ret;
 
 	if (!pdev->dev.of_node)
@@ -1058,10 +1060,18 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 
 	mutex_init(&hdp->mutex);
 
-	irq = platform_get_irq(pdev, 0);
-	if (irq < 0) {
-		dev_err(&pdev->dev, "can't get irq number\n");
-		return irq;
+	hdp->is_hpd_irq = of_property_read_bool(pdev->dev.of_node,
+						"fsl,hpd_irq");
+	if (hdp->is_hpd_irq) {
+		hdp->irq[HPD_IRQ_IN] =
+			platform_get_irq_byname(pdev, "plug_in");
+		if (hdp->irq[HPD_IRQ_IN] < 0)
+			dev_info(&pdev->dev, "No plug_in irq number\n");
+
+		hdp->irq[HPD_IRQ_OUT] =
+			platform_get_irq_byname(pdev, "plug_out");
+		if (hdp->irq[HPD_IRQ_OUT] < 0)
+			dev_info(&pdev->dev, "No plug_out irq number\n");
 	}
 
 	mutex_init(&hdp->mem.mutex);
@@ -1202,28 +1212,63 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 
 	dev_set_drvdata(dev, hdp);
 
-#ifdef hdp_irq
-	ret = devm_request_threaded_irq(dev, irq,
-					NULL, imx_hdp_irq_handler,
-					IRQF_IRQPOLL, dev_name(dev), dp);
-	if (ret) {
-		dev_err(&pdev->dev, "can't claim irq %d\n", irq);
-		goto err_irq;
-	}
-#else
-	hpd_worker = kthread_create(hpd_det_worker, hdp, "hdp-hpd");
-	if (IS_ERR(hpd_worker))
-		printk(KERN_ERR "failed  create hpd thread\n");
+	INIT_DELAYED_WORK(&hdp->hotplug_work, hotplug_work_func);
 
-	wake_up_process(hpd_worker);	/* avoid contributing to loadavg */
-#endif
+	/* Check cable states before enable irq */
+	imx_hdp_call(hdp, get_hpd_state, &hdp->state, &hpd);
+
+	if (hdp->is_hpd_irq) {
+		/* Enable Hotplug Detect IRQ thread */
+		if (hdp->irq[HPD_IRQ_IN] > 0) {
+			irq_set_status_flags(hdp->irq[HPD_IRQ_IN],
+					     IRQ_NOAUTOEN);
+			ret = devm_request_threaded_irq(dev,
+							hdp->irq[HPD_IRQ_IN],
+							NULL,
+							imx_hdp_irq_thread,
+							IRQF_ONESHOT,
+							dev_name(dev),
+							hdp);
+			if (ret) {
+				dev_err(&pdev->dev, "can't claim irq %d\n",
+					hdp->irq[HPD_IRQ_IN]);
+				goto err_irq;
+			}
+			/* Cable Disconnedted, enable Plug in IRQ */
+			if (hpd == 0)
+				enable_irq(hdp->irq[HPD_IRQ_IN]);
+		}
+		if (hdp->irq[HPD_IRQ_OUT] > 0) {
+			irq_set_status_flags(hdp->irq[HPD_IRQ_OUT],
+					     IRQ_NOAUTOEN);
+			ret = devm_request_threaded_irq(dev,
+							hdp->irq[HPD_IRQ_OUT],
+							NULL,
+							imx_hdp_irq_thread,
+							IRQF_ONESHOT,
+							dev_name(dev),
+							hdp);
+			if (ret) {
+				dev_err(&pdev->dev, "can't claim irq %d\n",
+					hdp->irq[HPD_IRQ_OUT]);
+				goto err_irq;
+			}
+			/* Cable Connected, enable Plug out IRQ */
+			if (hpd == 1)
+				enable_irq(hdp->irq[HPD_IRQ_OUT]);
+		}
+	} else {
+		hpd_thread = kthread_create(imx_hdp_hpd_thread, hdp, "hdp-hpd");
+		if (IS_ERR(hpd_thread))
+			dev_err(&pdev->dev, "failed  create hpd thread\n");
+
+		wake_up_process(hpd_thread);
+	}
 
 	return 0;
-#ifdef hdp_irq
 err_irq:
 	drm_encoder_cleanup(encoder);
 	return ret;
-#endif
 }
 
 static void imx_hdp_imx_unbind(struct device *dev, struct device *master,

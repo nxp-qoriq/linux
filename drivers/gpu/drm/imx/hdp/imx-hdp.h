@@ -70,13 +70,18 @@
 
 struct hdp_ops {
 	void (*fw_load)(state_struct *state);
-	int (*fw_init)(state_struct *state, u32 rate);
+	int (*fw_init)(state_struct *state);
 	int (*phy_init)(state_struct *state, struct drm_display_mode *mode,
 			int format, int color_depth);
 	void (*mode_set)(state_struct *state, struct drm_display_mode *mode,
 			 int format, int color_depth, int max_link);
 	int (*get_edid_block)(void *data, u8 *buf, u32 block, size_t len);
 	void (*get_hpd_state)(state_struct *state, u8 *hpd);
+#ifdef CONFIG_ARCH_LAYERSCAPE
+	void (*phy_reset)(u8 reset);
+#else
+	void (*phy_reset)(sc_ipc_t ipcHndl, struct hdp_mem *mem, u8 reset);
+#endif
 };
 
 struct hdp_devtype {
@@ -163,6 +168,11 @@ struct imx_hdp {
 
 	u8 load_fw;
 	u8 is_hdmi;
+
+	u8 is_edp;
+	u32 lane_mapping;
+	u32 edp_link_rate;
+	u32 edp_num_lanes;
 
 	struct mutex mutex;		/* for state below and previous_mode */
 	enum drm_connector_force force;	/* mutex-protected force state */

@@ -7,7 +7,7 @@
 #ifndef _IMX_HDMI_H_
 #define _IMX_HDMI_H_
 void hdmi_fw_load(state_struct *state);
-int hdmi_fw_init(state_struct *state, u32 rate);
+int hdmi_fw_init(state_struct *state);
 int hdmi_phy_init(state_struct *state, struct drm_display_mode *mode,
 		  int format, int color_depth);
 void hdmi_mode_set(state_struct *state, struct drm_display_mode *mode,

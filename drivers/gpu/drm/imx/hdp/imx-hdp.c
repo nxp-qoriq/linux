@@ -11,12 +11,15 @@
 #include <linux/component.h>
 #include <linux/mfd/syscon.h>
 #include <linux/of.h>
+#include <linux/of_address.h>
 #include <linux/of_device.h>
 
 #include "imx-hdp.h"
 #include "imx-hdmi.h"
 #include "imx-dp.h"
 #include "../imx-drm.h"
+
+#define EDP_PHY_RESET	0x230
 
 struct drm_display_mode *g_mode;
 
@@ -55,6 +58,18 @@ static inline struct imx_hdp *enc_to_imx_hdp(struct drm_encoder *e)
 	return container_of(e, struct imx_hdp, encoder);
 }
 
+static void imx_hdp_state_init(struct imx_hdp *hdp)
+{
+	state_struct *state = &hdp->state;
+
+	memset(state, 0, sizeof(state_struct));
+	mutex_init(&state->mutex);
+
+	state->mem = &hdp->mem;
+	state->rw = hdp->rw;
+	state->edp = hdp->is_edp;
+}
+
 #ifdef arch_imx
 static void imx_hdp_plmux_config(struct imx_hdp *hdp, struct drm_display_mode *mode)
 {
@@ -70,23 +85,7 @@ static void imx_hdp_plmux_config(struct imx_hdp *hdp, struct drm_display_mode *m
 
 	writel(val, hdp->mem.ss_base + CSR_PIXEL_LINK_MUX_CTL);
 }
-#endif
 
-static void imx_hdp_state_init(struct imx_hdp *hdp)
-{
-	state_struct *state = &hdp->state;
-
-	memset(state, 0, sizeof(state_struct));
-	mutex_init(&state->mutex);
-
-	state->mem.regs_base = hdp->regs_base;
-#ifdef arch_imx
-	state->mem.ss_base = hdp->ss_base;
-#endif
-	state->rw = hdp->rw;
-}
-
-#ifdef arch_imx
 void hdp_phy_reset(u8 reset)
 {
 	sc_err_t sciErr;
@@ -127,6 +126,23 @@ static void clk_set_root(struct imx_hdp *hdp)
 	sc_pm_set_clock_parent(ipcHndl, SC_R_HDMI, SC_PM_CLK_MISC3, 4);
 }
 #endif
+
+static const struct of_device_id scfg_device_ids[] = {
+	{ .compatible = "fsl,ls1028a-scfg", },
+	{}
+};
+
+void ls1028a_phy_reset(u8 reset)
+{
+	struct device_node *scfg_node;
+	void __iomem *scfg_base = NULL;
+
+	scfg_node = of_find_matching_node(NULL, scfg_device_ids);
+	if (scfg_node)
+		scfg_base = of_iomap(scfg_node, 0);
+
+	iowrite32(reset, scfg_base + EDP_PHY_RESET);
+}
 
 static void hdp_ipg_clock_set_rate(struct imx_hdp *hdp)
 {
@@ -788,9 +804,10 @@ static struct hdp_ops ls1028a_dp_ops = {
 	.fw_load = dp_fw_load,
 #endif
 	.fw_init = dp_fw_init,
-	.phy_init = dp_phy_init,
+	.phy_init = dp_phy_init_t28hpc,
 	.mode_set = dp_mode_set,
 	.get_edid_block = dp_get_edid_block,
+	.phy_reset = ls1028a_phy_reset,
 };
 
 static struct hdp_devtype ls1028a_dp_devtype = {
@@ -937,6 +954,36 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 
 	hdp->load_fw = devtype->load_fw;
 	hdp->is_hdmi = devtype->is_hdmi;
+
+	hdp->is_edp = of_property_read_bool(pdev->dev.of_node, "fsl,edp");
+
+	ret = of_property_read_u32(pdev->dev.of_node,
+				       "lane_mapping",
+				       &hdp->lane_mapping);
+	if (ret) {
+		hdp->lane_mapping = 0x1b;
+		dev_warn(dev, "Failed to get lane_mapping - using default\n");
+	}
+	dev_info(dev, "lane_mapping 0x%02x\n", hdp->lane_mapping);
+
+	ret = of_property_read_u32(pdev->dev.of_node,
+				       "edp_link_rate",
+				       &hdp->edp_link_rate);
+	if (ret) {
+		hdp->edp_link_rate = 0;
+		dev_warn(dev, "Failed to get dp_link_rate - using default\n");
+	}
+	dev_info(dev, "edp_link_rate 0x%02x\n", hdp->edp_link_rate);
+
+	ret = of_property_read_u32(pdev->dev.of_node,
+				       "edp_num_lanes",
+				       &hdp->edp_num_lanes);
+	if (ret) {
+		hdp->edp_num_lanes = 4;
+		dev_warn(dev, "Failed to get dp_num_lanes - using default\n");
+	}
+	dev_info(dev, "dp_num_lanes 0x%02x\n", hdp->edp_num_lanes);
+
 	hdp->ops = devtype->ops;
 	hdp->rw = devtype->rw;
 	hdp->bpc = 8;
@@ -957,7 +1004,7 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 	imx_hdp_call(hdp, fw_load, &hdp->state);
 	core_rate = clk_get_rate(hdp->clks.clk_core);
 
-	ret = imx_hdp_call(hdp, fw_init, &hdp->state, core_rate);
+	ret = imx_hdp_call(hdp, fw_init, &hdp->state);
 	if (ret < 0) {
 		DRM_ERROR("Failed to initialise HDP firmware\n");
 		return ret;

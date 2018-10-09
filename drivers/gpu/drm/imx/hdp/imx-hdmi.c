@@ -22,12 +22,16 @@ void hdmi_fw_load(state_struct *state)
 		hdmitx_dram0_get_size());
 }
 
-int hdmi_fw_init(state_struct *state, u32 core_rate)
+int hdmi_fw_init(state_struct *state)
 {
 	u8 echo_msg[] = "echo test";
 	u8 echo_resp[sizeof(echo_msg) + 1];
+	struct imx_hdp *hdp = state_to_imx_hdp(state);
+	u32 core_rate;
 	int ret;
 	u8 sts;
+
+	core_rate = clk_get_rate(hdp->clks.clk_core);
 
 	/* configure the clock */
 	CDN_API_SetClock(state, core_rate/1000000);

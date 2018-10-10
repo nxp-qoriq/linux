@@ -1648,7 +1648,8 @@ static void enetc_kfree_si(struct enetc_si *si)
 static void enetc_detect_errata(struct enetc_si *si)
 {
 	if (si->pdev->revision == ENETC_REV1)
-		si->errata = ENETC_ERR_TXCSUM | ENETC_ERR_VLAN_ISOL;
+		si->errata = ENETC_ERR_TXCSUM | ENETC_ERR_VLAN_ISOL |
+			     ENETC_ERR_UCMCSWP;
 }
 
 int enetc_pci_probe(struct pci_dev *pdev, const char *name, int sizeof_priv)

@@ -225,9 +225,9 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PMO_IFM_RG	BIT(2)
 #define ENETC_PM0_IFM_RLP	(BIT(5) | BIT(11))
 
-#define ENETC_PSIUMHFR0(n)	(0x01d00 + (n) * 0x10) /* n = SI index */
+#define ENETC_PSIUMHFR0(n, err)	(((err) ? 0x01d08 : 0x01d00) + (n) * 0x10)
 #define ENETC_PSIUMHFR1(n)	(0x01d04 + (n) * 0x10)
-#define ENETC_PSIMMHFR0(n)	(0x01d08 + (n) * 0x10)
+#define ENETC_PSIMMHFR0(n, err)	(((err) ? 0x01d00 : 0x01d08) + (n) * 0x10)
 #define ENETC_PSIMMHFR1(n)	(0x01d0c + (n) * 0x10)
 
 #define ENETC_PSIVHFR0(n)	(0x01e00 + (n) * 8) /* n = SI index */

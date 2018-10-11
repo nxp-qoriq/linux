@@ -1173,6 +1173,47 @@ static void enetc_setup_bdrs(struct enetc_ndev_priv *priv)
 		enetc_setup_rxbdr(&priv->si->hw, priv->rx_ring[i]);
 }
 
+static void enetc_clear_rxbdr(struct enetc_hw *hw, struct enetc_bdr *rx_ring)
+{
+	int idx = rx_ring->index;
+
+	/* disable EN bit on ring */
+	enetc_rxbdr_wr(hw, idx, ENETC_RBMR, 0);
+}
+
+static void enetc_clear_txbdr(struct enetc_hw *hw, struct enetc_bdr *tx_ring)
+{
+	int delay = 16, timeout = 1000;
+	int idx = tx_ring->index;
+
+	/* disable EN bit on ring */
+	enetc_txbdr_wr(hw, idx, ENETC_TBMR, 0);
+
+	/* wait for busy to clear */
+	while (delay < timeout &&
+	       enetc_txbdr_rd(hw, idx, ENETC_TBSR) & ENETC_TBSR_BUSY) {
+		msleep(delay);
+		delay *= 2;
+	}
+
+	if (delay >= timeout)
+		netdev_warn(tx_ring->ndev, "timeout for tx ring #%d clear\n",
+			    idx);
+}
+
+static void enetc_clear_bdrs(struct enetc_ndev_priv *priv)
+{
+	int i;
+
+	for (i = 0; i < priv->num_tx_rings; i++)
+		enetc_clear_txbdr(&priv->si->hw, priv->tx_ring[i]);
+
+	for (i = 0; i < priv->num_rx_rings; i++)
+		enetc_clear_rxbdr(&priv->si->hw, priv->rx_ring[i]);
+
+	udelay(1);
+}
+
 int enetc_setup_irqs(struct enetc_ndev_priv *priv)
 {
 	struct pci_dev *pdev = priv->si->pdev;
@@ -1343,6 +1384,8 @@ int enetc_close(struct net_device *ndev)
 	} else {
 		netif_carrier_off(ndev);
 	}
+
+	enetc_clear_bdrs(priv);
 
 	enetc_free_rxtx_rings(priv);
 	enetc_free_rx_resources(priv);

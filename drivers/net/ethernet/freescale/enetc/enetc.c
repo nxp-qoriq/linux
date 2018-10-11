@@ -987,6 +987,11 @@ static void enetc_setup_cbdr(struct enetc_hw *hw, struct enetc_cbdr *cbdr)
 	cbdr->cisr = hw->reg + ENETC_SICBDRCISR;
 }
 
+static void enetc_clear_cbdr(struct enetc_hw *hw)
+{
+	enetc_wr(hw, ENETC_SICBDRMR, 0);
+}
+
 static int enetc_configure_si(struct enetc_ndev_priv *priv)
 {
 	struct enetc_si *si = priv->si;
@@ -1064,6 +1069,7 @@ int enetc_alloc_si_resources(struct enetc_ndev_priv *priv)
 err_config_si:
 	kfree(priv->cls_rules);
 err_alloc_cls:
+	enetc_clear_cbdr(&si->hw);
 	enetc_free_cbdr(priv->dev, &si->cbd_ring);
 err_alloc_cbdr:
 
@@ -1074,6 +1080,7 @@ void enetc_free_si_resources(struct enetc_ndev_priv *priv)
 {
 	struct enetc_si *si = priv->si;
 
+	enetc_clear_cbdr(&si->hw);
 	enetc_free_cbdr(priv->dev, &si->cbd_ring);
 
 	kfree(priv->cls_rules);

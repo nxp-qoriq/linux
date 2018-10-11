@@ -61,38 +61,6 @@
 	status = "okay";
 };
 
-&enetc_port0 {
-	phy-connection-type = "internal";
-	fixed-link {
-		speed = <1000>;
-		full-duplex;
-	};
-};
-
-&enetc_port1 {
-	phy-connection-type = "internal";
-	fixed-link {
-		speed = <1000>;
-		full-duplex;
-	};
-};
-
-&enetc_port2 {
-	phy-connection-type = "internal";
-	fixed-link {
-		speed = <1000>;
-		full-duplex;
-	};
-};
-
-&enetc_port3 {
-	phy-connection-type = "internal";
-	fixed-link {
-		speed = <1000>;
-		full-duplex;
-	};
-};
-
 /* l2switch ports */
 &switch_port0 {
 	phy-connection-type = "internal";

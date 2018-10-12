@@ -129,8 +129,7 @@ free_buf:
 }
 
 /* Build a linear skb based on a single-buffer frame descriptor */
-static struct sk_buff *build_linear_skb(struct dpaa2_eth_priv *priv,
-					struct dpaa2_eth_channel *ch,
+static struct sk_buff *build_linear_skb(struct dpaa2_eth_channel *ch,
 					const struct dpaa2_fd *fd,
 					void *fd_vaddr)
 {
@@ -426,7 +425,7 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 
 		dma_unmap_single(dev, addr, DPAA2_ETH_RX_BUF_SIZE,
 				 DMA_BIDIRECTIONAL);
-		skb = build_linear_skb(priv, ch, fd, vaddr);
+		skb = build_linear_skb(ch, fd, vaddr);
 	} else if (fd_format == dpaa2_fd_sg) {
 		dma_unmap_single(dev, addr, DPAA2_ETH_RX_BUF_SIZE,
 				 DMA_BIDIRECTIONAL);

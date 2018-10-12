@@ -817,13 +817,12 @@ bool dpa_bpid2pool_use(int bpid)
 	return false;
 }
 
-#ifdef CONFIG_FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
+#ifdef CONFIG_FMAN_PFC
 u16 dpa_select_queue(struct net_device *net_dev, struct sk_buff *skb,
 		     void *accel_priv, select_queue_fallback_t fallback)
 {
 	return dpa_get_queue_mapping(skb);
 }
-EXPORT_SYMBOL(dpa_select_queue);
 #endif
 
 struct dpa_fq *dpa_fq_alloc(struct device *dev,

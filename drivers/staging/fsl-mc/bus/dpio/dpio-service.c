@@ -218,6 +218,12 @@ done:
 	return IRQ_HANDLED;
 }
 
+int dpaa2_io_get_cpu(struct dpaa2_io *d)
+{
+	return d->dpio_desc.cpu;
+}
+EXPORT_SYMBOL(dpaa2_io_get_cpu);
+
 /**
  * dpaa2_io_service_register() - Prepare for servicing of FQDAN or CDAN
  *                               notifications on the given DPIO service.

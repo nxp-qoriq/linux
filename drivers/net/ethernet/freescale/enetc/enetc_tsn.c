@@ -78,7 +78,7 @@ static int xmit_cbdr(struct enetc_si *si, int i)
 	} while (timeout);
 
 	if (!timeout)
-		return ENETC_CMD_TIMEOUT;
+		return -EBUSY;
 #if 0
 	enetc_clean_cbdr(si);
 #endif
@@ -96,7 +96,7 @@ static int xmit_cbdr(struct enetc_si *si, int i)
 
 	ring->next_to_clean = nc;
 
-	return ENETC_CMD_OK;
+	return 0;
 }
 
 /* Class 10: Flow Meter Instance Statistics Query Descriptor - Long Format */

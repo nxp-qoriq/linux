@@ -352,13 +352,16 @@ static void enetc_set_loopback(struct net_device *ndev, bool en)
 	reg = enetc_port_rd(hw, ENETC_PM0_IF_MODE);
 	if (reg & ENETC_PMO_IFM_RG) {
 		/* RGMII mode */
-		reg = en ? reg | ENETC_PM0_IFM_RLP : reg & ~ENETC_PM0_IFM_RLP;
+		reg = (reg & ~ENETC_PM0_IFM_RLP) |
+		      (en ? ENETC_PM0_IFM_RLP : 0);
 		enetc_port_wr(hw, ENETC_PM0_IF_MODE, reg);
 	} else {
 		/* assume SGMII mode */
 		reg = enetc_port_rd(hw, ENETC_PM0_CMD_CFG);
-		reg = en ? reg | ENETC_PM0_CMD_XGLP : reg & ~ENETC_PM0_CMD_XGLP;
-		reg = en ? reg & ~ENETC_PM0_CMD_PHY_TX_EN : reg | ENETC_PM0_CMD_PHY_TX_EN;
+		reg = (reg & ~ENETC_PM0_CMD_XGLP) |
+		      (en ? ENETC_PM0_CMD_XGLP : 0);
+		reg = (reg & ~ENETC_PM0_CMD_PHY_TX_EN) |
+		      (en ? ENETC_PM0_CMD_PHY_TX_EN : 0);
 		enetc_port_wr(hw, ENETC_PM0_CMD_CFG, reg);
 		enetc_port_wr(hw, ENETC_PM1_CMD_CFG, reg);
 	}

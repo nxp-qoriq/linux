@@ -11,7 +11,7 @@ static void enetc_clean_cbdr(struct enetc_si *si)
 
 	i = ring->next_to_clean;
 
-	while (enetc_rd_reg(ring->cisr) != i) {
+	while (enetc_rd_reg(ring->cir) != i) {
 		dest_cbd = ENETC_CBD(*ring, i);
 		status = dest_cbd->status_flags & ENETC_CBD_STATUS_MASK;
 		if (status)
@@ -54,10 +54,10 @@ static int enetc_send_cmd(struct enetc_si *si, struct enetc_cbd *cbd)
 
 	ring->next_to_use = i;
 	/* let H/W know BD ring has been updated */
-	enetc_wr_reg(ring->cir, i);
+	enetc_wr_reg(ring->pir, i);
 
 	do {
-		if (enetc_rd_reg(ring->cisr) == i)
+		if (enetc_rd_reg(ring->cir) == i)
 			break;
 		udelay(10); /* cannot sleep, rtnl_lock() */
 		timeout -= 10;

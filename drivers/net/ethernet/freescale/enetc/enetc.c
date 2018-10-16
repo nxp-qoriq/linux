@@ -77,7 +77,6 @@ netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
 	}
 
 	if (enetc_bd_unused(tx_ring) < ENETC_FREE_TXBD_NEEDED) {
-		// TODO: check h/w index (CISR) for more acurate status
 		netif_stop_subqueue(ndev, tx_ring->index);
 		return NETDEV_TX_BUSY;
 	}
@@ -89,7 +88,6 @@ netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
 	}
 
 	if (enetc_bd_unused(tx_ring) < ENETC_FREE_TXBD_NEEDED)
-		// TODO: check h/w index (CISR) for more acurate status
 		netif_stop_subqueue(ndev, tx_ring->index);
 
 	return NETDEV_TX_OK;
@@ -245,7 +243,7 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 	if (debug)
 		enetc_dbg_print_skb(skb, TX);
 	/* let H/W know BD ring has been updated */
-	enetc_wr_reg(tx_ring->tcir, i); /* includes wmb() */
+	enetc_wr_reg(tx_ring->tpir, i); /* includes wmb() */
 
 	return count;
 
@@ -315,7 +313,7 @@ static void enetc_unmap_tx_buff(struct enetc_bdr *tx_ring,
 
 static int enetc_bd_ready_count(struct enetc_bdr *tx_ring, int ci)
 {
-	int pi = enetc_rd_reg(tx_ring->tcisr) & ENETC_TBCISR_IDX_MASK;
+	int pi = enetc_rd_reg(tx_ring->tcir) & ENETC_TBCIR_IDX_MASK;
 
 	return pi >= ci ? pi - ci : tx_ring->bd_count - ci + pi;
 }
@@ -977,14 +975,14 @@ static void enetc_setup_cbdr(struct enetc_hw *hw, struct enetc_cbdr *cbdr)
 	enetc_wr(hw, ENETC_SICBDRBAR1, upper_32_bits(cbdr->bd_dma_base));
 	enetc_wr(hw, ENETC_SICBDRLENR, ENETC_RTBLENR_LEN(cbdr->bd_count));
 
+	enetc_wr(hw, ENETC_SICBDRPIR, 0);
 	enetc_wr(hw, ENETC_SICBDRCIR, 0);
-	enetc_wr(hw, ENETC_SICBDRCISR, 0);
 
 	/* enable ring */
 	enetc_wr(hw, ENETC_SICBDRMR, BIT(31));
 
+	cbdr->pir = hw->reg + ENETC_SICBDRPIR;
 	cbdr->cir = hw->reg + ENETC_SICBDRCIR;
-	cbdr->cisr = hw->reg + ENETC_SICBDRCISR;
 }
 
 static void enetc_clear_cbdr(struct enetc_hw *hw)
@@ -1105,8 +1103,8 @@ static void enetc_setup_txbdr(struct enetc_hw *hw, struct enetc_bdr *tx_ring)
 	enetc_txbdr_wr(hw, idx, ENETC_TBLENR,
 		       ENETC_RTBLENR_LEN(tx_ring->bd_count));
 
+	enetc_txbdr_wr(hw, idx, ENETC_TBPIR, 0);
 	enetc_txbdr_wr(hw, idx, ENETC_TBCIR, 0);
-	enetc_txbdr_wr(hw, idx, ENETC_TBCISR, 0);
 
 	/* enable Tx ints by setting pkt thr to 1 */
 	enetc_txbdr_wr(hw, idx, ENETC_TBICIR0, ENETC_TBICIR0_ICEN | 0x1);
@@ -1123,8 +1121,8 @@ static void enetc_setup_txbdr(struct enetc_hw *hw, struct enetc_bdr *tx_ring)
 	/* enable ring */
 	enetc_txbdr_wr(hw, idx, ENETC_TBMR, tbmr);
 
+	tx_ring->tpir = hw->reg + ENETC_BDR(TX, idx, ENETC_TBPIR);
 	tx_ring->tcir = hw->reg + ENETC_BDR(TX, idx, ENETC_TBCIR);
-	tx_ring->tcisr = hw->reg + ENETC_BDR(TX, idx, ENETC_TBCISR);
 	tx_ring->idr = hw->reg + ENETC_SITXIDR;
 }
 

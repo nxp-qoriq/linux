@@ -53,7 +53,7 @@ static int alloc_cbdr(struct enetc_si *si, struct enetc_cbd **curr_cbd)
 	return i;
 }
 
-/* Transmit the BD control ring by writing the ccir register.
+/* Transmit the BD control ring by writing the pir register.
  * Update the counters maintained by software.
  */
 static int xmit_cbdr(struct enetc_si *si, int i)
@@ -66,12 +66,12 @@ static int xmit_cbdr(struct enetc_si *si, int i)
 
 	ring->next_to_use = i;
 	/* let H/W know BD ring has been updated */
-	enetc_wr_reg(ring->cir, i);
+	enetc_wr_reg(ring->pir, i);
 
 	timeout = ENETC_CBDR_TIMEOUT;
 
 	do {
-		if (enetc_rd_reg(ring->cisr) == i)
+		if (enetc_rd_reg(ring->cir) == i)
 			break;
 		udelay(10);
 		timeout -= 10;
@@ -84,7 +84,7 @@ static int xmit_cbdr(struct enetc_si *si, int i)
 #endif
 	nc = ring->next_to_clean;
 
-	while (enetc_rd_reg(ring->cisr) != nc) {
+	while (enetc_rd_reg(ring->cir) != nc) {
 		dest_cbd = ENETC_CBD(*ring, nc);
 		if (dest_cbd->status_flags & ENETC_CBD_STATUS_MASK)
 			WARN_ON(1);
@@ -223,8 +223,8 @@ int enetc_qbv_set(struct net_device *ndev, struct tsn_qbv_conf *admin_conf)
 	gcl_config->acl_len = cpu_to_le16(gcl_len);
 
 	if (!admin_basic->base_time) {
-		gcl_data->btl = cpu_to_le32(enetc_rd(&priv->si->hw, ENETC_SICTRL));
-		gcl_data->bth = cpu_to_le32(enetc_rd(&priv->si->hw, ENETC_SICTRH));
+		gcl_data->btl = cpu_to_le32(enetc_rd(&priv->si->hw, ENETC_SICTR0));
+		gcl_data->bth = cpu_to_le32(enetc_rd(&priv->si->hw, ENETC_SICTR1));
 	} else {
 		gcl_data->btl = cpu_to_le32(lower_32_bits(admin_basic->base_time));
 		gcl_data->bth = cpu_to_le32(upper_32_bits(admin_basic->base_time));
@@ -470,8 +470,8 @@ int enetc_qbv_get_status(struct net_device *ndev,
 	status->tick_granularity = enetc_rd(&priv->si->hw, ENETC_SITGTGR);
 
 	/* current time */
-	temp = ((u64)enetc_rd(&priv->si->hw, ENETC_SICTRH)) << 32;
-	status->current_time = enetc_rd(&priv->si->hw, ENETC_SICTRL) + temp;
+	temp = ((u64)enetc_rd(&priv->si->hw, ENETC_SICTR1)) << 32;
+	status->current_time = enetc_rd(&priv->si->hw, ENETC_SICTR0) + temp;
 
 	status->supported_list_max = maxlen;
 
@@ -1097,8 +1097,8 @@ int enetc_qci_sgi_set(struct net_device *ndev, u32 index,
 	}
 
 	if (!tsn_qci_sgi->admin.base_time) {
-		sgcl_data->btl = cpu_to_le32(enetc_rd(&priv->si->hw, ENETC_SICTRL));
-		sgcl_data->bth = cpu_to_le32(enetc_rd(&priv->si->hw, ENETC_SICTRH));
+		sgcl_data->btl = cpu_to_le32(enetc_rd(&priv->si->hw, ENETC_SICTR0));
+		sgcl_data->bth = cpu_to_le32(enetc_rd(&priv->si->hw, ENETC_SICTR1));
 	} else {
 		sgcl_data->bth = cpu_to_le32(upper_32_bits(tsn_qci_sgi->admin.base_time));
 		sgcl_data->btl = cpu_to_le32(lower_32_bits(tsn_qci_sgi->admin.base_time));
@@ -1403,8 +1403,8 @@ cmd2quit:
 	status->tick_granularity = enetc_rd(&priv->si->hw, ENETC_SITGTGR);
 
 	/* current time */
-	temp = ((u64)enetc_rd(&priv->si->hw, ENETC_SICTRH)) << 32;
-	status->current_time = enetc_rd(&priv->si->hw, ENETC_SICTRL) + temp;
+	temp = ((u64)enetc_rd(&priv->si->hw, ENETC_SICTR1)) << 32;
+	status->current_time = enetc_rd(&priv->si->hw, ENETC_SICTR0) + temp;
 
 	memset(cbdr_sgi, 0, sizeof(*cbdr_sgi));
 

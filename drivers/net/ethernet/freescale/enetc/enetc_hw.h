@@ -10,25 +10,21 @@
 /* ENETC register block BAR */
 #define ENETC_BAR_REGS	0
 
-/* SI regs, offset: 0h */
+/** SI regs, offset: 0h */
 #define ENETC_SIMR	0
 #define ENETC_SIMR_EN	BIT(31)
 #define ENETC_SIMR_RSSE	BIT(0)
-
-#define ENETC_SICTRL	0x18
-#define ENETC_SICTRH	0x1c
+#define ENETC_SICTR0	0x18
+#define ENETC_SICTR1	0x1c
 #define ENETC_SIPCAPR0	0x20
 #define ENETC_SIPCAPR0_RSS	BIT(8)
 #define ENETC_SIPCAPR1	0x24
 #define ENETC_SITGTGR	0x30
-
 #define ENETC_SIRBGCR	0x38
-
-/* Cache attribute registers for transactions initiated by ENETC */
+/* cache attribute registers for transactions initiated by ENETC */
 #define ENETC_SICAR0	0x40
 #define ENETC_SICAR1	0x44
 #define ENETC_SICAR2	0x48
-
 /*
  * rd snoop, no alloc
  * wr snoop, no alloc, partial cache line update for BDs and full cache line
@@ -38,26 +34,23 @@
 #define ENETC_SICAR_WR_COHERENT	0x00006727
 #define ENETC_SICAR_MSI	0x00300030 /* rd/wr device, no snoop, no alloc */
 
-#define ENETC_SICTR0	0x18
-#define ENETC_SICTR1	0x1c
-
 #define ENETC_SIPMAR0	0x80
 #define ENETC_SIPMAR1	0x84
 
 /* VF-PF Message passing */
-#define ENETC_DEFAULT_MSG_SIZE	1024
+#define ENETC_DEFAULT_MSG_SIZE	1024	/* and max size */
+/* msg size encoding: default and max msg value of 1024B encoded as 0 */
 static inline u32 enetc_vsi_set_msize(u32 size)
 {
 	return size < ENETC_DEFAULT_MSG_SIZE ? size >> 5 : 0;
 }
-
 #define ENETC_PSIMSGRR	0x204
 #define ENETC_PSIMSGRR_MR_MASK	GENMASK(2, 1)
 #define ENETC_PSIMSGRR_MR(n) BIT((n) + 1) /* n = VSI index */
 #define ENETC_PSIVMSGRCVAR0(n)	(0x210 + (n) * 0x8) /* n = VSI index */
 #define ENETC_PSIVMSGRCVAR1(n)	(0x214 + (n) * 0x8)
 
-#define ENETC_VSIMSGSR	0x204
+#define ENETC_VSIMSGSR	0x204	/* RO */
 #define ENETC_VSIMSGSR_MB	BIT(0)
 #define ENETC_VSIMSGSR_MS	BIT(1)
 #define ENETC_VSIMSGSNDAR0	0x210
@@ -82,8 +75,8 @@ static inline u32 enetc_vsi_set_msize(u32 size)
 #define ENETC_SICBDRSR		0x804	/* RO */
 #define ENETC_SICBDRBAR0	0x810
 #define ENETC_SICBDRBAR1	0x814
-#define ENETC_SICBDRCIR		0x818
-#define ENETC_SICBDRCISR	0x81c
+#define ENETC_SICBDRPIR		0x818
+#define ENETC_SICBDRCIR		0x81c
 #define ENETC_SICBDRLENR	0x820
 
 #define ENETC_SICAPR0	0x900
@@ -108,12 +101,11 @@ static inline u32 enetc_vsi_set_msize(u32 size)
 enum enetc_bdr_type {TX, RX};
 #define ENETC_BDR_OFF(i)	((i) * 0x200)
 #define ENETC_BDR(t, i, r)	(0x8000 + (t) * 0x100 + ENETC_BDR_OFF(i) + (r))
-/*** RX BDR reg offsets */
+/* RX BDR reg offsets */
 #define ENETC_RBMR	0
 #define ENETC_RBMR_BDS	BIT(2)
 #define ENETC_RBMR_VTE	BIT(5)
 #define ENETC_RBMR_EN	BIT(31)
-
 #define ENETC_RBSR	0x4
 #define ENETC_RBBSR	0x8
 #define ENETC_RBCIR	0xc
@@ -127,20 +119,20 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_RBICIR0	0xa8
 #define ENETC_RBICIR0_ICEN	BIT(31)
 
-/*** TX BDR reg offsets */
+/* TX BDR reg offsets */
 #define ENETC_TBMR	0
 #define ENETC_TBSR_BUSY	BIT(0)
 #define ENETC_TBMR_VIH	BIT(9)
 #define ENETC_TBMR_PRIO_MASK		GENMASK(2, 0)
 #define ENETC_TBMR_PRIO_SET(val)	val
-
+#define ENETC_TBMR_EN	BIT(31)
 #define ENETC_TBSR	0x4
 #define ENETC_TBBAR0	0x10
 #define ENETC_TBBAR1	0x14
-#define ENETC_TBCIR	0x18
-#define ENETC_TBCISR	0x1c
+#define ENETC_TBPIR	0x18
+#define ENETC_TBCIR	0x1c
+#define ENETC_TBCIR_IDX_MASK	0xffff
 #define ENETC_TBLENR	0x20
-#define ENETC_TBCISR_IDX_MASK	0xffff
 #define ENETC_TBIER	0xa0
 #define ENETC_TBIER_TXTIE	BIT(0)
 #define ENETC_TBIDR	0xa4
@@ -148,39 +140,34 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_TBICIR0_ICEN	BIT(31)
 
 #define ENETC_RTBLENR_LEN(n)	((n) & ~0x7)
-#define ENETC_TBMR_EN	BIT(31)
 
 /* Port regs, offset: 1_0000h */
-#define ENETC_PORT_BASE	0x10000
-#define ENETC_PMR	0x00000
+#define ENETC_PORT_BASE		0x10000
+#define ENETC_PMR		0x0000
 #define ENETC_PMR_EN	GENMASK(18, 16)
-#define ENETC_PSR	0x00004 /* RO */
-#define ENETC_PSIPMR	0x00018
+#define ENETC_PSR		0x0004 /* RO */
+#define ENETC_PSIPMR		0x0018
 #define ENETC_PSIPMR_SET_UP(n)	BIT(n) /* n = SI index */
 #define ENETC_PSIPMR_SET_MP(n)	BIT((n) + 16)
-#define ENETC_PSIPVMR	0x0001c
+#define ENETC_PSIPVMR		0x001c
 #define ENETC_VLAN_PROMISC_MAP_ALL	0x7
 #define ENETC_PSIPVMR_SET_VP(simap)	((simap) & 0x7)
 #define ENETC_PSIPVMR_SET_VUTA(simap)	(((simap) & 0x7) << 16)
-#define ENETC_PSIPMAR0(n)	(0x00100 + (n) * 0x8) /* n = SI index */
-#define ENETC_PSIPMAR1(n)	(0x00104 + (n) * 0x8)
+#define ENETC_PSIPMAR0(n)	(0x0100 + (n) * 0x8) /* n = SI index */
+#define ENETC_PSIPMAR1(n)	(0x0104 + (n) * 0x8)
 #define ENETC_PVCLCTR		0x0208
 #define ENETC_VLAN_TYPE_C	BIT(0)
 #define ENETC_VLAN_TYPE_S	BIT(1)
 #define ENETC_PVCLCTR_OVTPIDL(bmp)	((bmp) & 0xff) /* VLAN_TYPE */
-
-#define ENETC_PSIVLANR(n)	(0x00240 + (n) * 4) /* n = SI index */
+#define ENETC_PSIVLANR(n)	(0x0240 + (n) * 4) /* n = SI index */
 #define ENETC_PSIVLAN_EN	BIT(31)
 #define ENETC_PSIVLAN_SET_QOS(val)	((u32)(val) << 12)
-
-#define ENETC_PTXMBAR	0x00608
-
-#define ENETC_PCAPR0	0x00900
+#define ENETC_PTXMBAR		0x0608
+#define ENETC_PCAPR0		0x0900
 #define ENETC_PCAPR0_RXBDR(val)	((val) >> 24)
 #define ENETC_PCAPR0_TXBDR(val)	(((val) >> 16) & 0xff)
-#define ENETC_PCAPR1	0x00904
-
-#define ENETC_PSICFGR0(n)	(0x00940 + (n) * 0xc)  /* n = SI index */
+#define ENETC_PCAPR1		0x0904
+#define ENETC_PSICFGR0(n)	(0x0940 + (n) * 0xc)  /* n = SI index */
 #define ENETC_PSICFGR0_SET_TXBDR(val)	((val) & 0xff)
 #define ENETC_PSICFGR0_SET_RXBDR(val)	(((val) & 0xff) << 16)
 #define ENETC_PSICFGR0_SPE	BIT(11)
@@ -189,52 +176,44 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PSICFGR0_ASE	BIT(15)
 #define ENETC_PSICFGR0_SIVC(bmp)	(((bmp) & 0xff) << 24) /* VLAN_TYPE */
 
+#define ENETC_PTCCBSR0(n)	(0x1110 + (n) * 8) /* n = 0 to 7*/
+#define ENETC_PTCCBSR1(n)	(0x1114 + (n) * 8) /* n = 0 to 7*/
 #define ENETC_RSSHASH_KEY_SIZE	40
-#define ENETC_PRSSK(n)		(0x01410 + (n) * 4) /* n = [0..9] */
-
-#define ENETC_PSIVLANFMR	0x01700
+#define ENETC_PRSSK(n)		(0x1410 + (n) * 4) /* n = [0..9] */
+#define ENETC_PSIVLANFMR	0x1700
 #define ENETC_PSIVLANFMR_VS	BIT(0)
-
-#define ENETC_PRFSMR		0x01800
+#define ENETC_PRFSMR		0x1800
 #define ENETC_PRFSMR_RFSE	BIT(31)
-#define ENETC_PFPMR			0x01900
+#define ENETC_PRFSCAPR		0x1804
+#define ENETC_PSIRFSCFGR(n)	(0x1814 + (n) * 4) /* n = SI index */
+#define ENETC_PFPMR		0x1900
 #define ENETC_PFPMR_PMACE	BIT(1)
 #define ENETC_PFPMR_MWLM	BIT(0)
-#define ENETC_MMCSR		0x1F00
+#define ENETC_PSIUMHFR0(n, err)	(((err) ? 0x1d08 : 0x1d00) + (n) * 0x10)
+#define ENETC_PSIUMHFR1(n)	(0x1d04 + (n) * 0x10)
+#define ENETC_PSIMMHFR0(n, err)	(((err) ? 0x1d00 : 0x1d08) + (n) * 0x10)
+#define ENETC_PSIMMHFR1(n)	(0x1d0c + (n) * 0x10)
+#define ENETC_PSIVHFR0(n)	(0x1e00 + (n) * 8) /* n = SI index */
+#define ENETC_PSIVHFR1(n)	(0x1e04 + (n) * 8) /* n = SI index */
+#define ENETC_MMCSR		0x1f00
 #define ENETC_MMCSR_ME		BIT(16)
+#define ENETC_PTCMSDUR(n)	(0x2020 + (n) * 4) /* n = TC index [0..7] */
 
-#define ENETC_PRFSCAPR		0x01804
-#define ENETC_PSIRFSCFGR(n)	(0x01814 + (n) * 4) /* n = SI index */
-
-#define ENETC_PTCMSDUR(n)	(0x02020 + (n) * 4) /* n = TC index [0..7] */
-
-#define ENETC_PM0_CMD_CFG	0x08008
+#define ENETC_PM0_CMD_CFG	0x8008
+#define ENETC_PM1_CMD_CFG	0x9008
 #define ENETC_PM0_TX_EN		BIT(0)
 #define ENETC_PM0_RX_EN		BIT(1)
 #define ENETC_PM0_PROMISC	BIT(4)
 #define ENETC_PM0_CMD_XGLP	BIT(10)
 #define ENETC_PM0_CMD_TXP	BIT(11)
 #define ENETC_PM0_CMD_PHY_TX_EN	BIT(15)
-#define ENETC_PM0_CMD_SFD   BIT(21)
-#define ENETC_PM1_CMD_CFG	0x09008
-
-#define ENETC_PM0_MAXFRM	0x08014
+#define ENETC_PM0_CMD_SFD	BIT(21)
+#define ENETC_PM0_MAXFRM	0x8014
 #define ENETC_SET_TX_MTU(val)	((val) << 16)
 #define ENETC_SET_MAXFRM(val)	((val) & 0xffff)
-
-#define ENETC_PM0_IF_MODE	0x08300
+#define ENETC_PM0_IF_MODE	0x8300
 #define ENETC_PMO_IFM_RG	BIT(2)
 #define ENETC_PM0_IFM_RLP	(BIT(5) | BIT(11))
-
-#define ENETC_PSIUMHFR0(n, err)	(((err) ? 0x01d08 : 0x01d00) + (n) * 0x10)
-#define ENETC_PSIUMHFR1(n)	(0x01d04 + (n) * 0x10)
-#define ENETC_PSIMMHFR0(n, err)	(((err) ? 0x01d00 : 0x01d08) + (n) * 0x10)
-#define ENETC_PSIMMHFR1(n)	(0x01d0c + (n) * 0x10)
-
-#define ENETC_PSIVHFR0(n)	(0x01e00 + (n) * 8) /* n = SI index */
-#define ENETC_PSIVHFR1(n)	(0x01e04 + (n) * 8) /* n = SI index */
-#define ENETC_PTCCBSR0(n)   (0x1110 + (n) * 8) /* n = 0 to 7*/
-#define ENETC_PTCCBSR1(n)   (0x1114 + (n) * 8) /* n = 0 to 7*/
 
 /* MAC counters */
 #define ENETC_PM0_REOCT		0x8100
@@ -295,10 +274,10 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PMFDVFR		0x1784
 #define ENETC_PBFDVFR		0x1788
 
-/* Global regs, offset: 2_0000h */
-#define ENETC_GLOBAL_BASE		0x20000
-#define ENETC_G_EIPBRR0		0x00bf8
-#define ENETC_G_EIPBRR1		0x00bfc
+/** Global regs, offset: 2_0000h */
+#define ENETC_GLOBAL_BASE	0x20000
+#define ENETC_G_EIPBRR0		0x0bf8
+#define ENETC_G_EIPBRR1		0x0bfc
 
 /* PCI device info */
 struct enetc_hw {
@@ -313,18 +292,19 @@ struct enetc_hw {
 /* general register accessors */
 #define enetc_rd_reg(reg)	ioread32((reg))
 #define enetc_wr_reg(reg, val)	iowrite32((val), (reg))
-#define enetc_rd(hw, off)	enetc_rd_reg((hw)->reg + (off))
-#define enetc_wr(hw, off, val)	enetc_wr_reg((hw)->reg + (off), val)
 #ifdef ioread64
-#define enetc_rd_reg64(reg)		ioread64((reg))
+#define enetc_rd_reg64(reg)	ioread64((reg))
 #else
 /* using this to read out stats on 32b systems */
 static inline u64 enetc_rd_reg64(void __iomem *reg)
 {
-	return __le64_to_cpu(*(u64*)reg);
+	return __le64_to_cpu(*(u64 *)reg);
 }
 #endif
-#define enetc_wr_reg64(reg)		iowrite64((val), (reg))
+#define enetc_wr_reg64(reg)	iowrite64((val), (reg))
+
+#define enetc_rd(hw, off)		enetc_rd_reg((hw)->reg + (off))
+#define enetc_wr(hw, off, val)		enetc_wr_reg((hw)->reg + (off), val)
 #define enetc_rd64(hw, off)		enetc_rd_reg64((hw)->reg + (off))
 #define enetc_wr64(hw, off, val)	enetc_wr_reg64((hw)->reg + (off), val)
 /* port register accessors - PF only */

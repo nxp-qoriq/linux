@@ -48,7 +48,7 @@ struct enetc_bdr {
 	struct net_device *ndev;
 	void *bd_base; /* points to Rx or Tx BD ring */
 	union {
-		void __iomem *tcir;
+		void __iomem *tpir;
 		void __iomem *rcir;
 	};
 	u16 index;
@@ -60,7 +60,7 @@ struct enetc_bdr {
 		struct enetc_rx_swbd *rx_swbd;
 	};
 	union {
-		void __iomem *tcisr; /* Tx */
+		void __iomem *tcir; /* Tx */
 		int next_to_alloc; /* Rx */
 	};
 	void __iomem *idr; /* Interrupt Detect Register pointer */
@@ -87,8 +87,8 @@ static inline int enetc_bd_unused(struct enetc_bdr *bdr)
 /* Control BD ring */
 struct enetc_cbdr {
 	void *bd_base; /* points to Rx or Tx BD ring */
+	void __iomem *pir;
 	void __iomem *cir;
-	void __iomem *cisr;
 
 	int bd_count; /* # of BDs */
 	int next_to_use;

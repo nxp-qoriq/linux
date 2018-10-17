@@ -1,36 +1,5 @@
-/*
- * Copyright 2017-2018 NXP
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
- *     * Neither the names of the above-listed copyright holders nor the
- *       names of any contributors may be used to endorse or promote products
- *       derived from this software without specific prior written permission.
- *
- *
- * ALTERNATIVELY, this software may be distributed under the terms of the
- * GNU General Public License ("GPL") as published by the Free Software
- * Foundation, either version 2 of that License or (at your option) any
- * later version.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- */
+// SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
+/* Copyright 2017-2018 NXP */
 
 #include "enetc.h"
 #include <linux/tcp.h>
@@ -784,6 +753,12 @@ void enetc_get_si_caps(struct enetc_si *si)
 	si->num_tx_rings = val & 0xff;
 	si->num_fs_entries = enetc_rd(hw, ENETC_SIRFSCAPR) & 0x7f;
 	si->num_fs_entries = min(si->num_fs_entries, ENETC_MAX_RFS_SIZE);
+	val = enetc_rd(hw, ENETC_SIRSSCAPR) & 0xf;
+	si->num_rss = BIT(val) * 32;
+
+	val = enetc_rd(hw, ENETC_SIPCAPR0);
+	if (!(val & ENETC_SIPCAPR0_RSS))
+		si->num_rss = 0;
 }
 
 static int enetc_alloc_txbdr(struct enetc_bdr *txr)
@@ -1012,26 +987,41 @@ static void enetc_setup_cbdr(struct enetc_hw *hw, struct enetc_cbdr *cbdr)
 	cbdr->cisr = hw->reg + ENETC_SICBDRCISR;
 }
 
-static void enetc_configure_si(struct enetc_ndev_priv *priv)
+static void enetc_clear_cbdr(struct enetc_hw *hw)
 {
-	int rss_table[ENETC_RSS_TABLE_SIZE];
+	enetc_wr(hw, ENETC_SICBDRMR, 0);
+}
+
+static int enetc_configure_si(struct enetc_ndev_priv *priv)
+{
 	struct enetc_si *si = priv->si;
 	struct enetc_hw *hw = &si->hw;
+	int *rss_table;
 	int i;
+
+	rss_table = kmalloc_array(si->num_rss, sizeof(*rss_table), GFP_KERNEL);
+	if (!rss_table)
+		return -ENOMEM;
 
 	enetc_setup_cbdr(hw, &si->cbd_ring);
 	/* set SI cache attributes */
 	enetc_wr(hw, ENETC_SICAR0,
 		 ENETC_SICAR_RD_COHERENT | ENETC_SICAR_WR_COHERENT);
 	enetc_wr(hw, ENETC_SICAR1, ENETC_SICAR_MSI);
-	/* enable SI, TODO: start RSS by default */
-	enetc_wr(hw, ENETC_SIMR, ENETC_SIMR_EN /*| ENETC_SIMR_RSSE*/);
+	/* enable SI */
+	enetc_wr(hw, ENETC_SIMR, ENETC_SIMR_EN);
 
-	/* Set up RSS table defaults */
-	for (i = 0; i < ENETC_RSS_TABLE_SIZE; i++)
-		rss_table[i] = i % priv->num_rx_rings;
-	/* TODO: fix the size, *2 is just to keep sim happy */
-	enetc_set_rss_table(si, rss_table, ENETC_RSS_TABLE_SIZE * 2);
+	if (si->num_rss) {
+		/* Set up RSS table defaults */
+		for (i = 0; i < si->num_rss; i++)
+			rss_table[i] = i % priv->num_rx_rings;
+
+		enetc_set_rss_table(si, rss_table, si->num_rss);
+	}
+
+	kfree(rss_table);
+
+	return 0;
 }
 
 void enetc_init_si_rings_params(struct enetc_ndev_priv *priv)
@@ -1070,11 +1060,16 @@ int enetc_alloc_si_resources(struct enetc_ndev_priv *priv)
 		goto err_alloc_cls;
 	}
 
-	enetc_configure_si(priv);
+	err = enetc_configure_si(priv);
+	if (err)
+		goto err_config_si;
 
 	return 0;
 
+err_config_si:
+	kfree(priv->cls_rules);
 err_alloc_cls:
+	enetc_clear_cbdr(&si->hw);
 	enetc_free_cbdr(priv->dev, &si->cbd_ring);
 err_alloc_cbdr:
 
@@ -1085,6 +1080,7 @@ void enetc_free_si_resources(struct enetc_ndev_priv *priv)
 {
 	struct enetc_si *si = priv->si;
 
+	enetc_clear_cbdr(&si->hw);
 	enetc_free_cbdr(priv->dev, &si->cbd_ring);
 
 	kfree(priv->cls_rules);
@@ -1182,6 +1178,47 @@ static void enetc_setup_bdrs(struct enetc_ndev_priv *priv)
 
 	for (i = 0; i < priv->num_rx_rings; i++)
 		enetc_setup_rxbdr(&priv->si->hw, priv->rx_ring[i]);
+}
+
+static void enetc_clear_rxbdr(struct enetc_hw *hw, struct enetc_bdr *rx_ring)
+{
+	int idx = rx_ring->index;
+
+	/* disable EN bit on ring */
+	enetc_rxbdr_wr(hw, idx, ENETC_RBMR, 0);
+}
+
+static void enetc_clear_txbdr(struct enetc_hw *hw, struct enetc_bdr *tx_ring)
+{
+	int delay = 16, timeout = 1000;
+	int idx = tx_ring->index;
+
+	/* disable EN bit on ring */
+	enetc_txbdr_wr(hw, idx, ENETC_TBMR, 0);
+
+	/* wait for busy to clear */
+	while (delay < timeout &&
+	       enetc_txbdr_rd(hw, idx, ENETC_TBSR) & ENETC_TBSR_BUSY) {
+		msleep(delay);
+		delay *= 2;
+	}
+
+	if (delay >= timeout)
+		netdev_warn(tx_ring->ndev, "timeout for tx ring #%d clear\n",
+			    idx);
+}
+
+static void enetc_clear_bdrs(struct enetc_ndev_priv *priv)
+{
+	int i;
+
+	for (i = 0; i < priv->num_tx_rings; i++)
+		enetc_clear_txbdr(&priv->si->hw, priv->tx_ring[i]);
+
+	for (i = 0; i < priv->num_rx_rings; i++)
+		enetc_clear_rxbdr(&priv->si->hw, priv->rx_ring[i]);
+
+	udelay(1);
 }
 
 int enetc_setup_irqs(struct enetc_ndev_priv *priv)
@@ -1354,6 +1391,8 @@ int enetc_close(struct net_device *ndev)
 	} else {
 		netif_carrier_off(ndev);
 	}
+
+	enetc_clear_bdrs(priv);
 
 	enetc_free_rxtx_rings(priv);
 	enetc_free_rx_resources(priv);
@@ -1656,6 +1695,13 @@ static void enetc_kfree_si(struct enetc_si *si)
 	kfree(p);
 }
 
+static void enetc_detect_errata(struct enetc_si *si)
+{
+	if (si->pdev->revision == ENETC_REV1)
+		si->errata = ENETC_ERR_TXCSUM | ENETC_ERR_VLAN_ISOL |
+			     ENETC_ERR_UCMCSWP;
+}
+
 int enetc_pci_probe(struct pci_dev *pdev, const char *name, int sizeof_priv)
 {
 	struct enetc_si *si, *p;
@@ -1721,6 +1767,8 @@ int enetc_pci_probe(struct pci_dev *pdev, const char *name, int sizeof_priv)
 		hw->port = hw->reg + ENETC_PORT_BASE;
 	if (len > ENETC_GLOBAL_BASE)
 		hw->global = hw->reg + ENETC_GLOBAL_BASE;
+
+	enetc_detect_errata(si);
 
 	return 0;
 

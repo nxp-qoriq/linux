@@ -1,36 +1,5 @@
-/*
- * Copyright 2017-2018 NXP
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
- *     * Neither the names of the above-listed copyright holders nor the
- *       names of any contributors may be used to endorse or promote products
- *       derived from this software without specific prior written permission.
- *
- *
- * ALTERNATIVELY, this software may be distributed under the terms of the
- * GNU General Public License ("GPL") as published by the Free Software
- * Foundation, either version 2 of that License or (at your option) any
- * later version.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- */
+// SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
+/* Copyright 2017-2018 NXP */
 
 #include <linux/module.h>
 #include <linux/of_mdio.h>
@@ -171,26 +140,30 @@ static void enetc_add_mac_addr_ht_filter(struct enetc_mac_filter *filter,
 	filter->mac_addr_cnt++;
 }
 
-static void enetc_clear_mac_ht_flt(struct enetc_hw *hw, int si_idx, int type)
+static void enetc_clear_mac_ht_flt(struct enetc_si *si, int si_idx, int type)
 {
-	if (type == UC) { // FIXME: Swap UC with MC low bits, TKT381557
-		enetc_port_wr(hw, ENETC_PSIMMHFR0(si_idx), 0);
-		enetc_port_wr(hw, ENETC_PSIUMHFR1(si_idx), 0);
+	bool err = si->errata & ENETC_ERR_UCMCSWP;
+
+	if (type == UC) {
+		enetc_port_wr(&si->hw, ENETC_PSIUMHFR0(si_idx, err), 0);
+		enetc_port_wr(&si->hw, ENETC_PSIUMHFR1(si_idx), 0);
 	} else { /* MC */
-		enetc_port_wr(hw, ENETC_PSIUMHFR0(si_idx), 0);
-		enetc_port_wr(hw, ENETC_PSIMMHFR1(si_idx), 0);
+		enetc_port_wr(&si->hw, ENETC_PSIMMHFR0(si_idx, err), 0);
+		enetc_port_wr(&si->hw, ENETC_PSIMMHFR1(si_idx), 0);
 	}
 }
 
-static void enetc_set_mac_ht_flt(struct enetc_hw *hw, int si_idx, int type,
+static void enetc_set_mac_ht_flt(struct enetc_si *si, int si_idx, int type,
 				 u32 *hash)
 {
-	if (type == UC) { // FIXME: Swap UC with MC low bits, TKT381557
-		enetc_port_wr(hw, ENETC_PSIMMHFR0(si_idx), *hash);
-		enetc_port_wr(hw, ENETC_PSIUMHFR1(si_idx), *(hash + 1));
+	bool err = si->errata & ENETC_ERR_UCMCSWP;
+
+	if (type == UC) {
+		enetc_port_wr(&si->hw, ENETC_PSIUMHFR0(si_idx, err), *hash);
+		enetc_port_wr(&si->hw, ENETC_PSIUMHFR1(si_idx), *(hash + 1));
 	} else { /* MC */
-		enetc_port_wr(hw, ENETC_PSIUMHFR0(si_idx), *hash);
-		enetc_port_wr(hw, ENETC_PSIMMHFR1(si_idx), *(hash + 1));
+		enetc_port_wr(&si->hw, ENETC_PSIMMHFR0(si_idx, err), *hash);
+		enetc_port_wr(&si->hw, ENETC_PSIMMHFR1(si_idx), *(hash + 1));
 	}
 }
 
@@ -210,24 +183,31 @@ static void enetc_sync_mac_filters(struct enetc_pf *pf)
 			if (i == UC)
 				enetc_clear_mac_flt_entry(si, pos);
 
-			enetc_clear_mac_ht_flt(&si->hw, 0, i);
+			enetc_clear_mac_ht_flt(si, 0, i);
 			continue;
 		}
 
 		/* exact match filter */
 		if (em) {
-			enetc_clear_mac_ht_flt(&si->hw, 0, UC);
+			int err;
 
-			enetc_set_mac_flt_entry(si, pos, f->mac_addr,
-						BIT(0));
-			continue;
+			enetc_clear_mac_ht_flt(si, 0, UC);
+
+			err = enetc_set_mac_flt_entry(si, pos, f->mac_addr,
+						      BIT(0));
+			if (!err)
+				continue;
+
+			/* fallback to HT filtering */
+			dev_warn(&si->pdev->dev, "fallback to HT filt (%d)\n",
+				 err);
 		}
 
 		/* hash table filter, clear EM filter for UC entries */
 		if (i == UC)
 			enetc_clear_mac_flt_entry(si, pos);
 
-		enetc_set_mac_ht_flt(&si->hw, 0, i, (u32 *)f->mac_hash_table);
+		enetc_set_mac_ht_flt(si, 0, i, (u32 *)f->mac_hash_table);
 	}
 }
 
@@ -401,6 +381,9 @@ static int enetc_pf_set_vf_vlan(struct net_device *ndev, int vf, u16 vlan,
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	struct enetc_pf *pf = enetc_si_priv(priv->si);
+
+	if (priv->si->errata & ENETC_ERR_VLAN_ISOL)
+		return -EOPNOTSUPP;
 
 	if (vf >= pf->total_vfs)
 		return -EINVAL;
@@ -681,12 +664,20 @@ static void enetc_pf_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 
 	ndev->hw_features = NETIF_F_RXCSUM | NETIF_F_HW_CSUM |
 			    NETIF_F_HW_VLAN_CTAG_TX | NETIF_F_HW_VLAN_CTAG_RX |
-			    NETIF_F_LOOPBACK | NETIF_F_RXHASH;
+			    NETIF_F_LOOPBACK;
 	ndev->features = NETIF_F_HIGHDMA | NETIF_F_SG |
 			 NETIF_F_RXCSUM | NETIF_F_HW_CSUM |
 			 NETIF_F_HW_VLAN_CTAG_TX |
 			 NETIF_F_HW_VLAN_CTAG_RX |
 			 NETIF_F_HW_VLAN_CTAG_FILTER;
+
+	if (si->num_rss)
+		ndev->hw_features |= NETIF_F_RXHASH;
+
+	if (si->errata & ENETC_ERR_TXCSUM) {
+		ndev->hw_features &= ~NETIF_F_HW_CSUM;
+		ndev->features &= ~NETIF_F_HW_CSUM;
+	}
 
 	ndev->priv_flags |= IFF_UNICAST_FLT;
 

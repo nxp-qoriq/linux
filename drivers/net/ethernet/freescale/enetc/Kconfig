@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0
 config FSL_ENETC
 	tristate "ENETC PF driver"
 	depends on PCI && PCI_MSI

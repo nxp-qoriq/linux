@@ -1,50 +1,22 @@
-/*
- * Copyright 2017-2018 NXP
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
- *     * Neither the names of the above-listed copyright holders nor the
- *       names of any contributors may be used to endorse or promote products
- *       derived from this software without specific prior written permission.
- *
- *
- * ALTERNATIVELY, this software may be distributed under the terms of the
- * GNU General Public License ("GPL") as published by the Free Software
- * Foundation, either version 2 of that License or (at your option) any
- * later version.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- */
+// SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
+/* Copyright 2017-2018 NXP */
 
 #include "enetc.h"
 
-static int enetc_clean_cbdr(struct enetc_si *si)
+static void enetc_clean_cbdr(struct enetc_si *si)
 {
 	struct enetc_cbdr *ring = &si->cbd_ring;
 	struct enetc_cbd *dest_cbd;
-	int i, err = 0;
+	int i, status;
 
 	i = ring->next_to_clean;
 
 	while (enetc_rd_reg(ring->cisr) != i) {
 		dest_cbd = ENETC_CBD(*ring, i);
-		err = dest_cbd->status_flags & ENETC_CBD_STATUS_MASK;
+		status = dest_cbd->status_flags & ENETC_CBD_STATUS_MASK;
+		if (status)
+			dev_warn(&si->pdev->dev, "CMD err %04x for cmd %04x\n",
+				 status, dest_cbd->cmd);
 
 		memset(dest_cbd, 0, sizeof(*dest_cbd));
 
@@ -52,26 +24,26 @@ static int enetc_clean_cbdr(struct enetc_si *si)
 	}
 
 	ring->next_to_clean = i;
-	return err;
 }
 
-static int enetc_send_cmd(struct enetc_si *si, struct enetc_cbd *cbd,
-			  bool async)
+static int enetc_cbd_unused(struct enetc_cbdr *r)
+{
+	return (r->next_to_clean - r->next_to_use - 1 + r->bd_count) %
+		r->bd_count;
+}
+
+static int enetc_send_cmd(struct enetc_si *si, struct enetc_cbd *cbd)
 {
 	struct enetc_cbdr *ring = &si->cbd_ring;
+	int timeout = ENETC_CBDR_TIMEOUT;
 	struct enetc_cbd *dest_cbd;
-	int i, err;
+	int i;
 
-	if (!ring->bd_base)
+	if (unlikely(!ring->bd_base))
 		return -EIO;
 
-	if (async && !ENETC_RING_UNUSED(ring)) {
-		// TODO: support true async mode, with interrupts
-		// and separate cleanup task
-
+	if (unlikely(!enetc_cbd_unused(ring)))
 		enetc_clean_cbdr(si);
-		return ENETC_CMD_BUSY;
-	}
 
 	i = ring->next_to_use;
 	dest_cbd = ENETC_CBD(*ring, i);
@@ -84,70 +56,46 @@ static int enetc_send_cmd(struct enetc_si *si, struct enetc_cbd *cbd,
 	/* let H/W know BD ring has been updated */
 	enetc_wr_reg(ring->cir, i);
 
-	if (!async) {
-		int timeout = ENETC_CBDR_TIMEOUT;
+	do {
+		if (enetc_rd_reg(ring->cisr) == i)
+			break;
+		usleep_range(100, 200);
+		timeout -= 100;
+	} while (timeout);
 
-		do {
-			if (enetc_rd_reg(ring->cisr) == i)
-				break;
-			udelay(10);
-			timeout -= 10;
-		} while (timeout);
+	if (!timeout)
+		return -EBUSY;
 
-		if (!timeout)
-			return ENETC_CMD_TIMEOUT;
-	}
+	enetc_clean_cbdr(si);
 
-	if (!async) {
-		err = enetc_clean_cbdr(si);
-		if (err) {
-			dev_warn(&si->pdev->dev, "CMD err %04x for cmd %04x\n",
-				err, cbd->cmd);
-		}
-	}
-
-	return ENETC_CMD_OK;
+	return 0;
 }
 
-void enetc_clear_mac_flt_entry(struct enetc_si *si, int index)
+int enetc_clear_mac_flt_entry(struct enetc_si *si, int index)
 {
 	struct enetc_cbd cbd;
-	bool async = false;
-	int ret;
 
 	memset(&cbd, 0, sizeof(cbd));
 
 	cbd.cls = 1;
 	cbd.status_flags = ENETC_CBD_FLAGS_SF;
-	if (async)
-		cbd.status_flags |= ENETC_CBD_FLAGS_IE;
-
 	cbd.index = cpu_to_le16(index);
 
-	ret = enetc_send_cmd(si, &cbd, async);
-	if (ret) {
-		pr_err("MAC filter clear failed (%d)!\n", ret);
-		WARN_ON(1);
-	}
+	return enetc_send_cmd(si, &cbd);
 }
 
-void enetc_set_mac_flt_entry(struct enetc_si *si, int index,
-			     char *mac_addr, int si_map)
+int enetc_set_mac_flt_entry(struct enetc_si *si, int index,
+			    char *mac_addr, int si_map)
 {
 	struct enetc_cbd cbd;
-	bool async = false;
 	u32 upper;
 	u16 lower;
-	int ret;
 
 	memset(&cbd, 0, sizeof(cbd));
 
 	/* fill up the "set" descriptor */
 	cbd.cls = 1;
 	cbd.status_flags = ENETC_CBD_FLAGS_SF;
-	if (async)
-		cbd.status_flags |= ENETC_CBD_FLAGS_IE;
-
 	cbd.index = cpu_to_le16(index);
 	cbd.opt[3] = cpu_to_le32(si_map);
 	/* enable entry */
@@ -158,12 +106,7 @@ void enetc_set_mac_flt_entry(struct enetc_si *si, int index,
 	cbd.addr[0] = upper;
 	cbd.addr[1] = lower;
 
-	ret = enetc_send_cmd(si, &cbd, async);
-	if (ret) {
-		pr_err("MAC filter update failed (%d)!\n", ret);
-		WARN_ON(1);
-		// TODO: fallback to promisc mode
-	}
+	return enetc_send_cmd(si, &cbd);
 }
 
 #define RFSE_ALIGN	64
@@ -174,7 +117,6 @@ int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 	struct enetc_cbd cbd = {.cmd = 0};
 	dma_addr_t dma, dma_align;
 	void *tmp, *tmp_align;
-	bool async = false;
 	int err;
 
 	/* fill up the "set" descriptor */
@@ -187,7 +129,7 @@ int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 	tmp = dma_alloc_coherent(&si->pdev->dev, sizeof(*rfse) + RFSE_ALIGN,
 				 &dma, DMA_TO_DEVICE);
 	if (!tmp) {
-		netdev_err(si->ndev, "DMA mapping of RFS entry failed!\n");
+		dev_err(&si->pdev->dev, "DMA mapping of RFS entry failed!\n");
 		return -ENOMEM;
 	}
 
@@ -198,12 +140,9 @@ int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 	cbd.addr[0] = cpu_to_le32(lower_32_bits(dma_align));
 	cbd.addr[1] = cpu_to_le32(upper_32_bits(dma_align));
 
-	if (async)
-		cbd.status_flags |= ENETC_CBD_FLAGS_IE;
-
-	err = enetc_send_cmd(si, &cbd, async);
+	err = enetc_send_cmd(si, &cbd);
 	if (err)
-		netdev_err(si->ndev, "FS entry add failed (%d)!", err);
+		dev_err(&si->pdev->dev, "FS entry add failed (%d)!", err);
 
 	dma_free_coherent(&si->pdev->dev, sizeof(*rfse) + RFSE_ALIGN,
 			  tmp, dma);
@@ -227,7 +166,7 @@ static int enetc_cmd_rss_table(struct enetc_si *si, u32 *table, int count,
 	tmp = dma_alloc_coherent(&si->pdev->dev, count + RSSE_ALIGN,
 				 &dma, read ? DMA_FROM_DEVICE : DMA_TO_DEVICE);
 	if (!tmp) {
-		netdev_err(si->ndev, "DMA mapping of RSS table failed!\n");
+		dev_err(&si->pdev->dev, "DMA mapping of RSS table failed!\n");
 		return -ENOMEM;
 	}
 	dma_align = ALIGN(dma, RSSE_ALIGN);
@@ -245,9 +184,9 @@ static int enetc_cmd_rss_table(struct enetc_si *si, u32 *table, int count,
 	cbd.addr[0] = cpu_to_le32(lower_32_bits(dma_align));
 	cbd.addr[1] = cpu_to_le32(upper_32_bits(dma_align));
 
-	err = enetc_send_cmd(si, &cbd, false);
+	err = enetc_send_cmd(si, &cbd);
 	if (err)
-		netdev_err(si->ndev, "RSS cmd failed (%d)!", err);
+		dev_err(&si->pdev->dev, "RSS cmd failed (%d)!", err);
 
 	if (read)
 		for (i = 0; i < count; i++)

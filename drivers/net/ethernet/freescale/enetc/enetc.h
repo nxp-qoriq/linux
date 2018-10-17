@@ -1,36 +1,5 @@
-/*
- * Copyright 2017-2018 NXP
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
- *     * Neither the names of the above-listed copyright holders nor the
- *       names of any contributors may be used to endorse or promote products
- *       derived from this software without specific prior written permission.
- *
- *
- * ALTERNATIVELY, this software may be distributed under the terms of the
- * GNU General Public License ("GPL") as published by the Free Software
- * Foundation, either version 2 of that License or (at your option) any
- * later version.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- */
+/* SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause) */
+/* Copyright 2017-2018 NXP */
 
 #include <linux/timer.h>
 #include <linux/pci.h>
@@ -159,10 +128,18 @@ struct enetc_cbs {
 };
 #endif
 
+#define ENETC_REV1	0x1
+enum enetc_errata {
+	ENETC_ERR_TXCSUM	= BIT(0),
+	ENETC_ERR_VLAN_ISOL	= BIT(1),
+	ENETC_ERR_UCMCSWP	= BIT(2),
+};
+
 /* PCI IEP device data */
 struct enetc_si {
 	struct pci_dev *pdev;
 	struct enetc_hw hw;
+	enum enetc_errata errata;
 
 	struct net_device *ndev; /* back ref. */
 
@@ -171,6 +148,7 @@ struct enetc_si {
 	int num_rx_rings; /* how many rings are available in the SI */
 	int num_tx_rings;
 	int num_fs_entries;
+	int num_rss; /* number of RSS buckets */
 	unsigned short pad;
 #ifdef CONFIG_ENETC_TSN
 	 struct enetc_cbs *ecbs;
@@ -250,18 +228,9 @@ struct enetc_msg_cmd_set_primary_mac {
 	struct sockaddr mac;
 };
 
-#define ENETC_RING_UNUSED(R)	(((R)->next_to_clean - (R)->next_to_use - 1 \
-				 + (R)->bd_count) % (R)->bd_count)
-
 #define ENETC_CBD(R, i)	(&(((struct enetc_cbd *)((R).bd_base))[i]))
 
 #define ENETC_CBDR_TIMEOUT	1000 /* usecs */
-
-enum enetc_cbdr_stat {
-	ENETC_CMD_OK,
-	ENETC_CMD_BUSY,
-	ENETC_CMD_TIMEOUT,
-};
 
 /* SI common */
 int enetc_pci_probe(struct pci_dev *pdev, const char *name, int sizeof_priv);
@@ -288,9 +257,9 @@ int enetc_setup_tc(struct net_device *ndev, enum tc_setup_type type,
 void enetc_set_ethtool_ops(struct net_device *ndev);
 
 /* control buffer descriptor ring (CBDR) */
-void enetc_set_mac_flt_entry(struct enetc_si *si, int index,
-			     char *mac_addr, int si_map);
-void enetc_clear_mac_flt_entry(struct enetc_si *si, int index);
+int enetc_set_mac_flt_entry(struct enetc_si *si, int index,
+			    char *mac_addr, int si_map);
+int enetc_clear_mac_flt_entry(struct enetc_si *si, int index);
 int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 		       int index);
 void enetc_set_rss_key(struct enetc_hw *hw, const u8 *bytes);

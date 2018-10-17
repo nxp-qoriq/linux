@@ -598,8 +598,11 @@
 			enetc_port2: pci@0,2 {
 				reg = <0x000200 0 0 0 0>;
 			};
-			pci@0,3 {
+			mdio0: pci@0,3 {
 				reg = <0x000300 0 0 0 0>;
+				device_type = "mdio";
+				#address-cells = <1>;
+				#size-cells = <0>;
 			};
 			pci@0,4 {
 				reg = <0x000400 0 0 0 0>;
@@ -643,14 +646,6 @@
 			enetc_port3: pci@0,6 {
 				reg = <0x000600 0 0 0 0>;
 			};
-		};
-
-		mdio0: mdio@1f8101c00 {
-			compatible = "fsl,enetc-mdio";
-			device_type = "mdio";
-			#address-cells = <1>;
-			#size-cells = <0>;
-			reg = <0x1 0xf8101c00 0x0 0x2c>;
 		};
 
 		can0: can@2180000 {

@@ -22,7 +22,7 @@ void hdmi_fw_load(state_struct *state)
 		hdmitx_dram0_get_size());
 }
 
-void hdmi_fw_init(state_struct *state, u32 core_rate)
+int hdmi_fw_init(state_struct *state, u32 core_rate)
 {
 	u8 echo_msg[] = "echo test";
 	u8 echo_resp[sizeof(echo_msg) + 1];
@@ -36,12 +36,18 @@ void hdmi_fw_init(state_struct *state, u32 core_rate)
 	cdn_apb_write(state, APB_CTRL << 2, 0);
 
 	ret = CDN_API_CheckAlive_blocking(state);
+	if (ret != 0) {
+		DRM_ERROR("CDN_API_CheckAlive failed - check firmware!\n");
+		return -ENXIO;
+	}
 
 	/* turn on IP activity */
 	ret = CDN_API_MainControl_blocking(state, 1, &sts);
 
 	ret = CDN_API_General_Test_Echo_Ext_blocking(state, echo_msg, echo_resp,
 		 sizeof(echo_msg), CDN_BUS_TYPE_APB);
+
+	return 0;
 }
 
 void hdmi_phy_init(state_struct *state, int vic, int format, int color_depth)

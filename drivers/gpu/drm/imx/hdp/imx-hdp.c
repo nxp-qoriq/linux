@@ -746,7 +746,9 @@ static struct hdp_rw_func imx8qm_rw = {
 };
 
 static struct hdp_ops imx8qm_dp_ops = {
+#ifdef DEBUG_FW_LOAD
 	.fw_load = dp_fw_load,
+#endif
 	.fw_init = dp_fw_init,
 	.phy_init = dp_phy_init,
 	.mode_set = dp_mode_set,
@@ -754,7 +756,9 @@ static struct hdp_ops imx8qm_dp_ops = {
 };
 
 static struct hdp_ops imx8qm_hdmi_ops = {
+#ifdef DEBUG_FW_LOAD
 	.fw_load = hdmi_fw_load,
+#endif
 	.fw_init = hdmi_fw_init,
 	.phy_init = hdmi_phy_init,
 	.mode_set = hdmi_mode_set,
@@ -798,7 +802,9 @@ static struct hdp_rw_func ls1028a_rw = {
 };
 
 static struct hdp_ops ls1028a_dp_ops = {
+#ifdef DEBUG_FW_LOAD
 	.fw_load = dp_fw_load,
+#endif
 	.fw_init = dp_fw_init,
 	.phy_init = dp_phy_init,
 	.mode_set = dp_mode_set,
@@ -806,7 +812,7 @@ static struct hdp_ops ls1028a_dp_ops = {
 };
 
 static struct hdp_devtype ls1028a_dp_devtype = {
-	.load_fw = true,
+	.load_fw = false,
 	.is_hdmi = false,
 	.ops = &ls1028a_dp_ops,
 	.rw = &ls1028a_rw,
@@ -1029,7 +1035,12 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 	imx_hdp_call(hdp, fw_load, &hdp->state);
 	core_rate = clk_get_rate(hdp->clks.clk_core);
 
-	imx_hdp_call(hdp, fw_init, &hdp->state, core_rate);
+	ret = imx_hdp_call(hdp, fw_init, &hdp->state, core_rate);
+	if (ret < 0) {
+		DRM_ERROR("Failed to initialise HDP firmware\n");
+		return ret;
+	}
+
 	if (hdp->is_hdmi == true)
 		/* default set hdmi to 1080p60 mode */
 		imx_hdp_call(hdp, phy_init, &hdp->state, 2, 1, 8);

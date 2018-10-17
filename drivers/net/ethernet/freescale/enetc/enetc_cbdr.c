@@ -59,8 +59,8 @@ static int enetc_send_cmd(struct enetc_si *si, struct enetc_cbd *cbd)
 	do {
 		if (enetc_rd_reg(ring->cisr) == i)
 			break;
-		usleep_range(100, 200);
-		timeout -= 100;
+		udelay(10); /* cannot sleep, rtnl_lock() */
+		timeout -= 10;
 	} while (timeout);
 
 	if (!timeout)

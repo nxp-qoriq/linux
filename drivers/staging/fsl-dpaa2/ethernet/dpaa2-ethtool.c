@@ -74,6 +74,44 @@ static void dpaa2_eth_get_drvinfo(struct net_device *net_dev,
 		sizeof(drvinfo->bus_info));
 }
 
+#define DPNI_LINK_AUTONEG_VER_MAJOR		7
+#define DPNI_LINK_AUTONEG_VER_MINOR		8
+
+struct dpaa2_eth_link_mode_map {
+	u64 dpni_lm;
+	u64 ethtool_lm;
+};
+
+static const struct dpaa2_eth_link_mode_map dpaa2_eth_lm_map[] = {
+	{DPNI_ADVERTISED_10BASET_FULL, ETHTOOL_LINK_MODE_10baseT_Full_BIT},
+	{DPNI_ADVERTISED_100BASET_FULL, ETHTOOL_LINK_MODE_100baseT_Full_BIT},
+	{DPNI_ADVERTISED_1000BASET_FULL, ETHTOOL_LINK_MODE_1000baseT_Full_BIT},
+	{DPNI_ADVERTISED_10000BASET_FULL, ETHTOOL_LINK_MODE_10000baseT_Full_BIT},
+	{DPNI_ADVERTISED_2500BASEX_FULL, ETHTOOL_LINK_MODE_2500baseX_Full_BIT},
+	{DPNI_ADVERTISED_AUTONEG, ETHTOOL_LINK_MODE_Autoneg_BIT},
+};
+
+static void link_mode_dpni2ethtool(u64 dpni_lm, unsigned long *ethtool_lm)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(dpaa2_eth_lm_map); i++) {
+		if (dpni_lm & dpaa2_eth_lm_map[i].dpni_lm)
+			__set_bit(dpaa2_eth_lm_map[i].ethtool_lm, ethtool_lm);
+	}
+}
+
+static void link_mode_ethtool2dpni(const unsigned long *ethtool_lm,
+				   u64 *dpni_lm)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(dpaa2_eth_lm_map); i++) {
+		if (test_bit(dpaa2_eth_lm_map[i].ethtool_lm, ethtool_lm))
+			*dpni_lm |= dpaa2_eth_lm_map[i].dpni_lm;
+	}
+}
+
 static int
 dpaa2_eth_get_link_ksettings(struct net_device *net_dev,
 			     struct ethtool_link_ksettings *link_settings)
@@ -82,17 +120,27 @@ dpaa2_eth_get_link_ksettings(struct net_device *net_dev,
 	int err = 0;
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 
-	err = dpni_get_link_state(priv->mc_io, 0, priv->mc_token, &state);
-	if (err) {
-		netdev_err(net_dev, "ERROR %d getting link state\n", err);
-		goto out;
+	if (dpaa2_eth_cmp_dpni_ver(priv, DPNI_LINK_AUTONEG_VER_MAJOR,
+				   DPNI_LINK_AUTONEG_VER_MINOR) < 0) {
+		err = dpni_get_link_state(priv->mc_io, 0, priv->mc_token,
+					  &state);
+		if (err) {
+			netdev_err(net_dev, "dpni_get_link_state failed\n");
+			goto out;
+		}
+	} else {
+		err = dpni_get_link_state_v2(priv->mc_io, 0, priv->mc_token,
+					     &state);
+		if (err) {
+			netdev_err(net_dev, "dpni_get_link_state_v2 failed\n");
+			goto out;
+		}
+		link_mode_dpni2ethtool(state.supported,
+				       link_settings->link_modes.supported);
+		link_mode_dpni2ethtool(state.advertising,
+				       link_settings->link_modes.advertising);
 	}
 
-	/* At the moment, we have no way of interrogating the DPMAC
-	 * from the DPNI side - and for that matter there may exist
-	 * no DPMAC at all. So for now we just don't report anything
-	 * beyond the DPNI attributes.
-	 */
 	if (state.options & DPNI_LINK_OPT_AUTONEG)
 		link_settings->base.autoneg = AUTONEG_ENABLE;
 	if (!(state.options & DPNI_LINK_OPT_HALF_DUPLEX))
@@ -144,12 +192,16 @@ dpaa2_eth_set_link_ksettings(struct net_device *net_dev,
 	else
 		cfg.options &= ~DPNI_LINK_OPT_HALF_DUPLEX;
 
-	err = dpni_set_link_cfg(priv->mc_io, 0, priv->mc_token, &cfg);
+	if (dpaa2_eth_cmp_dpni_ver(priv, DPNI_LINK_AUTONEG_VER_MAJOR,
+				   DPNI_LINK_AUTONEG_VER_MINOR)) {
+		err = dpni_set_link_cfg(priv->mc_io, 0, priv->mc_token, &cfg);
+	} else {
+		link_mode_ethtool2dpni(link_settings->link_modes.advertising,
+				       &cfg.advertising);
+		dpni_set_link_cfg_v2(priv->mc_io, 0, priv->mc_token, &cfg);
+	}
 	if (err)
-		/* ethtool will be loud enough if we return an error; no point
-		 * in putting our own error message on the console by default
-		 */
-		netdev_dbg(net_dev, "ERROR %d setting link cfg\n", err);
+		netdev_err(net_dev, "dpni_set_link_cfg failed");
 
 out:
 	return err;

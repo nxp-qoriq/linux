@@ -40,6 +40,7 @@
 #define MDIO_PMA_CTRL2_AQ_TYPE_MASK    0x3F
 
 #define MDIO_AN_VENDOR_PROV_CTRL       0xc400
+#define MDIO_AN_RECV_LP_STATUS         0xe820
 
 static int aquantia_pma_setup_forced(struct phy_device *phydev)
 {
@@ -257,6 +258,45 @@ static int aquantia_read_advert(struct phy_device *phydev)
 	return 0;
 }
 
+static int aquantia_read_lp_advert(struct phy_device *phydev)
+{
+	int adv, adv1;
+
+	/* Read standard link partner advertisement */
+	adv = phy_read_mmd(phydev, MDIO_MMD_AN,
+			   MDIO_STAT1);
+
+	if (adv & 0x1)
+		phydev->lp_advertising |= ADVERTISED_Autoneg |
+					  ADVERTISED_100baseT_Full;
+	else
+		phydev->lp_advertising &= ~(ADVERTISED_Autoneg |
+					    ADVERTISED_100baseT_Full);
+
+	/* Read standard link partner advertisement */
+	adv = phy_read_mmd(phydev, MDIO_MMD_AN,
+			   MDIO_AN_10GBT_STAT);
+
+	/* Aquantia link partner advertisments */
+	adv1 = phy_read_mmd(phydev, MDIO_MMD_AN,
+			    MDIO_AN_RECV_LP_STATUS);
+
+	if (adv & 0x800)
+		phydev->lp_advertising |= ADVERTISED_10000baseT_Full;
+	else
+		phydev->lp_advertising &= ~ADVERTISED_10000baseT_Full;
+	if (adv1 & 0x8000)
+		phydev->lp_advertising |= ADVERTISED_1000baseT_Full;
+	else
+		phydev->lp_advertising &= ~ADVERTISED_1000baseT_Full;
+	if (adv1 & 0x400)
+		phydev->lp_advertising |= ADVERTISED_2500baseX_Full;
+	else
+		phydev->lp_advertising &= ~ADVERTISED_2500baseX_Full;
+
+	return 0;
+}
+
 static int aquantia_read_status(struct phy_device *phydev)
 {
 	int reg;
@@ -302,6 +342,7 @@ static int aquantia_read_status(struct phy_device *phydev)
 	phydev->duplex = DUPLEX_FULL;
 
 	aquantia_read_advert(phydev);
+	aquantia_read_lp_advert(phydev);
 
 	return 0;
 }

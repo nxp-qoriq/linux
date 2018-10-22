@@ -46,6 +46,11 @@
 #define CSR_HDP_TX_CTRL_CTRL0		0x08
 #define CSR_HDP_TX_CTRL_CTRL1		0x0c
 
+#define HOTPLUG_DEBOUNCE_MS		200
+
+#define VIC_MODE_96_50Hz 96
+#define VIC_MODE_97_60Hz 97
+
 /**
  * imx_hdp_call - Calls a struct imx hdp_operations operation on
  *	an entity
@@ -62,18 +67,47 @@
 	(!(hdp) ? -ENODEV : (((hdp)->ops && (hdp)->ops->operation) ?	\
 	 (hdp)->ops->operation(args) : -ENOIOCTLCMD))
 
+#define clks_to_imx_hdp(env) \
+	container_of(env, struct imx_hdp, clks)
+
+#define state_to_imx_hdp(env) \
+	container_of(env, struct imx_hdp, state)
+
+struct hdp_clks;
+
 struct hdp_ops {
 	void (*fw_load)(state_struct *state);
-	int (*fw_init)(state_struct *state, u32 rate);
-	void (*phy_init)(state_struct *state, int vic, int format, int color_depth);
-	void (*mode_set)(state_struct *state, int vic, int format, int color_depth, int max_link);
+	int (*fw_init)(state_struct *state);
+	int (*phy_init)(state_struct *state, struct drm_display_mode *mode,
+			int format, int color_depth);
+	void (*mode_set)(state_struct *state, struct drm_display_mode *mode,
+			 int format, int color_depth, int max_link);
 	int (*get_edid_block)(void *data, u8 *buf, u32 block, size_t len);
-	void (*get_hpd_state)(state_struct *state, u8 *hpd);
+	int (*get_hpd_state)(state_struct *state, u8 *hpd);
+#ifdef CONFIG_ARCH_LAYERSCAPE
+	void (*phy_reset)(u8 reset);
+#else
+	void (*phy_reset)(sc_ipc_t ipcHndl, struct hdp_mem *mem, u8 reset);
+#endif
+	int (*pixel_link_validate)(state_struct *state);
+	int (*pixel_link_invalidate)(state_struct *state);
+	int (*pixel_link_sync_ctrl_enable)(state_struct *state);
+	int (*pixel_link_sync_ctrl_disable)(state_struct *state);
+	void (*pixel_link_mux)(state_struct *state,
+			       struct drm_display_mode *mode);
+	void (*pixel_engine_reset)(state_struct *state);
+
+	int (*clock_init)(struct hdp_clks *clks);
+	int (*ipg_clock_enable)(struct hdp_clks *clks);
+	void (*ipg_clock_disable)(struct hdp_clks *clks);
+	void (*ipg_clock_set_rate)(struct hdp_clks *clks);
+	int (*pixel_clock_enable)(struct hdp_clks *clks);
+	void (*pixel_clock_disable)(struct hdp_clks *clks);
+	void (*pixel_clock_set_rate)(struct hdp_clks *clks);
+	int (*pixel_clock_range)(struct drm_display_mode *mode);
 };
 
 struct hdp_devtype {
-	u8 load_fw;
-	u8 is_hdmi;
 	struct hdp_ops *ops;
 	struct hdp_rw_func *rw;
 };
@@ -141,6 +175,12 @@ struct hdp_clks {
 	struct clk *dig_pll_div;
 };
 
+enum hdp_tx_irq {
+	HPD_IRQ_IN,
+	HPD_IRQ_OUT,
+	HPD_IRQ_NUM,
+};
+
 struct imx_hdp {
 	struct device *dev;
 	struct drm_connector connector;
@@ -151,11 +191,15 @@ struct imx_hdp {
 	char cable_state;
 	char fw_running;
 
-	void __iomem *regs_base; /* Controller regs base */
-	void __iomem *ss_base; /* HDP Subsystem regs base */
+	struct hdp_mem mem;
 
-	u8 load_fw;
-	u8 is_hdmi;
+	u8 is_hpd_irq;
+	u8 is_edp;
+	u8 is_digpll_dp_pclock;
+	u8 no_edid;
+	u32 lane_mapping;
+	u32 edp_link_rate;
+	u32 edp_num_lanes;
 
 	struct mutex mutex;		/* for state below and previous_mode */
 	enum drm_connector_force force;	/* mutex-protected force state */
@@ -168,7 +212,7 @@ struct imx_hdp {
 	struct drm_dp_link dp_link;
 	S_LINK_STAT lkstat;
 	ENUM_AFE_LINK_RATE link_rate;
-#ifdef arch_imx
+#ifndef CONFIG_ARCH_LAYERSCAPE
 	sc_ipc_t ipcHndl;
 #endif
 	u32 mu_id;
@@ -177,11 +221,13 @@ struct imx_hdp {
 	struct hdp_rw_func *rw;
 	struct hdp_clks clks;
 	state_struct state;
+	int vic;
+	int irq[HPD_IRQ_NUM];
+	struct delayed_work hotplug_work;
 
+	int bpc;
+	VIC_PXL_ENCODING_FORMAT format;
 };
 
-int imx_hdpaux_init(struct device *dev,	struct imx_hdp *dp);
-void imx_hdpaux_destroy(struct device *dev, struct imx_hdp *dp);
-void hdp_phy_reset(u8 reset);
 
 #endif

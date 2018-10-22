@@ -725,7 +725,7 @@
 		};
 	};
 
-	dp0: malidp@f080000 {
+	dp0: display@f080000 {
 		compatible = "arm,mali-dp500";
 		reg = <0x0 0xf080000 0x0 0x10000>;
 		interrupts = <0 222 0x4>,
@@ -738,12 +738,12 @@
 
 		port {
 			dp0_out: endpoint {
-				remote-endpoint = <&ip8501_out>;
+				remote-endpoint = <&edp_phy_out>;
 			};
 		};
 	};
 
-	ip8501: dp@f200000 {
+	edp: phy@f200000 {
 		compatible = "fsl,ls1028a-dp";
 		reg = <0x0 0xf200000 0x0 0x100000>;
 		interrupts = <0 221 0x4>;
@@ -773,7 +773,7 @@
 			      "clk_vif", "clk_apb_csr","clk_apb_ctrl";
 
 		port {
-			ip8501_out: endpoint {
+			edp_phy_out: endpoint {
 				remote-endpoint = <&dp0_out>;
 			};
 		};

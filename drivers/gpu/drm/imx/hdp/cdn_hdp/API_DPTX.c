@@ -55,7 +55,7 @@ CDN_API_STATUS CDN_API_DPTX_Read_DPCD_blocking(state_struct *state,
 					       DPTX_Read_DPCD_response *resp,
 					       CDN_BUS_TYPE bus_type)
 {
-	internal_block_function(CDN_API_DPTX_Read_DPCD
+	internal_block_function(&state->mutex, CDN_API_DPTX_Read_DPCD
 				(state, numOfBytes, addr, resp, bus_type));
 }
 
@@ -88,7 +88,7 @@ CDN_API_STATUS CDN_API_DPTX_Read_EDID_blocking(state_struct *state, u8 segment,
 					       u8 extension,
 					       DPTX_Read_EDID_response *resp)
 {
-	internal_block_function(CDN_API_DPTX_Read_EDID
+	internal_block_function(&state->mutex, CDN_API_DPTX_Read_EDID
 				(state, segment, extension, resp));
 }
 
@@ -128,7 +128,7 @@ CDN_API_STATUS CDN_API_DPTX_SetHostCap_blocking(state_struct *state,
 						u8 fastLinkTraining,
 						u8 laneMapping, u8 enchanced)
 {
-	internal_block_function(CDN_API_DPTX_SetHostCap
+	internal_block_function(&state->mutex, CDN_API_DPTX_SetHostCap
 				(state, maxLinkRate, lanesCount_SSC,
 				 maxVoltageSwing, maxPreemphasis,
 				 testPatternsSupported, fastLinkTraining,
@@ -153,7 +153,8 @@ CDN_API_STATUS CDN_API_DPTX_SetPowerMode(state_struct *state,
 CDN_API_STATUS CDN_API_DPTX_SetPowerMode_blocking(state_struct *state,
 						  CDN_API_PWR_MODE mode)
 {
-	internal_block_function(CDN_API_DPTX_SetPowerMode(state, mode));
+	internal_block_function(&state->mutex,
+				CDN_API_DPTX_SetPowerMode(state, mode));
 }
 
 CDN_API_STATUS CDN_API_DPTX_Control(state_struct *state, u32 mode)
@@ -172,7 +173,8 @@ CDN_API_STATUS CDN_API_DPTX_Control(state_struct *state, u32 mode)
 
 CDN_API_STATUS CDN_API_DPTX_Control_blocking(state_struct *state, u32 mode)
 {
-	internal_block_function(CDN_API_DPTX_Control(state, mode));
+	internal_block_function(&state->mutex,
+				CDN_API_DPTX_Control(state, mode));
 }
 
 CDN_API_STATUS CDN_API_DPTX_EDP_Training(state_struct *state,
@@ -201,7 +203,8 @@ CDN_API_STATUS CDN_API_DPTX_EDP_Training_blocking(state_struct *state, u8 mode,
 						  ENUM_AFE_LINK_RATE linkRate,
 						  u8 rateId)
 {
-	internal_block_function(CDN_API_DPTX_EDP_Training(state, mode,
+	internal_block_function(&state->mutex,
+				CDN_API_DPTX_EDP_Training(state, mode,
 							  linkRate, rateId));
 }
 
@@ -237,7 +240,7 @@ CDN_API_STATUS CDN_API_DPTX_Write_DPCD_blocking(state_struct *state,
 						DPTX_Write_DPCD_response *resp,
 						CDN_BUS_TYPE bus_type)
 {
-	internal_block_function(CDN_API_DPTX_Write_DPCD
+	internal_block_function(&state->mutex, CDN_API_DPTX_Write_DPCD
 				(state, numOfBytes, addr, buff, resp,
 				 bus_type));
 }
@@ -273,7 +276,7 @@ CDN_API_STATUS CDN_API_DPTX_Read_Register_blocking(state_struct *state,
 						   u8 base, u8 regNo,
 						   DPTX_Read_Register_response *resp)
 {
-	internal_block_function(CDN_API_DPTX_Read_Register
+	internal_block_function(&state->mutex, CDN_API_DPTX_Read_Register
 				(state, base, regNo, resp));
 }
 
@@ -297,7 +300,7 @@ CDN_API_STATUS CDN_API_DPTX_Write_Register(state_struct *state, u8 base,
 CDN_API_STATUS CDN_API_DPTX_Write_Register_blocking(state_struct *state,
 						    u8 base, u8 regNo, u32 val)
 {
-	internal_block_function(CDN_API_DPTX_Write_Register
+	internal_block_function(&state->mutex, CDN_API_DPTX_Write_Register
 				(state, base, regNo, val));
 }
 
@@ -324,7 +327,7 @@ CDN_API_STATUS CDN_API_DPTX_Write_Field_blocking(state_struct *state, u8 base,
 						 u8 startBit,
 						 u8 bitsNo, u32 val)
 {
-	internal_block_function(CDN_API_DPTX_Write_Field
+	internal_block_function(&state->mutex, CDN_API_DPTX_Write_Field
 				(state, base, regNo, startBit, bitsNo, val));
 }
 
@@ -355,7 +358,8 @@ CDN_API_STATUS CDN_API_DPTX_EnableEvent(state_struct *state, bool hpd,
 CDN_API_STATUS CDN_API_DPTX_EnableEvent_blocking(state_struct *state, bool hpd,
 						 bool training)
 {
-	internal_block_function(CDN_API_DPTX_EnableEvent(state, hpd, training));
+	internal_block_function(&state->mutex,
+				CDN_API_DPTX_EnableEvent(state, hpd, training));
 }
 
 CDN_API_STATUS CDN_API_DPTX_ReadEvent(state_struct *state, u8 *LinkeventId,
@@ -384,60 +388,12 @@ CDN_API_STATUS CDN_API_DPTX_ReadEvent(state_struct *state, u8 *LinkeventId,
 CDN_API_STATUS CDN_API_DPTX_ReadEvent_blocking(state_struct *state,
 					       u8 *LinkeventId, u8 *HPDevents)
 {
-	internal_block_function(CDN_API_DPTX_ReadEvent
+	internal_block_function(&state->mutex, CDN_API_DPTX_ReadEvent
 				(state, LinkeventId, HPDevents));
 }
 
-#define NUM_OF_SUPPORTED_PIXEL_FREQ 25
-
-u32 CDN_API_Get_PIXEL_FREQ_KHZ_ClosetVal(u32 val, CDN_PROTOCOL_TYPE protocol)
-{
-	u32 supportedVals[NUM_OF_SUPPORTED_PIXEL_FREQ];
-	int i;
-	int minI;
-
-	u32 minVal;
-
-	supportedVals[0] = 24719;
-	supportedVals[1] = 25000;
-	supportedVals[2] = 25175;
-	supportedVals[3] = 25200;
-	supportedVals[4] = 27000;
-	supportedVals[5] = 32358;
-	supportedVals[6] = 33750;
-	supportedVals[7] = 38250;
-	supportedVals[8] = 54000;
-	supportedVals[9] = 74250;
-	supportedVals[10] = 108000;
-	supportedVals[11] = 148500;
-	supportedVals[12] = 138750;
-	supportedVals[13] = 104750;
-	supportedVals[14] = 102500;
-	supportedVals[15] = 82000;
-	supportedVals[16] = 78500;
-	supportedVals[17] = 63500;
-	supportedVals[18] = 40000;
-	supportedVals[19] = 59340;
-	supportedVals[20] = 35000;
-	supportedVals[21] = 72000;
-	supportedVals[22] = 47000;
-	supportedVals[23] = 22250;
-	supportedVals[24] = 30750;
-
-	minVal = abs(val - supportedVals[0]);
-	minI = 0;
-	for (i = 1; i < NUM_OF_SUPPORTED_PIXEL_FREQ; i++) {
-		if (abs(val - supportedVals[i]) < minVal) {
-
-			minVal = abs(val - supportedVals[i]);
-			minI = i;
-		}
-	}
-
-	return supportedVals[minI];
-}
-
-CDN_API_STATUS CDN_API_DPTX_Set_VIC(state_struct *state, VIC_MODES vicMode,
+CDN_API_STATUS CDN_API_DPTX_Set_VIC(state_struct *state,
+				    struct drm_display_mode *mode,
 				    int bitsPerPixel,
 				    VIC_NUM_OF_LANES NumOfLanes,
 				    VIC_SYMBOL_RATE rate,
@@ -479,7 +435,7 @@ CDN_API_STATUS CDN_API_DPTX_Set_VIC(state_struct *state, VIC_MODES vicMode,
 		bitsPerPixelCalc = bitsPerPixel * 3;
 
 	/* KHz */
-	pixelClockFreq = vic_table[vicMode][PIXEL_FREQ_KHZ];
+	pixelClockFreq = mode->clock;
 
 	/* KHz */
 	min_link_rate = rate * 995;
@@ -508,21 +464,14 @@ CDN_API_STATUS CDN_API_DPTX_Set_VIC(state_struct *state, VIC_MODES vicMode,
 		val2 = TU_SIZE_reg * pixelClockFreq * bitsPerPixelCalc;
 		val2_f = val2 / (NumOfLanes * min_link_rate * 8);
 		val2 /= NumOfLanes * min_link_rate * 8;
-
-		/*
-		pr_info("val=%d, val_f=%d, val2=%d, val2_f=%d\n", val, val_f,
-		       val2, val2_f);
-		*/
 	}
 
 	/* calculate the fixed valid symbols */
 	val = TU_SIZE_reg * pixelClockFreq * bitsPerPixelCalc;
 	val /= NumOfLanes * rate * 8;
 
-	if (val > 64) {
-		printk("CDN_ERROR_NOT_SUPPORTED val: %d\n", val);
+	if (val > 64)
 		return CDN_ERROR_NOT_SUPPORTED;
-	}
 
 	DP_FRAMER_TU_Param = (TU_SIZE_reg << 8) + val + (1 << 15);
 
@@ -539,63 +488,56 @@ CDN_API_STATUS CDN_API_DPTX_Set_VIC(state_struct *state, VIC_MODES vicMode,
 	lineThresh += 2;
 
 	DP_FRAMER_SP_Param =
-	    (vic_table[vicMode][I_P] == INTERLACED ? 4 : 0) +
-	    (vic_table[vicMode][HSYNC_POL] == ACTIVE_LOW ? 2 : 0) +
-	    (vic_table[vicMode][VSYNC_POL] == ACTIVE_LOW ? 1 : 0);
+		((mode->flags & DRM_MODE_FLAG_INTERLACE) ? 4 : 0) +
+		((mode->flags & DRM_MODE_FLAG_NHSYNC) ? 2 : 0) +
+		((mode->flags & DRM_MODE_FLAG_NVSYNC) ? 1 : 0);
 	DP_FRONT_BACK_PORCH_Param =
-	    vic_table[vicMode][BACK_PORCH] +
-	    (vic_table[vicMode][FRONT_PORCH] << 16);
+		mode->htotal - mode->hsync_end +
+		((mode->hsync_start - mode->hdisplay) << 16);
 
-	DP_BYTE_COUNT_Param =
-	    vic_table[vicMode][H_ACTIVE] * (bitsPerPixelCalc) / 8;
+	DP_BYTE_COUNT_Param = mode->hdisplay * (bitsPerPixelCalc) / 8;
+
 	MSA_HORIZONTAL_0_Param =
-	    vic_table[vicMode][H_TOTAL] +
-	    ((vic_table[vicMode][HSYNC] +
-	      vic_table[vicMode][BACK_PORCH]) << 16);
+	    mode->htotal + ((mode->htotal - mode->hsync_start) << 16);
+
 	MSA_HORIZONTAL_1_Param =
-	    vic_table[vicMode][HSYNC] +
-	    ((vic_table[vicMode][HSYNC_POL] ==
-	      ACTIVE_LOW ? 0 : 1) << 15) + (vic_table[vicMode][H_ACTIVE] << 16);
+	    mode->hsync_end - mode->hsync_start +
+	    ((mode->flags & DRM_MODE_FLAG_NHSYNC ? 1 : 0) << 15) +
+	    (mode->hdisplay << 16);
 
 	MSA_VERTICAL_0_Param =
-	    (vic_table[vicMode][I_P] == INTERLACED ?
-	     ((vic_table[vicMode][V_TOTAL] /
-	       2)) : vic_table[vicMode][V_TOTAL]) +
-	    ((vic_table[vicMode][VSYNC] + vic_table[vicMode][SOF]) << 16);
-	MSA_VERTICAL_1_Param =
-	    (vic_table[vicMode][VSYNC] +
-	     ((vic_table[vicMode][VSYNC_POL] ==
-	       ACTIVE_LOW ? 0 : 1) << 15)) + ((vic_table[vicMode][I_P] ==
-					       INTERLACED ?
-					       vic_table[vicMode][V_ACTIVE] /
-					       2 : vic_table[vicMode][V_ACTIVE])
-					      << 16);
-	DP_HORIZONTAL_ADDR_Param =
-	    ((vic_table[vicMode][H_TOTAL] -
-	      vic_table[vicMode][H_BLANK]) << 16) +
-	    (vic_table[vicMode][H_BLANK] - vic_table[vicMode][FRONT_PORCH] -
-	     vic_table[vicMode][BACK_PORCH]);
-	DP_VERTICAL_0_ADDR_Param =
-	    (vic_table[vicMode][I_P] ==
-	     INTERLACED ? (((vic_table[vicMode][V_TOTAL]) / 2)) :
-	     vic_table[vicMode][V_TOTAL]) - (vic_table[vicMode][VSYNC] +
-					     vic_table[vicMode][SOF] +
-					     vic_table[vicMode][TYPE_EOF]) +
-	    ((vic_table[vicMode][VSYNC] + vic_table[vicMode][SOF]) << 16);
-	DP_VERTICAL_1_ADDR_Param =
-	    (vic_table[vicMode][I_P] ==
-	     INTERLACED ? (((vic_table[vicMode][V_TOTAL]) / 2)) :
-	     vic_table[vicMode][V_TOTAL]);
+	    (mode->flags & DRM_MODE_FLAG_INTERLACE ?
+	     (mode->vtotal / 2) : mode->vtotal) +
+	    ((mode->vtotal - mode->vsync_start) << 16);
 
-	if (vic_table[vicMode][I_P] == INTERLACED)
+	MSA_VERTICAL_1_Param =
+	    (mode->vsync_end - mode->vsync_start +
+		 ((mode->flags & DRM_MODE_FLAG_NVSYNC ? 1 : 0) << 15)) +
+		((mode->flags & DRM_MODE_FLAG_INTERLACE ?
+		  mode->vdisplay / 2 : mode->vdisplay) << 16);
+
+	DP_HORIZONTAL_ADDR_Param = (mode->hdisplay << 16) + mode->hsync_end -
+		mode->hsync_start;
+
+	DP_VERTICAL_0_ADDR_Param =
+	    (mode->flags & DRM_MODE_FLAG_INTERLACE ?
+	     (mode->vtotal / 2) : mode->vtotal) -
+	    (mode->vtotal - mode->vdisplay) +
+	    ((mode->vtotal - mode->vsync_start) << 16);
+
+	DP_VERTICAL_1_ADDR_Param =
+	    mode->flags & DRM_MODE_FLAG_INTERLACE ?
+	    (mode->vtotal / 2) : mode->vtotal;
+
+	if (mode->flags & DRM_MODE_FLAG_INTERLACE)
 		BND_HSYNC2VSYNC_Param = 0x3020;
 	else
 		BND_HSYNC2VSYNC_Param = 0x2000;
 
-	if (vic_table[vicMode][HSYNC_POL] == ACTIVE_LOW)
+	if (mode->flags & DRM_MODE_FLAG_NHSYNC)
 		HSYNC2VSYNC_POL_CTRL_Param |= F_HPOL(1);
 
-	if (vic_table[vicMode][VSYNC_POL] == ACTIVE_LOW)
+	if (mode->flags & DRM_MODE_FLAG_NVSYNC)
 		HSYNC2VSYNC_POL_CTRL_Param |= F_VPOL(1);
 
 	switch (bitsPerPixel) {
@@ -666,13 +608,14 @@ CDN_API_STATUS CDN_API_DPTX_Set_VIC(state_struct *state, VIC_MODES vicMode,
 
 	};
 
-	oddEvenV_Total = vic_table[vicMode][V_TOTAL] % 2;
+	oddEvenV_Total = mode->vtotal % 2;
 	oddEvenV_Total = 1 - oddEvenV_Total;
 	oddEvenV_Total = oddEvenV_Total << 8;
 	MSA_MISC_Param =
 	    ((tempForMisc * 2) + (32 * tempForMisc2) +
 	     ((pxlencformat == Y_ONLY ? 1 : 0) << 14) +
-	     ((oddEvenV_Total) * (vic_table[vicMode][I_P])));
+	     ((oddEvenV_Total) *
+	      (mode->flags & DRM_MODE_FLAG_INTERLACE ? 1 : 0)));
 
 	/* 420 has different parameters, enable VSS SDP */
 	if (pxlencformat == YCBCR_4_2_0)
@@ -777,8 +720,9 @@ CDN_API_STATUS CDN_API_DPTX_Set_VIC(state_struct *state, VIC_MODES vicMode,
 		ret =
 		    CDN_API_DPTX_Write_Field(state, BASE_DPTX_STREAM, DP_VB_ID,
 					     2, 1,
-					     ((vic_table[vicMode][I_P] ==
-					       INTERLACED ? 1 : 0) << 2));
+					     ((mode->flags &
+					       DRM_MODE_FLAG_INTERLACE ? 1 : 0)
+					      << 2));
 		break;
 	case 17:
 		ret =
@@ -811,7 +755,7 @@ CDN_API_STATUS CDN_API_DPTX_Set_VIC(state_struct *state, VIC_MODES vicMode,
 }
 
 CDN_API_STATUS CDN_API_DPTX_Set_VIC_blocking(state_struct *state,
-					     VIC_MODES vicMode,
+					     struct drm_display_mode *mode,
 					     int bitsPerPixel,
 					     VIC_NUM_OF_LANES NumOfLanes,
 					     VIC_SYMBOL_RATE rate,
@@ -820,8 +764,8 @@ CDN_API_STATUS CDN_API_DPTX_Set_VIC_blocking(state_struct *state,
 					     STEREO_VIDEO_ATTR steroVidAttr,
 					     BT_TYPE bt_type, int TU)
 {
-	internal_block_function(CDN_API_DPTX_Set_VIC
-				(state, vicMode, bitsPerPixel, NumOfLanes, rate,
+	internal_block_function(&state->mutex, CDN_API_DPTX_Set_VIC
+				(state, mode, bitsPerPixel, NumOfLanes, rate,
 				 pxlencformat, steroVidAttr, bt_type, TU));
 }
 
@@ -834,7 +778,8 @@ CDN_API_STATUS CDN_API_DPTX_SetVideo(state_struct *state, u8 mode)
 
 CDN_API_STATUS CDN_API_DPTX_SetVideo_blocking(state_struct *state, u8 mode)
 {
-	internal_block_function(CDN_API_DPTX_SetVideo(state, mode));
+	internal_block_function(&state->mutex,
+				CDN_API_DPTX_SetVideo(state, mode));
 }
 
 CDN_API_STATUS CDN_API_DPTX_ReadLinkStat(state_struct *state,
@@ -853,7 +798,8 @@ CDN_API_STATUS CDN_API_DPTX_ReadLinkStat(state_struct *state,
 CDN_API_STATUS CDN_API_DPTX_ReadLinkStat_blocking(state_struct *state,
 						  S_LINK_STAT *stat)
 {
-	internal_block_function(CDN_API_DPTX_ReadLinkStat(state, stat));
+	internal_block_function(&state->mutex,
+				CDN_API_DPTX_ReadLinkStat(state, stat));
 }
 
 CDN_API_STATUS CDN_API_DPTX_TrainingControl(state_struct *state, u8 val)
@@ -867,7 +813,8 @@ CDN_API_STATUS CDN_API_DPTX_TrainingControl(state_struct *state, u8 val)
 CDN_API_STATUS CDN_API_DPTX_TrainingControl_blocking(state_struct *state,
 						     u8 val)
 {
-	internal_block_function(CDN_API_DPTX_TrainingControl(state, val));
+	internal_block_function(&state->mutex,
+				CDN_API_DPTX_TrainingControl(state, val));
 }
 
 CDN_API_STATUS CDN_API_DPTX_GetLastAuxStatus(state_struct *state, u8 *resp)
@@ -882,7 +829,8 @@ CDN_API_STATUS CDN_API_DPTX_GetLastAuxStatus(state_struct *state, u8 *resp)
 CDN_API_STATUS CDN_API_DPTX_GetLastAuxStatus_blocking(state_struct *state,
 						      u8 *resp)
 {
-	internal_block_function(CDN_API_DPTX_GetLastAuxStatus(state, resp));
+	internal_block_function(&state->mutex,
+				CDN_API_DPTX_GetLastAuxStatus(state, resp));
 }
 
 CDN_API_STATUS CDN_API_DPTX_GetHpdStatus(state_struct *state, u8 *resp)
@@ -897,7 +845,8 @@ CDN_API_STATUS CDN_API_DPTX_GetHpdStatus_blocking(state_struct *state,
 						  u8 *resp)
 {
 
-	internal_block_function(CDN_API_DPTX_GetHpdStatus(state, resp));
+	internal_block_function(&state->mutex,
+				CDN_API_DPTX_GetHpdStatus(state, resp));
 }
 
 CDN_API_STATUS CDN_API_DPTX_ForceLanes(state_struct *state, u8 linkRate,
@@ -940,7 +889,7 @@ CDN_API_STATUS CDN_API_DPTX_ForceLanes_blocking(state_struct *state,
 						u8 preemphasis_l3, u8 pattern,
 						u8 ssc)
 {
-	internal_block_function(CDN_API_DPTX_ForceLanes_blocking
+	internal_block_function(&state->mutex, CDN_API_DPTX_ForceLanes_blocking
 				(state, linkRate, numOfLanes, voltageSwing_l0,
 				 preemphasis_l0, voltageSwing_l1,
 				 preemphasis_l1, voltageSwing_l2,
@@ -977,5 +926,6 @@ CDN_API_STATUS CDN_API_DPTX_SetDbg(state_struct *state, uint32_t dbg_cfg)
 CDN_API_STATUS CDN_API_DPTX_SetDbg_blocking(state_struct *state,
 					    uint32_t dbg_cfg)
 {
-	internal_block_function(CDN_API_DPTX_SetDbg(state, dbg_cfg));
+	internal_block_function(&state->mutex,
+				CDN_API_DPTX_SetDbg(state, dbg_cfg));
 }

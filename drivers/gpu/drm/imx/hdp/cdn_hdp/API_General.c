@@ -78,7 +78,7 @@ CDN_API_STATUS CDN_API_General_Test_Echo(state_struct *state, u32 val,
 CDN_API_STATUS CDN_API_General_Test_Echo_blocking(state_struct *state, u32 val,
 						  CDN_BUS_TYPE bus_type)
 {
-	internal_block_function(CDN_API_General_Test_Echo
+	internal_block_function(&state->mutex, CDN_API_General_Test_Echo
 				(state, val, bus_type));
 }
 
@@ -140,7 +140,7 @@ CDN_API_STATUS CDN_API_General_Test_Echo_Ext_blocking(state_struct *state,
 						      u16 num_bytes,
 						      CDN_BUS_TYPE bus_type)
 {
-	internal_block_function(CDN_API_General_Test_Echo_Ext
+	internal_block_function(&state->mutex, CDN_API_General_Test_Echo_Ext
 				       (state, msg, resp, num_bytes, bus_type));
 }
 
@@ -221,7 +221,7 @@ CDN_API_STATUS CDN_API_CheckAlive(state_struct *state)
 
 CDN_API_STATUS CDN_API_CheckAlive_blocking(state_struct *state)
 {
-	internal_block_function(CDN_API_CheckAlive(state));
+	internal_block_function(&state->mutex, CDN_API_CheckAlive(state));
 }
 
 CDN_API_STATUS CDN_API_MainControl(state_struct *state, u8 mode, u8 *resp)
@@ -245,7 +245,8 @@ CDN_API_STATUS CDN_API_MainControl(state_struct *state, u8 mode, u8 *resp)
 CDN_API_STATUS CDN_API_MainControl_blocking(state_struct *state, u8 mode,
 					    u8 *resp)
 {
-	internal_block_function(CDN_API_MainControl(state, mode, resp));
+	internal_block_function(&state->mutex,
+				CDN_API_MainControl(state, mode, resp));
 }
 
 CDN_API_STATUS CDN_API_ApbConf(state_struct *state, u8 dpcd_bus_sel,
@@ -315,7 +316,7 @@ CDN_API_STATUS CDN_API_ApbConf_blocking(state_struct *state, u8 dpcd_bus_sel,
 					u8 *dpcd_resp,
 					u8 *hdcp_resp, u8 *capb_resp)
 {
-	internal_block_function(CDN_API_ApbConf
+	internal_block_function(&state->mutex, CDN_API_ApbConf
 				(state, dpcd_bus_sel, dpcd_bus_lock,
 				 hdcp_bus_sel, hdcp_bus_lock, capb_bus_sel,
 				 capb_bus_lock, dpcd_resp, hdcp_resp,
@@ -352,7 +353,7 @@ CDN_API_STATUS CDN_API_General_Read_Register(state_struct *state, u32 addr,
 CDN_API_STATUS CDN_API_General_Read_Register_blocking(state_struct *state,
 						      u32 addr, GENERAL_Read_Register_response *resp)
 {
-	internal_block_function(CDN_API_General_Read_Register
+	internal_block_function(&state->mutex, CDN_API_General_Read_Register
 				(state, addr, resp));
 }
 
@@ -375,7 +376,7 @@ CDN_API_STATUS CDN_API_General_Write_Register(state_struct *state, u32 addr,
 CDN_API_STATUS CDN_API_General_Write_Register_blocking(state_struct *state,
 						       u32 addr, u32 val)
 {
-	internal_block_function(CDN_API_General_Write_Register
+	internal_block_function(&state->mutex, CDN_API_General_Write_Register
 				(state, addr, val));
 }
 
@@ -399,7 +400,7 @@ CDN_API_STATUS CDN_API_General_Write_Field_blocking(state_struct *state,
 						    u32 addr, u8 startBit,
 						    u8 bitsNo, u32 val)
 {
-	internal_block_function(CDN_API_General_Write_Field
+	internal_block_function(&state->mutex, CDN_API_General_Write_Field
 				(state, addr, startBit, bitsNo, val));
 }
 
@@ -438,7 +439,8 @@ CDN_API_STATUS CDN_API_General_Phy_Test_Access(state_struct *state, u8 *resp)
 CDN_API_STATUS CDN_API_General_Phy_Test_Access_blocking(state_struct *state,
 							u8 *resp)
 {
-	internal_block_function(CDN_API_General_Phy_Test_Access(state, resp));
+	internal_block_function(&state->mutex,
+				CDN_API_General_Phy_Test_Access(state, resp));
 }
 
 CDN_API_STATUS CDN_API_General_GetHpdState(state_struct *state, u8 *hpd_state)
@@ -469,5 +471,6 @@ CDN_API_STATUS CDN_API_General_GetHpdState(state_struct *state, u8 *hpd_state)
 
 CDN_API_STATUS CDN_API_General_GetHpdState_blocking(state_struct *state, u8 *hpd_state)
 {
-	internal_block_function(CDN_API_General_GetHpdState(state, hpd_state));
+	internal_block_function(&state->mutex,
+				CDN_API_General_GetHpdState(state, hpd_state));
 }

@@ -14,6 +14,7 @@
  ******************************************************************************
  */
 
+#include <drm/drmP.h>
 #include <linux/io.h>
 #include "API_AFE_ss28fdsoi_kiran_hdmitx.h"
 #include "ss28fdsoi_hdmitx_table.h"
@@ -74,15 +75,18 @@ int get_table_row(const u32 *array, u32 table_rows,
 	return i;
 }
 
-int phy_cfg_hdp_ss28fdsoi(state_struct *state, int num_lanes, VIC_MODES vicMode, int bpp,
-		VIC_PXL_ENCODING_FORMAT format)
+int phy_cfg_hdp_ss28fdsoi(state_struct *state,
+					int num_lanes,
+					struct drm_display_mode *mode,
+					int bpp,
+					VIC_PXL_ENCODING_FORMAT format)
 {
 	const int phy_reset_workaround = 0;
 	u32 vco_freq_khz;
 	unsigned char i;
 	u32 row, feedback_factor;
 	uint32_t reg_val;
-	int pixel_freq_khz = vic_table[vicMode][PIXEL_FREQ_KHZ];
+	int pixel_freq_khz = mode->clock;
 	uint32_t character_clock_ratio_num = 1;
 	uint32_t character_clock_ratio_den = 1;
 	int character_freq_khz;
@@ -144,9 +148,9 @@ int phy_cfg_hdp_ss28fdsoi(state_struct *state, int num_lanes, VIC_MODES vicMode,
 	charge_pump_gain.msb = 8;
 	charge_pump_gain.lsb = 0;
 
-	pr_info
-	    ("phy_cfg_hdp() num_lanes: %0d, vicMode: %0d, color depth: %0d-bit, encoding: %0d\n",
-	     num_lanes, vicMode, bpp, format);
+	DRM_INFO("phy_cfg_hdp() num_lanes: %0d, mode:%dx%dp%d, ",
+		 num_lanes, mode->hdisplay, mode->vdisplay, mode->vrefresh);
+	DRM_INFO("color depth: %0d-bit, encoding: %0d\n", bpp, format);
 
 	/* register PHY_PMA_ISOLATION_CTRL enable PHY isolation mode only for CMN */
 	if (phy_reset_workaround) {

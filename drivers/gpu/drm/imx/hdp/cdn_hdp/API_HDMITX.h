@@ -19,7 +19,6 @@
 
 #include "API_General.h"
 #include "hdmi.h"
-#include "vic_table.h"
 
 /**
  * \addtogroup HDMI_TX_API
@@ -117,7 +116,8 @@ CDN_API_STATUS CDN_API_HDMITX_Init_blocking(state_struct *state);
  * \returns status
  */
 CDN_API_STATUS CDN_API_HDMITX_SetVic_blocking(state_struct *state,
-					      VIC_MODES vicMode, int bpp,
+					      struct drm_display_mode *mode,
+					      int bpp,
 					      VIC_PXL_ENCODING_FORMAT format);
 
 /**

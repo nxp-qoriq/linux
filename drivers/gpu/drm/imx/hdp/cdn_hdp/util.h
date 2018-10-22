@@ -19,6 +19,8 @@
 
 #include <linux/delay.h>
 #include <linux/mutex.h>
+#include <drm/drm_modes.h>
+#include <drm/drm_edid.h>
 
 /**
  * \addtogroup GENERAL_API
@@ -76,6 +78,49 @@ typedef enum {
 	CDN_BUS_TYPE_SAPB = 1
 } CDN_BUS_TYPE;
 
+typedef enum {
+	NUM_OF_LANES_1 = 1,
+	NUM_OF_LANES_2 = 2,
+	NUM_OF_LANES_4 = 4,
+} VIC_NUM_OF_LANES;
+
+typedef enum {
+	RATE_1_6 = 162,
+	RATE_2_1 = 216,
+	RATE_2_4 = 243,
+	RATE_2_7 = 270,
+	RATE_3_2 = 324,
+	RATE_4_3 = 432,
+	RATE_5_4 = 540,
+	RATE_8_1 = 810,
+} VIC_SYMBOL_RATE;
+
+typedef enum {
+	PXL_RGB = 0x1,
+	YCBCR_4_4_4 = 0x2,
+	YCBCR_4_2_2 = 0x4,
+	YCBCR_4_2_0 = 0x8,
+	Y_ONLY = 0x10,
+} VIC_PXL_ENCODING_FORMAT;
+
+typedef enum {
+	BCS_6 = 0x1,
+	BCS_8 = 0x2,
+	BCS_10 = 0x4,
+	BCS_12 = 0x8,
+	BCS_16 = 0x10,
+} VIC_COLOR_DEPTH;
+
+typedef enum {
+	STEREO_VIDEO_LEFT = 0x0,
+	STEREO_VIDEO_RIGHT = 0x1,
+} STEREO_VIDEO_ATTR;
+
+typedef enum {
+	BT_601 = 0x0,
+	BT_709 = 0x1,
+} BT_TYPE;
+
 typedef struct {
     /** apb write status */
 	enum tx_status_enum {
@@ -106,6 +151,7 @@ typedef struct {
 struct hdp_mem {
 	void __iomem *regs_base;
 	void __iomem *ss_base;
+	struct mutex mutex;
 };
 
 struct hdp_rw_func {
@@ -128,7 +174,7 @@ typedef struct {
 	u32 edp; /* use eDP */
 
 	struct mutex mutex;	//mutex may replace running
-	struct hdp_mem mem;
+	struct hdp_mem *mem;
 	struct hdp_rw_func *rw;
 } state_struct;
 /**
@@ -146,16 +192,18 @@ typedef struct {
 #else
 #define MAILBOX_FILL_TIMEOUT	15000
 #endif
-#define internal_block_function(x)					\
+#define internal_block_function(y, x)					\
 do {									\
 	unsigned long end_jiffies = jiffies +				\
 			msecs_to_jiffies(MAILBOX_FILL_TIMEOUT);		\
 	CDN_API_STATUS ret;						\
+	mutex_lock(y);							\
 	do {								\
 		ret = x;						\
 		cpu_relax();						\
 	} while (time_after(end_jiffies, jiffies) &&			\
 			(ret == CDN_BSY || ret == CDN_STARTED));	\
+	mutex_unlock(y);						\
 	return ret;							\
 } while (0)
 

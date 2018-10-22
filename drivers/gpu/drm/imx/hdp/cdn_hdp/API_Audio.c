@@ -37,7 +37,7 @@ CDN_API_STATUS CDN_API_AudioMute(state_struct *state, AUDIO_MUTE_MODE mode)
 CDN_API_STATUS CDN_API_AudioMute_blocking(state_struct *state,
 					  AUDIO_MUTE_MODE mode)
 {
-	internal_block_function(CDN_API_AudioMute(state, mode));
+	internal_block_function(&state->mutex, CDN_API_AudioMute(state, mode));
 }
 
 CDN_API_STATUS CDN_API_AudioMode(state_struct *state, AUDIO_MODE mode)
@@ -49,7 +49,7 @@ CDN_API_STATUS CDN_API_AudioMode(state_struct *state, AUDIO_MODE mode)
 
 CDN_API_STATUS CDN_API_AudioMode_blocking(state_struct *state, AUDIO_MODE mode)
 {
-	internal_block_function(CDN_API_AudioMode(state, mode));
+	internal_block_function(&state->mutex, CDN_API_AudioMode(state, mode));
 }
 
 CDN_API_STATUS CDN_API_AudioConfigCore(state_struct *state,
@@ -184,7 +184,7 @@ CDN_API_STATUS CDN_API_AudioConfigCore_blocking(state_struct *state,
 						AUDIO_FREQ freq, int lanes,
 						AUDIO_WIDTH width)
 {
-	internal_block_function(CDN_API_AudioConfigCore
+	internal_block_function(&state->mutex, CDN_API_AudioConfigCore
 				(state, audioType, numOfChannels, freq, lanes,
 				 width));
 }
@@ -329,7 +329,7 @@ CDN_API_STATUS CDN_API_AudioAutoConfig_blocking(state_struct *state,
 						CDN_PROTOCOL_TYPE protocol,
 						int ncts, AUDIO_MUTE_MODE mode)
 {
-	internal_block_function(CDN_API_AudioAutoConfig
+	internal_block_function(&state->mutex, CDN_API_AudioAutoConfig
 				(state, audioType, numOfChannels, freq, lanes,
 				 width, protocol, ncts, mode));
 }
@@ -407,5 +407,6 @@ CDN_API_STATUS CDN_API_AudioOff(state_struct *state, AUDIO_TYPE audioType)
 CDN_API_STATUS CDN_API_AudioOff_blocking(state_struct *state,
 					 AUDIO_TYPE audioType)
 {
-	internal_block_function(CDN_API_AudioOff(state, audioType));
+	internal_block_function(&state->mutex,
+				CDN_API_AudioOff(state, audioType));
 }

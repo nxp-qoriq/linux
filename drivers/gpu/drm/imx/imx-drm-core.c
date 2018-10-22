@@ -95,7 +95,7 @@ static int imx_drm_atomic_check(struct drm_device *dev,
 	ret = drm_atomic_helper_check_modeset(dev, state);
 	if (ret)
 		return ret;
-#ifdef arch_imx
+#ifndef CONFIG_ARCH_LAYERSCAPE
 	/* Assign PRG/PRE channels and check if all constrains are satisfied. */
 	ret = ipu_planes_assign_pre(dev, state);
 	if (ret)
@@ -134,7 +134,7 @@ static void imx_drm_atomic_commit_tail(struct drm_atomic_state *state)
 
 	if (plane_disabling) {
 		drm_atomic_helper_wait_for_vblanks(dev, state);
-#ifdef arch_imx
+#ifndef CONFIG_ARCH_LAYERSCAPE
 		for_each_old_plane_in_state(state, plane, old_plane_state, i)
 			ipu_plane_disable_deferred(plane);
 #endif
@@ -421,7 +421,7 @@ static struct platform_driver imx_drm_pdrv = {
 
 static struct platform_driver * const drivers[] = {
 	&imx_drm_pdrv,
-#ifdef arch_imx
+#ifndef CONFIG_ARCH_LAYERSCAPE
 	&ipu_drm_driver,
 #endif
 };

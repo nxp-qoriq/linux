@@ -279,6 +279,3 @@ void enetc_tsn_pf_deinit(struct net_device *netdev);
 /* PTP driver exports */
 #define ENETC_PHC_INDEX_DEFAULT	-1
 extern int enetc_phc_index;
-
-/* common PF and VF module params */
-extern unsigned int debug;

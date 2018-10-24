@@ -1,0 +1,41 @@
+* NXP Flex Serial Peripheral Interface(FlexSPI)
+
+Required properties:
+  - compatible : Should be "nxp,lx2160a-fspi"
+  - reg : the first contains the register location and length,
+          the second contains the memory mapping address and length
+  - reg-names: Should contain the reg names "FSPI" and "FSPI-memory"
+  - interrupts : Should contain the interrupt for the device
+  - clocks : The clocks needed by the FlexSPI controller
+  - clock-names : Should contain the name of the clocks: "fspi_en" and "fspi"
+
+Optional properties:
+  - nxp,fspi-has-second-chip: The controller has two buses, bus A and bus B.
+			      Each bus can be connected with two NOR flashes.
+			      Most of the time, each bus only has one NOR flash
+			      connected, this is the default case.
+			      But if there are two NOR flashes connected to the
+			      bus, you should enable this property.
+			      (Please check the board's schematic.)
+Example:
+fspi0: flexspi@20c0000 {
+	compatible = "nxp,lx2160a-fspi";
+	reg = <0x0 0x20c0000 0x0 0x10000>, <0x0 0x20000000 0x0 0x10000000>;
+	reg-names = "FSPI", "FSPI-memory";
+	interrupts = <0 25 0x4>; /* Level high type */
+	clocks = <&clockgen 4 3>, <&clockgen 4 3>;
+	clock-names = "fspi_en", "fspi";
+
+	status = "okay";
+	nxp,fspi-has-second-chip;
+	flash0: mt35xu512aba@0 {
+		reg = <0>;
+		....
+	};
+
+	flash1: mt35xu512aba@1 {
+		reg = <1>;
+		....
+	};
+
+};

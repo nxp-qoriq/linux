@@ -173,15 +173,7 @@ static inline bool enetc_si_is_pf(struct enetc_si *si)
 	return !!(si->hw.port);
 }
 
-#define ENETC_MAX_TCS		8
-#define ENETC_TXQ_PER_TC	num_online_cpus()
-#define ENETC_MAX_NUM_TXQS	(ENETC_MAX_TCS * ENETC_TXQ_PER_TC)
-
-#ifdef CONFIG_ENETC_TSN
-#define ENETC_DEFAULT_NUM_TXQS 8
-#else
-#define ENETC_DEFAULT_NUM_TXQS ENETC_TXQ_PER_TC
-#endif
+#define ENETC_MAX_NUM_TXQS	8
 
 struct enetc_int_vector {
 	void __iomem *rbier;
@@ -256,8 +248,6 @@ struct net_device_stats *enetc_get_stats(struct net_device *ndev);
 int enetc_ioctl(struct net_device *dev, struct ifreq *rq, int cmd);
 int enetc_set_features(struct net_device *ndev,
 		       netdev_features_t features);
-int enetc_setup_tc(struct net_device *ndev, enum tc_setup_type type,
-		   void *type_data);
 /* ethtool */
 void enetc_set_ethtool_ops(struct net_device *ndev);
 

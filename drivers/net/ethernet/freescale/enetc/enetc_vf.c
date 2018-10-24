@@ -104,7 +104,6 @@ static const struct net_device_ops enetc_ndev_ops = {
 	.ndo_start_xmit		= enetc_xmit,
 	.ndo_get_stats		= enetc_get_stats,
 	.ndo_set_mac_address	= enetc_vf_set_mac_addr,
-	.ndo_setup_tc		= enetc_setup_tc,
 	.ndo_do_ioctl		= enetc_ioctl,
 };
 

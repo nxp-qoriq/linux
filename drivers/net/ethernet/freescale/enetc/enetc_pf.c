@@ -638,7 +638,6 @@ static const struct net_device_ops enetc_ndev_ops = {
 	.ndo_set_vf_vlan	= enetc_pf_set_vf_vlan,
 	.ndo_set_vf_spoofchk	= enetc_pf_set_vf_spoofchk,
 	.ndo_set_features	= enetc_pf_set_features,
-	.ndo_setup_tc		= enetc_setup_tc,
 	.ndo_do_ioctl		= enetc_ioctl,
 };
 

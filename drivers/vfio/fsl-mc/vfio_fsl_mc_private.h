@@ -32,6 +32,8 @@ struct vfio_fsl_mc_region {
 	u32			flags;
 #define VFIO_FSL_MC_REGION_TYPE_MMIO  1
 #define VFIO_FSL_MC_REGION_TYPE_CACHEABLE  2
+#define VFIO_FSL_MC_REGION_TYPE_SHAREABLE  4
+
 	u32			type;
 	u64			addr;
 	resource_size_t		size;

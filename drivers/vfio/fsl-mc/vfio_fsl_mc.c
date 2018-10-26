@@ -59,6 +59,10 @@ static int vfio_fsl_mc_regions_init(struct vfio_fsl_mc_device *vdev)
 		if (mc_dev->regions[i].flags & IORESOURCE_CACHEABLE)
 			vdev->regions[i].type |=
 					VFIO_FSL_MC_REGION_TYPE_CACHEABLE;
+		if (mc_dev->regions[i].flags & IORESOURCE_MEM)
+			vdev->regions[i].type |=
+					VFIO_FSL_MC_REGION_TYPE_SHAREABLE;
+
 		vdev->regions[i].flags = VFIO_REGION_INFO_FLAG_MMAP;
 		vdev->regions[i].flags |= VFIO_REGION_INFO_FLAG_READ;
 		if (!(mc_dev->regions[i].flags & IORESOURCE_READONLY))
@@ -440,9 +444,12 @@ static int vfio_fsl_mc_mmap_mmio(struct vfio_fsl_mc_region region,
 	 * cache inhibited area of the portal to avoid coherency issues
 	 * if a user migrates to another core.
 	 */
-	if (region.type & VFIO_FSL_MC_REGION_TYPE_CACHEABLE)
-		vma->vm_page_prot = pgprot_cached_ns(vma->vm_page_prot);
-	else
+	if (region.type & VFIO_FSL_MC_REGION_TYPE_CACHEABLE) {
+		if (region.type & VFIO_FSL_MC_REGION_TYPE_SHAREABLE)
+			vma->vm_page_prot = pgprot_cached(vma->vm_page_prot);
+		else
+			vma->vm_page_prot = pgprot_cached_ns(vma->vm_page_prot);
+	} else
 		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 
 	vma->vm_pgoff = (region.addr >> PAGE_SHIFT) + pgoff;

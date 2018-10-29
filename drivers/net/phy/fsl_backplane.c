@@ -72,8 +72,10 @@
 #define AN_CTRL_INIT				0x1200
 #define KX_AN_AD1_INIT				0x25
 #define KR_AN_AD1_INIT_10G			0x85
+#define KR_AN_AD1_INIT_40G			0x105
 #define AN_LNK_UP_MASK				0x4
 #define KR_AN_MASK_10G				0x8
+#define KR_AN_MASK_40G				0x20
 #define TRAIN_FAIL					0x8
 
 /* XGKR Timeouts */
@@ -138,6 +140,7 @@ static const u32 pst1q_table[] = {0x0, 0x1, 0x3, 0x5, 0x7,
 enum backplane_mode {
 	PHY_BACKPLANE_1000BASE_KX,
 	PHY_BACKPLANE_10GBASE_KR,
+	PHY_BACKPLANE_40GBASE_KR,
 	PHY_BACKPLANE_INVAL
 };
 
@@ -181,8 +184,9 @@ struct tx_condition {
 #endif
 };
 
-struct fsl_xgkr_inst {
-	void *reg_base;
+struct xgkr_params {
+	void *reg_base;		/* lane memory map: registers base address */
+	int idx;			/* lane relative index inside a multi-lane PHY */
 	struct phy_device *phydev;
 	struct backplane_serdes bckpl_sd;
 	struct tx_condition tx_c;
@@ -193,6 +197,13 @@ struct fsl_xgkr_inst {
 	u32 ratio_preq;
 	u32 ratio_pst1q;
 	u32 adpt_eq;
+};
+
+struct xgkr_phy_data {
+	int bp_mode;
+	u32 phy_lanes;
+	bool aneg_done;
+	struct xgkr_params xgkr[MAX_PHY_LANES_NO];
 };
 
 static void setup_an_lt_ls(void)
@@ -243,30 +254,45 @@ static void tx_condition_init(struct tx_condition *tx_c)
 #endif
 }
 
-void tune_tecr0(struct fsl_xgkr_inst *inst)
+void tune_tecr(struct xgkr_params *xgkr)
 {
-	inst->bckpl_sd.tune_tecr(inst->reg_base, inst->ratio_preq, inst->ratio_pst1q, inst->adpt_eq, true);
+	
+	xgkr->bckpl_sd.tune_tecr(xgkr->reg_base, xgkr->ratio_preq, xgkr->ratio_pst1q, xgkr->adpt_eq, true);
 }
 
-static void start_lt(struct phy_device *phydev)
+static void start_lt(struct xgkr_params *xgkr)
 {
-	phy_write_mmd(phydev, lt_MDIO_MMD, lt_KR_PMD_CTRL, TRAIN_EN);
+	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_PMD_CTRL, TRAIN_EN);
 }
 
-static void stop_lt(struct phy_device *phydev)
+static void stop_lt(struct xgkr_params *xgkr)
 {
-	phy_write_mmd(phydev, lt_MDIO_MMD, lt_KR_PMD_CTRL, TRAIN_DISABLE);
+	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_PMD_CTRL, TRAIN_DISABLE);
 }
 
-static void reset_lt(struct phy_device *phydev)
+static void reset_lt(struct xgkr_params *xgkr)
 {
-	phy_write_mmd(phydev, lt_MDIO_MMD, MDIO_CTRL1, PMD_RESET);
-	phy_write_mmd(phydev, lt_MDIO_MMD, lt_KR_PMD_CTRL, TRAIN_DISABLE);
-	phy_write_mmd(phydev, lt_MDIO_MMD, lt_KR_LD_CU, 0);
-	phy_write_mmd(phydev, lt_MDIO_MMD, lt_KR_LD_STATUS, 0);
-	phy_write_mmd(phydev, lt_MDIO_MMD, lt_KR_PMD_STATUS, 0);
-	phy_write_mmd(phydev, lt_MDIO_MMD, lt_KR_LP_CU, 0);
-	phy_write_mmd(phydev, lt_MDIO_MMD, lt_KR_LP_STATUS, 0);
+	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD, MDIO_CTRL1, PMD_RESET);
+	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_PMD_CTRL, TRAIN_DISABLE);
+	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_LD_CU, 0);
+	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_LD_STATUS, 0);
+	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_PMD_STATUS, 0);
+	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_LP_CU, 0);
+	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_LP_STATUS, 0);
+	
+}
+
+static void ld_coe_status(struct xgkr_params *xgkr)
+{
+	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD,
+		      lt_KR_LD_STATUS, xgkr->ld_status);
+}
+
+static void ld_coe_update(struct xgkr_params *xgkr)
+{
+	dev_dbg(&xgkr->phydev->mdio.dev, "sending request: %x\n", xgkr->ld_update);
+	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD,
+		      lt_KR_LD_CU, xgkr->ld_update);
 }
 
 static void start_xgkr_state_machine(struct delayed_work *work)
@@ -275,18 +301,32 @@ static void start_xgkr_state_machine(struct delayed_work *work)
 			   msecs_to_jiffies(XGKR_TIMEOUT));
 }
 
-static void start_xgkr_an(struct phy_device *phydev)
+static void start_xgkr_an(struct xgkr_params *xgkr)
 {
-	struct fsl_xgkr_inst *inst;
+	struct phy_device *phydev = xgkr->phydev;
+	struct xgkr_phy_data *xgkr_inst = phydev->priv;
+	int i;
+	int err;
 
-	reset_lt(phydev);
-	phy_write_mmd(phydev, MDIO_MMD_AN, g_an_AD1, KR_AN_AD1_INIT_10G);
-	phy_write_mmd(phydev, MDIO_MMD_AN, MDIO_CTRL1, AN_CTRL_INIT);
+	switch (xgkr_inst->bp_mode)
+	{
+	case PHY_BACKPLANE_1000BASE_KX:
+		dev_err(&phydev->mdio.dev, "Wrong call path for 1000Base-KX \n");
+		break;
 
-	inst = phydev->priv;
+	case PHY_BACKPLANE_10GBASE_KR:
+		err = phy_write_mmd(xgkr->phydev, MDIO_MMD_AN, g_an_AD1, KR_AN_AD1_INIT_10G);
+		if (err)
+			dev_err(&phydev->mdio.dev, "Setting AN register 0x%02x failed with error code: 0x%08x \n", g_an_AD1, err);
+		udelay(1);
+		err = phy_write_mmd(xgkr->phydev, MDIO_MMD_AN, MDIO_CTRL1, AN_CTRL_INIT);
+		if (err)
+			dev_err(&phydev->mdio.dev, "Setting AN register 0x%02x failed with error code: 0x%08x \n", MDIO_CTRL1, err);
+		break;
 
-	/* start state machine*/
-	start_xgkr_state_machine(&inst->xgkr_wk);
+	case PHY_BACKPLANE_40GBASE_KR:
+		break;
+	}
 }
 
 static void start_1gkx_an(struct phy_device *phydev)
@@ -297,41 +337,45 @@ static void start_1gkx_an(struct phy_device *phydev)
 	phy_write_mmd(phydev, MDIO_MMD_AN, MDIO_CTRL1, AN_CTRL_INIT);
 }
 
-static void ld_coe_status(struct fsl_xgkr_inst *inst)
+static void reset_tecr(struct xgkr_params *xgkr)
 {
-	phy_write_mmd(inst->phydev, lt_MDIO_MMD,
-		      lt_KR_LD_STATUS, inst->ld_status);
+	xgkr->ratio_preq = RATIO_PREQ_10G;
+	xgkr->ratio_pst1q = RATIO_PST1Q_10G;
+	xgkr->adpt_eq = RATIO_EQ_10G;
+
+	tune_tecr(xgkr);
 }
 
-static void ld_coe_update(struct fsl_xgkr_inst *inst)
+static void init_xgkr(struct xgkr_params *xgkr, int reset)
 {
-	dev_dbg(&inst->phydev->mdio.dev, "sending request: %x\n", inst->ld_update);
-	phy_write_mmd(inst->phydev, lt_MDIO_MMD,
-		      lt_KR_LD_CU, inst->ld_update);
+	if (reset)
+		reset_tecr(xgkr);
+
+	tx_condition_init(&xgkr->tx_c);
+	xgkr->state = DETECTING_LP;
+
+	xgkr->ld_status &= RX_READY_MASK;
+	ld_coe_status(xgkr);
+	xgkr->ld_update = 0;
+	xgkr->ld_status &= ~RX_READY_MASK;
+	ld_coe_status(xgkr);
+
 }
 
-static void init_inst(struct fsl_xgkr_inst *inst, int reset)
+static void initialize(struct xgkr_params *xgkr)
 {
-	if (reset) {
-		inst->ratio_preq = RATIO_PREQ_10G;
-		inst->ratio_pst1q = RATIO_PST1Q_10G;
-		inst->adpt_eq = RATIO_EQ_10G;
-		tune_tecr0(inst);
-	}
+	reset_tecr(xgkr);
 
-	tx_condition_init(&inst->tx_c);
-	inst->state = DETECTING_LP;
-	inst->ld_status &= RX_READY_MASK;
-	ld_coe_status(inst);
-	inst->ld_update = 0;
-	inst->ld_status &= ~RX_READY_MASK;
-	ld_coe_status(inst);
+	xgkr->ld_status &= ~(COP1_MASK | COZ_MASK | COM1_MASK);
+	xgkr->ld_status |= COE_UPDATED << COP1_SHIFT |
+			   COE_UPDATED << COZ_SHIFT |
+			   COE_UPDATED << COM1_SHIFT;
+	ld_coe_status(xgkr);
 }
 
-static void train_tx(struct fsl_xgkr_inst *inst)
+static void train_tx(struct xgkr_params *xgkr)
 {
-	struct phy_device *phydev = inst->phydev;
-	struct tx_condition *tx_c = &inst->tx_c;
+	struct tx_condition *tx_c = &xgkr->tx_c;
 	bool bin_m1_early, bin_long_early;
 	u32 lp_status, old_ld_update;
 	u32 status_cop1, status_coz, status_com1;
@@ -344,11 +388,13 @@ static void train_tx(struct fsl_xgkr_inst *inst)
 recheck:
 	if (tx_c->bin_long_stop && tx_c->bin_m1_stop) {
 		tx_c->tx_complete = true;
-		inst->ld_status |= RX_READY_MASK;
-		ld_coe_status(inst);
+		xgkr->ld_status |= RX_READY_MASK;
+		ld_coe_status(xgkr);
+
 		/* tell LP we are ready */
-		phy_write_mmd(phydev, lt_MDIO_MMD,
+		phy_write_mmd(xgkr->phydev, lt_MDIO_MMD,
 			      lt_KR_PMD_STATUS, RX_STAT);
+
 		return;
 	}
 
@@ -356,13 +402,14 @@ recheck:
 	 * we can clear up the appropriate update request so that the
 	 * subsequent code may easily issue new update requests if needed.
 	 */
-	lp_status = phy_read_mmd(phydev, lt_MDIO_MMD, lt_KR_LP_STATUS) &
+	lp_status = phy_read_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_LP_STATUS) &
 				 REQUEST_MASK;
+
 	status_cop1 = (lp_status & COP1_MASK) >> COP1_SHIFT;
 	status_coz = (lp_status & COZ_MASK) >> COZ_SHIFT;
 	status_com1 = (lp_status & COM1_MASK) >> COM1_SHIFT;
 
-	old_ld_update = inst->ld_update;
+	old_ld_update = xgkr->ld_update;
 	req_cop1 = (old_ld_update & COP1_MASK) >> COP1_SHIFT;
 	req_coz = (old_ld_update & COZ_MASK) >> COZ_SHIFT;
 	req_com1 = (old_ld_update & COM1_MASK) >> COM1_SHIFT;
@@ -376,7 +423,7 @@ recheck:
 		if ((status_cop1 == COE_UPDATED || status_cop1 == COE_MAX) &&
 		    (status_coz == COE_UPDATED || status_coz == COE_MAX) &&
 		    (status_com1 == COE_UPDATED || status_com1 == COE_MAX)) {
-			inst->ld_update &= ~PRESET_MASK;
+			xgkr->ld_update &= ~PRESET_MASK;
 		}
 	}
 
@@ -387,7 +434,7 @@ recheck:
 		if (status_cop1 != COE_NOTUPDATED &&
 		    status_coz != COE_NOTUPDATED &&
 		    status_com1 != COE_NOTUPDATED) {
-			inst->ld_update &= ~INIT_MASK;
+			xgkr->ld_update &= ~INIT_MASK;
 		}
 	}
 
@@ -397,7 +444,7 @@ recheck:
 	 */
 	if (!tx_c->sent_init) {
 		if (!lp_status && !(old_ld_update & (LD_ALL_MASK))) {
-			inst->ld_update = INIT_MASK;
+			xgkr->ld_update = INIT_MASK;
 			tx_c->sent_init = true;
 		}
 	}
@@ -409,7 +456,7 @@ recheck:
 	 */
 	if (status_cop1 != COE_NOTUPDATED) {
 		if (req_cop1) {
-			inst->ld_update &= ~COP1_MASK;
+			xgkr->ld_update &= ~COP1_MASK;
 #ifdef	NEW_ALGORITHM_TRAIN_TX
 			if (tx_c->post_inc) {
 				if (req_cop1 == INCREMENT &&
@@ -421,19 +468,19 @@ recheck:
 					tx_c->post_inc -= 1;
 				}
 
-				ld_coe_update(inst);
+				ld_coe_update(xgkr);
 				goto recheck;
 			}
 #endif
 			if ((req_cop1 == DECREMENT && status_cop1 == COE_MIN) ||
 			    (req_cop1 == INCREMENT && status_cop1 == COE_MAX)) {
-				dev_dbg(&inst->phydev->mdio.dev, "COP1 hit limit %s",
+				dev_dbg(&xgkr->phydev->mdio.dev, "COP1 hit limit %s",
 					(status_cop1 == COE_MIN) ?
 					"DEC MIN" : "INC MAX");
 				tx_c->long_min_max_cnt++;
 				if (tx_c->long_min_max_cnt >= TIMEOUT_LONG) {
 					tx_c->bin_long_stop = true;
-					ld_coe_update(inst);
+					ld_coe_update(xgkr);
 					goto recheck;
 				}
 			}
@@ -442,12 +489,12 @@ recheck:
 
 	if (status_coz != COE_NOTUPDATED) {
 		if (req_coz)
-			inst->ld_update &= ~COZ_MASK;
+			xgkr->ld_update &= ~COZ_MASK;
 	}
 
 	if (status_com1 != COE_NOTUPDATED) {
 		if (req_com1) {
-			inst->ld_update &= ~COM1_MASK;
+			xgkr->ld_update &= ~COM1_MASK;
 #ifdef	NEW_ALGORITHM_TRAIN_TX
 			if (tx_c->pre_inc) {
 				if (req_com1 == INCREMENT &&
@@ -456,28 +503,28 @@ recheck:
 				else
 					tx_c->pre_inc -= 1;
 
-				ld_coe_update(inst);
+				ld_coe_update(xgkr);
 				goto recheck;
 			}
 #endif
 			/* Stop If we have reached the limit for a parameter. */
 			if ((req_com1 == DECREMENT && status_com1 == COE_MIN) ||
 			    (req_com1 == INCREMENT && status_com1 == COE_MAX)) {
-				dev_dbg(&inst->phydev->mdio.dev, "COM1 hit limit %s",
+				dev_dbg(&xgkr->phydev->mdio.dev, "COM1 hit limit %s",
 					(status_com1 == COE_MIN) ?
 					"DEC MIN" : "INC MAX");
 				tx_c->m1_min_max_cnt++;
 				if (tx_c->m1_min_max_cnt >= TIMEOUT_M1) {
 					tx_c->bin_m1_stop = true;
-					ld_coe_update(inst);
+					ld_coe_update(xgkr);
 					goto recheck;
 				}
 			}
 		}
 	}
 
-	if (old_ld_update != inst->ld_update) {
-		ld_coe_update(inst);
+	if (old_ld_update != xgkr->ld_update) {
+		ld_coe_update(xgkr);
 		/* Redo these status checks and updates until we have no more
 		 * changes, to speed up the overall process.
 		 */
@@ -494,15 +541,15 @@ recheck:
 		return;
 
 #ifdef	NEW_ALGORITHM_TRAIN_TX
-	if (!(inst->ld_update & (PRESET_MASK | INIT_MASK))) {
+	if (!(xgkr->ld_update & (PRESET_MASK | INIT_MASK))) {
 		if (tx_c->pre_inc) {
-			inst->ld_update = INCREMENT << COM1_SHIFT;
-			ld_coe_update(inst);
+			xgkr->ld_update = INCREMENT << COM1_SHIFT;
+			ld_coe_update(xgkr);
 			return;
 		}
 
 		if (status_cop1 != COE_MAX) {
-			median_gaink2 = inst->bckpl_sd.get_median_gaink2(inst->reg_base);
+			median_gaink2 = xgkr->bckpl_sd.get_median_gaink2(xgkr->reg_base);
 			if (median_gaink2 == 0xf) {
 				tx_c->post_inc = 1;
 			} else {
@@ -519,16 +566,16 @@ recheck:
 		}
 
 		if (tx_c->post_inc) {
-			inst->ld_update = INCREMENT << COP1_SHIFT;
-			ld_coe_update(inst);
+			xgkr->ld_update = INCREMENT << COP1_SHIFT;
+			ld_coe_update(xgkr);
 			return;
 		}
 	}
 #endif
 
 	/* snapshot and select bin */
-	bin_m1_early = inst->bckpl_sd.is_bin_early(BIN_M1, inst->reg_base);
-	bin_long_early = inst->bckpl_sd.is_bin_early(BIN_LONG, inst->reg_base);
+	bin_m1_early = xgkr->bckpl_sd.is_bin_early(BIN_M1, xgkr->reg_base);
+	bin_long_early = xgkr->bckpl_sd.is_bin_early(BIN_LONG, xgkr->reg_base);
 
 	if (!tx_c->bin_m1_stop && !tx_c->bin_m1_late_early && bin_m1_early) {
 		tx_c->bin_m1_stop = true;
@@ -546,39 +593,39 @@ recheck:
 	 * pending. We also only request coefficient updates when the
 	 * corresponding status is NOT UPDATED and nothing is pending.
 	 */
-	if (!(inst->ld_update & (PRESET_MASK | INIT_MASK))) {
+	if (!(xgkr->ld_update & (PRESET_MASK | INIT_MASK))) {
 		if (!tx_c->bin_long_stop) {
 			/* BinM1 correction means changing COM1 */
-			if (!status_com1 && !(inst->ld_update & COM1_MASK)) {
+			if (!status_com1 && !(xgkr->ld_update & COM1_MASK)) {
 				/* Avoid BinM1Late by requesting an
 				 * immediate decrement.
 				 */
 				if (!bin_m1_early) {
 					/* request decrement c(-1) */
 					temp = DECREMENT << COM1_SHIFT;
-					inst->ld_update = temp;
-					ld_coe_update(inst);
+					xgkr->ld_update = temp;
+					ld_coe_update(xgkr);
 					tx_c->bin_m1_late_early = bin_m1_early;
 					return;
 				}
 			}
 
 			/* BinLong correction means changing COP1 */
-			if (!status_cop1 && !(inst->ld_update & COP1_MASK)) {
+			if (!status_cop1 && !(xgkr->ld_update & COP1_MASK)) {
 				/* Locate BinLong transition point (if any)
 				 * while avoiding BinM1Late.
 				 */
 				if (bin_long_early) {
 					/* request increment c(1) */
 					temp = INCREMENT << COP1_SHIFT;
-					inst->ld_update = temp;
+					xgkr->ld_update = temp;
 				} else {
 					/* request decrement c(1) */
 					temp = DECREMENT << COP1_SHIFT;
-					inst->ld_update = temp;
+					xgkr->ld_update = temp;
 				}
 
-				ld_coe_update(inst);
+				ld_coe_update(xgkr);
 				tx_c->bin_long_late_early = bin_long_early;
 			}
 			/* We try to finish BinLong before we do BinM1 */
@@ -587,19 +634,19 @@ recheck:
 
 		if (!tx_c->bin_m1_stop) {
 			/* BinM1 correction means changing COM1 */
-			if (!status_com1 && !(inst->ld_update & COM1_MASK)) {
+			if (!status_com1 && !(xgkr->ld_update & COM1_MASK)) {
 				/* Locate BinM1 transition point (if any) */
 				if (bin_m1_early) {
 					/* request increment c(-1) */
 					temp = INCREMENT << COM1_SHIFT;
-					inst->ld_update = temp;
+					xgkr->ld_update = temp;
 				} else {
 					/* request decrement c(-1) */
 					temp = DECREMENT << COM1_SHIFT;
-					inst->ld_update = temp;
+					xgkr->ld_update = temp;
 				}
 
-				ld_coe_update(inst);
+				ld_coe_update(xgkr);
 				tx_c->bin_m1_late_early = bin_m1_early;
 			}
 		}
@@ -616,12 +663,14 @@ static int is_link_up(struct phy_device *phydev)
 	return (val & KR_RX_LINK_STAT_MASK) ? 1 : 0;
 }
 
-static int is_link_training_fail(struct phy_device *phydev)
+static int is_link_training_fail(struct xgkr_params *xgkr)
 {
+	struct phy_device *phydev = xgkr->phydev;
 	int val;
 	int timeout = 100;
 
-	val = phy_read_mmd(phydev, lt_MDIO_MMD, lt_KR_PMD_STATUS);
+	val = phy_read_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_PMD_STATUS);
+
 	if (!(val & TRAIN_FAIL) && (val & RX_STAT)) {
 		/* check LNK_STAT for sure */
 		while (timeout--) {
@@ -635,18 +684,18 @@ static int is_link_training_fail(struct phy_device *phydev)
 	return 1;
 }
 
-static int check_rx(struct phy_device *phydev)
+static int check_rx(struct xgkr_params *xgkr)
 {
-	return phy_read_mmd(phydev, lt_MDIO_MMD, lt_KR_LP_STATUS) &
+	return phy_read_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_LP_STATUS) &
 			    RX_READY_MASK;
 }
 
 /* Coefficient values have hardware restrictions */
-static int is_ld_valid(struct fsl_xgkr_inst *inst)
+static int is_ld_valid(struct xgkr_params *xgkr)
 {
-	u32 ratio_pst1q = inst->ratio_pst1q;
-	u32 adpt_eq = inst->adpt_eq;
-	u32 ratio_preq = inst->ratio_preq;
+	u32 ratio_pst1q = xgkr->ratio_pst1q;
+	u32 adpt_eq = xgkr->adpt_eq;
+	u32 ratio_preq = xgkr->ratio_preq;
 
 	if ((ratio_pst1q + adpt_eq + ratio_preq) > 48)
 		return 0;
@@ -682,15 +731,15 @@ static int is_value_allowed(const u32 *val_table, u32 val)
 	}
 }
 
-static int inc_dec(struct fsl_xgkr_inst *inst, int field, int request)
+static int inc_dec(struct xgkr_params *xgkr, int field, int request)
 {
 	u32 ld_limit[3], ld_coe[3], step[3];
 
-	ld_coe[0] = inst->ratio_pst1q;
-	ld_coe[1] = inst->adpt_eq;
-	ld_coe[2] = inst->ratio_preq;
+	ld_coe[0] = xgkr->ratio_pst1q;
+	ld_coe[1] = xgkr->adpt_eq;
+	ld_coe[2] = xgkr->ratio_preq;
 
-	/* Information specific to the Freescale SerDes for 10GBase-KR:
+	/* Information specific to the SerDes for 10GBase-KR:
 	 * Incrementing C(+1) means *decrementing* RATIO_PST1Q
 	 * Incrementing C(0) means incrementing ADPT_EQ
 	 * Incrementing C(-1) means *decrementing* RATIO_PREQ
@@ -724,28 +773,28 @@ static int inc_dec(struct fsl_xgkr_inst *inst, int field, int request)
 		break;
 	}
 
-	if (is_ld_valid(inst)) {
+	if (is_ld_valid(xgkr)) {
 		/* accept new ld */
-		inst->ratio_pst1q = ld_coe[0];
-		inst->adpt_eq = ld_coe[1];
-		inst->ratio_preq = ld_coe[2];
+		xgkr->ratio_pst1q = ld_coe[0];
+		xgkr->adpt_eq = ld_coe[1];
+		xgkr->ratio_preq = ld_coe[2];
 		/* only some values for preq and pst1q can be used.
 		 * for preq: 0x0, 0x1, 0x3, 0x5, 0x7, 0x9, 0xb, 0xc.
 		 * for pst1q: 0x0, 0x1, 0x3, 0x5, 0x7, 0x9, 0xb, 0xd, 0xf, 0x10.
 		 */
 		if (!is_value_allowed((const u32 *)&preq_table, ld_coe[2])) {
-			dev_dbg(&inst->phydev->mdio.dev,
+			dev_dbg(&xgkr->phydev->mdio.dev,
 				"preq skipped value: %d\n", ld_coe[2]);
 			return 0;
 		}
 
 		if (!is_value_allowed((const u32 *)&pst1q_table, ld_coe[0])) {
-			dev_dbg(&inst->phydev->mdio.dev,
+			dev_dbg(&xgkr->phydev->mdio.dev,
 				"pst1q skipped value: %d\n", ld_coe[0]);
 			return 0;
 		}
 
-		tune_tecr0(inst);
+		tune_tecr(xgkr);
 	} else {
 		if (request == DECREMENT)
 			/* MIN */
@@ -758,7 +807,7 @@ static int inc_dec(struct fsl_xgkr_inst *inst, int field, int request)
 	return 0;
 }
 
-static void min_max_updated(struct fsl_xgkr_inst *inst, int field, int new_ld)
+static void min_max_updated(struct xgkr_params *xgkr, int field, int new_ld)
 {
 	u32 ld_coe[] = {COE_UPDATED, COE_MIN, COE_MAX};
 	u32 mask, val;
@@ -780,11 +829,11 @@ static void min_max_updated(struct fsl_xgkr_inst *inst, int field, int new_ld)
 		return;
 	}
 
-	inst->ld_status &= ~mask;
-	inst->ld_status |= val;
+	xgkr->ld_status &= ~mask;
+	xgkr->ld_status |= val;
 }
 
-static void check_request(struct fsl_xgkr_inst *inst, int request)
+static void check_request(struct xgkr_params *xgkr, int request)
 {
 	int cop1_req, coz_req, com_req;
 	int old_status, new_ld_sta;
@@ -796,65 +845,51 @@ static void check_request(struct fsl_xgkr_inst *inst, int request)
 	/* IEEE802.3-2008, 72.6.10.2.5
 	 * Ensure we only act on INCREMENT/DECREMENT when we are in NOT UPDATED
 	 */
-	old_status = inst->ld_status;
+	old_status = xgkr->ld_status;
 
-	if (cop1_req && !(inst->ld_status & COP1_MASK)) {
-		new_ld_sta = inc_dec(inst, COE_COP1, cop1_req);
-		min_max_updated(inst, COE_COP1, new_ld_sta);
+	if (cop1_req && !(xgkr->ld_status & COP1_MASK)) {
+		new_ld_sta = inc_dec(xgkr, COE_COP1, cop1_req);
+		min_max_updated(xgkr, COE_COP1, new_ld_sta);
 	}
 
-	if (coz_req && !(inst->ld_status & COZ_MASK)) {
-		new_ld_sta = inc_dec(inst, COE_COZ, coz_req);
-		min_max_updated(inst, COE_COZ, new_ld_sta);
+	if (coz_req && !(xgkr->ld_status & COZ_MASK)) {
+		new_ld_sta = inc_dec(xgkr, COE_COZ, coz_req);
+		min_max_updated(xgkr, COE_COZ, new_ld_sta);
 	}
 
-	if (com_req && !(inst->ld_status & COM1_MASK)) {
-		new_ld_sta = inc_dec(inst, COE_COM, com_req);
-		min_max_updated(inst, COE_COM, new_ld_sta);
+	if (com_req && !(xgkr->ld_status & COM1_MASK)) {
+		new_ld_sta = inc_dec(xgkr, COE_COM, com_req);
+		min_max_updated(xgkr, COE_COM, new_ld_sta);
 	}
 
-	if (old_status != inst->ld_status)
-		ld_coe_status(inst);
+	if (old_status != xgkr->ld_status)
+		ld_coe_status(xgkr);
 }
 
-static void preset(struct fsl_xgkr_inst *inst)
+static void preset(struct xgkr_params *xgkr)
 {
 	/* These are all MAX values from the IEEE802.3 perspective. */
-	inst->ratio_pst1q = POST_COE_MAX;
-	inst->adpt_eq = ZERO_COE_MAX;
-	inst->ratio_preq = PRE_COE_MAX;
+	xgkr->ratio_pst1q = POST_COE_MAX;
+	xgkr->adpt_eq = ZERO_COE_MAX;
+	xgkr->ratio_preq = PRE_COE_MAX;
 
-	tune_tecr0(inst);
-	inst->ld_status &= ~(COP1_MASK | COZ_MASK | COM1_MASK);
-	inst->ld_status |= COE_MAX << COP1_SHIFT |
+	tune_tecr(xgkr);
+	xgkr->ld_status &= ~(COP1_MASK | COZ_MASK | COM1_MASK);
+	xgkr->ld_status |= COE_MAX << COP1_SHIFT |
 			   COE_MAX << COZ_SHIFT |
 			   COE_MAX << COM1_SHIFT;
-	ld_coe_status(inst);
+	ld_coe_status(xgkr);
 }
 
-static void initialize(struct fsl_xgkr_inst *inst)
+static void train_rx(struct xgkr_params *xgkr)
 {
-	inst->ratio_preq = RATIO_PREQ_10G;
-	inst->ratio_pst1q = RATIO_PST1Q_10G;
-	inst->adpt_eq = RATIO_EQ_10G;
-
-	tune_tecr0(inst);
-	inst->ld_status &= ~(COP1_MASK | COZ_MASK | COM1_MASK);
-	inst->ld_status |= COE_UPDATED << COP1_SHIFT |
-			   COE_UPDATED << COZ_SHIFT |
-			   COE_UPDATED << COM1_SHIFT;
-	ld_coe_status(inst);
-}
-
-static void train_rx(struct fsl_xgkr_inst *inst)
-{
-	struct phy_device *phydev = inst->phydev;
 	int request, old_ld_status;
 
 	/* get request from LP */
-	request = phy_read_mmd(phydev, lt_MDIO_MMD, lt_KR_LP_CU) &
+	request = phy_read_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_LP_CU) &
 			      (LD_ALL_MASK);
-	old_ld_status = inst->ld_status;
+
+	old_ld_status = xgkr->ld_status;
 
 	/* IEEE802.3-2008, 72.6.10.2.5
 	 * Ensure we always go to NOT UDPATED for status reporting in
@@ -865,69 +900,71 @@ static void train_rx(struct fsl_xgkr_inst *inst)
 	 */
 	if (!(request & (PRESET_MASK | INIT_MASK))) {
 		if (!(request & COP1_MASK))
-			inst->ld_status &= ~COP1_MASK;
+			xgkr->ld_status &= ~COP1_MASK;
 
 		if (!(request & COZ_MASK))
-			inst->ld_status &= ~COZ_MASK;
+			xgkr->ld_status &= ~COZ_MASK;
 
 		if (!(request & COM1_MASK))
-			inst->ld_status &= ~COM1_MASK;
+			xgkr->ld_status &= ~COM1_MASK;
 
-		if (old_ld_status != inst->ld_status)
-			ld_coe_status(inst);
+		if (old_ld_status != xgkr->ld_status)
+			ld_coe_status(xgkr);
 	}
 
 	/* As soon as the LP shows ready, no need to do any more updates. */
-	if (check_rx(phydev)) {
+	if (check_rx(xgkr)) {
 		/* LP receiver is ready */
-		if (inst->ld_status & (COP1_MASK | COZ_MASK | COM1_MASK)) {
-			inst->ld_status &= ~(COP1_MASK | COZ_MASK | COM1_MASK);
-			ld_coe_status(inst);
+		if (xgkr->ld_status & (COP1_MASK | COZ_MASK | COM1_MASK)) {
+			xgkr->ld_status &= ~(COP1_MASK | COZ_MASK | COM1_MASK);
+			ld_coe_status(xgkr);
 		}
 	} else {
 		/* IEEE802.3-2008, 72.6.10.2.3.1/2
 		 * only act on PRESET/INITIALIZE if all status is NOT UPDATED.
 		 */
 		if (request & (PRESET_MASK | INIT_MASK)) {
-			if (!(inst->ld_status &
+			if (!(xgkr->ld_status &
 			      (COP1_MASK | COZ_MASK | COM1_MASK))) {
 				if (request & PRESET_MASK)
-					preset(inst);
+					preset(xgkr);
 
 				if (request & INIT_MASK)
-					initialize(inst);
+					initialize(xgkr);
 			}
 		}
 
 		/* LP Coefficient are not in HOLD */
 		if (request & REQUEST_MASK)
-			check_request(inst, request & REQUEST_MASK);
+			check_request(xgkr, request & REQUEST_MASK);
 	}
 }
 
-static void xgkr_start_train(struct phy_device *phydev)
+static void xgkr_start_train(struct xgkr_params *xgkr)
 {
-	struct fsl_xgkr_inst *inst = phydev->priv;
-	struct tx_condition *tx_c = &inst->tx_c;
+	struct tx_condition *tx_c = &xgkr->tx_c;
 	int val = 0, i;
 	int lt_state;
 	unsigned long dead_line;
 	int rx_ok, tx_ok;
 
-	init_inst(inst, 0);
-	start_lt(phydev);
+	init_xgkr(xgkr, 0);
+	
+	start_lt(xgkr);
+	
 
 	for (i = 0; i < 2;) {
 		dead_line = jiffies + msecs_to_jiffies(500);
 		while (time_before(jiffies, dead_line)) {
-			val = phy_read_mmd(phydev, lt_MDIO_MMD,
+			val = phy_read_mmd(xgkr->phydev, lt_MDIO_MMD,
 					   lt_KR_PMD_STATUS);
+
 			if (val & TRAIN_FAIL) {
 				/* LT failed already, reset lane to avoid
 				 * it run into hanging, then start LT again.
 				 */
-				inst->bckpl_sd.reset_lane(inst->reg_base);
-				start_lt(phydev);
+				xgkr->bckpl_sd.reset_lane(xgkr->reg_base);
+				start_lt(xgkr);
 			} else if ((val & PMD_STATUS_SUP_STAT) &&
 				   (val & PMD_STATUS_FRAME_LOCK))
 				break;
@@ -948,36 +985,39 @@ static void xgkr_start_train(struct phy_device *phydev)
 
 		while (time_before(jiffies, dead_line)) {
 			/* check if the LT is already failed */
-			lt_state = phy_read_mmd(phydev, lt_MDIO_MMD,
+
+			lt_state = phy_read_mmd(xgkr->phydev, lt_MDIO_MMD,
 						lt_KR_PMD_STATUS);
+
 			if (lt_state & TRAIN_FAIL) {
-				inst->bckpl_sd.reset_lane(inst->reg_base);
+				
+				xgkr->bckpl_sd.reset_lane(xgkr->reg_base);
 				break;
 			}
 
-			rx_ok = check_rx(phydev);
+			rx_ok = check_rx(xgkr);
 			tx_ok = tx_c->tx_complete;
 
 			if (rx_ok && tx_ok)
 				break;
 
 			if (!rx_ok)
-				train_rx(inst);
+				train_rx(xgkr);
 
 			if (!tx_ok)
-				train_tx(inst);
+				train_tx(xgkr);
 
 			usleep_range(100, 500);
 		}
 
 		i++;
 		/* check LT result */
-		if (is_link_training_fail(phydev)) {
-			init_inst(inst, 0);
+		if (is_link_training_fail(xgkr)) {
+			init_xgkr(xgkr, 0);
 			continue;
 		} else {
-			stop_lt(phydev);
-			inst->state = TRAINED;
+			stop_lt(xgkr);
+			xgkr->state = TRAINED;
 			break;
 		}
 	}
@@ -986,16 +1026,20 @@ static void xgkr_start_train(struct phy_device *phydev)
 static void xgkr_state_machine(struct work_struct *work)
 {
 	struct delayed_work *dwork = to_delayed_work(work);
-	struct fsl_xgkr_inst *inst = container_of(dwork,
-						  struct fsl_xgkr_inst,
-						  xgkr_wk);
-	struct phy_device *phydev = inst->phydev;
+	struct xgkr_params *xgkr = container_of(dwork,
+						  struct xgkr_params, xgkr_wk);
+	struct phy_device *phydev = xgkr->phydev;
+	struct xgkr_phy_data *xgkr_inst = phydev->priv;
 	int an_state;
 	bool needs_train = false;
 
+	if (!xgkr_inst->aneg_done) {
+		start_xgkr_state_machine(&xgkr->xgkr_wk);
+		return;
+	}
 	mutex_lock(&phydev->lock);
 
-	switch (inst->state) {
+	switch (xgkr->state) {
 	case DETECTING_LP:
 		phy_read_mmd(phydev, MDIO_MMD_AN, g_an_BP_STAT);
 		an_state = phy_read_mmd(phydev, MDIO_MMD_AN, g_an_BP_STAT);
@@ -1006,32 +1050,31 @@ static void xgkr_state_machine(struct work_struct *work)
 		if (!is_link_up(phydev)) {
 			dev_info(&phydev->mdio.dev,
 				 "Detect hotplug, restart training\n");
-			init_inst(inst, 1);
-			start_xgkr_an(phydev);
-			inst->state = DETECTING_LP;
+			init_xgkr(xgkr, 1);
+			start_xgkr_an(xgkr);
+			xgkr->state = DETECTING_LP;
 		}
 		break;
 	}
 
 	if (needs_train)
-		xgkr_start_train(phydev);
+		xgkr_start_train(xgkr);
 
 	mutex_unlock(&phydev->lock);
-	queue_delayed_work(system_power_efficient_wq, &inst->xgkr_wk,
-			   msecs_to_jiffies(XGKR_TIMEOUT));
+	start_xgkr_state_machine(&xgkr->xgkr_wk);
 }
 
 static int fsl_backplane_probe(struct phy_device *phydev)
 {
-	struct fsl_xgkr_inst *xgkr_inst;
+	struct xgkr_phy_data *xgkr_inst;
 	struct device_node *phy_node, *lane_node;
 	struct resource res_lane;
 	struct backplane_serdes bckpl_sd;
 	const char *st;
 	const char *bm;
-	int ret;
+	int ret, i, phy_lanes;
 	int bp_mode;
-	u32 lane[2], lane_memmap_size;
+	u32 lane_base_addr[MAX_PHY_LANES_NO], lane_memmap_size;
 
 	phy_node = phydev->mdio.dev.of_node;
 	if (!phy_node) {
@@ -1043,10 +1086,14 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 	if (bp_mode < 0)
 		return -EINVAL;
 
+	phy_lanes = 1;
 	if (!strcasecmp(bm, "1000base-kx")) {
 		bp_mode = PHY_BACKPLANE_1000BASE_KX;
 	} else if (!strcasecmp(bm, "10gbase-kr")) {
 		bp_mode = PHY_BACKPLANE_10GBASE_KR;
+	} else if (!strcasecmp(bm, "40gbase-kr")) {
+		bp_mode = PHY_BACKPLANE_40GBASE_KR;
+		phy_lanes = 4;
 	} else {
 		dev_err(&phydev->mdio.dev, "Unknown backplane-mode\n");
 		return -EINVAL;
@@ -1080,7 +1127,7 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 
 	of_node_put(lane_node);
 	ret = of_property_read_u32_array(phy_node, "fsl,lane-reg",
-					 (u32 *)&lane, 2);
+					 (u32 *)lane_base_addr, phy_lanes);
 	if (ret) {
 		dev_err(&phydev->mdio.dev, "could not get fsl,lane-reg\n");
 		return -EINVAL;
@@ -1103,35 +1150,49 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 		return -EINVAL;
 	}
 
-	if (bp_mode == PHY_BACKPLANE_1000BASE_KX) {
-		phydev->speed = SPEED_1000;
-		/* configure the lane for 1000BASE-KX */
-		bckpl_sd.lane_set_1gkx(phydev->priv);
-		return 0;
-	}
-
 	xgkr_inst = devm_kzalloc(&phydev->mdio.dev,
 				 sizeof(*xgkr_inst), GFP_KERNEL);
 	if (!xgkr_inst)
 		return -ENOMEM;
 
-	xgkr_inst->phydev = phydev;
-	xgkr_inst->bckpl_sd = bckpl_sd;
+	xgkr_inst->phy_lanes = phy_lanes;
+	xgkr_inst->bp_mode = bp_mode;
 
 	lane_memmap_size = bckpl_sd.get_lane_memmap_size();
-	xgkr_inst->reg_base = devm_ioremap_nocache(&phydev->mdio.dev,
-					        res_lane.start + lane[0],
-					        lane_memmap_size);
-	if (!xgkr_inst->reg_base) {
-		dev_err(&phydev->mdio.dev, "ioremap_nocache failed\n");
-		return -ENOMEM;
+	
+	for (i = 0; i < phy_lanes; i++) {
+		xgkr_inst->xgkr[i].idx = i;
+		xgkr_inst->xgkr[i].phydev = phydev;
+		xgkr_inst->xgkr[i].bckpl_sd = bckpl_sd;
+		xgkr_inst->xgkr[i].reg_base = devm_ioremap_nocache(&phydev->mdio.dev,
+						    res_lane.start + lane_base_addr[i],
+						    lane_memmap_size);
+		if (!xgkr_inst->xgkr[i].reg_base) {
+			dev_err(&phydev->mdio.dev, "ioremap_nocache failed\n");
+			return -ENOMEM;
+		}
 	}
 
 	phydev->priv = xgkr_inst;
 
-	if (bp_mode == PHY_BACKPLANE_10GBASE_KR) {
+	switch (bp_mode)
+	{
+	case PHY_BACKPLANE_1000BASE_KX:
+		phydev->speed = SPEED_1000;
+		/* configure the lane for 1000BASE-KX */
+		bckpl_sd.lane_set_1gkx(xgkr_inst->xgkr[SINGLE_LANE].reg_base);
+		break;
+
+	case PHY_BACKPLANE_10GBASE_KR:
 		phydev->speed = SPEED_10000;
-		INIT_DELAYED_WORK(&xgkr_inst->xgkr_wk, xgkr_state_machine);
+		INIT_DELAYED_WORK(&xgkr_inst->xgkr[SINGLE_LANE].xgkr_wk, xgkr_state_machine);
+		break;
+
+	case PHY_BACKPLANE_40GBASE_KR:
+		phydev->speed = SPEED_40000;
+		for (i = 0; i < phy_lanes; i++)
+			INIT_DELAYED_WORK(&xgkr_inst->xgkr[i].xgkr_wk, xgkr_state_machine);
+		break;
 	}
 
 	return 0;
@@ -1139,27 +1200,45 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 
 static int fsl_backplane_aneg_done(struct phy_device *phydev)
 {
+	struct xgkr_phy_data *xgkr_inst = phydev->priv;
+
 	if (!phydev->mdio.dev.of_node) {
 		dev_err(&phydev->mdio.dev, "No associated device tree node\n");
 		return -EINVAL;
 	}
+	
+	xgkr_inst->aneg_done = true;
 
 	return 1;
 }
 
 static int fsl_backplane_config_aneg(struct phy_device *phydev)
 {
+	struct xgkr_phy_data *xgkr_inst = phydev->priv;
+	int i;
+
 	if (!phydev->mdio.dev.of_node) {
 		dev_err(&phydev->mdio.dev, "No associated device tree node\n");
 		return -EINVAL;
 	}
 
-	if (phydev->speed == SPEED_10000) {
-		phydev->supported |= SUPPORTED_10000baseKR_Full;
-		start_xgkr_an(phydev);
-	} else if (phydev->speed == SPEED_1000) {
+	switch (phydev->speed)
+	{
+	case SPEED_1000:
 		phydev->supported |= SUPPORTED_1000baseKX_Full;
 		start_1gkx_an(phydev);
+		break;
+
+	case SPEED_10000:
+		phydev->supported |= SUPPORTED_10000baseKR_Full;
+		reset_lt(&xgkr_inst->xgkr[SINGLE_LANE]);
+		start_xgkr_an(&xgkr_inst->xgkr[SINGLE_LANE]);
+		/* start state machine*/
+		start_xgkr_state_machine(&xgkr_inst->xgkr[SINGLE_LANE].xgkr_wk);
+		break;
+
+	case SPEED_40000:
+		break;
 	}
 
 	phydev->advertising = phydev->supported;
@@ -1170,33 +1249,37 @@ static int fsl_backplane_config_aneg(struct phy_device *phydev)
 
 static int fsl_backplane_suspend(struct phy_device *phydev)
 {
+	int i;
+
 	if (!phydev->mdio.dev.of_node) {
 		dev_err(&phydev->mdio.dev, "No associated device tree node\n");
 		return -EINVAL;
 	}
 
-	if (phydev->speed == SPEED_10000) {
-		struct fsl_xgkr_inst *xgkr_inst = phydev->priv;
+	if (phydev->speed == SPEED_10000 || phydev->speed == SPEED_40000) {
+		struct xgkr_phy_data *xgkr_inst = phydev->priv;
 
-		cancel_delayed_work_sync(&xgkr_inst->xgkr_wk);
+		for (i = 0; i < xgkr_inst->phy_lanes; i++)
+			cancel_delayed_work_sync(&xgkr_inst->xgkr[i].xgkr_wk);
 	}
 	return 0;
 }
 
 static int fsl_backplane_resume(struct phy_device *phydev)
 {
+	struct xgkr_phy_data *xgkr_inst = phydev->priv;
+	int i;
+
 	if (!phydev->mdio.dev.of_node) {
 		dev_err(&phydev->mdio.dev, "No associated device tree node\n");
 		return -EINVAL;
 	}
 
-	if (phydev->speed == SPEED_10000) {
-		struct fsl_xgkr_inst *xgkr_inst = phydev->priv;
-
-		init_inst(xgkr_inst, 1);
-		queue_delayed_work(system_power_efficient_wq,
-				   &xgkr_inst->xgkr_wk,
-				   msecs_to_jiffies(XGKR_TIMEOUT));
+	if (phydev->speed == SPEED_10000 || phydev->speed == SPEED_40000) {
+		for (i = 0; i < xgkr_inst->phy_lanes; i++) {
+			init_xgkr(&xgkr_inst->xgkr[i], 1);
+			start_xgkr_state_machine(&xgkr_inst->xgkr[i].xgkr_wk);
+		}
 	}
 	return 0;
 }

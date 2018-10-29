@@ -30,6 +30,7 @@ struct backplane_serdes {
 };
 
 void setup_backplane_serdes_10g(struct backplane_serdes *bckpl_serdes);
+void setup_backplane_serdes_28g(struct backplane_serdes *bckpl_serdes);
 
 
 #endif //FSL_BACKPLANE_H

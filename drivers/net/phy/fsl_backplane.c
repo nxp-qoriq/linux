@@ -205,7 +205,7 @@ struct xgkr_params {
 	void *reg_base;		/* lane memory map: registers base address */
 	int idx;			/* lane relative index inside a multi-lane PHY */
 	struct phy_device *phydev;
-	struct backplane_serdes bckpl_sd;
+	struct serdes_access *srds;
 	struct tx_condition tx_c;
 	struct delayed_work xgkr_wk;
 	enum train_state state;
@@ -256,6 +256,26 @@ static void setup_an_lt_lx(void)
 	/* KX/KR AN registers */
 	g_an_AD1 = 0x03;
 	g_an_BP_STAT = 0x0F;
+}
+
+static u32 le_ioread32(u32 *reg)
+{
+	return ioread32(reg);
+}
+
+static void le_iowrite32(u32 value, u32 *reg)
+{
+	iowrite32(value, reg);
+}
+
+static u32 be_ioread32(u32 *reg)
+{
+	return ioread32be(reg);
+}
+
+static void be_iowrite32(u32 value, u32 *reg)
+{
+	iowrite32be(value, reg);
 }
 
 /**
@@ -353,7 +373,7 @@ void tune_tecr(struct xgkr_params *xgkr)
 		reset = true;
 	}
 	
-	xgkr->bckpl_sd.tune_tecr(xgkr->reg_base, xgkr->ratio_preq, xgkr->ratio_pst1q, xgkr->adpt_eq, reset);
+	xgkr->srds->tune_tecr(xgkr->reg_base, xgkr->ratio_preq, xgkr->ratio_pst1q, xgkr->adpt_eq, reset);
 }
 
 static void start_lt(struct xgkr_params *xgkr)
@@ -674,7 +694,7 @@ recheck:
 		}
 
 		if (status_cop1 != COE_MAX) {
-			median_gaink2 = xgkr->bckpl_sd.get_median_gaink2(xgkr->reg_base);
+			median_gaink2 = xgkr->srds->get_median_gaink2(xgkr->reg_base);
 			if (median_gaink2 == 0xf) {
 				tx_c->post_inc = 1;
 			} else {
@@ -699,8 +719,8 @@ recheck:
 #endif
 
 	/* snapshot and select bin */
-	bin_m1_early = xgkr->bckpl_sd.is_bin_early(BIN_M1, xgkr->reg_base);
-	bin_long_early = xgkr->bckpl_sd.is_bin_early(BIN_LONG, xgkr->reg_base);
+	bin_m1_early = xgkr->srds->is_bin_early(BIN_M1, xgkr->reg_base);
+	bin_long_early = xgkr->srds->is_bin_early(BIN_LONG, xgkr->reg_base);
 
 	if (!tx_c->bin_m1_stop && !tx_c->bin_m1_late_early && bin_m1_early) {
 		tx_c->bin_m1_stop = true;
@@ -1104,9 +1124,9 @@ static void xgkr_start_train(struct xgkr_params *xgkr)
 				if (xgkr_inst->bp_mode == PHY_BACKPLANE_40GBASE_KR) {
 					/* Reset only the Master Lane */
 					if (xgkr->idx == MASTER_LANE)
-						xgkr->bckpl_sd.reset_lane(xgkr->reg_base);
+						xgkr->srds->reset_lane(xgkr->reg_base);
 				} else {
-					xgkr->bckpl_sd.reset_lane(xgkr->reg_base);
+					xgkr->srds->reset_lane(xgkr->reg_base);
 				}
 				
 				start_lt(xgkr);
@@ -1139,9 +1159,9 @@ static void xgkr_start_train(struct xgkr_params *xgkr)
 				if (xgkr_inst->bp_mode == PHY_BACKPLANE_40GBASE_KR) {
 					/* Reset only the Master Lane */
 					if (xgkr->idx == MASTER_LANE)
-						xgkr->bckpl_sd.reset_lane(xgkr->reg_base);
+						xgkr->srds->reset_lane(xgkr->reg_base);
 				} else {
-					xgkr->bckpl_sd.reset_lane(xgkr->reg_base);
+					xgkr->srds->reset_lane(xgkr->reg_base);
 				}
 				
 				break;
@@ -1371,7 +1391,8 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 	struct xgkr_phy_data *xgkr_inst;
 	struct device_node *phy_node, *lane_node;
 	struct resource res_lane;
-	struct backplane_serdes bckpl_sd;
+	struct serdes_access *srds = NULL;
+	int serdes_type;
 	const char *st;
 	const char *bm;
 	int ret, i, phy_lanes;
@@ -1410,12 +1431,12 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 	ret = of_property_read_string(lane_node, "compatible", &st);
 	if (ret < 0) {
 		//assume SERDES-10G if compatible property is not specified
-		bckpl_sd.serdes_type = SERDES_10G;
+		serdes_type = SERDES_10G;
 	}
 	else if (!strcasecmp(st, "fsl,serdes-10g")) {
-		bckpl_sd.serdes_type = SERDES_10G;
+		serdes_type = SERDES_10G;
 	} else if (!strcasecmp(st, "fsl,serdes-28g")) {
-		bckpl_sd.serdes_type = SERDES_28G;
+		serdes_type = SERDES_28G;
 	} else {
 		dev_err(&phydev->mdio.dev, "Unknown serdes-type\n");
 		return -EINVAL;
@@ -1435,21 +1456,37 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 		return -EINVAL;
 	}
 
-	switch (bckpl_sd.serdes_type)
+	switch (serdes_type)
 	{
 	case SERDES_10G:
 		setup_an_lt_ls();
-		setup_backplane_serdes_10g(&bckpl_sd);
+		srds = setup_serdes_access_10g();
 		break;
 
 	case SERDES_28G:
 		setup_an_lt_lx();
-		setup_backplane_serdes_28g(&bckpl_sd);
+		srds = setup_serdes_access_28g();
 		break;
 
 	default:
 		dev_err(&phydev->mdio.dev, "Unsupported serdes-type\n");
 		return -EINVAL;
+	}
+
+	if (!srds) {
+		dev_err(&phydev->mdio.dev, "Unsupported serdes-type\n");
+		return -EINVAL;
+	}
+
+	srds->serdes_type = serdes_type;
+	srds->is_little_endian = of_property_read_bool(lane_node, "little-endian");
+
+	if (srds->is_little_endian) {
+		srds->ioread32 = le_ioread32;
+		srds->iowrite32 = le_iowrite32;
+	} else {
+		srds->ioread32 = be_ioread32;
+		srds->iowrite32 = be_iowrite32;
 	}
 
 	xgkr_inst = devm_kzalloc(&phydev->mdio.dev,
@@ -1461,12 +1498,12 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 	xgkr_inst->bp_mode = bp_mode;
 	mutex_init(&xgkr_inst->phy_lock);
 
-	lane_memmap_size = bckpl_sd.get_lane_memmap_size();
+	lane_memmap_size = srds->get_lane_memmap_size();
 	
 	for (i = 0; i < phy_lanes; i++) {
 		xgkr_inst->xgkr[i].idx = i;
 		xgkr_inst->xgkr[i].phydev = phydev;
-		xgkr_inst->xgkr[i].bckpl_sd = bckpl_sd;
+		xgkr_inst->xgkr[i].srds = srds;
 		xgkr_inst->xgkr[i].reg_base = devm_ioremap_nocache(&phydev->mdio.dev,
 						    res_lane.start + lane_base_addr[i],
 						    lane_memmap_size);
@@ -1484,7 +1521,7 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 	case PHY_BACKPLANE_1000BASE_KX:
 		phydev->speed = SPEED_1000;
 		/* configure the lane for 1000BASE-KX */
-		bckpl_sd.lane_set_1gkx(xgkr_inst->xgkr[SINGLE_LANE].reg_base);
+		srds->lane_set_1gkx(xgkr_inst->xgkr[SINGLE_LANE].reg_base);
 		break;
 
 	case PHY_BACKPLANE_10GBASE_KR:

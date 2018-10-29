@@ -43,71 +43,73 @@
 #define TECR0_AMP_RED_MASK			0x0000003f
 
 struct per_lane_ctrl_status {
-	__be32 gcr0;	/* 0x.000 - General Control Register 0 */
-	__be32 resv1;	/* 0x.004 - Reserved */
-	__be32 resv2;	/* 0x.008 - Reserved */
-	__be32 resv3;	/* 0x.00C - Reserved */
-	__be32 resv4;	/* 0x.010 - Reserved */
-	__be32 resv5;	/* 0x.014 - Reserved */
-	__be32 resv6;	/* 0x.018 - Reserved */
-	__be32 resv7;	/* 0x.01C - Reserved */
-	__be32 trstctl;	/* 0x.020 - TX Reset Control Register */
-	__be32 tgcr0;	/* 0x.024 - TX General Control Register 0 */
-	__be32 tgcr1;	/* 0x.028 - TX General Control Register 1 */
-	__be32 tgcr2;	/* 0x.02C - TX General Control Register 2 */
-	__be32 tecr0;	/* 0x.030 - Transmit Equalization Control Register 0 */
-	__be32 tecr1;	/* 0x.034 - Transmit Equalization Control Register 1 */
-	__be32 resv8;	/* 0x.038 - Reserved */
-	__be32 resv9;	/* 0x.03C - Reserved */
-	__be32 rrstctl;	/* 0x.040 - RX Reset Control Register */
-	__be32 rgcr0;	/* 0x.044 - RX General Control Register 0 */
-	__be32 rxgcr1; 	/* 0x.048 - RX General Control Register 1 */
-	__be32 resv10;	/* 0x.04C - Reserved */
-	__be32 recr0;	/* 0x.050 - RX Equalization Register 0 */
-	__be32 recr1;	/* 0x.054 - RX Equalization Register 1 */
-	__be32 recr2;	/* 0x.058 - RX Equalization Register 2 */
-	__be32 recr3;	/* 0x.05C - RX Equalization Register 3 */
-	__be32 recr4;	/* 0x.060 - RX Equalization Register 4 */
-	__be32 resv11;	/* 0x.064 - Reserved */
-	__be32 rccr0;	/* 0x.068 - RX Calibration Register 0 */
-	__be32 rccr1;	/* 0x.06C - RX Calibration Register 1 */
-	__be32 rcpcr0;	/* 0x.070 - RX Clock Path Register 0 */
-	__be32 rsccr0;	/* 0x.074 - RX Sampler Calibration Control Register 0 */
-	__be32 rsccr1;	/* 0x.078 - RX Sampler Calibration Control Register 1 */
-	__be32 resv12;	/* 0x.07C - Reserved */
-	__be32 ttlcr0;	/* 0x.080 - Transition Tracking Loop Register 0 */
-	__be32 ttlcr1;	/* 0x.084 - Transition Tracking Loop Register 1 */
-	__be32 ttlcr2;	/* 0x.088 - Transition Tracking Loop Register 2 */
-	__be32 ttlcr3;	/* 0x.08C - Transition Tracking Loop Register 3 */
-	__be32 resv13;	/* 0x.090 - Reserved */
-	__be32 resv14;	/* 0x.094 - Reserved */
-	__be32 resv15;	/* 0x.098 - Reserved */
-	__be32 resv16;	/* 0x.09C - Reserved */
-	__be32 tcsr0;	/* 0x.0A0 - Test Control/Status Register 0 */
-	__be32 tcsr1;	/* 0x.0A4 - Test Control/Status Register 1 */
-	__be32 tcsr2;	/* 0x.0A8 - Test Control/Status Register 2 */
-	__be32 tcsr3;	/* 0x.0AC - Test Control/Status Register 3 */
-	__be32 tcsr4;	/* 0x.0B0 - Test Control/Status Register 4 */
-	__be32 resv17;	/* 0x.0B4 - Reserved */
-	__be32 resv18;	/* 0x.0B8 - Reserved */
-	__be32 resv19;	/* 0x.0BC - Reserved */
-	__be32 rxcb0;	/* 0x.0C0 - RX Control Block Register 0 */
-	__be32 rxcb1;	/* 0x.0C4 - RX Control Block Register 1 */
-	__be32 resv20;	/* 0x.0C8 - Reserved */
-	__be32 resv21;	/* 0x.0CC - Reserved */
-	__be32 rxss0;	/* 0x.0D0 - RX Speed Switch Register 0 */
-	__be32 rxss1;	/* 0x.0D4 - RX Speed Switch Register 1 */
-	__be32 rxss2;	/* 0x.0D8 - RX Speed Switch Register 2 */
-	__be32 resv22;	/* 0x.0DC - Reserved */
-	__be32 txcb0;	/* 0x.0E0 - TX Control Block Register 0 */
-	__be32 txcb1;	/* 0x.0E4 - TX Control Block Register 1 */
-	__be32 resv23;	/* 0x.0E8 - Reserved */
-	__be32 resv24;	/* 0x.0EC - Reserved */
-	__be32 txss0;	/* 0x.0F0 - TX Speed Switch Register 0 */
-	__be32 txss1;	/* 0x.0F4 - TX Speed Switch Register 1 */
-	__be32 txss2;	/* 0x.0F8 - TX Speed Switch Register 2 */
-	__be32 resv25;	/* 0x.0FC - Reserved */
+	u32 gcr0;	/* 0x.000 - General Control Register 0 */
+	u32 resv1;	/* 0x.004 - Reserved */
+	u32 resv2;	/* 0x.008 - Reserved */
+	u32 resv3;	/* 0x.00C - Reserved */
+	u32 resv4;	/* 0x.010 - Reserved */
+	u32 resv5;	/* 0x.014 - Reserved */
+	u32 resv6;	/* 0x.018 - Reserved */
+	u32 resv7;	/* 0x.01C - Reserved */
+	u32 trstctl;	/* 0x.020 - TX Reset Control Register */
+	u32 tgcr0;	/* 0x.024 - TX General Control Register 0 */
+	u32 tgcr1;	/* 0x.028 - TX General Control Register 1 */
+	u32 tgcr2;	/* 0x.02C - TX General Control Register 2 */
+	u32 tecr0;	/* 0x.030 - Transmit Equalization Control Register 0 */
+	u32 tecr1;	/* 0x.034 - Transmit Equalization Control Register 1 */
+	u32 resv8;	/* 0x.038 - Reserved */
+	u32 resv9;	/* 0x.03C - Reserved */
+	u32 rrstctl;	/* 0x.040 - RX Reset Control Register */
+	u32 rgcr0;	/* 0x.044 - RX General Control Register 0 */
+	u32 rxgcr1; 	/* 0x.048 - RX General Control Register 1 */
+	u32 resv10;	/* 0x.04C - Reserved */
+	u32 recr0;	/* 0x.050 - RX Equalization Register 0 */
+	u32 recr1;	/* 0x.054 - RX Equalization Register 1 */
+	u32 recr2;	/* 0x.058 - RX Equalization Register 2 */
+	u32 recr3;	/* 0x.05C - RX Equalization Register 3 */
+	u32 recr4;	/* 0x.060 - RX Equalization Register 4 */
+	u32 resv11;	/* 0x.064 - Reserved */
+	u32 rccr0;	/* 0x.068 - RX Calibration Register 0 */
+	u32 rccr1;	/* 0x.06C - RX Calibration Register 1 */
+	u32 rcpcr0;	/* 0x.070 - RX Clock Path Register 0 */
+	u32 rsccr0;	/* 0x.074 - RX Sampler Calibration Control Register 0 */
+	u32 rsccr1;	/* 0x.078 - RX Sampler Calibration Control Register 1 */
+	u32 resv12;	/* 0x.07C - Reserved */
+	u32 ttlcr0;	/* 0x.080 - Transition Tracking Loop Register 0 */
+	u32 ttlcr1;	/* 0x.084 - Transition Tracking Loop Register 1 */
+	u32 ttlcr2;	/* 0x.088 - Transition Tracking Loop Register 2 */
+	u32 ttlcr3;	/* 0x.08C - Transition Tracking Loop Register 3 */
+	u32 resv13;	/* 0x.090 - Reserved */
+	u32 resv14;	/* 0x.094 - Reserved */
+	u32 resv15;	/* 0x.098 - Reserved */
+	u32 resv16;	/* 0x.09C - Reserved */
+	u32 tcsr0;	/* 0x.0A0 - Test Control/Status Register 0 */
+	u32 tcsr1;	/* 0x.0A4 - Test Control/Status Register 1 */
+	u32 tcsr2;	/* 0x.0A8 - Test Control/Status Register 2 */
+	u32 tcsr3;	/* 0x.0AC - Test Control/Status Register 3 */
+	u32 tcsr4;	/* 0x.0B0 - Test Control/Status Register 4 */
+	u32 resv17;	/* 0x.0B4 - Reserved */
+	u32 resv18;	/* 0x.0B8 - Reserved */
+	u32 resv19;	/* 0x.0BC - Reserved */
+	u32 rxcb0;	/* 0x.0C0 - RX Control Block Register 0 */
+	u32 rxcb1;	/* 0x.0C4 - RX Control Block Register 1 */
+	u32 resv20;	/* 0x.0C8 - Reserved */
+	u32 resv21;	/* 0x.0CC - Reserved */
+	u32 rxss0;	/* 0x.0D0 - RX Speed Switch Register 0 */
+	u32 rxss1;	/* 0x.0D4 - RX Speed Switch Register 1 */
+	u32 rxss2;	/* 0x.0D8 - RX Speed Switch Register 2 */
+	u32 resv22;	/* 0x.0DC - Reserved */
+	u32 txcb0;	/* 0x.0E0 - TX Control Block Register 0 */
+	u32 txcb1;	/* 0x.0E4 - TX Control Block Register 1 */
+	u32 resv23;	/* 0x.0E8 - Reserved */
+	u32 resv24;	/* 0x.0EC - Reserved */
+	u32 txss0;	/* 0x.0F0 - TX Speed Switch Register 0 */
+	u32 txss1;	/* 0x.0F4 - TX Speed Switch Register 1 */
+	u32 txss2;	/* 0x.0F8 - TX Speed Switch Register 2 */
+	u32 resv25;	/* 0x.0FC - Reserved */
 };
+
+static struct serdes_access srds;
 
 static u32 get_lane_memmap_size(void)
 {
@@ -121,24 +123,24 @@ static void reset_lane(void *reg)
 	unsigned long timeout;
 
 	/* reset Tx lane: send reset request */
-	iowrite32(ioread32(&reg_base->trstctl) | RESET_REQ_MASK,
+	srds.iowrite32(srds.ioread32(&reg_base->trstctl) | RESET_REQ_MASK,
 		    &reg_base->trstctl);
 	udelay(1);
 	timeout = 10;
 	while (timeout--) {
-		val = ioread32(&reg_base->trstctl);
+		val = srds.ioread32(&reg_base->trstctl);
 		if (!(val & RESET_REQ_MASK))
 			break;
 		usleep_range(5, 20);
 	}
 	
 	/* reset Rx lane: send reset request */
-	iowrite32(ioread32(&reg_base->rrstctl) | RESET_REQ_MASK,
+	srds.iowrite32(srds.ioread32(&reg_base->rrstctl) | RESET_REQ_MASK,
 		    &reg_base->rrstctl);
 	udelay(1);
 	timeout = 10;
 	while (timeout--) {
-		val = ioread32(&reg_base->rrstctl);
+		val = srds.ioread32(&reg_base->rrstctl);
 		if (!(val & RESET_REQ_MASK))
 			break;
 		usleep_range(5, 20);
@@ -165,10 +167,10 @@ static void tune_tecr(void *reg, u32 ratio_preq, u32 ratio_pst1q, u32 adpt_eq, b
 	val = TECR0_INIT |
 		ratio_preq << PRE_COE_SHIFT |
 		ratio_pst1q << POST_COE_SHIFT;
-	iowrite32(val, &reg_base->tecr0);
+	srds.iowrite32(val, &reg_base->tecr0);
 
 	val = adpt_eq << ZERO_COE_SHIFT;
-	iowrite32(val, &reg_base->tecr1);
+	srds.iowrite32(val, &reg_base->tecr1);
 	
 	udelay(1);
 }
@@ -182,16 +184,16 @@ static void lane_set_1gkx(void *reg)
 	reset_lane(reg);
 
 	/* set gcr1 for 1GKX */
-	val = ioread32(&reg_base->rxgcr1);
+	val = srds.ioread32(&reg_base->rxgcr1);
 	val &= ~(GCR1_REIDL_TH_MASK | GCR1_REIDL_EX_SEL_MASK |
 		 GCR1_REIDL_ET_MAS_MASK);
-	iowrite32(val, &reg_base->rxgcr1);
+	srds.iowrite32(val, &reg_base->rxgcr1);
 	udelay(1);
 
 	/* set tecr0 for 1GKX */
-	val = ioread32(&reg_base->tecr0);
+	val = srds.ioread32(&reg_base->tecr0);
 	val &= ~TECR0_AMP_RED_MASK;
-	iowrite32(val, &reg_base->tecr0);
+	srds.iowrite32(val, &reg_base->tecr0);
 	udelay(1);
 }
 
@@ -208,7 +210,7 @@ static int get_median_gaink2(u32 *reg)
 	for (i = 0; i < BIN_SNAPSHOT_NUM; i++) {
 		/* wait RECR3_SNP_DONE_MASK has cleared */
 		timeout = 100;
-		while (ioread32(&reg_base->recr3) &
+		while (srds.ioread32(&reg_base->recr3) &
 				RECR3_SNP_DONE_MASK) {
 			udelay(1);
 			timeout--;
@@ -217,13 +219,13 @@ static int get_median_gaink2(u32 *reg)
 		}
 
 		/* start snap shot */
-		iowrite32((ioread32(&reg_base->recr3) |
+		srds.iowrite32((srds.ioread32(&reg_base->recr3) |
 			    RECR3_SNP_START_MASK),
 			    &reg_base->recr3);
 
 		/* wait for SNP done */
 		timeout = 100;
-		while (!(ioread32(&reg_base->recr3) &
+		while (!(srds.ioread32(&reg_base->recr3) &
 				RECR3_SNP_DONE_MASK)) {
 			udelay(1);
 			timeout--;
@@ -232,12 +234,12 @@ static int get_median_gaink2(u32 *reg)
 		}
 
 		/* read and save the snap shot */
-		rx_eq_snp = ioread32(&reg_base->recr3);
+		rx_eq_snp = srds.ioread32(&reg_base->recr3);
 		gaink2_snap_shot[i] = (rx_eq_snp & RECR3_GAINK2_MASK) >>
 					RECR3_GAINK2_SHIFT;
 
 		/* terminate the snap shot by setting GCR1[REQ_CTL_SNP] */
-		iowrite32((ioread32(&reg_base->recr3) &
+		srds.iowrite32((srds.ioread32(&reg_base->recr3) &
 			    ~RECR3_SNP_START_MASK),
 			    &reg_base->recr3);
 	}
@@ -271,7 +273,7 @@ static bool is_bin_early(int bin_sel, void *reg)
 	for (i = 0; i < BIN_SNAPSHOT_NUM; i++) {
 		/* wait RECR3_SNP_DONE_MASK has cleared */
 		timeout = 100;
-		while ((ioread32(&reg_base->recr3) & RECR3_SNP_DONE_MASK)) {
+		while ((srds.ioread32(&reg_base->recr3) & RECR3_SNP_DONE_MASK)) {
 			udelay(1);
 			timeout--;
 			if (timeout == 0)
@@ -280,22 +282,22 @@ static bool is_bin_early(int bin_sel, void *reg)
 
 		/* set TCSR1[CDR_SEL] to BinM1/BinLong */
 		if (bin_sel == BIN_M1) {
-			iowrite32((ioread32(&reg_base->recr4) &
+			srds.iowrite32((srds.ioread32(&reg_base->recr4) &
 				    ~CDR_SEL_MASK) | BIN_M1_SEL,
 				    &reg_base->recr4);
 		} else {
-			iowrite32((ioread32(&reg_base->recr4) &
+			srds.iowrite32((srds.ioread32(&reg_base->recr4) &
 				    ~CDR_SEL_MASK) | BIN_Long_SEL,
 				    &reg_base->recr4);
 		}
 
 		/* start snap shot */
-		iowrite32(ioread32(&reg_base->recr3) | RECR3_SNP_START_MASK,
+		srds.iowrite32(srds.ioread32(&reg_base->recr3) | RECR3_SNP_START_MASK,
 			    &reg_base->recr3);
 
 		/* wait for SNP done */
 		timeout = 100;
-		while (!(ioread32(&reg_base->recr3) & RECR3_SNP_DONE_MASK)) {
+		while (!(srds.ioread32(&reg_base->recr3) & RECR3_SNP_DONE_MASK)) {
 			udelay(1);
 			timeout--;
 			if (timeout == 0)
@@ -303,13 +305,13 @@ static bool is_bin_early(int bin_sel, void *reg)
 		}
 
 		/* read and save the snap shot */
-		bin_snap_shot[i] = (ioread32(&reg_base->recr4) &
+		bin_snap_shot[i] = (srds.ioread32(&reg_base->recr4) &
 				RECR4_SNP_DATA_MASK) >> RECR4_SNP_DATA_SHIFT;
 		if (bin_snap_shot[i] & RECR4_EQ_SNPBIN_SIGN_MASK)
 			negative_count++;
 
 		/* terminate the snap shot by setting GCR1[REQ_CTL_SNP] */
-		iowrite32(ioread32(&reg_base->recr3) & ~RECR3_SNP_START_MASK,
+		srds.iowrite32(srds.ioread32(&reg_base->recr3) & ~RECR3_SNP_START_MASK,
 			    &reg_base->recr3);
 	}
 
@@ -321,12 +323,14 @@ static bool is_bin_early(int bin_sel, void *reg)
 	return early;
 }
 
-void setup_backplane_serdes_28g(struct backplane_serdes *bckpl_serdes)
+struct serdes_access* setup_serdes_access_28g(void)
 {
-	bckpl_serdes->get_lane_memmap_size = get_lane_memmap_size;
-	bckpl_serdes->tune_tecr = tune_tecr;
-	bckpl_serdes->reset_lane = reset_lane;
-	bckpl_serdes->lane_set_1gkx = lane_set_1gkx;
-	bckpl_serdes->get_median_gaink2 = get_median_gaink2;
-	bckpl_serdes->is_bin_early = is_bin_early;
+	srds.get_lane_memmap_size = get_lane_memmap_size;
+	srds.tune_tecr = tune_tecr;
+	srds.reset_lane = reset_lane;
+	srds.lane_set_1gkx = lane_set_1gkx;
+	srds.get_median_gaink2 = get_median_gaink2;
+	srds.is_bin_early = is_bin_early;
+
+	return &srds;
 }

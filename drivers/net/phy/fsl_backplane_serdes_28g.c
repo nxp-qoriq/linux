@@ -13,18 +13,17 @@
 
 #include "fsl_backplane.h"
 
+#define BIN_M1_SEL					0x0000c000
+#define BIN_Long_SEL				0x0000d000
+#define CDR_SEL_MASK				0x0000f000
+
 #define PRE_COE_SHIFT				16
 #define POST_COE_SHIFT				8
 #define ZERO_COE_SHIFT				24
 
 #define TECR0_INIT					0x20808000
 
-#define TECR0_AMP_RED_MASK			0x0000003f
-
-#define GCR0_RESET_MASK				0x020000
-#define BIN_M1_SEL					0x0000c000
-#define BIN_Long_SEL				0x0000d000
-#define CDR_SEL_MASK				0x0000f000
+#define RESET_REQ_MASK				0x80000000
 
 #define RECR3_SNP_START_MASK		0x80000000
 #define RECR3_SNP_DONE_MASK			0x40000000
@@ -36,7 +35,7 @@
 #define RECR3_GAINK2_MASK			0x1f000000
 #define RECR3_GAINK2_SHIFT			24
 
-//used only for 1GKX:
+/* Required only for 1000BASE KX */
 #define GCR1_REIDL_TH_MASK			0x00700000
 #define GCR1_REIDL_EX_SEL_MASK		0x000c0000
 #define GCR1_REIDL_ET_MAS_MASK		0x04000000
@@ -109,16 +108,52 @@ struct per_lane_ctrl_status {
 	__be32 resv25;	/* 0x.0FC - Reserved */
 };
 
-static void tune_tecr0(void *reg, u32 ratio_preq, u32 ratio_pst1q, u32 adpt_eq)
+static u32 get_lane_memmap_size(void)
+{
+	return 0x100;
+}
+
+static void reset_lane(void *reg)
+{
+	struct per_lane_ctrl_status *reg_base = reg;
+	u32 val;
+	int timeout;
+
+	/* reset Tx lane: send reset request */
+	iowrite32(ioread32(&reg_base->trstctl) | RESET_REQ_MASK,
+		    &reg_base->trstctl);
+	udelay(1);
+	timeout = 10;
+	while (timeout--) {
+		val = ioread32(&reg_base->trstctl);
+		if (!(val & RESET_REQ_MASK))
+			break;
+		usleep_range(5, 20);
+	}
+	
+	/* reset Rx lane: send reset request */
+	iowrite32(ioread32(&reg_base->rrstctl) | RESET_REQ_MASK,
+		    &reg_base->rrstctl);
+	udelay(1);
+	timeout = 10;
+	while (timeout--) {
+		val = ioread32(&reg_base->rrstctl);
+		if (!(val & RESET_REQ_MASK))
+			break;
+		usleep_range(5, 20);
+	}
+}
+
+static void tune_tecr(void *reg, u32 ratio_preq, u32 ratio_pst1q, u32 adpt_eq, bool reset)
 {
 	struct per_lane_ctrl_status *reg_base = reg;
 	u32 val;
 
-	/* reset the lane */
-	iowrite32(ioread32(&reg_base->gcr0) & ~GCR0_RESET_MASK,
-		    &reg_base->gcr0);
-	udelay(1);
-
+	if (reset) {
+		/* reset lanes */
+		reset_lane(reg);
+	}
+	
 	val = TECR0_INIT |
 		ratio_preq << PRE_COE_SHIFT |
 		ratio_pst1q << POST_COE_SHIFT;
@@ -126,24 +161,7 @@ static void tune_tecr0(void *reg, u32 ratio_preq, u32 ratio_pst1q, u32 adpt_eq)
 
 	val = adpt_eq << ZERO_COE_SHIFT;
 	iowrite32(val, &reg_base->tecr1);
-
-	udelay(1);
-
-	/* unreset the lane */
-	iowrite32(ioread32(&reg_base->gcr0) | GCR0_RESET_MASK,
-		    &reg_base->gcr0);
-	udelay(1);
-}
-
-static void reset_gcr0(void *reg)
-{
-	struct per_lane_ctrl_status *reg_base = reg;
-
-	iowrite32(ioread32(&reg_base->gcr0) & ~GCR0_RESET_MASK,
-		    &reg_base->gcr0);
-	udelay(1);
-	iowrite32(ioread32(&reg_base->gcr0) | GCR0_RESET_MASK,
-		    &reg_base->gcr0);
+	
 	udelay(1);
 }
 
@@ -152,10 +170,8 @@ static void lane_set_1gkx(void *reg)
 	struct per_lane_ctrl_status *reg_base = reg;
 	u32 val;
 
-	/* reset the lane */
-	iowrite32(ioread32(&reg_base->gcr0) & ~GCR0_RESET_MASK,
-		    &reg_base->gcr0);
-	udelay(1);
+	/* reset lanes */
+	reset_lane(reg);
 
 	/* set gcr1 for 1GKX */
 	val = ioread32(&reg_base->rxgcr1);
@@ -168,11 +184,6 @@ static void lane_set_1gkx(void *reg)
 	val = ioread32(&reg_base->tecr0);
 	val &= ~TECR0_AMP_RED_MASK;
 	iowrite32(val, &reg_base->tecr0);
-	udelay(1);
-
-	/* unreset the lane */
-	iowrite32(ioread32(&reg_base->gcr0) | GCR0_RESET_MASK,
-		    &reg_base->gcr0);
 	udelay(1);
 }
 
@@ -304,8 +315,9 @@ static bool is_bin_early(int bin_sel, void *reg)
 
 void setup_backplane_serdes_28g(struct backplane_serdes *bckpl_serdes)
 {
-	bckpl_serdes->tune_tecr0 = tune_tecr0;
-	bckpl_serdes->reset_gcr0 = reset_gcr0;
+	bckpl_serdes->get_lane_memmap_size = get_lane_memmap_size;
+	bckpl_serdes->tune_tecr = tune_tecr;
+	bckpl_serdes->reset_lane = reset_lane;
 	bckpl_serdes->lane_set_1gkx = lane_set_1gkx;
 	bckpl_serdes->get_median_gaink2 = get_median_gaink2;
 	bckpl_serdes->is_bin_early = is_bin_early;

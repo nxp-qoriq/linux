@@ -12,9 +12,9 @@
 #define FSL_BACKPLANE_H
 
 /* C(-1) */
-#define BIN_M1					0
+#define BIN_M1						0
 /* C(1) */
-#define BIN_LONG				1
+#define BIN_LONG					1
 
 #define BIN_SNAPSHOT_NUM			5
 #define BIN_M1_THRESHOLD			3
@@ -22,8 +22,10 @@
 
 struct backplane_serdes {
 
-	void (*tune_tecr0)(void *reg, u32 ratio_preq, u32 ratio_pst1q, u32 adpt_eq);
-	void (*reset_gcr0)(void *reg);
+	int serdes_type;
+	u32 (*get_lane_memmap_size)(void);
+	void (*tune_tecr)(void *reg, u32 ratio_preq, u32 ratio_pst1q, u32 adpt_eq, bool reset);
+	void (*reset_lane)(void *reg);
 	void (*lane_set_1gkx)(void *reg);
 	int (*get_median_gaink2)(u32 *reg);
 	bool (*is_bin_early)(int bin_sel, void *reg);

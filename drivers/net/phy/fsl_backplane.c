@@ -229,7 +229,7 @@ static void tx_condition_init(struct tx_condition *tx_c)
 
 void tune_tecr0(struct fsl_xgkr_inst *inst)
 {
-	inst->bckpl_sd.tune_tecr0(inst->reg_base, inst->ratio_preq, inst->ratio_pst1q, inst->adpt_eq);
+	inst->bckpl_sd.tune_tecr(inst->reg_base, inst->ratio_preq, inst->ratio_pst1q, inst->adpt_eq, true);
 }
 
 static void start_lt(struct phy_device *phydev)
@@ -910,7 +910,7 @@ static void xgkr_start_train(struct phy_device *phydev)
 				/* LT failed already, reset lane to avoid
 				 * it run into hanging, then start LT again.
 				 */
-				inst->bckpl_sd.reset_gcr0(inst->reg_base);
+				inst->bckpl_sd.reset_lane(inst->reg_base);
 				start_lt(phydev);
 			} else if ((val & PMD_STATUS_SUP_STAT) &&
 				   (val & PMD_STATUS_FRAME_LOCK))
@@ -935,7 +935,7 @@ static void xgkr_start_train(struct phy_device *phydev)
 			lt_state = phy_read_mmd(phydev, lt_MDIO_MMD,
 						lt_KR_PMD_STATUS);
 			if (lt_state & TRAIN_FAIL) {
-				inst->bckpl_sd.reset_gcr0(inst->reg_base);
+				inst->bckpl_sd.reset_lane(inst->reg_base);
 				break;
 			}
 
@@ -1015,8 +1015,7 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 	const char *bm;
 	int ret;
 	int bp_mode;
-	int serdes_type;
-	u32 lane[2];
+	u32 lane[2], lane_memmap_size;
 
 	phy_node = phydev->mdio.dev.of_node;
 	if (!phy_node) {
@@ -1046,12 +1045,12 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 	ret = of_property_read_string(lane_node, "compatible", &st);
 	if (ret < 0) {
 		//assume SERDES-10G if compatible property is not specified
-		serdes_type = SERDES_10G;
+		bckpl_sd.serdes_type = SERDES_10G;
 	}
 	else if (!strcasecmp(st, "fsl,serdes-10g")) {
-		serdes_type = SERDES_10G;
+		bckpl_sd.serdes_type = SERDES_10G;
 	} else if (!strcasecmp(st, "fsl,serdes-28g")) {
-		serdes_type = SERDES_28G;
+		bckpl_sd.serdes_type = SERDES_28G;
 	} else {
 		dev_err(&phydev->mdio.dev, "Unknown serdes-type\n");
 		return -EINVAL;
@@ -1071,15 +1070,7 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 		return -EINVAL;
 	}
 
-	phydev->priv = devm_ioremap_nocache(&phydev->mdio.dev,
-					    res_lane.start + lane[0],
-					    lane[1]);
-	if (!phydev->priv) {
-		dev_err(&phydev->mdio.dev, "ioremap_nocache failed\n");
-		return -ENOMEM;
-	}
-
-	switch (serdes_type)
+	switch (bckpl_sd.serdes_type)
 	{
 	case SERDES_10G:
 		setup_an_lt_ls();
@@ -1108,9 +1099,17 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 	if (!xgkr_inst)
 		return -ENOMEM;
 
-	xgkr_inst->reg_base = phydev->priv;
 	xgkr_inst->phydev = phydev;
 	xgkr_inst->bckpl_sd = bckpl_sd;
+
+	lane_memmap_size = bckpl_sd.get_lane_memmap_size();
+	xgkr_inst->reg_base = devm_ioremap_nocache(&phydev->mdio.dev,
+					        res_lane.start + lane[0],
+					        lane_memmap_size);
+	if (!xgkr_inst->reg_base) {
+		dev_err(&phydev->mdio.dev, "ioremap_nocache failed\n");
+		return -ENOMEM;
+	}
 
 	phydev->priv = xgkr_inst;
 

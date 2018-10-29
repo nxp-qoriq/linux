@@ -28,12 +28,96 @@
 #include "fsl_backplane.h"
 
 
-/* XFI PCS Device Identifier */
-#define FSL_PCS_PHY_ID				0x0083e400
-#define FSL_PCS_PHY_ID_MASK			0xffffffff
+/* PCS Device Identifier */
+#define PCS_PHY_DEVICE_ID			0x0083e400
+#define PCS_PHY_DEVICE_ID_MASK		0xffffffff
 
+/* Long cables setup: 1 m to 2 m cables */
+#define RATIO_PREQ_10G				0x3
+#define RATIO_PST1Q_10G				0xd
+#define RATIO_EQ_10G				0x20
 
-/* Link_Training_Registers */
+/* Short cables setup: up to 30 cm cable */
+//#define RATIO_PREQ_10G				0x3
+//#define RATIO_PST1Q_10G				0xa
+//#define RATIO_EQ_10G				0x29
+
+/* Max/Min coefficient values */
+#define PRE_COE_MAX					0x0
+#define PRE_COE_MIN					0x8
+#define POST_COE_MAX				0x0
+#define POST_COE_MIN				0x10
+#define ZERO_COE_MAX				0x30
+#define ZERO_COE_MIN				0x0
+
+/* KR PMD defines */
+#define PMD_RESET					0x1
+#define PMD_STATUS_SUP_STAT			0x4
+#define PMD_STATUS_FRAME_LOCK		0x2
+#define TRAIN_EN					0x3
+#define TRAIN_DISABLE				0x1
+#define RX_STAT						0x1
+
+/* PCS Link up */
+#define XFI_PCS_SR1             	0x20
+#define KR_RX_LINK_STAT_MASK		0x1000
+
+/* KX PCS mode register */
+#define KX_PCS_IF_MODE				0x8014
+
+/* KX PCS mode register init value */
+#define KX_IF_MODE_INIT				0x8
+
+/* KX/KR AN registers */
+#define AN_CTRL_INIT				0x1200
+#define KX_AN_AD1_INIT				0x25
+#define KR_AN_AD1_INIT_10G			0x85
+#define AN_LNK_UP_MASK				0x4
+#define KR_AN_MASK_10G				0x8
+#define TRAIN_FAIL					0x8
+
+/* XGKR Timeouts */
+#define XGKR_TIMEOUT				1050
+#define XGKR_DENY_RT_INTERVAL		3000
+#define XGKR_AN_WAIT_ITERATIONS 	5
+
+/* XGKR Increment/Decrement Requests */
+#define INCREMENT					1
+#define DECREMENT					2
+#define TIMEOUT_LONG				3
+#define TIMEOUT_M1					3
+
+/* XGKR Masks */
+#define RX_READY_MASK				0x8000
+#define PRESET_MASK					0x2000
+#define INIT_MASK					0x1000
+#define COP1_MASK					0x30
+#define COP1_SHIFT					4
+#define COZ_MASK					0xc
+#define COZ_SHIFT					2
+#define COM1_MASK					0x3
+#define COM1_SHIFT					0
+#define REQUEST_MASK				0x3f
+#define LD_ALL_MASK			(PRESET_MASK | INIT_MASK | \
+					COP1_MASK | COZ_MASK | COM1_MASK)
+
+/* Lanes definitions */
+#define MASTER_LANE					0
+#define SINGLE_LANE					0
+#define MAX_PHY_LANES_NO			4
+
+/* Invalid value */
+#define VAL_INVALID 				0xff
+
+/* New XGKR Training Algorithm */
+#define NEW_ALGORITHM_TRAIN_TX
+
+#ifdef	NEW_ALGORITHM_TRAIN_TX
+#define	FORCE_INC_COP1_NUMBER		0
+#define	FORCE_INC_COM1_NUMBER		1
+#endif
+
+/* Link_Training_Registers offsets */
 static int lt_MDIO_MMD = 0;
 static u32 lt_KR_PMD_CTRL = 0;
 static u32 lt_KR_PMD_STATUS = 0;
@@ -42,77 +126,9 @@ static u32 lt_KR_LP_STATUS = 0;
 static u32 lt_KR_LD_CU = 0;
 static u32 lt_KR_LD_STATUS = 0;
 
-/* Freescale KX/KR AN registers */
-static u32 fsl_AN_AD1 = 0;
-static u32 fsl_AN_BP_STAT = 0;
-
-/* Freescale KR PMD defines */
-#define PMD_RESET				0x1
-#define PMD_STATUS_SUP_STAT			0x4
-#define PMD_STATUS_FRAME_LOCK			0x2
-#define TRAIN_EN				0x3
-#define TRAIN_DISABLE				0x1
-#define RX_STAT					0x1
-
-#define FSL_KR_RX_LINK_STAT_MASK		0x1000
-#define FSL_XFI_PCS_10GR_SR1                    0x20
-
-/* Freescale KX PCS mode register */
-#define FSL_PCS_IF_MODE				0x8014
-
-/* Freescale KX PCS mode register init value */
-#define IF_MODE_INIT				0x8
-
-
-/* Freescale KX/KR AN registers defines */
-#define AN_CTRL_INIT				0x1200
-#define KX_AN_AD1_INIT				0x25
-#define KR_AN_AD1_INIT				0x85
-#define AN_LNK_UP_MASK				0x4
-#define KR_AN_MASK					0x8
-#define TRAIN_FAIL					0x8
-
-
-#define PRE_COE_MAX				0x0
-#define PRE_COE_MIN				0x8
-#define POST_COE_MAX				0x0
-#define POST_COE_MIN				0x10
-#define ZERO_COE_MAX				0x30
-#define ZERO_COE_MIN				0x0
-
-#define RATIO_PREQ				0x3
-#define RATIO_PST1Q				0xd
-#define RATIO_EQ				0x20
-
-
-#define XGKR_TIMEOUT				1050
-
-#define INCREMENT				1
-#define DECREMENT				2
-#define TIMEOUT_LONG				3
-#define TIMEOUT_M1				3
-
-#define RX_READY_MASK				0x8000
-#define PRESET_MASK				0x2000
-#define INIT_MASK				0x1000
-#define COP1_MASK				0x30
-#define COP1_SHIFT				4
-#define COZ_MASK				0xc
-#define COZ_SHIFT				2
-#define COM1_MASK				0x3
-#define COM1_SHIFT				0
-#define REQUEST_MASK				0x3f
-#define LD_ALL_MASK			(PRESET_MASK | INIT_MASK | \
-					COP1_MASK | COZ_MASK | COM1_MASK)
-
-#define NEW_ALGORITHM_TRAIN_TX
-
-#ifdef	NEW_ALGORITHM_TRAIN_TX
-#define	FORCE_INC_COP1_NUMBER			0
-#define	FORCE_INC_COM1_NUMBER			1
-#endif
-
-#define VAL_INVALID 0xff
+/* KX/KR AN registers offsets */
+static u32 g_an_AD1 = 0;
+static u32 g_an_BP_STAT = 0;
 
 static const u32 preq_table[] = {0x0, 0x1, 0x3, 0x5,
 				 0x7, 0x9, 0xb, 0xc, VAL_INVALID};
@@ -181,7 +197,7 @@ struct fsl_xgkr_inst {
 
 static void setup_an_lt_ls(void)
 {
-	/* Freescale KR PMD registers */
+	/* KR PMD registers */
 	lt_MDIO_MMD = MDIO_MMD_PMAPMD;
 	lt_KR_PMD_CTRL = 0x96;
 	lt_KR_PMD_STATUS = 0x97;
@@ -190,9 +206,9 @@ static void setup_an_lt_ls(void)
 	lt_KR_LD_CU = 0x9a;
 	lt_KR_LD_STATUS = 0x9b;
 
-	/* Freescale KX/KR AN registers */
-	fsl_AN_AD1 = 0x11;
-	fsl_AN_BP_STAT = 0x30;
+	/* KX/KR AN registers */
+	g_an_AD1 = 0x11;
+	g_an_BP_STAT = 0x30;
 }
 
 static void setup_an_lt_lx(void)
@@ -206,9 +222,9 @@ static void setup_an_lt_lx(void)
 	lt_KR_LD_CU = 0x104;
 	lt_KR_LD_STATUS = 0x105;
 
-	/* Freescale KX/KR AN registers */
-	fsl_AN_AD1 = 0x03;
-	fsl_AN_BP_STAT = 0x0F;
+	/* KX/KR AN registers */
+	g_an_AD1 = 0x03;
+	g_an_BP_STAT = 0x0F;
 }
 
 static void tx_condition_init(struct tx_condition *tx_c)
@@ -264,7 +280,7 @@ static void start_xgkr_an(struct phy_device *phydev)
 	struct fsl_xgkr_inst *inst;
 
 	reset_lt(phydev);
-	phy_write_mmd(phydev, MDIO_MMD_AN, fsl_AN_AD1, KR_AN_AD1_INIT);
+	phy_write_mmd(phydev, MDIO_MMD_AN, g_an_AD1, KR_AN_AD1_INIT_10G);
 	phy_write_mmd(phydev, MDIO_MMD_AN, MDIO_CTRL1, AN_CTRL_INIT);
 
 	inst = phydev->priv;
@@ -275,8 +291,8 @@ static void start_xgkr_an(struct phy_device *phydev)
 
 static void start_1gkx_an(struct phy_device *phydev)
 {
-	phy_write_mmd(phydev, MDIO_MMD_PCS, FSL_PCS_IF_MODE, IF_MODE_INIT);
-	phy_write_mmd(phydev, MDIO_MMD_AN, fsl_AN_AD1, KX_AN_AD1_INIT);
+	phy_write_mmd(phydev, MDIO_MMD_PCS, KX_PCS_IF_MODE, KX_IF_MODE_INIT);
+	phy_write_mmd(phydev, MDIO_MMD_AN, g_an_AD1, KX_AN_AD1_INIT);
 	phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_STAT1);
 	phy_write_mmd(phydev, MDIO_MMD_AN, MDIO_CTRL1, AN_CTRL_INIT);
 }
@@ -297,9 +313,9 @@ static void ld_coe_update(struct fsl_xgkr_inst *inst)
 static void init_inst(struct fsl_xgkr_inst *inst, int reset)
 {
 	if (reset) {
-		inst->ratio_preq = RATIO_PREQ;
-		inst->ratio_pst1q = RATIO_PST1Q;
-		inst->adpt_eq = RATIO_EQ;
+		inst->ratio_preq = RATIO_PREQ_10G;
+		inst->ratio_pst1q = RATIO_PST1Q_10G;
+		inst->adpt_eq = RATIO_EQ_10G;
 		tune_tecr0(inst);
 	}
 
@@ -594,10 +610,10 @@ static int is_link_up(struct phy_device *phydev)
 {
 	int val;
 
-	phy_read_mmd(phydev, MDIO_MMD_PCS, FSL_XFI_PCS_10GR_SR1);
-	val = phy_read_mmd(phydev, MDIO_MMD_PCS, FSL_XFI_PCS_10GR_SR1);
+	phy_read_mmd(phydev, MDIO_MMD_PCS, XFI_PCS_SR1);
+	val = phy_read_mmd(phydev, MDIO_MMD_PCS, XFI_PCS_SR1);
 
-	return (val & FSL_KR_RX_LINK_STAT_MASK) ? 1 : 0;
+	return (val & KR_RX_LINK_STAT_MASK) ? 1 : 0;
 }
 
 static int is_link_training_fail(struct phy_device *phydev)
@@ -818,9 +834,9 @@ static void preset(struct fsl_xgkr_inst *inst)
 
 static void initialize(struct fsl_xgkr_inst *inst)
 {
-	inst->ratio_preq = RATIO_PREQ;
-	inst->ratio_pst1q = RATIO_PST1Q;
-	inst->adpt_eq = RATIO_EQ;
+	inst->ratio_preq = RATIO_PREQ_10G;
+	inst->ratio_pst1q = RATIO_PST1Q_10G;
+	inst->adpt_eq = RATIO_EQ_10G;
 
 	tune_tecr0(inst);
 	inst->ld_status &= ~(COP1_MASK | COZ_MASK | COM1_MASK);
@@ -981,9 +997,9 @@ static void xgkr_state_machine(struct work_struct *work)
 
 	switch (inst->state) {
 	case DETECTING_LP:
-		phy_read_mmd(phydev, MDIO_MMD_AN, fsl_AN_BP_STAT);
-		an_state = phy_read_mmd(phydev, MDIO_MMD_AN, fsl_AN_BP_STAT);
-		if ((an_state & KR_AN_MASK))
+		phy_read_mmd(phydev, MDIO_MMD_AN, g_an_BP_STAT);
+		an_state = phy_read_mmd(phydev, MDIO_MMD_AN, g_an_BP_STAT);
+		if ((an_state & KR_AN_MASK_10G))
 			needs_train = true;
 		break;
 	case TRAINED:
@@ -1256,8 +1272,8 @@ static int fsl_backplane_match_phy_device(struct phy_device *phydev)
 			if (!(phydev->c45_ids.devices_in_package & (1 << i)))
 				continue;
 
-			if ((FSL_PCS_PHY_ID & FSL_PCS_PHY_ID_MASK) ==
-				(phydev->c45_ids.device_ids[i] & FSL_PCS_PHY_ID_MASK))
+			if ((PCS_PHY_DEVICE_ID & PCS_PHY_DEVICE_ID_MASK) ==
+				(phydev->c45_ids.device_ids[i] & PCS_PHY_DEVICE_ID_MASK))
 			{
 				return 1;
 			}
@@ -1274,9 +1290,9 @@ static int fsl_backplane_match_phy_device(struct phy_device *phydev)
 
 static struct phy_driver fsl_backplane_driver[] = {
 	{
-	.phy_id		= FSL_PCS_PHY_ID,
+	.phy_id		= PCS_PHY_DEVICE_ID,
 	.name		= "Freescale Backplane",
-	.phy_id_mask	= FSL_PCS_PHY_ID_MASK,
+	.phy_id_mask	= PCS_PHY_DEVICE_ID_MASK,
 	.features	= SUPPORTED_Backplane | SUPPORTED_Autoneg |
 			  SUPPORTED_MII,
 	.probe          = fsl_backplane_probe,
@@ -1292,7 +1308,7 @@ static struct phy_driver fsl_backplane_driver[] = {
 module_phy_driver(fsl_backplane_driver);
 
 static struct mdio_device_id __maybe_unused freescale_tbl[] = {
-	{ FSL_PCS_PHY_ID, FSL_PCS_PHY_ID_MASK },
+	{ PCS_PHY_DEVICE_ID, PCS_PHY_DEVICE_ID_MASK },
 	{ }
 };
 

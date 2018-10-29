@@ -193,6 +193,8 @@ struct xgkr_params {
 	struct tx_condition tx_c;
 	struct delayed_work xgkr_wk;
 	enum train_state state;
+	int an_wait_count;
+	unsigned long rt_time;
 	u32 ld_update;
 	u32 ld_status;
 	u32 ratio_preq;
@@ -1139,6 +1141,47 @@ static void xgkr_start_train(struct xgkr_params *xgkr)
 	}
 }
 
+static void xgkr_request_restart_training(struct xgkr_params *xgkr)
+{
+	struct phy_device *phydev = xgkr->phydev;
+	struct xgkr_phy_data *xgkr_inst = phydev->priv;
+	int i;
+
+	if (time_before(jiffies, xgkr->rt_time))
+		return;
+	
+	switch (xgkr_inst->bp_mode)
+	{
+	case PHY_BACKPLANE_1000BASE_KX:
+		dev_err(&phydev->mdio.dev, "Wrong call path for 1000Base-KX \n");
+		break;
+
+	case PHY_BACKPLANE_10GBASE_KR:
+		init_xgkr(xgkr, 0);  
+		reset_lt(xgkr);
+		xgkr->state = DETECTING_LP;
+		start_xgkr_an(xgkr);
+		start_xgkr_state_machine(&xgkr->xgkr_wk);
+		break;
+
+	case PHY_BACKPLANE_40GBASE_KR:
+		for (i = 0; i < xgkr_inst->phy_lanes; i++) {
+			init_xgkr(&xgkr_inst->xgkr[i], 0);
+			reset_lt(&xgkr_inst->xgkr[i]);
+			xgkr_inst->xgkr[i].state = DETECTING_LP;
+		}
+		//Start AN only for Master Lane
+		start_xgkr_an(&xgkr_inst->xgkr[MASTER_LANE]);
+		//start state machine
+		for (i = 0; i < xgkr_inst->phy_lanes; i++) {
+			start_xgkr_state_machine(&xgkr_inst->xgkr[i].xgkr_wk);
+		}
+		break;
+	}
+	
+	xgkr->rt_time = jiffies + msecs_to_jiffies(XGKR_DENY_RT_INTERVAL);
+}
+
 static void xgkr_state_machine(struct work_struct *work)
 {
 	struct delayed_work *dwork = to_delayed_work(work);
@@ -1148,6 +1191,8 @@ static void xgkr_state_machine(struct work_struct *work)
 	struct xgkr_phy_data *xgkr_inst = phydev->priv;
 	int an_state;
 	bool start_train = false;
+	bool all_lanes_trained = false;
+	int i;
 
 	if (!xgkr_inst->aneg_done) {
 		start_xgkr_state_machine(&xgkr->xgkr_wk);
@@ -1169,7 +1214,23 @@ static void xgkr_state_machine(struct work_struct *work)
 			an_state = xgkr_phy_read_mmd(xgkr, MDIO_MMD_AN, g_an_BP_STAT);
 			if (an_state & KR_AN_MASK_10G) {
 				//AN acquired: Train the lane
+				xgkr->an_wait_count = 0;
 				start_train = true;
+			} else {
+				//AN lost or not yet acquired
+				if (!is_link_up(phydev)) {
+					//Link is down: restart training
+					xgkr->an_wait_count = 0;
+					xgkr_request_restart_training(xgkr);
+				} else {
+					//Link is up: wait few iterations for AN to be acquired
+					if (xgkr->an_wait_count >= XGKR_AN_WAIT_ITERATIONS) {
+						xgkr->an_wait_count = 0;
+						xgkr_request_restart_training(xgkr);
+					} else {
+						xgkr->an_wait_count++;
+					}
+				}
 			}
 			break;
 
@@ -1178,11 +1239,27 @@ static void xgkr_state_machine(struct work_struct *work)
 			an_state = xgkr_phy_read_mmd(&xgkr_inst->xgkr[MASTER_LANE], MDIO_MMD_AN, g_an_BP_STAT);
 			if (an_state & KR_AN_MASK_40G) {
 				//AN acquired: Train all lanes in order starting with Master Lane
+				xgkr->an_wait_count = 0;
 				if (xgkr->idx == MASTER_LANE) {
 					start_train = true;
 				}
 				else if (xgkr_inst->xgkr[xgkr->idx - 1].state == TRAINED) {
 					start_train = true;
+				}
+			} else {
+				//AN lost or not yet acquired
+				if (!is_link_up(phydev)) {
+					//Link is down: restart training
+					xgkr->an_wait_count = 0;
+					xgkr_request_restart_training(xgkr);
+				} else {
+					//Link is up: wait few iterations for AN to be acquired
+					if (xgkr->an_wait_count >= XGKR_AN_WAIT_ITERATIONS) {
+						xgkr->an_wait_count = 0;
+						xgkr_request_restart_training(xgkr);
+					} else {
+						xgkr->an_wait_count++;
+					}
 				}
 			}
 			break;
@@ -1191,11 +1268,34 @@ static void xgkr_state_machine(struct work_struct *work)
 
 	case TRAINED:
 		if (!is_link_up(phydev)) {
-			dev_info(&phydev->mdio.dev,
-				 "Detect hotplug, restart training\n");
-			init_xgkr(xgkr, 1);
-			start_xgkr_an(xgkr);
-			xgkr->state = DETECTING_LP;
+			switch (xgkr_inst->bp_mode)
+			{
+			case PHY_BACKPLANE_1000BASE_KX:
+				dev_err(&phydev->mdio.dev, "Wrong call path for 1000Base-KX \n");
+				break;
+
+			case PHY_BACKPLANE_10GBASE_KR:
+				dev_info(&phydev->mdio.dev, "Detect hotplug, restart training\n");
+				xgkr_request_restart_training(xgkr);
+				break;
+
+			case PHY_BACKPLANE_40GBASE_KR:
+				if (xgkr->idx == MASTER_LANE) {
+					//check if all lanes are trained only on Master Lane
+					all_lanes_trained = true;
+					for (i = 0; i < xgkr_inst->phy_lanes; i++) {
+						if (xgkr_inst->xgkr[i].state != TRAINED) {
+							all_lanes_trained = false;
+							break;
+						}
+					}
+					if (all_lanes_trained) {
+						dev_info(&phydev->mdio.dev, "Detect hotplug, restart training\n");
+						xgkr_request_restart_training(xgkr);
+					}
+				}
+				break;
+			}
 		}
 		break;
 	}
@@ -1316,6 +1416,7 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 			dev_err(&phydev->mdio.dev, "ioremap_nocache failed\n");
 			return -ENOMEM;
 		}
+		xgkr_inst->xgkr[i].rt_time = jiffies + msecs_to_jiffies(XGKR_DENY_RT_INTERVAL);
 	}
 
 	phydev->priv = xgkr_inst;

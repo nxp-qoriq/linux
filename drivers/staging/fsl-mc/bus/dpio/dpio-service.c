@@ -223,6 +223,7 @@ done:
  *                               notifications on the given DPIO service.
  * @d:   the given DPIO service.
  * @ctx: the notification context.
+ * @dev: the device that requests the register
  *
  * The caller should make the MC command to attach a DPAA2 object to
  * a DPIO after this function completes successfully.  In that way:
@@ -237,13 +238,16 @@ done:
  * Return 0 for success, or -ENODEV for failure.
  */
 int dpaa2_io_service_register(struct dpaa2_io *d,
-			      struct dpaa2_io_notification_ctx *ctx)
+			      struct dpaa2_io_notification_ctx *ctx,
+			      struct device *dev)
 {
 	unsigned long irqflags;
 
 	d = service_select_by_cpu(d, ctx->desired_cpu);
 	if (!d)
 		return -ENODEV;
+
+	device_link_add(dev, d->dev, DL_FLAG_AUTOREMOVE_SUPPLIER);
 
 	ctx->dpio_id = d->dpio_desc.dpio_id;
 	ctx->qman64 = (u64)(uintptr_t)ctx;
@@ -257,6 +261,7 @@ int dpaa2_io_service_register(struct dpaa2_io *d,
 		return qbman_swp_CDAN_set_context_enable(d->swp,
 							 (u16)ctx->id,
 							 ctx->qman64);
+
 	return 0;
 }
 EXPORT_SYMBOL_GPL(dpaa2_io_service_register);
@@ -265,12 +270,14 @@ EXPORT_SYMBOL_GPL(dpaa2_io_service_register);
  * dpaa2_io_service_deregister - The opposite of 'register'.
  * @service: the given DPIO service.
  * @ctx: the notification context.
+ * @dev: the device that requests to be deregistered
  *
  * This function should be called only after sending the MC command to
  * to detach the notification-producing device from the DPIO.
  */
 void dpaa2_io_service_deregister(struct dpaa2_io *service,
-				 struct dpaa2_io_notification_ctx *ctx)
+				 struct dpaa2_io_notification_ctx *ctx,
+				 struct device *dev)
 {
 	struct dpaa2_io *d = ctx->dpio_private;
 	unsigned long irqflags;
@@ -281,6 +288,8 @@ void dpaa2_io_service_deregister(struct dpaa2_io *service,
 	spin_lock_irqsave(&d->lock_notifications, irqflags);
 	list_del(&ctx->node);
 	spin_unlock_irqrestore(&d->lock_notifications, irqflags);
+
+	device_link_remove(dev, d->dev);
 }
 EXPORT_SYMBOL_GPL(dpaa2_io_service_deregister);
 

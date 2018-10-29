@@ -379,7 +379,7 @@
 			dmas = <&edma0 1 39>,
 			       <&edma0 1 38>;
 			dma-names = "tx", "rx";
-			fsl-scl-gpio = <&gpio3 12 0>;
+			scl-gpios = <&gpio3 12 0>;
 			status = "disabled";
 		};
 
@@ -410,7 +410,7 @@
 			reg = <0x0 0x21b0000 0x0 0x10000>;
 			interrupts = <GIC_SPI 59 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clockgen 4 1>;
-			fsl-scl-gpio = <&gpio3 12 0>;
+			scl-gpios = <&gpio3 12 0>;
 			status = "disabled";
 		};
 

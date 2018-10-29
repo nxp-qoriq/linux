@@ -20,9 +20,12 @@
 #define BIN_M1_THRESHOLD			3
 #define BIN_LONG_THRESHOLD			2
 
-struct backplane_serdes {
+struct serdes_access {
 
 	int serdes_type;
+	bool is_little_endian;
+	u32 (*ioread32)(u32 *reg);
+	void (*iowrite32)(u32 value, u32 *reg);
 	u32 (*get_lane_memmap_size)(void);
 	void (*tune_tecr)(void *reg, u32 ratio_preq, u32 ratio_pst1q, u32 adpt_eq, bool reset);
 	void (*reset_lane)(void *reg);
@@ -31,8 +34,8 @@ struct backplane_serdes {
 	bool (*is_bin_early)(int bin_sel, void *reg);
 };
 
-void setup_backplane_serdes_10g(struct backplane_serdes *bckpl_serdes);
-void setup_backplane_serdes_28g(struct backplane_serdes *bckpl_serdes);
+struct serdes_access* setup_serdes_access_10g(void);
+struct serdes_access* setup_serdes_access_28g(void);
 
 
 #endif //FSL_BACKPLANE_H

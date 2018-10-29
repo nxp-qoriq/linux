@@ -24,6 +24,7 @@
 #include <linux/timer.h>
 #include <linux/delay.h>
 #include <linux/workqueue.h>
+#include <linux/netdevice.h>
 
 #include "fsl_backplane.h"
 
@@ -32,15 +33,30 @@
 #define PCS_PHY_DEVICE_ID			0x0083e400
 #define PCS_PHY_DEVICE_ID_MASK		0xffffffff
 
-/* Long cables setup: 1 m to 2 m cables */
+/* 10G Long cables setup: 1 m to 2 m cables */
 #define RATIO_PREQ_10G				0x3
 #define RATIO_PST1Q_10G				0xd
 #define RATIO_EQ_10G				0x20
 
-/* Short cables setup: up to 30 cm cable */
+/* 10G Short cables setup: up to 30 cm cable */
 //#define RATIO_PREQ_10G				0x3
 //#define RATIO_PST1Q_10G				0xa
 //#define RATIO_EQ_10G				0x29
+
+/* 40G Long cables setup: 1 m to 2 m cables */
+#define RATIO_PREQ_40G				0x2
+#define RATIO_PST1Q_40G				0xd
+#define RATIO_EQ_40G				0x20
+
+/* 40G Short cables setup: up to 30 cm cable */
+//#define RATIO_PREQ_40G				0x1
+//#define RATIO_PST1Q_40G				0x3
+//#define RATIO_EQ_40G				0x29
+
+/* LX2 2x40G default RCW setup */
+//#define RATIO_PREQ_40G				0x0
+//#define RATIO_PST1Q_40G				0x3
+//#define RATIO_EQ_40G				0x30
 
 /* Max/Min coefficient values */
 #define PRE_COE_MAX					0x0
@@ -430,9 +446,27 @@ static void start_1gkx_an(struct phy_device *phydev)
 
 static void reset_tecr(struct xgkr_params *xgkr)
 {
-	xgkr->ratio_preq = RATIO_PREQ_10G;
-	xgkr->ratio_pst1q = RATIO_PST1Q_10G;
-	xgkr->adpt_eq = RATIO_EQ_10G;
+	struct phy_device *phydev = xgkr->phydev;
+	struct xgkr_phy_data *xgkr_inst = phydev->priv;
+
+	switch (xgkr_inst->bp_mode)
+	{
+	case PHY_BACKPLANE_1000BASE_KX:
+		dev_err(&phydev->mdio.dev, "Wrong call path for 1000Base-KX \n");
+		break;
+
+	case PHY_BACKPLANE_10GBASE_KR:
+		xgkr->ratio_preq = RATIO_PREQ_10G;
+		xgkr->ratio_pst1q = RATIO_PST1Q_10G;
+		xgkr->adpt_eq = RATIO_EQ_10G;
+		break;
+
+	case PHY_BACKPLANE_40GBASE_KR:
+		xgkr->ratio_preq = RATIO_PREQ_40G;
+		xgkr->ratio_pst1q = RATIO_PST1Q_40G;
+		xgkr->adpt_eq = RATIO_EQ_40G;
+		break;
+	}
 
 	tune_tecr(xgkr);
 }
@@ -1136,6 +1170,30 @@ static void xgkr_start_train(struct xgkr_params *xgkr)
 		} else {
 			stop_lt(xgkr);
 			xgkr->state = TRAINED;
+			
+			switch (xgkr_inst->bp_mode)
+			{
+			case PHY_BACKPLANE_10GBASE_KR:
+				if (phydev->attached_dev == NULL)
+					dev_info(&phydev->mdio.dev, "10GBase-KR link trained\n");
+				else
+					dev_info(&phydev->mdio.dev, "%s %s: 10GBase-KR link trained\n",
+							dev_driver_string(phydev->attached_dev->dev.parent), 
+							dev_name(phydev->attached_dev->dev.parent));
+				break;
+				
+			case PHY_BACKPLANE_40GBASE_KR:
+				if (xgkr->idx == xgkr_inst->phy_lanes - 1) {
+					if (phydev->attached_dev == NULL)
+						dev_info(&phydev->mdio.dev, "40GBase-KR link trained\n");
+					else
+						dev_info(&phydev->mdio.dev, "%s %s: 40GBase-KR link trained\n",
+								dev_driver_string(phydev->attached_dev->dev.parent), 
+								dev_name(phydev->attached_dev->dev.parent));
+				}
+				break;
+			}
+
 			break;
 		}
 	}

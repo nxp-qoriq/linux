@@ -10,6 +10,7 @@
 
 #include <linux/io.h>
 #include <linux/delay.h>
+#include <linux/sched.h>
 
 #include "fsl_backplane.h"
 
@@ -117,7 +118,7 @@ static void reset_lane(void *reg)
 {
 	struct per_lane_ctrl_status *reg_base = reg;
 	u32 val;
-	int timeout;
+	unsigned long timeout;
 
 	/* reset Tx lane: send reset request */
 	iowrite32(ioread32(&reg_base->trstctl) | RESET_REQ_MASK,
@@ -140,6 +141,13 @@ static void reset_lane(void *reg)
 		val = ioread32(&reg_base->rrstctl);
 		if (!(val & RESET_REQ_MASK))
 			break;
+		usleep_range(5, 20);
+	}
+	
+	/* wait for a while after reset */
+	timeout = jiffies + 10;
+	while (time_before(jiffies, timeout)) {
+		schedule();
 		usleep_range(5, 20);
 	}
 }

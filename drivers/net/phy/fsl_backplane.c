@@ -29,7 +29,9 @@
 
 
 /* XFI PCS Device Identifier */
-#define FSL_PCS_PHY_ID_LS				0x0083e400
+#define FSL_PCS_PHY_ID				0x0083e400
+#define FSL_PCS_PHY_ID_MASK			0xffffffff
+
 
 /* Link_Training_Registers */
 static int lt_MDIO_MMD = 0;
@@ -125,6 +127,7 @@ enum backplane_mode {
 
 enum serdes_type {
 	SERDES_10G,
+	SERDES_28G,
 	SERDES_INVAL
 };
 
@@ -190,6 +193,22 @@ static void setup_an_lt_ls(void)
 	/* Freescale KX/KR AN registers */
 	fsl_AN_AD1 = 0x11;
 	fsl_AN_BP_STAT = 0x30;
+}
+
+static void setup_an_lt_lx(void)
+{
+	/* Auto-Negotiation and Link Training Core Registers page 1: 256 = 0x100 */
+	lt_MDIO_MMD = MDIO_MMD_AN;
+	lt_KR_PMD_CTRL = 0x100;
+	lt_KR_PMD_STATUS = 0x101;
+	lt_KR_LP_CU = 0x102;
+	lt_KR_LP_STATUS = 0x103;
+	lt_KR_LD_CU = 0x104;
+	lt_KR_LD_STATUS = 0x105;
+
+	/* Freescale KX/KR AN registers */
+	fsl_AN_AD1 = 0x03;
+	fsl_AN_BP_STAT = 0x0F;
 }
 
 static void tx_condition_init(struct tx_condition *tx_c)
@@ -1031,6 +1050,8 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 	}
 	else if (!strcasecmp(st, "fsl,serdes-10g")) {
 		serdes_type = SERDES_10G;
+	} else if (!strcasecmp(st, "fsl,serdes-28g")) {
+		serdes_type = SERDES_28G;
 	} else {
 		dev_err(&phydev->mdio.dev, "Unknown serdes-type\n");
 		return -EINVAL;
@@ -1063,6 +1084,11 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 	case SERDES_10G:
 		setup_an_lt_ls();
 		setup_backplane_serdes_10g(&bckpl_sd);
+		break;
+
+	case SERDES_28G:
+		setup_an_lt_lx();
+		setup_backplane_serdes_28g(&bckpl_sd);
 		break;
 
 	default:
@@ -1177,19 +1203,81 @@ static int fsl_backplane_read_status(struct phy_device *phydev)
 
 static int fsl_backplane_match_phy_device(struct phy_device *phydev)
 {
+	struct device_node *phy_node, *lane_node;
+	const char *st;
+	int serdes_type, i, ret;
+	const int num_ids = ARRAY_SIZE(phydev->c45_ids.device_ids);
+
 	if (!phydev->mdio.dev.of_node) {
 		dev_err(&phydev->mdio.dev, "No associated device tree node\n");
 		return 0;
 	}
+
+	//	 WORKAROUND:
+	// Required for LX2 devices
+	// where PHY ID cannot be verified in PCS
+	// because PCS Device Identifier Upper and Lower registers are hidden
+	// and always return 0 when they are read:
+	// 2  02 	Device_ID0  RO 		Bits 15:0 	0
+	// val = phy_read_mmd(phydev, MDIO_MMD_PCS, 0x2);
+	// 3  03 	Device_ID1  RO 		Bits 31:16 	0
+	// val = phy_read_mmd(phydev, MDIO_MMD_PCS, 0x3);
+	//
+	// To be removed: After the issue will be fixed on LX2 devices
+
+	if (!phydev->is_c45)
+		return 0;
+
+	phy_node = phydev->mdio.dev.of_node;
+
+	lane_node = of_parse_phandle(phy_node, "fsl,lane-handle", 0);
+	if (!lane_node) {
+		dev_err(&phydev->mdio.dev, "parse fsl,lane-handle failed\n");
+		return 0;
+	}
+
+	ret = of_property_read_string(lane_node, "compatible", &st);
+	if (ret < 0) {
+		//assume SERDES-10G if compatible property is not specified
+		serdes_type = SERDES_10G;
+	}
+	else if (!strcasecmp(st, "fsl,serdes-10g")) {
+		serdes_type = SERDES_10G;
+	} else if (!strcasecmp(st, "fsl,serdes-28g")) {
+		serdes_type = SERDES_28G;
+	} else {
+		dev_err(&phydev->mdio.dev, "Unknown serdes-type\n");
+		return 0;
+	}
+
+	if (serdes_type == SERDES_10G) {
+		//On LS devices we must find the c45 device with correct PHY ID
+		//Implementation similar with the one existent in phy_device: @function: phy_bus_match
+		for (i = 1; i < num_ids; i++) {
+			if (!(phydev->c45_ids.devices_in_package & (1 << i)))
+				continue;
+
+			if ((FSL_PCS_PHY_ID & FSL_PCS_PHY_ID_MASK) ==
+				(phydev->c45_ids.device_ids[i] & FSL_PCS_PHY_ID_MASK))
+			{
+				return 1;
+			}
+		}
+		return 0;
+	}
+
+	//On LX devices we cannot verify PHY ID
+	//so we are happy only with preliminary verifications already made: mdio.dev.of_node and is_c45
+	//because we already filtered other undesired devices: non clause 45
 
 	return 1;
 }
 
 static struct phy_driver fsl_backplane_driver[] = {
 	{
-	.phy_id		= FSL_PCS_PHY_ID_LS,
-	.name		= "Freescale Backplane LS",
-	.phy_id_mask	= 0xffffffff,
+	.phy_id		= FSL_PCS_PHY_ID,
+	.name		= "Freescale Backplane",
+	.phy_id_mask	= FSL_PCS_PHY_ID_MASK,
 	.features	= SUPPORTED_Backplane | SUPPORTED_Autoneg |
 			  SUPPORTED_MII,
 	.probe          = fsl_backplane_probe,
@@ -1205,7 +1293,7 @@ static struct phy_driver fsl_backplane_driver[] = {
 module_phy_driver(fsl_backplane_driver);
 
 static struct mdio_device_id __maybe_unused freescale_tbl[] = {
-	{ FSL_PCS_PHY_ID_LS, 0xffffffff },
+	{ FSL_PCS_PHY_ID, FSL_PCS_PHY_ID_MASK },
 	{ }
 };
 

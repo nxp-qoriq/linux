@@ -660,7 +660,7 @@
 			interrupts = <0 34 0x4>; /* Level high type */
 			clock-names = "i2c";
 			clocks = <&clockgen 4 1>;
-			fsl-scl-gpio = <&gpio3 10 0>;
+			scl-gpios = <&gpio3 10 0>;
 		};
 
 		i2c1: i2c@2010000 {

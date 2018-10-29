@@ -264,7 +264,7 @@ static void setup_an_lt_lx(void)
  *
  * Same rules as for phy_write_mmd();
  */
-int xgkr_phy_write_mmd(struct xgkr_params *xgkr, int devad, u32 regnum, u16 val)
+static int xgkr_phy_write_mmd(struct xgkr_params *xgkr, int devad, u32 regnum, u16 val)
 {
 	struct phy_device *phydev = xgkr->phydev;
 	struct xgkr_phy_data *xgkr_inst = phydev->priv;
@@ -274,7 +274,7 @@ int xgkr_phy_write_mmd(struct xgkr_params *xgkr, int devad, u32 regnum, u16 val)
 	mutex_lock(&xgkr_inst->phy_lock);
 
 	if (xgkr_inst->bp_mode == PHY_BACKPLANE_40GBASE_KR && devad == MDIO_MMD_AN) {
-		//40G AN: prepare mdio addr for writing phydev AN registers for 40G on respective lane
+		//40G AN: prepare mdio address for writing phydev AN registers for 40G on respective lane
 		phydev->mdio.addr = KR_AN_40G_MDIO_OFFSET + xgkr->idx;
 	}
 
@@ -283,7 +283,7 @@ int xgkr_phy_write_mmd(struct xgkr_params *xgkr, int devad, u32 regnum, u16 val)
 		dev_err(&phydev->mdio.dev, "Writing PHY (%p) MMD = 0x%02x register = 0x%02x failed with error code: 0x%08x \n", phydev, devad, regnum, err);
 
 	if (xgkr_inst->bp_mode == PHY_BACKPLANE_40GBASE_KR && devad == MDIO_MMD_AN) {
-		//40G AN: restore mdio addr
+		//40G AN: restore mdio address
 		phydev->mdio.addr = mdio_addr;
 	}
 
@@ -298,7 +298,7 @@ int xgkr_phy_write_mmd(struct xgkr_params *xgkr, int devad, u32 regnum, u16 val)
  *
  * Same rules as for phy_read_mmd();
  */
-int xgkr_phy_read_mmd(struct xgkr_params *xgkr, int devad, u32 regnum)
+static int xgkr_phy_read_mmd(struct xgkr_params *xgkr, int devad, u32 regnum)
 {
 	struct phy_device *phydev = xgkr->phydev;
 	struct xgkr_phy_data *xgkr_inst = phydev->priv;
@@ -308,14 +308,14 @@ int xgkr_phy_read_mmd(struct xgkr_params *xgkr, int devad, u32 regnum)
 	mutex_lock(&xgkr_inst->phy_lock);
 
 	if (xgkr_inst->bp_mode == PHY_BACKPLANE_40GBASE_KR && devad == MDIO_MMD_AN) {
-		//40G AN: prepare mdio addr for writing phydev AN registers for 40G on respective lane
+		//40G AN: prepare mdio address for reading phydev AN registers for 40G on respective lane
 		phydev->mdio.addr = KR_AN_40G_MDIO_OFFSET + xgkr->idx;
 	}
 
 	ret = phy_read_mmd(phydev, devad, regnum);
 
 	if (xgkr_inst->bp_mode == PHY_BACKPLANE_40GBASE_KR && devad == MDIO_MMD_AN) {
-		//40G AN: restore mdio addr
+		//40G AN: restore mdio address
 		phydev->mdio.addr = mdio_addr;
 	}
 
@@ -1199,7 +1199,7 @@ static void xgkr_start_train(struct xgkr_params *xgkr)
 	}
 }
 
-static void xgkr_request_restart_training(struct xgkr_params *xgkr)
+static void xgkr_request_restart_an(struct xgkr_params *xgkr)
 {
 	struct phy_device *phydev = xgkr->phydev;
 	struct xgkr_phy_data *xgkr_inst = phydev->priv;
@@ -1279,12 +1279,12 @@ static void xgkr_state_machine(struct work_struct *work)
 				if (!is_link_up(phydev)) {
 					//Link is down: restart training
 					xgkr->an_wait_count = 0;
-					xgkr_request_restart_training(xgkr);
+					xgkr_request_restart_an(xgkr);
 				} else {
 					//Link is up: wait few iterations for AN to be acquired
 					if (xgkr->an_wait_count >= XGKR_AN_WAIT_ITERATIONS) {
 						xgkr->an_wait_count = 0;
-						xgkr_request_restart_training(xgkr);
+						xgkr_request_restart_an(xgkr);
 					} else {
 						xgkr->an_wait_count++;
 					}
@@ -1309,12 +1309,12 @@ static void xgkr_state_machine(struct work_struct *work)
 				if (!is_link_up(phydev)) {
 					//Link is down: restart training
 					xgkr->an_wait_count = 0;
-					xgkr_request_restart_training(xgkr);
+					xgkr_request_restart_an(xgkr);
 				} else {
 					//Link is up: wait few iterations for AN to be acquired
 					if (xgkr->an_wait_count >= XGKR_AN_WAIT_ITERATIONS) {
 						xgkr->an_wait_count = 0;
-						xgkr_request_restart_training(xgkr);
+						xgkr_request_restart_an(xgkr);
 					} else {
 						xgkr->an_wait_count++;
 					}
@@ -1334,7 +1334,7 @@ static void xgkr_state_machine(struct work_struct *work)
 
 			case PHY_BACKPLANE_10GBASE_KR:
 				dev_info(&phydev->mdio.dev, "Detect hotplug, restart training\n");
-				xgkr_request_restart_training(xgkr);
+				xgkr_request_restart_an(xgkr);
 				break;
 
 			case PHY_BACKPLANE_40GBASE_KR:
@@ -1349,7 +1349,7 @@ static void xgkr_state_machine(struct work_struct *work)
 					}
 					if (all_lanes_trained) {
 						dev_info(&phydev->mdio.dev, "Detect hotplug, restart training\n");
-						xgkr_request_restart_training(xgkr);
+						xgkr_request_restart_an(xgkr);
 					}
 				}
 				break;

@@ -77,6 +77,7 @@
 #define KR_AN_MASK_10G				0x8
 #define KR_AN_MASK_40G				0x20
 #define TRAIN_FAIL					0x8
+#define KR_AN_40G_MDIO_OFFSET		4
 
 /* XGKR Timeouts */
 #define XGKR_TIMEOUT				1050
@@ -202,6 +203,7 @@ struct xgkr_params {
 struct xgkr_phy_data {
 	int bp_mode;
 	u32 phy_lanes;
+	struct mutex phy_lock;
 	bool aneg_done;
 	struct xgkr_params xgkr[MAX_PHY_LANES_NO];
 };
@@ -238,6 +240,72 @@ static void setup_an_lt_lx(void)
 	g_an_BP_STAT = 0x0F;
 }
 
+/**
+ * xgkr_phy_write_mmd - Wrapper function for phy_write_mmd
+ * for writing a register on an MMD on a given PHY.
+ *
+ * Same rules as for phy_write_mmd();
+ */
+int xgkr_phy_write_mmd(struct xgkr_params *xgkr, int devad, u32 regnum, u16 val)
+{
+	struct phy_device *phydev = xgkr->phydev;
+	struct xgkr_phy_data *xgkr_inst = phydev->priv;
+	int mdio_addr = phydev->mdio.addr;
+	int err;
+
+	mutex_lock(&xgkr_inst->phy_lock);
+
+	if (xgkr_inst->bp_mode == PHY_BACKPLANE_40GBASE_KR && devad == MDIO_MMD_AN) {
+		//40G AN: prepare mdio addr for writing phydev AN registers for 40G on respective lane
+		phydev->mdio.addr = KR_AN_40G_MDIO_OFFSET + xgkr->idx;
+	}
+
+	err = phy_write_mmd(phydev, devad, regnum, val);
+	if (err)
+		dev_err(&phydev->mdio.dev, "Writing PHY (%p) MMD = 0x%02x register = 0x%02x failed with error code: 0x%08x \n", phydev, devad, regnum, err);
+
+	if (xgkr_inst->bp_mode == PHY_BACKPLANE_40GBASE_KR && devad == MDIO_MMD_AN) {
+		//40G AN: restore mdio addr
+		phydev->mdio.addr = mdio_addr;
+	}
+
+	mutex_unlock(&xgkr_inst->phy_lock);
+
+	return err;
+}
+
+/**
+ * xgkr_phy_read_mmd - Wrapper function for phy_read_mmd
+ * for reading a register from an MMD on a given PHY.
+ *
+ * Same rules as for phy_read_mmd();
+ */
+int xgkr_phy_read_mmd(struct xgkr_params *xgkr, int devad, u32 regnum)
+{
+	struct phy_device *phydev = xgkr->phydev;
+	struct xgkr_phy_data *xgkr_inst = phydev->priv;
+	int mdio_addr = phydev->mdio.addr;
+	int ret;
+
+	mutex_lock(&xgkr_inst->phy_lock);
+
+	if (xgkr_inst->bp_mode == PHY_BACKPLANE_40GBASE_KR && devad == MDIO_MMD_AN) {
+		//40G AN: prepare mdio addr for writing phydev AN registers for 40G on respective lane
+		phydev->mdio.addr = KR_AN_40G_MDIO_OFFSET + xgkr->idx;
+	}
+
+	ret = phy_read_mmd(phydev, devad, regnum);
+
+	if (xgkr_inst->bp_mode == PHY_BACKPLANE_40GBASE_KR && devad == MDIO_MMD_AN) {
+		//40G AN: restore mdio addr
+		phydev->mdio.addr = mdio_addr;
+	}
+
+	mutex_unlock(&xgkr_inst->phy_lock);
+
+	return ret;
+}
+
 static void tx_condition_init(struct tx_condition *tx_c)
 {
 	tx_c->bin_m1_late_early = true;
@@ -272,36 +340,36 @@ void tune_tecr(struct xgkr_params *xgkr)
 
 static void start_lt(struct xgkr_params *xgkr)
 {
-	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_PMD_CTRL, TRAIN_EN);
+	xgkr_phy_write_mmd(xgkr, lt_MDIO_MMD, lt_KR_PMD_CTRL, TRAIN_EN);
 }
 
 static void stop_lt(struct xgkr_params *xgkr)
 {
-	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_PMD_CTRL, TRAIN_DISABLE);
+	xgkr_phy_write_mmd(xgkr, lt_MDIO_MMD, lt_KR_PMD_CTRL, TRAIN_DISABLE);
 }
 
 static void reset_lt(struct xgkr_params *xgkr)
 {
-	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD, MDIO_CTRL1, PMD_RESET);
-	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_PMD_CTRL, TRAIN_DISABLE);
-	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_LD_CU, 0);
-	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_LD_STATUS, 0);
-	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_PMD_STATUS, 0);
-	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_LP_CU, 0);
-	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_LP_STATUS, 0);
+	xgkr_phy_write_mmd(xgkr, lt_MDIO_MMD, MDIO_CTRL1, PMD_RESET);
+	xgkr_phy_write_mmd(xgkr, lt_MDIO_MMD, lt_KR_PMD_CTRL, TRAIN_DISABLE);
+	xgkr_phy_write_mmd(xgkr, lt_MDIO_MMD, lt_KR_LD_CU, 0);
+	xgkr_phy_write_mmd(xgkr, lt_MDIO_MMD, lt_KR_LD_STATUS, 0);
+	xgkr_phy_write_mmd(xgkr, lt_MDIO_MMD, lt_KR_PMD_STATUS, 0);
+	xgkr_phy_write_mmd(xgkr, lt_MDIO_MMD, lt_KR_LP_CU, 0);
+	xgkr_phy_write_mmd(xgkr, lt_MDIO_MMD, lt_KR_LP_STATUS, 0);
 	
 }
 
 static void ld_coe_status(struct xgkr_params *xgkr)
 {
-	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD,
+	xgkr_phy_write_mmd(xgkr, lt_MDIO_MMD,
 		      lt_KR_LD_STATUS, xgkr->ld_status);
 }
 
 static void ld_coe_update(struct xgkr_params *xgkr)
 {
 	dev_dbg(&xgkr->phydev->mdio.dev, "sending request: %x\n", xgkr->ld_update);
-	phy_write_mmd(xgkr->phydev, lt_MDIO_MMD,
+	xgkr_phy_write_mmd(xgkr, lt_MDIO_MMD,
 		      lt_KR_LD_CU, xgkr->ld_update);
 }
 
@@ -325,11 +393,11 @@ static void start_xgkr_an(struct xgkr_params *xgkr)
 		break;
 
 	case PHY_BACKPLANE_10GBASE_KR:
-		err = phy_write_mmd(xgkr->phydev, MDIO_MMD_AN, g_an_AD1, KR_AN_AD1_INIT_10G);
+		err = xgkr_phy_write_mmd(xgkr, MDIO_MMD_AN, g_an_AD1, KR_AN_AD1_INIT_10G);
 		if (err)
 			dev_err(&phydev->mdio.dev, "Setting AN register 0x%02x failed with error code: 0x%08x \n", g_an_AD1, err);
 		udelay(1);
-		err = phy_write_mmd(xgkr->phydev, MDIO_MMD_AN, MDIO_CTRL1, AN_CTRL_INIT);
+		err = xgkr_phy_write_mmd(xgkr, MDIO_MMD_AN, MDIO_CTRL1, AN_CTRL_INIT);
 		if (err)
 			dev_err(&phydev->mdio.dev, "Setting AN register 0x%02x failed with error code: 0x%08x \n", MDIO_CTRL1, err);
 		break;
@@ -337,12 +405,12 @@ static void start_xgkr_an(struct xgkr_params *xgkr)
 	case PHY_BACKPLANE_40GBASE_KR:
 		if (xgkr->idx == MASTER_LANE) {
 			for (i = 0; i < xgkr_inst->phy_lanes; i++) {
-				err = phy_write_mmd(xgkr_inst->xgkr[i].phydev, MDIO_MMD_AN, g_an_AD1, KR_AN_AD1_INIT_40G);
+				err = xgkr_phy_write_mmd(&xgkr_inst->xgkr[i], MDIO_MMD_AN, g_an_AD1, KR_AN_AD1_INIT_40G);
 				if (err)
 					dev_err(&phydev->mdio.dev, "Setting AN register 0x%02x on lane %d failed with error code: 0x%08x \n", g_an_AD1, xgkr_inst->xgkr[i].idx, err);
 			}
 			udelay(1);
-			err = phy_write_mmd(xgkr->phydev, MDIO_MMD_AN, MDIO_CTRL1, AN_CTRL_INIT);
+			err = xgkr_phy_write_mmd(xgkr, MDIO_MMD_AN, MDIO_CTRL1, AN_CTRL_INIT);
 			if (err)
 				dev_err(&phydev->mdio.dev, "Setting AN register 0x%02x on Master Lane failed with error code: 0x%08x \n", MDIO_CTRL1, err);
 		}
@@ -413,7 +481,7 @@ recheck:
 		ld_coe_status(xgkr);
 
 		/* tell LP we are ready */
-		phy_write_mmd(xgkr->phydev, lt_MDIO_MMD,
+		xgkr_phy_write_mmd(xgkr, lt_MDIO_MMD,
 			      lt_KR_PMD_STATUS, RX_STAT);
 
 		return;
@@ -423,7 +491,7 @@ recheck:
 	 * we can clear up the appropriate update request so that the
 	 * subsequent code may easily issue new update requests if needed.
 	 */
-	lp_status = phy_read_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_LP_STATUS) &
+	lp_status = xgkr_phy_read_mmd(xgkr, lt_MDIO_MMD, lt_KR_LP_STATUS) &
 				 REQUEST_MASK;
 
 	status_cop1 = (lp_status & COP1_MASK) >> COP1_SHIFT;
@@ -676,10 +744,14 @@ recheck:
 
 static int is_link_up(struct phy_device *phydev)
 {
-	int val;
+	struct xgkr_phy_data *xgkr_inst = phydev->priv;
+	int val = 0;
+	
+	mutex_lock(&xgkr_inst->phy_lock);
 
-	phy_read_mmd(phydev, MDIO_MMD_PCS, XFI_PCS_SR1);
 	val = phy_read_mmd(phydev, MDIO_MMD_PCS, XFI_PCS_SR1);
+
+	mutex_unlock(&xgkr_inst->phy_lock);
 
 	return (val & KR_RX_LINK_STAT_MASK) ? 1 : 0;
 }
@@ -690,7 +762,7 @@ static int is_link_training_fail(struct xgkr_params *xgkr)
 	int val;
 	int timeout = 100;
 
-	val = phy_read_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_PMD_STATUS);
+	val = xgkr_phy_read_mmd(xgkr, lt_MDIO_MMD, lt_KR_PMD_STATUS);
 
 	if (!(val & TRAIN_FAIL) && (val & RX_STAT)) {
 		/* check LNK_STAT for sure */
@@ -707,7 +779,7 @@ static int is_link_training_fail(struct xgkr_params *xgkr)
 
 static int check_rx(struct xgkr_params *xgkr)
 {
-	return phy_read_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_LP_STATUS) &
+	return xgkr_phy_read_mmd(xgkr, lt_MDIO_MMD, lt_KR_LP_STATUS) &
 			    RX_READY_MASK;
 }
 
@@ -907,7 +979,7 @@ static void train_rx(struct xgkr_params *xgkr)
 	int request, old_ld_status;
 
 	/* get request from LP */
-	request = phy_read_mmd(xgkr->phydev, lt_MDIO_MMD, lt_KR_LP_CU) &
+	request = xgkr_phy_read_mmd(xgkr, lt_MDIO_MMD, lt_KR_LP_CU) &
 			      (LD_ALL_MASK);
 
 	old_ld_status = xgkr->ld_status;
@@ -985,7 +1057,8 @@ static void xgkr_start_train(struct xgkr_params *xgkr)
 		dead_line = jiffies + msecs_to_jiffies(lt_timeout);
 		
 		while (time_before(jiffies, dead_line)) {
-			val = phy_read_mmd(xgkr->phydev, lt_MDIO_MMD,
+
+			val = xgkr_phy_read_mmd(xgkr, lt_MDIO_MMD,
 					   lt_KR_PMD_STATUS);
 
 			if (val & TRAIN_FAIL) {
@@ -1022,7 +1095,7 @@ static void xgkr_start_train(struct xgkr_params *xgkr)
 		while (time_before(jiffies, dead_line)) {
 			/* check if the LT is already failed */
 
-			lt_state = phy_read_mmd(xgkr->phydev, lt_MDIO_MMD,
+			lt_state = xgkr_phy_read_mmd(xgkr, lt_MDIO_MMD,
 						lt_KR_PMD_STATUS);
 
 			if (lt_state & TRAIN_FAIL) {
@@ -1093,7 +1166,7 @@ static void xgkr_state_machine(struct work_struct *work)
 			break;
 
 		case PHY_BACKPLANE_10GBASE_KR:
-			an_state = phy_read_mmd(xgkr->phydev, MDIO_MMD_AN, g_an_BP_STAT);
+			an_state = xgkr_phy_read_mmd(xgkr, MDIO_MMD_AN, g_an_BP_STAT);
 			if (an_state & KR_AN_MASK_10G) {
 				//AN acquired: Train the lane
 				start_train = true;
@@ -1102,7 +1175,7 @@ static void xgkr_state_machine(struct work_struct *work)
 
 		case PHY_BACKPLANE_40GBASE_KR:
 			//Check AN state only on Master Lane
-			an_state = phy_read_mmd(xgkr_inst->xgkr[MASTER_LANE].phydev, MDIO_MMD_AN, g_an_BP_STAT);
+			an_state = xgkr_phy_read_mmd(&xgkr_inst->xgkr[MASTER_LANE], MDIO_MMD_AN, g_an_BP_STAT);
 			if (an_state & KR_AN_MASK_40G) {
 				//AN acquired: Train all lanes in order starting with Master Lane
 				if (xgkr->idx == MASTER_LANE) {
@@ -1228,6 +1301,7 @@ static int fsl_backplane_probe(struct phy_device *phydev)
 
 	xgkr_inst->phy_lanes = phy_lanes;
 	xgkr_inst->bp_mode = bp_mode;
+	mutex_init(&xgkr_inst->phy_lock);
 
 	lane_memmap_size = bckpl_sd.get_lane_memmap_size();
 	

@@ -256,8 +256,18 @@ static void tx_condition_init(struct tx_condition *tx_c)
 
 void tune_tecr(struct xgkr_params *xgkr)
 {
+	struct phy_device *phydev = xgkr->phydev;
+	struct xgkr_phy_data *xgkr_inst = phydev->priv;
+	bool reset = false;
 	
-	xgkr->bckpl_sd.tune_tecr(xgkr->reg_base, xgkr->ratio_preq, xgkr->ratio_pst1q, xgkr->adpt_eq, true);
+	if (xgkr_inst->bp_mode == PHY_BACKPLANE_40GBASE_KR) {
+		/* Reset only the Master Lane */
+		reset = (xgkr->idx == MASTER_LANE);
+	} else {
+		reset = true;
+	}
+	
+	xgkr->bckpl_sd.tune_tecr(xgkr->reg_base, xgkr->ratio_preq, xgkr->ratio_pst1q, xgkr->adpt_eq, reset);
 }
 
 static void start_lt(struct xgkr_params *xgkr)
@@ -325,6 +335,17 @@ static void start_xgkr_an(struct xgkr_params *xgkr)
 		break;
 
 	case PHY_BACKPLANE_40GBASE_KR:
+		if (xgkr->idx == MASTER_LANE) {
+			for (i = 0; i < xgkr_inst->phy_lanes; i++) {
+				err = phy_write_mmd(xgkr_inst->xgkr[i].phydev, MDIO_MMD_AN, g_an_AD1, KR_AN_AD1_INIT_40G);
+				if (err)
+					dev_err(&phydev->mdio.dev, "Setting AN register 0x%02x on lane %d failed with error code: 0x%08x \n", g_an_AD1, xgkr_inst->xgkr[i].idx, err);
+			}
+			udelay(1);
+			err = phy_write_mmd(xgkr->phydev, MDIO_MMD_AN, MDIO_CTRL1, AN_CTRL_INIT);
+			if (err)
+				dev_err(&phydev->mdio.dev, "Setting AN register 0x%02x on Master Lane failed with error code: 0x%08x \n", MDIO_CTRL1, err);
+		}
 		break;
 	}
 }
@@ -942,19 +963,27 @@ static void train_rx(struct xgkr_params *xgkr)
 
 static void xgkr_start_train(struct xgkr_params *xgkr)
 {
+	struct phy_device *phydev = xgkr->phydev;
+	struct xgkr_phy_data *xgkr_inst = phydev->priv;
 	struct tx_condition *tx_c = &xgkr->tx_c;
 	int val = 0, i;
 	int lt_state;
 	unsigned long dead_line;
 	int rx_ok, tx_ok;
+	u32 lt_timeout = 500;
 
 	init_xgkr(xgkr, 0);
 	
 	start_lt(xgkr);
 	
+	if (xgkr_inst->bp_mode == PHY_BACKPLANE_40GBASE_KR) {
+		lt_timeout = 2000;
+	}
 
 	for (i = 0; i < 2;) {
-		dead_line = jiffies + msecs_to_jiffies(500);
+		
+		dead_line = jiffies + msecs_to_jiffies(lt_timeout);
+		
 		while (time_before(jiffies, dead_line)) {
 			val = phy_read_mmd(xgkr->phydev, lt_MDIO_MMD,
 					   lt_KR_PMD_STATUS);
@@ -963,7 +992,14 @@ static void xgkr_start_train(struct xgkr_params *xgkr)
 				/* LT failed already, reset lane to avoid
 				 * it run into hanging, then start LT again.
 				 */
-				xgkr->bckpl_sd.reset_lane(xgkr->reg_base);
+				if (xgkr_inst->bp_mode == PHY_BACKPLANE_40GBASE_KR) {
+					/* Reset only the Master Lane */
+					if (xgkr->idx == MASTER_LANE)
+						xgkr->bckpl_sd.reset_lane(xgkr->reg_base);
+				} else {
+					xgkr->bckpl_sd.reset_lane(xgkr->reg_base);
+				}
+				
 				start_lt(xgkr);
 			} else if ((val & PMD_STATUS_SUP_STAT) &&
 				   (val & PMD_STATUS_FRAME_LOCK))
@@ -981,7 +1017,7 @@ static void xgkr_start_train(struct xgkr_params *xgkr)
 		rx_ok = false;
 		tx_ok = false;
 		/* the LT should be finished in 500ms, failed or OK. */
-		dead_line = jiffies + msecs_to_jiffies(500);
+		dead_line = jiffies + msecs_to_jiffies(lt_timeout);
 
 		while (time_before(jiffies, dead_line)) {
 			/* check if the LT is already failed */
@@ -991,7 +1027,14 @@ static void xgkr_start_train(struct xgkr_params *xgkr)
 
 			if (lt_state & TRAIN_FAIL) {
 				
-				xgkr->bckpl_sd.reset_lane(xgkr->reg_base);
+				if (xgkr_inst->bp_mode == PHY_BACKPLANE_40GBASE_KR) {
+					/* Reset only the Master Lane */
+					if (xgkr->idx == MASTER_LANE)
+						xgkr->bckpl_sd.reset_lane(xgkr->reg_base);
+				} else {
+					xgkr->bckpl_sd.reset_lane(xgkr->reg_base);
+				}
+				
 				break;
 			}
 
@@ -1031,21 +1074,48 @@ static void xgkr_state_machine(struct work_struct *work)
 	struct phy_device *phydev = xgkr->phydev;
 	struct xgkr_phy_data *xgkr_inst = phydev->priv;
 	int an_state;
-	bool needs_train = false;
+	bool start_train = false;
 
 	if (!xgkr_inst->aneg_done) {
 		start_xgkr_state_machine(&xgkr->xgkr_wk);
 		return;
 	}
-	mutex_lock(&phydev->lock);
 
+	mutex_lock(&phydev->lock);
+	
 	switch (xgkr->state) {
 	case DETECTING_LP:
-		phy_read_mmd(phydev, MDIO_MMD_AN, g_an_BP_STAT);
-		an_state = phy_read_mmd(phydev, MDIO_MMD_AN, g_an_BP_STAT);
-		if ((an_state & KR_AN_MASK_10G))
-			needs_train = true;
+
+		switch (xgkr_inst->bp_mode)
+		{
+		case PHY_BACKPLANE_1000BASE_KX:
+			dev_err(&phydev->mdio.dev, "Wrong call path for 1000Base-KX \n");
+			break;
+
+		case PHY_BACKPLANE_10GBASE_KR:
+			an_state = phy_read_mmd(xgkr->phydev, MDIO_MMD_AN, g_an_BP_STAT);
+			if (an_state & KR_AN_MASK_10G) {
+				//AN acquired: Train the lane
+				start_train = true;
+			}
+			break;
+
+		case PHY_BACKPLANE_40GBASE_KR:
+			//Check AN state only on Master Lane
+			an_state = phy_read_mmd(xgkr_inst->xgkr[MASTER_LANE].phydev, MDIO_MMD_AN, g_an_BP_STAT);
+			if (an_state & KR_AN_MASK_40G) {
+				//AN acquired: Train all lanes in order starting with Master Lane
+				if (xgkr->idx == MASTER_LANE) {
+					start_train = true;
+				}
+				else if (xgkr_inst->xgkr[xgkr->idx - 1].state == TRAINED) {
+					start_train = true;
+				}
+			}
+			break;
+		}
 		break;
+
 	case TRAINED:
 		if (!is_link_up(phydev)) {
 			dev_info(&phydev->mdio.dev,
@@ -1057,8 +1127,9 @@ static void xgkr_state_machine(struct work_struct *work)
 		break;
 	}
 
-	if (needs_train)
+	if (start_train) {
 		xgkr_start_train(xgkr);
+	}
 
 	mutex_unlock(&phydev->lock);
 	start_xgkr_state_machine(&xgkr->xgkr_wk);
@@ -1238,6 +1309,17 @@ static int fsl_backplane_config_aneg(struct phy_device *phydev)
 		break;
 
 	case SPEED_40000:
+		phydev->supported |= SUPPORTED_40000baseKR4_Full;
+		for (i = 0; i < xgkr_inst->phy_lanes; i++) {
+			reset_lt(&xgkr_inst->xgkr[i]);
+		}
+		//Start AN only for Master Lane
+		start_xgkr_an(&xgkr_inst->xgkr[MASTER_LANE]);
+		/* start state machine*/
+		for (i = 0; i < xgkr_inst->phy_lanes; i++) {
+			start_xgkr_state_machine(&xgkr_inst->xgkr[i].xgkr_wk);
+		}
+		
 		break;
 	}
 

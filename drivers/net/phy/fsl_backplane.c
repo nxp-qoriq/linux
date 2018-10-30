@@ -1659,7 +1659,6 @@ static int fsl_backplane_match_phy_device(struct phy_device *phydev)
 	const int num_ids = ARRAY_SIZE(phydev->c45_ids.device_ids);
 
 	if (!phydev->mdio.dev.of_node) {
-		dev_err(&phydev->mdio.dev, "No associated device tree node\n");
 		return 0;
 	}
 

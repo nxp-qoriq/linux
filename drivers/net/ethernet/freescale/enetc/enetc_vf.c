@@ -149,8 +149,6 @@ static void enetc_vf_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 		ndev->features &= ~NETIF_F_SG;
 	}
 
-	ndev->priv_flags |= IFF_UNICAST_FLT;
-
 	/* pick up primary MAC address from SI */
 	enetc_get_primary_mac_addr(&si->hw, ndev->dev_addr);
 }

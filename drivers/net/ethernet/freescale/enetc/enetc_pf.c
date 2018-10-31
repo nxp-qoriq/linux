@@ -581,12 +581,10 @@ static int enetc_sriov_configure(struct pci_dev *pdev, int num_vfs)
 	int err;
 
 	if (!num_vfs) {
-		dev_info(&pdev->dev, "SR-IOV stop\n");
 		enetc_msg_psi_free(pf);
-		pci_disable_sriov(pdev);
 		pf->num_vfs = 0;
+		pci_disable_sriov(pdev);
 	} else {
-		dev_info(&pdev->dev, "SR-IOV start, %d VFs\n", num_vfs);
 		err = pci_enable_sriov(pdev, num_vfs);
 		if (err) {
 			dev_err(&pdev->dev, "pci_enable_sriov err %d\n", err);

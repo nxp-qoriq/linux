@@ -429,6 +429,7 @@
 
 enum nxp_fspi_devtype {
 	NXP_FSPI_LX2160A,
+	NXP_FSPI_LS1028A
 };
 
 struct nxp_fspi_devtype_data {
@@ -441,6 +442,14 @@ struct nxp_fspi_devtype_data {
 
 static struct nxp_fspi_devtype_data lx2160a_data = {
 	.devtype = NXP_FSPI_LX2160A,
+	.rxfifo = RX_IPBUF_SIZE,
+	.txfifo = TX_IPBUF_SIZE,
+	.ahb_buf_size = RX_AHBBUF_SIZE,
+	.driver_data = 0,
+};
+
+static struct nxp_fspi_devtype_data ls1028a_data = {
+	.devtype = NXP_FSPI_LS1028A,
 	.rxfifo = RX_IPBUF_SIZE,
 	.txfifo = TX_IPBUF_SIZE,
 	.ahb_buf_size = RX_AHBBUF_SIZE,
@@ -1152,7 +1161,7 @@ static void nxp_fspi_unprep(struct spi_nor *nor, enum spi_nor_ops ops)
 }
 
 static const struct of_device_id nxp_fspi_dt_ids[] = {
-	{ .compatible = "nxp,lx2160a-fspi", .data = (void *)&lx2160a_data, },
+	{ .compatible = "nxp,lx2160a-fspi", .data = (void *)&ls1028a_data, },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, nxp_fspi_dt_ids);
@@ -1160,7 +1169,9 @@ MODULE_DEVICE_TABLE(of, nxp_fspi_dt_ids);
 static int nxp_fspi_probe(struct platform_device *pdev)
 {
 	struct spi_nor_hwcaps hwcaps = {
-		.mask = SNOR_HWCAPS_READ | SNOR_HWCAPS_PP
+		.mask = SPINOR_OP_READ_FAST_4B |
+			SPINOR_OP_READ_4B |
+			SNOR_HWCAPS_PP
 	};
 	struct device_node *np = pdev->dev.of_node;
 	struct device *dev = &pdev->dev;

@@ -196,6 +196,18 @@
 		};
 	};
 
+	fspi: flexspi@20c0000 {
+		compatible = "nxp,lx2160a-fspi", "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x0 0x20c0000 0x0 0x10000>,
+		    <0x0 0x20000000 0x0 0x10000000>;
+		reg-names = "FSPI", "FSPI-memory";
+		interrupts = <0 25 0x4>; /* Level high type */
+		clocks = <&clockgen 4 3>, <&clockgen 4 3>;
+		clock-names = "fspi_en", "fspi";
+	};
+
 	soc: soc {
 		compatible = "simple-bus";
 		#address-cells = <2>;
@@ -493,18 +505,6 @@
 			clocks = <&clockgen 4 1>;
 			big-endian;
 			status = "disabled";
-		};
-
-		qspi: quadspi@20c0000 {
-			compatible = "fsl,ls2080a-qspi", "fsl,ls1088a-qspi";
-			#address-cells = <1>;
-			#size-cells = <0>;
-			reg = <0x0 0x20c0000 0x0 0x10000>,
-					<0x0 0x20000000 0x0 0x10000000>;
-			reg-names = "QuadSPI", "QuadSPI-memory";
-			interrupts = <0 25 0x4>; /* Level high type */
-			clocks = <&clockgen 4 3>, <&clockgen 4 3>;
-			clock-names = "qspi_en", "qspi";
 		};
 
 		sata: sata@3200000 {

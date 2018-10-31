@@ -370,6 +370,9 @@ static int enetc_pf_set_vf_mac(struct net_device *ndev, int vf, u8 *mac)
 	if (vf >= pf->total_vfs)
 		return -EINVAL;
 
+	if (!is_valid_ether_addr(mac))
+		return -EADDRNOTAVAIL;
+
 	enetc_pf_set_primary_mac_addr(&priv->si->hw, vf + 1, mac);
 	return 0;
 }

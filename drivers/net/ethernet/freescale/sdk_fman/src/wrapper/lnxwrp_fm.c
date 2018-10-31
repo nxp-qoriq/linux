@@ -682,6 +682,7 @@ static t_LnxWrpFmDev * ReadFmDevTreeNode (struct platform_device *of_dev)
         }
     }
 
+#if 0
     /* Get the RTC base address and size */
     memset(ids, 0, sizeof(ids));
     if (WARN_ON(strlen("ptp-timer") >= sizeof(ids[0].name)))
@@ -704,6 +705,7 @@ static t_LnxWrpFmDev * ReadFmDevTreeNode (struct platform_device *of_dev)
             p_LnxWrpFmDev->fmRtcMemSize = res.end + 1 - res.start;
         }
     }
+#endif
 
 #if (DPAA_VERSION >= 11)
     /* Get the VSP base address */

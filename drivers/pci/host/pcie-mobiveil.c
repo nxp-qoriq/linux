@@ -630,8 +630,9 @@ static int mobiveil_host_init(struct mobiveil_pcie *pcie)
 
 		/* configure outbound translation window */
 		program_ob_windows(pcie, pcie->ob_wins_configured,
-				   win->res->start, 0, type,
-				   resource_size(win->res));
+				   win->res->start,
+				   win->res->start - win->offset,
+				   type, resource_size(win->res));
 	}
 
 	/* setup MSI hardware registers */

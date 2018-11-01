@@ -753,7 +753,10 @@ static int enetc_alloc_txbdr(struct enetc_bdr *txr)
 
 static void enetc_free_txbdr(struct enetc_bdr *txr)
 {
-	int size;
+	int size, i;
+
+	for (i = 0; i < txr->bd_count; i++)
+		enetc_unmap_tx_buff(txr, &txr->tx_swbd[i]);
 
 	size = txr->bd_count * sizeof(union enetc_tx_bd);
 
@@ -762,7 +765,6 @@ static void enetc_free_txbdr(struct enetc_bdr *txr)
 
 	vfree(txr->tx_swbd);
 	txr->tx_swbd = 0;
-	// TODO: free tx_ring dma mappings and skbs
 }
 
 static int enetc_alloc_tx_resources(struct enetc_ndev_priv *priv)

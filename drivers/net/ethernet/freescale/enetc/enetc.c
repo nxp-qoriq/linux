@@ -729,20 +729,35 @@ void enetc_get_si_caps(struct enetc_si *si)
 		si->num_rss = 0;
 }
 
+static int enetc_dma_alloc_bdr(struct enetc_bdr *r, size_t bd_size)
+{
+	r->bd_base = dma_zalloc_coherent(r->dev, r->bd_count * bd_size,
+					 &r->bd_dma_base, GFP_KERNEL);
+	if (!r->bd_base)
+		return -ENOMEM;
+
+	/* h/w requires 128B alignment */
+	if (!IS_ALIGNED(r->bd_dma_base, 128)) {
+		dma_free_coherent(r->dev, r->bd_count * bd_size, r->bd_base,
+				  r->bd_dma_base);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 static int enetc_alloc_txbdr(struct enetc_bdr *txr)
 {
-	int size;
+	int err;
 
 	txr->tx_swbd = vzalloc(txr->bd_count * sizeof(struct enetc_tx_swbd));
 	if (!txr->tx_swbd)
 		return -ENOMEM;
 
-	size = txr->bd_count * sizeof(union enetc_tx_bd);
-	txr->bd_base = dma_zalloc_coherent(txr->dev, size, &txr->bd_dma_base,
-					   GFP_KERNEL);
-	if (!txr->bd_base) {
+	err = enetc_dma_alloc_bdr(txr, sizeof(union enetc_tx_bd));
+	if (err) {
 		vfree(txr->tx_swbd);
-		return -ENOMEM;
+		return err;
 	}
 
 	txr->next_to_clean = 0;
@@ -797,18 +812,16 @@ static void enetc_free_tx_resources(struct enetc_ndev_priv *priv)
 
 static int enetc_alloc_rxbdr(struct enetc_bdr *rxr)
 {
-	int size;
+	int err;
 
 	rxr->rx_swbd = vzalloc(rxr->bd_count * sizeof(struct enetc_rx_swbd));
 	if (!rxr->rx_swbd)
 		return -ENOMEM;
 
-	size = rxr->bd_count * sizeof(union enetc_rx_bd);
-	rxr->bd_base = dma_zalloc_coherent(rxr->dev, size, &rxr->bd_dma_base,
-					   GFP_KERNEL);
-	if (!rxr->bd_base) {
+	err = enetc_dma_alloc_bdr(rxr, sizeof(union enetc_rx_bd));
+	if (err) {
 		vfree(rxr->rx_swbd);
-		return -ENOMEM;
+		return err;
 	}
 
 	rxr->next_to_clean = 0;
@@ -1061,9 +1074,6 @@ static void enetc_setup_txbdr(struct enetc_hw *hw, struct enetc_bdr *tx_ring)
 	int idx = tx_ring->index;
 	u32 tbmr;
 
-	/* 128B alignment required */
-	WARN_ON(lower_32_bits(tx_ring->bd_dma_base) & 0x7f);
-
 	enetc_txbdr_wr(hw, idx, ENETC_TBBAR0,
 		       lower_32_bits(tx_ring->bd_dma_base));
 
@@ -1103,9 +1113,6 @@ static void enetc_setup_rxbdr(struct enetc_hw *hw, struct enetc_bdr *rx_ring)
 {
 	int idx = rx_ring->index;
 	u32 rbmr;
-
-	/* 128B alignment required */
-	WARN_ON(lower_32_bits(rx_ring->bd_dma_base) & 0x7f);
 
 	enetc_rxbdr_wr(hw, idx, ENETC_RBBAR0,
 		       lower_32_bits(rx_ring->bd_dma_base));

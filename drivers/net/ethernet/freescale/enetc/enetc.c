@@ -1014,8 +1014,8 @@ void enetc_init_si_rings_params(struct enetc_ndev_priv *priv)
 	struct enetc_si *si = priv->si;
 	int cpus = num_online_cpus();
 
-	priv->tx_bd_count = 1024; //TODO: use defines for defaults
-	priv->rx_bd_count = 1024;
+	priv->tx_bd_count = ENETC_BDR_DEFAULT_SIZE;
+	priv->rx_bd_count = ENETC_BDR_DEFAULT_SIZE;
 
 	/* Enable all available TX rings in order to configure as many
 	 * priorities as possible, when needed.
@@ -1026,7 +1026,7 @@ void enetc_init_si_rings_params(struct enetc_ndev_priv *priv)
 	priv->bdr_int_num = cpus;
 
 	/* SI specific */
-	si->cbd_ring.bd_count = 64; //TODO: use defines for defaults
+	si->cbd_ring.bd_count = ENETC_CBDR_DEFAULT_SIZE;
 }
 
 int enetc_alloc_si_resources(struct enetc_ndev_priv *priv)

@@ -389,7 +389,7 @@ static int enetc_pf_set_vf_vlan(struct net_device *ndev, int vf, u16 vlan,
 	if (vf >= pf->total_vfs)
 		return -EINVAL;
 
-	if (proto != htons(0x8100))
+	if (proto != htons(ETH_P_8021Q))
 		/* only C-tags supported for now */
 		return -EPROTONOSUPPORT;
 

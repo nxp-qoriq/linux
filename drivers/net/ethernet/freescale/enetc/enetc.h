@@ -44,6 +44,8 @@ struct enetc_ring_stats {
 	unsigned int rx_alloc_errs;
 };
 
+#define ENETC_BDR_DEFAULT_SIZE	1024
+
 struct enetc_bdr {
 	struct device *dev; /* for DMA mapping */
 	struct net_device *ndev;
@@ -86,6 +88,7 @@ static inline int enetc_bd_unused(struct enetc_bdr *bdr)
 }
 
 /* Control BD ring */
+#define ENETC_CBDR_DEFAULT_SIZE	64
 struct enetc_cbdr {
 	void *bd_base; /* points to Rx or Tx BD ring */
 	void __iomem *pir;

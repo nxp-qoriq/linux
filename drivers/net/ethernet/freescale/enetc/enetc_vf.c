@@ -132,7 +132,7 @@ static void enetc_vf_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 	ndev->features = NETIF_F_HIGHDMA | NETIF_F_SG |
 			 NETIF_F_RXCSUM | NETIF_F_HW_CSUM |
 			 NETIF_F_HW_VLAN_CTAG_TX |
-			 NETIF_F_HW_VLAN_CTAG_RX; /* < has to stay on for now */
+			 NETIF_F_HW_VLAN_CTAG_RX;
 
 	if (si->errata & ENETC_ERR_TXCSUM) {
 		ndev->hw_features &= ~NETIF_F_HW_CSUM;

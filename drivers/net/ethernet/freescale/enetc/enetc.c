@@ -45,8 +45,6 @@ netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
 	struct enetc_bdr *tx_ring;
 	int count, prio;
 
-	// TODO: guard against runt (invalid) packets (?)
-
 	if (ndev->num_tc) {
 		/* Choose the TX BD ring based on the skb's priority mapping */
 		prio = netdev_get_prio_tc_map(ndev, skb->priority);
@@ -487,7 +485,7 @@ static void enetc_get_rx_tstamp(struct net_device *ndev,
 static void enetc_get_offloads(struct enetc_bdr *rx_ring,
 			       union enetc_rx_bd *rxbd, struct sk_buff *skb)
 {
-	// TODO: checksum, tstamp, VLAN, hash
+	// TODO: tstamp, hashing
 	if (rx_ring->ndev->features & NETIF_F_RXCSUM) {
 		u16 inet_csum = le16_to_cpu(rxbd->r.inet_csum);
 
@@ -506,7 +504,7 @@ static void enetc_get_offloads(struct enetc_bdr *rx_ring,
 #endif
 }
 
-#define ENETC_RXBD_BUNDLE 16 /* recommended # of BDs to update at once */
+#define ENETC_RXBD_BUNDLE 16 /* # of BDs to update at once */
 
 static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 			       struct napi_struct *napi, int work_limit)
@@ -536,7 +534,7 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 			break;
 
 		enetc_wr_reg(rx_ring->idr, BIT(rx_ring->index));
-		dma_rmb(); /* for readig other rxbd fields */
+		dma_rmb(); /* for reading other rxbd fields */
 		size = le16_to_cpu(rxbd->r.buf_len);
 		skb = enetc_map_rx_buff_to_skb(rx_ring, i, size);
 		if (!skb)
@@ -566,7 +564,6 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 				}
 			}
 
-			// FIXME: driver ethtool stats instead?
 			rx_ring->ndev->stats.rx_dropped++;
 			rx_ring->ndev->stats.rx_errors++;
 
@@ -712,9 +709,6 @@ void enetc_get_si_caps(struct enetc_si *si)
 
 	/* find out how many of various resources we have to work with */
 	val = enetc_rd(hw, ENETC_SICAPR0);
-	/* we expect to have the same number of Rx and Tx rings, but in case
-	 * that's not true use the min value
-	 */
 	si->num_rx_rings = (val >> 16) & 0xff;
 	si->num_tx_rings = val & 0xff;
 	si->num_fs_entries = enetc_rd(hw, ENETC_SIRFSCAPR) & 0x7f;
@@ -906,7 +900,6 @@ static void enetc_free_rx_ring(struct enetc_bdr *rx_ring)
 		rx_swbd->page = NULL;
 	}
 
-	// TODO: zero out rx_swbd and BD ring?
 	rx_ring->next_to_clean = 0;
 	rx_ring->next_to_use = 0;
 	rx_ring->next_to_alloc = 0;
@@ -1082,8 +1075,7 @@ static void enetc_setup_txbdr(struct enetc_hw *hw, struct enetc_bdr *tx_ring)
 	enetc_txbdr_wr(hw, idx, ENETC_TBBAR1,
 		       upper_32_bits(tx_ring->bd_dma_base));
 
-	WARN_ON(tx_ring->bd_count & 0x3f); //FIXME: must be multiple of 64
-
+	WARN_ON(!IS_ALIGNED(tx_ring->bd_count, 64)); /* multiple of 64 */
 	enetc_txbdr_wr(hw, idx, ENETC_TBLENR,
 		       ENETC_RTBLENR_LEN(tx_ring->bd_count));
 
@@ -1122,8 +1114,7 @@ static void enetc_setup_rxbdr(struct enetc_hw *hw, struct enetc_bdr *rx_ring)
 	enetc_rxbdr_wr(hw, idx, ENETC_RBBAR1,
 		       upper_32_bits(rx_ring->bd_dma_base));
 
-	WARN_ON(rx_ring->bd_count & 0x3f); //FIXME: must be multiple of 64
-
+	WARN_ON(!IS_ALIGNED(rx_ring->bd_count, 64)); /* multiple of 64 */
 	enetc_rxbdr_wr(hw, idx, ENETC_RBLENR,
 		       ENETC_RTBLENR_LEN(rx_ring->bd_count));
 
@@ -1131,7 +1122,7 @@ static void enetc_setup_rxbdr(struct enetc_hw *hw, struct enetc_bdr *rx_ring)
 
 	enetc_rxbdr_wr(hw, idx, ENETC_RBPIR, 0);
 
-	/* enable Rx ints by setting pkt thr to 1 (BG 0.7) */
+	/* enable Rx ints by setting pkt thr to 1 */
 	enetc_rxbdr_wr(hw, idx, ENETC_RBICIR0, ENETC_RBICIR0_ICEN | 0x1);
 
 	rbmr = ENETC_RBMR_EN;

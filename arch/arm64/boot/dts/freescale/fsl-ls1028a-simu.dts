@@ -1,7 +1,7 @@
 /*
  * Device Tree file for LS1028A software Simulator model
  *
- * Copyright 2017, NXP
+ * Copyright 2017-2018, NXP
  *
  * Sudhanshu Gupta <sudhanshu.gupta@nxp.com>
  *
@@ -124,4 +124,25 @@
 		speed = <1000>;
 		full-duplex;
 	};
+};
+
+&fspi {
+	status = "okay";
+	flash0: mt35xu02g@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "micron,m25p80";
+		m25p,fast-read;
+		spi-max-frequency = <20000000>;
+		reg = <0>;
+		/* The following setting enables 1-1-8 (CMD-ADDR-DATA) mode */
+		spi-rx-bus-width = <8>; /* 8 SPI Rx lines */
+		spi-tx-bus-width = <1>; /* 1 SPI Tx line */
+	};
+};
+
+&dspi0 {
+	bus-num = <0>;
+	status = "okay";
+
 };

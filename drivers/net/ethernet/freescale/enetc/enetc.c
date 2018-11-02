@@ -932,6 +932,12 @@ static int enetc_alloc_cbdr(struct device *dev, struct enetc_cbdr *cbdr)
 	if (!cbdr->bd_base)
 		return -ENOMEM;
 
+	/* h/w requires 128B alignment */
+	if (!IS_ALIGNED(cbdr->bd_dma_base, 128)) {
+		dma_free_coherent(dev, size, cbdr->bd_base, cbdr->bd_dma_base);
+		return -EINVAL;
+	}
+
 	cbdr->next_to_clean = 0;
 	cbdr->next_to_use = 0;
 
@@ -948,8 +954,6 @@ static void enetc_free_cbdr(struct device *dev, struct enetc_cbdr *cbdr)
 
 static void enetc_setup_cbdr(struct enetc_hw *hw, struct enetc_cbdr *cbdr)
 {
-	WARN_ON(lower_32_bits(cbdr->bd_dma_base) & 0x7f);
-
 	/* set CBDR cache attributes */
 	enetc_wr(hw, ENETC_SICAR2,
 		 ENETC_SICAR_RD_COHERENT | ENETC_SICAR_WR_COHERENT);

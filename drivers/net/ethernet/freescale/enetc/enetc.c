@@ -98,8 +98,6 @@ static bool enetc_tx_csum(struct sk_buff *skb, union enetc_tx_bd *txbd)
 	l3_flags = 0;
 	if (skb->protocol == htons(ETH_P_IPV6))
 		l3_flags = ENETC_TXBD_L3_IPV6;
-	else if (skb->protocol != htons(ETH_P_IP))
-		WARN_ON(1); //FIXME: Debug only (remove from final code)
 
 	/* write BD fields */
 	txbd->l3_csoff = enetc_txbd_l3_csoff(l3_start, l3_hsize, l3_flags);

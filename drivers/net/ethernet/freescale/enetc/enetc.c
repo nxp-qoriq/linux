@@ -1269,14 +1269,7 @@ static void enetc_enable_interrupts(struct enetc_ndev_priv *priv)
 
 static void enetc_disable_interrupts(struct enetc_ndev_priv *priv)
 {
-	struct pci_dev *pdev = priv->si->pdev;
 	int i;
-
-	for (i = 0; i < priv->bdr_int_num; i++) {
-		int irq = pci_irq_vector(pdev, ENETC_BDR_INT_BASE_IDX + i);
-
-		synchronize_irq(irq);
-	}
 
 	for (i = 0; i < priv->num_tx_rings; i++)
 		enetc_txbdr_wr(&priv->si->hw, i, ENETC_TBIER, 0);
@@ -1358,8 +1351,6 @@ int enetc_close(struct net_device *ndev)
 
 	netif_tx_stop_all_queues(ndev);
 
-	enetc_disable_interrupts(priv);
-
 	for (i = 0; i < priv->bdr_int_num; i++) {
 		napi_synchronize(&priv->int_vector[i]->napi);
 		napi_disable(&priv->int_vector[i]->napi);
@@ -1372,6 +1363,7 @@ int enetc_close(struct net_device *ndev)
 		netif_carrier_off(ndev);
 	}
 
+	enetc_disable_interrupts(priv);
 	enetc_clear_bdrs(priv);
 
 	enetc_free_rxtx_rings(priv);

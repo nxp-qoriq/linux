@@ -1,5 +1,6 @@
 /*
  * Copyright 2013 Freescale Semiconductor, Inc.
+ * Copyright 2018 NXP
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -513,7 +514,7 @@ static const struct clockgen_chipinfo chipinfo[] = {
 			&clockgen2_cmux_cga12
 		},
 		.cmux_to_group = {
-			0, 0, -1
+			0, 0, 0, 0, -1
 		},
 		.pll_mask = 0x07,
 		.flags = CG_VER3 | CG_LITTLE_ENDIAN,
@@ -1442,6 +1443,7 @@ CLK_OF_DECLARE(qoriq_clockgen_1, "fsl,qoriq-clockgen-1.0", clockgen_init);
 CLK_OF_DECLARE(qoriq_clockgen_2, "fsl,qoriq-clockgen-2.0", clockgen_init);
 CLK_OF_DECLARE(qoriq_clockgen_ls1012a, "fsl,ls1012a-clockgen", clockgen_init);
 CLK_OF_DECLARE(qoriq_clockgen_ls1021a, "fsl,ls1021a-clockgen", clockgen_init);
+CLK_OF_DECLARE(qoriq_clockgen_ls1028a, "fsl,ls1028a-clockgen", clockgen_init);
 CLK_OF_DECLARE(qoriq_clockgen_ls1043a, "fsl,ls1043a-clockgen", clockgen_init);
 CLK_OF_DECLARE(qoriq_clockgen_ls1046a, "fsl,ls1046a-clockgen", clockgen_init);
 CLK_OF_DECLARE(qoriq_clockgen_ls1088a, "fsl,ls1088a-clockgen", clockgen_init);

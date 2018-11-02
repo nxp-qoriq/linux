@@ -1,5 +1,6 @@
 /*
  * Copyright 2013 Freescale Semiconductor, Inc.
+ * Copyright 2018 NXP
  *
  * CPU Frequency Scaling driver for Freescale QorIQ SoCs.
  *
@@ -316,6 +317,7 @@ static const struct of_device_id node_matches[] __initconst = {
 
 	{ .compatible = "fsl,ls1012a-clockgen", },
 	{ .compatible = "fsl,ls1021a-clockgen", },
+	{ .compatible = "fsl,ls1028a-clockgen", },
 	{ .compatible = "fsl,ls1043a-clockgen", },
 	{ .compatible = "fsl,ls1046a-clockgen", },
 	{ .compatible = "fsl,ls1088a-clockgen", },

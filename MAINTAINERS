@@ -10386,7 +10386,7 @@ M:	Subrahmanya Lingappa <l.subrahmanya@mobiveil.co.in>
 L:	linux-pci@vger.kernel.org
 S:	Supported
 F:	Documentation/devicetree/bindings/pci/mobiveil-pcie.txt
-F:	drivers/pci/host/pcie-mobiveil.c
+F:	drivers/pci/mobiveil/pcie-mobiveil*
 
 PCI DRIVER FOR MVEBU (Marvell Armada 370 and Armada XP SOC support)
 M:	Thomas Petazzoni <thomas.petazzoni@free-electrons.com>

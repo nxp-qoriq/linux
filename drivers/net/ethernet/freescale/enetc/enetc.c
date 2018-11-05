@@ -1321,15 +1321,15 @@ int enetc_open(struct net_device *ndev)
 	if (err)
 		goto err_set_queues;
 
-	if (ndev->phydev)
-		phy_start(ndev->phydev);
-	else
-		netif_carrier_on(ndev);
-
 	for (i = 0; i < priv->bdr_int_num; i++)
 		napi_enable(&priv->int_vector[i]->napi);
 
 	enetc_enable_interrupts(priv);
+
+	if (ndev->phydev)
+		phy_start(ndev->phydev);
+	else
+		netif_carrier_on(ndev);
 
 	netif_tx_start_all_queues(ndev);
 
@@ -1351,16 +1351,16 @@ int enetc_close(struct net_device *ndev)
 
 	netif_tx_stop_all_queues(ndev);
 
-	for (i = 0; i < priv->bdr_int_num; i++) {
-		napi_synchronize(&priv->int_vector[i]->napi);
-		napi_disable(&priv->int_vector[i]->napi);
-	}
-
 	if (ndev->phydev) {
 		phy_stop(ndev->phydev);
 		phy_disconnect(ndev->phydev);
 	} else {
 		netif_carrier_off(ndev);
+	}
+
+	for (i = 0; i < priv->bdr_int_num; i++) {
+		napi_synchronize(&priv->int_vector[i]->napi);
+		napi_disable(&priv->int_vector[i]->napi);
 	}
 
 	enetc_disable_interrupts(priv);

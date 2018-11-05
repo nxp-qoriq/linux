@@ -150,6 +150,12 @@ static int dpaa2_dpio_probe(struct fsl_mc_device *dpio_dev)
 		goto err_open;
 	}
 
+	err = dpio_reset(dpio_dev->mc_io, 0, dpio_dev->mc_handle);
+	if (err) {
+		dev_err(dev, "dpio_reset() failed\n");
+		goto err_reset;
+	}
+
 	err = dpio_get_attributes(dpio_dev->mc_io, 0, dpio_dev->mc_handle,
 				  &dpio_attrs);
 	if (err) {
@@ -227,6 +233,7 @@ err_allocate_irqs:
 	cpumask_set_cpu(next_cpu, cpus_unused_mask);
 	dpio_disable(dpio_dev->mc_io, 0, dpio_dev->mc_handle);
 err_get_attr:
+err_reset:
 	dpio_close(dpio_dev->mc_io, 0, dpio_dev->mc_handle);
 err_open:
 	if (cpumask_full(cpus_unused_mask)) {

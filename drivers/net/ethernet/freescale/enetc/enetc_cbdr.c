@@ -159,7 +159,7 @@ static int enetc_cmd_rss_table(struct enetc_si *si, u32 *table, int count,
 	u8 *tmp, *tmp_align;
 	int err, i;
 
-	if (count < 0x40)
+	if (count < RSSE_ALIGN)
 		/* HW only takes in a full 64 entry table */
 		return -EINVAL;
 

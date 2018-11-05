@@ -217,7 +217,7 @@ static void mobiveil_pcie_enable_msi(struct mobiveil_pcie *pcie)
 	writel_relaxed(1, pcie->apb_csr_base + MSI_ENABLE_OFFSET);
 }
 
-static int mobiveil_host_init(struct mobiveil_pcie *pcie)
+int mobiveil_host_init(struct mobiveil_pcie *pcie, bool reinit)
 {
 	u32 value, pab_ctrl, type;
 	struct resource_entry *win;
@@ -229,11 +229,16 @@ static int mobiveil_host_init(struct mobiveil_pcie *pcie)
 	for (i = 0; i < pcie->ppio_wins; i++)
 		mobiveil_pcie_disable_ib_win(pcie, i);
 
-	/* setup bus numbers */
-	value = csr_readl(pcie, PCI_PRIMARY_BUS);
-	value &= 0xff000000;
-	value |= 0x00ff0100;
-	csr_writel(pcie, value, PCI_PRIMARY_BUS);
+	pcie->ib_wins_configured = 0;
+	pcie->ob_wins_configured = 0;
+
+	if (!reinit) {
+		/* setup bus numbers */
+		value = csr_readl(pcie, PCI_PRIMARY_BUS);
+		value &= 0xff000000;
+		value |= 0x00ff0100;
+		csr_writel(pcie, value, PCI_PRIMARY_BUS);
+	}
 
 	/*
 	 * program Bus Master Enable Bit in Command Register in PAB Config
@@ -279,7 +284,7 @@ static int mobiveil_host_init(struct mobiveil_pcie *pcie)
 	program_ib_windows(pcie, WIN_NUM_0, 0, 0, MEM_WINDOW_TYPE, IB_WIN_SIZE);
 
 	/* Get the I/O and memory ranges from DT */
-	resource_list_for_each_entry(win, &pcie->resources) {
+	resource_list_for_each_entry(win, pcie->resources) {
 		if (resource_type(win->res) == IORESOURCE_MEM) {
 			type = MEM_WINDOW_TYPE;
 		} else if (resource_type(win->res) == IORESOURCE_IO) {
@@ -551,8 +556,6 @@ int mobiveil_pcie_host_probe(struct mobiveil_pcie *pcie)
 	resource_size_t iobase;
 	int ret;
 
-	INIT_LIST_HEAD(&pcie->resources);
-
 	ret = mobiveil_pcie_parse_dt(pcie);
 	if (ret) {
 		dev_err(dev, "Parsing DT failed, ret: %x\n", ret);
@@ -566,17 +569,19 @@ int mobiveil_pcie_host_probe(struct mobiveil_pcie *pcie)
 
 	/* parse the host bridge base addresses from the device tree file */
 	ret = of_pci_get_host_bridge_resources(np, 0, 0xff,
-						    &pcie->resources, &iobase);
+					       &bridge->windows, &iobase);
 	if (ret) {
 		dev_err(dev, "Getting bridge resources failed\n");
 		return ret;
 	}
 
+	pcie->resources = &bridge->windows;
+
 	/*
 	 * configure all inbound and outbound windows and prepare the RC for
 	 * config access
 	 */
-	ret = mobiveil_host_init(pcie);
+	ret = mobiveil_host_init(pcie, false);
 	if (ret) {
 		dev_err(dev, "Failed to initialize host\n");
 		goto error;
@@ -588,12 +593,11 @@ int mobiveil_pcie_host_probe(struct mobiveil_pcie *pcie)
 		goto error;
 	}
 
-	ret = devm_request_pci_bus_resources(dev, &pcie->resources);
+	ret = devm_request_pci_bus_resources(dev, pcie->resources);
 	if (ret)
 		goto error;
 
 	/* Initialize bridge */
-	list_splice_init(&pcie->resources, &bridge->windows);
 	bridge->dev.parent = dev;
 	bridge->sysdata = pcie;
 	bridge->busnr = pcie->rp.root_bus_nr;
@@ -620,6 +624,6 @@ int mobiveil_pcie_host_probe(struct mobiveil_pcie *pcie)
 
 	return 0;
 error:
-	pci_free_resource_list(&pcie->resources);
+	pci_free_resource_list(pcie->resources);
 	return ret;
 }

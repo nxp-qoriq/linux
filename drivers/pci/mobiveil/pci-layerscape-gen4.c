@@ -24,6 +24,9 @@
 
 /* LUT and PF control registers */
 #define PCIE_LUT_OFF			(0x80000)
+#define PCIE_LUT_GCR			(0x28)
+#define PCIE_LUT_GCR_RRE		(0)
+
 #define PCIE_PF_OFF			(0xc0000)
 #define PCIE_PF_INT_STAT		(0x18)
 #define PF_INT_STAT_PABRST		(31)
@@ -188,8 +191,29 @@ static void ls_pcie_g4_reset(struct work_struct *work)
 	ls_pcie_g4_reinit_hw(pcie);
 }
 
+static int ls_pcie_g4_read_other_conf(struct pci_bus *bus, unsigned int devfn,
+				   int where, int size, u32 *val)
+{
+	struct mobiveil_pcie *pci = bus->sysdata;
+	struct ls_pcie_g4 *pcie = to_ls_pcie_g4(pci);
+	int ret;
+
+	if (where == PCI_VENDOR_ID)
+		ls_pcie_g4_lut_writel(pcie, PCIE_LUT_GCR,
+				      0 << PCIE_LUT_GCR_RRE);
+
+	ret = pci_generic_config_read(bus, devfn, where, size, val);
+
+	if (where == PCI_VENDOR_ID)
+		ls_pcie_g4_lut_writel(pcie, PCIE_LUT_GCR,
+				      1 << PCIE_LUT_GCR_RRE);
+
+	return ret;
+}
+
 static struct mobiveil_rp_ops ls_pcie_g4_rp_ops = {
 	.interrupt_init = ls_pcie_g4_interrupt_init,
+	.read_other_conf = ls_pcie_g4_read_other_conf,
 };
 
 static const struct mobiveil_pab_ops ls_pcie_g4_pab_ops = {

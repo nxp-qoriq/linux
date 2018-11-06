@@ -145,6 +145,8 @@ struct mobiveil_msi {			/* MSI information */
 
 struct mobiveil_rp_ops {
 	int (*interrupt_init)(struct mobiveil_pcie *pcie);
+	int (*read_other_conf)(struct pci_bus *bus, unsigned int devfn,
+			       int where, int size, u32 *val);
 };
 
 struct root_port {

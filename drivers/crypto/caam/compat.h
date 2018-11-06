@@ -35,6 +35,7 @@
 #include <crypto/sha.h>
 #include <crypto/md5.h>
 #include <crypto/chacha20.h>
+#include <crypto/poly1305.h>
 #include <crypto/internal/aead.h>
 #include <crypto/authenc.h>
 #include <crypto/akcipher.h>

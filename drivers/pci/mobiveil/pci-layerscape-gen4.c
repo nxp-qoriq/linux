@@ -220,6 +220,18 @@ static const struct mobiveil_pab_ops ls_pcie_g4_pab_ops = {
 	.link_up = ls_pcie_g4_link_up,
 };
 
+static void workaround_tkt381274(struct ls_pcie_g4 *pcie)
+{
+	struct mobiveil_pcie *mv_pci = pcie->pci;
+	u32 val;
+
+	/* Set ACK latency timeout */
+	val = csr_readl(mv_pci, GPEX_ACK_REPLAY_TO);
+	val &= ~(ACK_LAT_TO_VAL_MASK << ACK_LAT_TO_VAL_SHIFT);
+	val |= (4 << ACK_LAT_TO_VAL_SHIFT);
+	csr_writel(mv_pci, val, GPEX_ACK_REPLAY_TO);
+}
+
 static int __init ls_pcie_g4_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -258,6 +270,8 @@ static int __init ls_pcie_g4_probe(struct platform_device *pdev)
 
 	if (!ls_pcie_g4_is_bridge(pcie))
 		return -ENODEV;
+
+	workaround_tkt381274(pcie);
 
 	return 0;
 }

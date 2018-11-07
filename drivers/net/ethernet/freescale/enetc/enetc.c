@@ -967,16 +967,31 @@ static void enetc_clear_cbdr(struct enetc_hw *hw)
 	enetc_wr(hw, ENETC_SICBDRMR, 0);
 }
 
-static int enetc_configure_si(struct enetc_ndev_priv *priv)
+static int enetc_setup_default_rss_table(struct enetc_si *si, int num_groups)
 {
-	struct enetc_si *si = priv->si;
-	struct enetc_hw *hw = &si->hw;
 	int *rss_table;
 	int i;
 
 	rss_table = kmalloc_array(si->num_rss, sizeof(*rss_table), GFP_KERNEL);
 	if (!rss_table)
 		return -ENOMEM;
+
+	/* Set up RSS table defaults */
+	for (i = 0; i < si->num_rss; i++)
+		rss_table[i] = i % num_groups;
+
+	enetc_set_rss_table(si, rss_table, si->num_rss);
+
+	kfree(rss_table);
+
+	return 0;
+}
+
+static int enetc_configure_si(struct enetc_ndev_priv *priv)
+{
+	struct enetc_si *si = priv->si;
+	struct enetc_hw *hw = &si->hw;
+	int err;
 
 	enetc_setup_cbdr(hw, &si->cbd_ring);
 	/* set SI cache attributes */
@@ -987,14 +1002,10 @@ static int enetc_configure_si(struct enetc_ndev_priv *priv)
 	enetc_wr(hw, ENETC_SIMR, ENETC_SIMR_EN);
 
 	if (si->num_rss) {
-		/* Set up RSS table defaults */
-		for (i = 0; i < si->num_rss; i++)
-			rss_table[i] = i % priv->num_rx_rings;
-
-		enetc_set_rss_table(si, rss_table, si->num_rss);
+		err = enetc_setup_default_rss_table(si, priv->num_rx_rings);
+		if (err)
+			return err;
 	}
-
-	kfree(rss_table);
 
 	return 0;
 }

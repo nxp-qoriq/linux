@@ -705,14 +705,17 @@ void enetc_get_si_caps(struct enetc_si *si)
 	val = enetc_rd(hw, ENETC_SICAPR0);
 	si->num_rx_rings = (val >> 16) & 0xff;
 	si->num_tx_rings = val & 0xff;
-	si->num_fs_entries = enetc_rd(hw, ENETC_SIRFSCAPR) & 0x7f;
-	si->num_fs_entries = min(si->num_fs_entries, ENETC_MAX_RFS_SIZE);
-	val = enetc_rd(hw, ENETC_SIRSSCAPR) & 0xf;
-	si->num_rss = BIT(val) * 32;
 
+	val = enetc_rd(hw, ENETC_SIRFSCAPR);
+	si->num_fs_entries = ENETC_SIRFSCAPR_GET_NUM_RFS(val);
+	si->num_fs_entries = min(si->num_fs_entries, ENETC_MAX_RFS_SIZE);
+
+	si->num_rss = 0;
 	val = enetc_rd(hw, ENETC_SIPCAPR0);
-	if (!(val & ENETC_SIPCAPR0_RSS))
-		si->num_rss = 0;
+	if (val & ENETC_SIPCAPR0_RSS) {
+		val = enetc_rd(hw, ENETC_SIRSSCAPR);
+		si->num_rss = ENETC_SIRSSCAPR_GET_NUM_RSS(val);
+	}
 }
 
 static int enetc_dma_alloc_bdr(struct enetc_bdr *r, size_t bd_size)

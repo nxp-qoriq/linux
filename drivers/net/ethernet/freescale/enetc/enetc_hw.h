@@ -95,7 +95,9 @@ static inline u32 enetc_vsi_set_msize(u32 size)
 #define ENETC_SIUEFDCR	0xe28
 
 #define ENETC_SIRFSCAPR	0x1200
+#define ENETC_SIRFSCAPR_GET_NUM_RFS(val) ((val) & 0x7f)
 #define ENETC_SIRSSCAPR	0x1600
+#define ENETC_SIRSSCAPR_GET_NUM_RSS(val) (BIT((val) & 0xf) * 32)
 
 /** SI BDR sub-blocks, n = 0..7 */
 enum enetc_bdr_type {TX, RX};

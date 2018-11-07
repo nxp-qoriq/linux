@@ -302,8 +302,8 @@ static void ether_addr_copy_swap(u8 *dst, const u8 *src)
 {
 	int i;
 
-	for (i = 0; i < 6; i++)
-		dst[i] = src[5 - i];
+	for (i = 0; i < ETH_ALEN; i++)
+		dst[i] = src[ETH_ALEN - i - 1];
 }
 
 static int enetc_set_cls_entry(struct enetc_si *si,
@@ -340,7 +340,7 @@ l4ip4:
 		rfse.dport_m = ntohs(l4ip4_m->pdst);
 		if (l4ip4_m->tos)
 			netdev_warn(si->ndev, "ToS field is not supported and was ignored\n");
-		rfse.ethtype_h = 0x0800; /* IPv4 */
+		rfse.ethtype_h = ETH_P_IP; /* IPv4 */
 		rfse.ethtype_m = 0xffff;
 		break;
 	case IP_USER_FLOW:
@@ -353,7 +353,7 @@ l4ip4:
 		rfse.dip_m[0] = l3ip4_m->ip4dst;
 		if (l3ip4_m->tos)
 			netdev_warn(si->ndev, "ToS field is not supported and was ignored\n");
-		rfse.ethtype_h = 0x0800; /* IPv4 */
+		rfse.ethtype_h = ETH_P_IP; /* IPv4 */
 		rfse.ethtype_m = 0xffff;
 		break;
 	case ETHER_FLOW:

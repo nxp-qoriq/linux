@@ -432,15 +432,16 @@ static void enetc_port_setup_primary_mac_address(struct enetc_si *si)
 	}
 }
 
-static void enetc_port_alloc_rfs(struct enetc_si *si)
+static void enetc_port_assign_rfs_entries(struct enetc_si *si)
 {
 	struct enetc_pf *pf = enetc_si_priv(si);
 	struct enetc_hw *hw = &si->hw;
 	int num_entries, vf_entries, i;
+	u32 val;
 
 	/* split RFS entries between functions */
-	num_entries = enetc_port_rd(hw, ENETC_PRFSCAPR) & 0xf;
-	num_entries = 16 * (1 + num_entries);
+	val = enetc_port_rd(hw, ENETC_PRFSCAPR);
+	num_entries = ENETC_PRFSCAPR_GET_NUM_RFS(val);
 	vf_entries = num_entries / (pf->total_vfs + 1);
 
 	for (i = 0; i < pf->total_vfs; i++)
@@ -552,7 +553,7 @@ static void enetc_configure_port(struct enetc_pf *pf)
 	enetc_set_rss_key(hw, hash_key);
 
 	/* split up RFS entries */
-	enetc_port_alloc_rfs(pf->si);
+	enetc_port_assign_rfs_entries(pf->si);
 
 	/* fix-up primary MAC addresses, if not set already */
 	enetc_port_setup_primary_mac_address(pf->si);

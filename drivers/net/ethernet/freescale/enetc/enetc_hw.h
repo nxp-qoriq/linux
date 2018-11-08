@@ -186,6 +186,7 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PRFSMR		0x1800
 #define ENETC_PRFSMR_RFSE	BIT(31)
 #define ENETC_PRFSCAPR		0x1804
+#define ENETC_PRFSCAPR_GET_NUM_RFS(val)	((((val) & 0xf) + 1) * 16)
 #define ENETC_PSIRFSCFGR(n)	(0x1814 + (n) * 4) /* n = SI index */
 #define ENETC_PFPMR		0x1900
 #define ENETC_PFPMR_PMACE	BIT(1)

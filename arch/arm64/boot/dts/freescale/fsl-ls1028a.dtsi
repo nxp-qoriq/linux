@@ -136,7 +136,7 @@
 	pclk: pclk {
 		compatible = "fixed-clock";
 		#clock-cells = <0>;
-		clock-frequency = <325000000>;
+		clock-frequency = <650000000>;
 		clock-output-names= "pclk";
 	};
 

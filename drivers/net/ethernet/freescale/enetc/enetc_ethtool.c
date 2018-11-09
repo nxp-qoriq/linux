@@ -552,7 +552,7 @@ static int enetc_get_ts_info(struct net_device *ndev,
 		info->phc_index = ENETC_PHC_INDEX_DEFAULT;
 	}
 
-#ifdef CONFIG_ENETC_HW_TIMESTAMPING
+#ifdef CONFIG_FSL_ENETC_HW_TIMESTAMPING
 	info->so_timestamping = SOF_TIMESTAMPING_TX_HARDWARE |
 				SOF_TIMESTAMPING_RX_HARDWARE |
 				SOF_TIMESTAMPING_RAW_HARDWARE;

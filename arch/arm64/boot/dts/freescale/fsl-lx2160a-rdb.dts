@@ -244,6 +244,16 @@
 	};
 };
 
+&emdio2 {
+        inphi_phy: emdio2_phy@0 {
+                compatible = "ethernet-phy-ieee802.3-c45";
+                reg = <0x0>;
+                dev-addr = <0x1e>;
+                phy-connection-type = "xfi";
+                interrupts = <0 9 0x2>, <0 10 0x2>; /* high-to-low edge triggered */
+        };
+};
+
 &dpmac3 {
         phy-handle = <&aquantia_phy3>;
         phy-connection-type = "xgmii";
@@ -252,6 +262,14 @@
 &dpmac4 {
         phy-handle = <&aquantia_phy4>;
         phy-connection-type = "xgmii";
+};
+
+&dpmac5 {
+         phy-handle = <&inphi_phy>;
+};
+
+&dpmac6 {
+         phy-handle = <&inphi_phy>;
 };
 
 &dpmac17 {

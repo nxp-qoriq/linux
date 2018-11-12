@@ -67,6 +67,7 @@ struct dpaa2_qdma_sd_d {
 /* Destination descriptor command write transaction type for RBP=0:
  coherent copy of cacheable memory */
 #define QDMA_DD_CMD_WRTTYPE_COHERENT (0x6 << 28)
+#define LX2160_QDMA_DD_CMD_WRTTYPE_COHERENT (0xb << 28)
 
 #define QDMA_SG_FMT_SDB		0x0 /* single data buffer */
 #define QDMA_SG_FMT_FDS		0x1 /* frame data section */
@@ -180,6 +181,7 @@ struct dpaa2_qdma_engine {
 	struct dma_device	dma_dev;
 	u32			n_chans;
 	struct dpaa2_qdma_chan	chans[NUM_CH];
+	bool			qdma_wrtype_fixup;
 
 	struct dpaa2_qdma_priv *priv;
 };
@@ -214,6 +216,11 @@ struct dpaa2_qdma_priv_per_prio {
 	struct dpaa2_io_notification_ctx nctx;
 
 	struct dpaa2_qdma_priv *priv;
+};
+
+static struct soc_device_attribute soc_fixup_tuning[] = {
+	{ .family = "QorIQ LX2160A"},
+	{ },
 };
 
 /* FD pool size: one FD + 3 Frame list + 2 source/destination descriptor */

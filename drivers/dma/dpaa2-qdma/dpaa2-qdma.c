@@ -32,6 +32,7 @@
 #include <linux/types.h>
 #include <linux/delay.h>
 #include <linux/iommu.h>
+#include <linux/sys_soc.h>
 
 #include "../virt-dma.h"
 
@@ -141,7 +142,8 @@ static void dpaa2_qdma_populate_fd(uint32_t format,
 /* first frame list for descriptor buffer */
 static void dpaa2_qdma_populate_first_framel(
 		struct dpaa2_fl_entry *f_list,
-		struct dpaa2_qdma_comp *dpaa2_comp)
+		struct dpaa2_qdma_comp *dpaa2_comp,
+		bool wrt_changed)
 {
 	struct dpaa2_qdma_sd_d *sdd;
 
@@ -150,7 +152,12 @@ static void dpaa2_qdma_populate_first_framel(
 	/* source and destination descriptor */
 	sdd->cmd = cpu_to_le32(QDMA_SD_CMD_RDTTYPE_COHERENT); /* source descriptor CMD */
 	sdd++;
-	sdd->cmd = cpu_to_le32(QDMA_DD_CMD_WRTTYPE_COHERENT); /* dest descriptor CMD */
+
+	/* dest descriptor CMD */
+	if (wrt_changed)
+		sdd->cmd = cpu_to_le32(LX2160_QDMA_DD_CMD_WRTTYPE_COHERENT);
+	else
+		sdd->cmd = cpu_to_le32(QDMA_DD_CMD_WRTTYPE_COHERENT);
 
 	memset(f_list, 0, sizeof(struct dpaa2_fl_entry));
 	/* first frame list to source descriptor */
@@ -194,11 +201,15 @@ static struct dma_async_tx_descriptor *dpaa2_qdma_prep_memcpy(
 		dma_addr_t src, size_t len, unsigned long flags)
 {
 	struct dpaa2_qdma_chan *dpaa2_chan = to_dpaa2_qdma_chan(chan);
+	struct dpaa2_qdma_engine *dpaa2_qdma;
 	struct dpaa2_qdma_comp *dpaa2_comp;
 	struct dpaa2_fl_entry *f_list;
+	bool	wrt_changed;
 	uint32_t format;
 
+	dpaa2_qdma = dpaa2_chan->qdma;
 	dpaa2_comp = dpaa2_qdma_request_desc(dpaa2_chan);
+	wrt_changed = dpaa2_qdma->qdma_wrtype_fixup;
 
 #ifdef LONG_FORMAT
 	format = QDMA_FD_LONG_FORMAT;
@@ -212,7 +223,7 @@ static struct dma_async_tx_descriptor *dpaa2_qdma_prep_memcpy(
 
 #ifdef LONG_FORMAT
 	/* first frame list for descriptor buffer (logn format) */
-	dpaa2_qdma_populate_first_framel(f_list, dpaa2_comp);
+	dpaa2_qdma_populate_first_framel(f_list, dpaa2_comp, wrt_changed);
 
 	f_list++;
 #endif
@@ -838,6 +849,11 @@ static int dpaa2_qdma_probe(struct fsl_mc_device *dpdmai_dev)
 		dev_err(dev, "QDMA alloc channels faile\n");
 		goto err_reg;
 	}
+
+	if (soc_device_match(soc_fixup_tuning))
+		dpaa2_qdma->qdma_wrtype_fixup = true;
+	else
+		dpaa2_qdma->qdma_wrtype_fixup = false;
 
 	dma_cap_set(DMA_PRIVATE, dpaa2_qdma->dma_dev.cap_mask);
 	dma_cap_set(DMA_SLAVE, dpaa2_qdma->dma_dev.cap_mask);

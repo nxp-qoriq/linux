@@ -612,14 +612,14 @@ static void cpuhp_thread_fun(unsigned int cpu)
 	bool bringup = st->bringup;
 	enum cpuhp_state state;
 
+	if (WARN_ON_ONCE(!st->should_run))
+		return;
+
 	/*
 	 * ACQUIRE for the cpuhp_should_run() load of ->should_run. Ensures
 	 * that if we see ->should_run we also see the rest of the state.
 	 */
 	smp_mb();
-
-	if (WARN_ON_ONCE(!st->should_run))
-		return;
 
 	cpuhp_lock_acquire(bringup);
 
@@ -932,7 +932,8 @@ static int cpuhp_down_callbacks(unsigned int cpu, struct cpuhp_cpu_state *st,
 		ret = cpuhp_invoke_callback(cpu, st->state, false, NULL, NULL);
 		if (ret) {
 			st->target = prev_state;
-			undo_cpu_down(cpu, st);
+			if (st->state < prev_state)
+				undo_cpu_down(cpu, st);
 			break;
 		}
 	}
@@ -985,7 +986,7 @@ static int __ref _cpu_down(unsigned int cpu, int tasks_frozen,
 	 * to do the further cleanups.
 	 */
 	ret = cpuhp_down_callbacks(cpu, st, target);
-	if (ret && st->state > CPUHP_TEARDOWN_CPU && st->state < prev_state) {
+	if (ret && st->state == CPUHP_TEARDOWN_CPU && st->state < prev_state) {
 		cpuhp_reset_state(st, prev_state);
 		__cpuhp_kick_ap(st);
 	}
@@ -2044,6 +2045,12 @@ static void cpuhp_online_cpu_device(unsigned int cpu)
 	kobject_uevent(&dev->kobj, KOBJ_ONLINE);
 }
 
+/*
+ * Architectures that need SMT-specific errata handling during SMT hotplug
+ * should override this.
+ */
+void __weak arch_smt_update(void) { };
+
 static int cpuhp_smt_disable(enum cpuhp_smt_control ctrlval)
 {
 	int cpu, ret = 0;
@@ -2070,8 +2077,10 @@ static int cpuhp_smt_disable(enum cpuhp_smt_control ctrlval)
 		 */
 		cpuhp_offline_cpu_device(cpu);
 	}
-	if (!ret)
+	if (!ret) {
 		cpu_smt_control = ctrlval;
+		arch_smt_update();
+	}
 	cpu_maps_update_done();
 	return ret;
 }
@@ -2082,6 +2091,7 @@ static int cpuhp_smt_enable(void)
 
 	cpu_maps_update_begin();
 	cpu_smt_control = CPU_SMT_ENABLED;
+	arch_smt_update();
 	for_each_present_cpu(cpu) {
 		/* Skip online CPUs and CPUs on offline nodes */
 		if (cpu_online(cpu) || !node_online(cpu_to_node(cpu)))

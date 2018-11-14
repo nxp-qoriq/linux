@@ -479,7 +479,7 @@ static inline int dpaa2_eth_cmp_dpni_ver(struct dpaa2_eth_priv *priv,
 	((priv)->dpni_attrs.fs_entries)
 
 #define dpaa2_eth_queue_count(priv)	\
-	((priv)->dpni_attrs.num_queues)
+	((priv)->num_channels)
 
 #define dpaa2_eth_tc_count(priv)	\
 	((priv)->dpni_attrs.num_tcs)

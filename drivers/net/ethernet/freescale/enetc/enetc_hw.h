@@ -304,12 +304,10 @@ static inline u64 enetc_rd_reg64(void __iomem *reg)
 	return __le64_to_cpu(*(u64 *)reg);
 }
 #endif
-#define enetc_wr_reg64(reg)	iowrite64((val), (reg))
 
 #define enetc_rd(hw, off)		enetc_rd_reg((hw)->reg + (off))
 #define enetc_wr(hw, off, val)		enetc_wr_reg((hw)->reg + (off), val)
 #define enetc_rd64(hw, off)		enetc_rd_reg64((hw)->reg + (off))
-#define enetc_wr64(hw, off, val)	enetc_wr_reg64((hw)->reg + (off), val)
 /* port register accessors - PF only */
 #define enetc_port_rd(hw, off)		enetc_rd_reg((hw)->port + (off))
 #define enetc_port_wr(hw, off, val)	enetc_wr_reg((hw)->port + (off), val)

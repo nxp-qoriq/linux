@@ -657,7 +657,6 @@ static void enetc_pf_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 	ndev->netdev_ops = ndev_ops;
 	enetc_set_ethtool_ops(ndev);
 	ndev->watchdog_timeo = 5 * HZ;
-	ndev->min_mtu = ETH_MIN_MTU;
 	ndev->max_mtu = ENETC_MAX_MTU;
 
 	ndev->hw_features = NETIF_F_RXCSUM | NETIF_F_HW_CSUM |

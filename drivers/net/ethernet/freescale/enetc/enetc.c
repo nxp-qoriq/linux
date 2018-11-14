@@ -105,14 +105,13 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 	struct skb_frag_struct *frag;
 	int len = skb_headlen(skb);
 	union enetc_tx_bd *txbd;
-	int i, start, count = 0;
 	bool do_vlan, do_tstamp;
+	int i, count = 0;
 	unsigned int f;
 	dma_addr_t dma;
 	u8 flags = 0;
 
 	i = tx_ring->next_to_use;
-	start = tx_ring->next_to_use;
 
 	dma = dma_map_single(tx_ring->dev, skb->data, len, DMA_TO_DEVICE);
 	if (unlikely(dma_mapping_error(tx_ring->dev, dma)))

@@ -36,8 +36,9 @@ static irqreturn_t enetc_msix(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-/* max number of fragments + optional extension BD */
-#define ENETC_FREE_TXBD_NEEDED (MAX_SKB_FRAGS + 1)
+/* ENETC overhead: optional extension BD + 1 BD gap */
+#define ENETC_TXBDS_NEEDED(val)	((val) + 2)
+#define ENETC_TXBDS_MAX_NEEDED	ENETC_TXBDS_NEEDED(MAX_SKB_FRAGS + 1)
 
 netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
 {
@@ -47,7 +48,8 @@ netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
 
 	tx_ring = priv->tx_ring[skb->queue_mapping];
 
-	if (enetc_bd_unused(tx_ring) < ENETC_FREE_TXBD_NEEDED) {
+	count = skb_shinfo(skb)->nr_frags + 1; /* fragments + head */
+	if (enetc_bd_unused(tx_ring) < ENETC_TXBDS_NEEDED(count)) {
 		netif_stop_subqueue(ndev, tx_ring->index);
 		return NETDEV_TX_BUSY;
 	}
@@ -58,7 +60,7 @@ netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
 		return NETDEV_TX_OK;
 	}
 
-	if (enetc_bd_unused(tx_ring) < ENETC_FREE_TXBD_NEEDED)
+	if (enetc_bd_unused(tx_ring) < ENETC_TXBDS_MAX_NEEDED)
 		netif_stop_subqueue(ndev, tx_ring->index);
 
 	return NETDEV_TX_OK;
@@ -375,7 +377,7 @@ static int enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
 
 	if (unlikely(tx_frm_cnt && netif_carrier_ok(ndev) &&
 		     __netif_subqueue_stopped(ndev, tx_ring->index) &&
-		     (enetc_bd_unused(tx_ring) >= ENETC_FREE_TXBD_NEEDED))) {
+		     (enetc_bd_unused(tx_ring) >= ENETC_TXBDS_MAX_NEEDED))) {
 		netif_wake_subqueue(ndev, tx_ring->index);
 	}
 

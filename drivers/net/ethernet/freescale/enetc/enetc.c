@@ -1544,7 +1544,8 @@ int enetc_alloc_msix(struct enetc_ndev_priv *priv)
 
 		priv->int_vector[i] = v;
 
-		netif_napi_add(priv->ndev, &v->napi, enetc_poll, 64);
+		netif_napi_add(priv->ndev, &v->napi, enetc_poll,
+			       NAPI_POLL_WEIGHT);
 		v->count_tx_rings = v_tx_rings;
 
 		for (j = 0; j < v_tx_rings; j++) {

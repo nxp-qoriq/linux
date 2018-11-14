@@ -301,7 +301,15 @@ struct enetc_hw {
 /* using this to read out stats on 32b systems */
 static inline u64 enetc_rd_reg64(void __iomem *reg)
 {
-	return __le64_to_cpu(*(u64 *)reg);
+	u32 low, high, tmp;
+
+	do {
+		high = ioread32(reg + 4);
+		low = ioread32(reg);
+		tmp = ioread32(reg + 4);
+	} while (high != tmp);
+
+	return le64_to_cpu((u64)high << 32 | low);
 }
 #endif
 

@@ -323,6 +323,8 @@ struct dpaa2_eth_fq {
 	u16 flowid;
 	u8 tc;
 	int target_cpu;
+	u32 dq_frames;
+	u32 dq_bytes;
 	struct dpaa2_eth_channel *channel;
 	enum dpaa2_eth_fq_type type;
 

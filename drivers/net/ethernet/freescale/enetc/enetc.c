@@ -1167,7 +1167,7 @@ static void enetc_clear_rxbdr(struct enetc_hw *hw, struct enetc_bdr *rx_ring)
 
 static void enetc_clear_txbdr(struct enetc_hw *hw, struct enetc_bdr *tx_ring)
 {
-	int delay = 16, timeout = 1000;
+	int delay = 8, timeout = 100;
 	int idx = tx_ring->index;
 
 	/* disable EN bit on ring */

@@ -478,7 +478,7 @@ static void enetc_get_rx_tstamp(struct net_device *ndev,
 static void enetc_get_offloads(struct enetc_bdr *rx_ring,
 			       union enetc_rx_bd *rxbd, struct sk_buff *skb)
 {
-	// TODO: tstamp, hashing
+	/* TODO: add tstamp, hashing */
 	if (rx_ring->ndev->features & NETIF_F_RXCSUM) {
 		u16 inet_csum = le16_to_cpu(rxbd->r.inet_csum);
 
@@ -594,7 +594,7 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 	}
 
 	rx_ring->next_to_clean = i;
-	// TODO: 64-bit stats
+
 	rx_ring->stats.packets += rx_frm_cnt;
 	rx_ring->stats.bytes += rx_byte_cnt;
 

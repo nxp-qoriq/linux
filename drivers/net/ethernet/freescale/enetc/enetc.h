@@ -45,6 +45,7 @@ struct enetc_ring_stats {
 };
 
 #define ENETC_BDR_DEFAULT_SIZE	1024
+#define ENETC_DEFAULT_TX_WORK	256
 
 struct enetc_bdr {
 	struct device *dev; /* for DMA mapping */

@@ -1708,7 +1708,7 @@ static int call_netdevice_notifiers_mtu(unsigned long val,
 
 	BUILD_BUG_ON(offsetof(struct netdev_notifier_info_ext, info) != 0);
 
-	return call_netdevice_notifiers_info(val, dev, &info.info);
+	return call_netdevice_notifiers_info(val, &info.info);
 }
 
 #ifdef CONFIG_NET_INGRESS

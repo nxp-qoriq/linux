@@ -491,9 +491,9 @@ static void enetc_get_offloads(struct enetc_bdr *rx_ring,
 	/* copy VLAN to skb, if one is extracted, for now we assume it's a
 	 * standard TPID, but HW also supports custom values
 	 */
-	if (rxbd->r.flags & ENETC_RXBD_FLAG_VLAN)
+	if (le16_to_cpu(rxbd->r.flags) & ENETC_RXBD_FLAG_VLAN)
 		__vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q),
-				       rxbd->r.vlan_opt);
+				       le16_to_cpu(rxbd->r.vlan_opt));
 #ifdef CONFIG_FSL_ENETC_HW_TIMESTAMPING
 	enetc_get_rx_tstamp(rx_ring->ndev, rxbd, skb);
 #endif
@@ -622,8 +622,8 @@ static void enetc_reuse_page(struct enetc_bdr *rx_ring,
 	*new = *old;
 }
 
-struct enetc_rx_swbd *enetc_get_rx_buff(struct enetc_bdr *rx_ring, int i,
-					u16 size)
+static struct enetc_rx_swbd *enetc_get_rx_buff(struct enetc_bdr *rx_ring,
+					       int i, u16 size)
 {
 	struct enetc_rx_swbd *rx_swbd = &rx_ring->rx_swbd[i];
 
@@ -769,7 +769,7 @@ static void enetc_free_txbdr(struct enetc_bdr *txr)
 	txr->bd_base = NULL;
 
 	vfree(txr->tx_swbd);
-	txr->tx_swbd = 0;
+	txr->tx_swbd = NULL;
 }
 
 static int enetc_alloc_tx_resources(struct enetc_ndev_priv *priv)

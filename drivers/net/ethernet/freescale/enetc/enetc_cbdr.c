@@ -103,8 +103,8 @@ int enetc_set_mac_flt_entry(struct enetc_si *si, int index,
 
 	upper = *(const u32 *)mac_addr;
 	lower = *(const u16 *)(mac_addr + 4);
-	cbd.addr[0] = upper;
-	cbd.addr[1] = lower;
+	cbd.addr[0] = cpu_to_le32(upper);
+	cbd.addr[1] = cpu_to_le32(lower);
 
 	return enetc_send_cmd(si, &cbd);
 }

@@ -582,7 +582,7 @@ static int enetc_get_ts_info(struct net_device *ndev,
 	return 0;
 }
 
-const struct ethtool_ops enetc_pf_ethtool_ops = {
+static const struct ethtool_ops enetc_pf_ethtool_ops = {
 	.get_regs_len = enetc_get_reglen,
 	.get_regs = enetc_get_regs,
 	.get_sset_count = enetc_get_sset_count,
@@ -600,7 +600,7 @@ const struct ethtool_ops enetc_pf_ethtool_ops = {
 	.set_link_ksettings = phy_ethtool_set_link_ksettings,
 };
 
-const struct ethtool_ops enetc_vf_ethtool_ops = {
+static const struct ethtool_ops enetc_vf_ethtool_ops = {
 	.get_regs_len = enetc_get_reglen,
 	.get_regs = enetc_get_regs,
 	.get_sset_count = enetc_get_sset_count,

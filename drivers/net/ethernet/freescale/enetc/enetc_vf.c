@@ -206,10 +206,6 @@ static int enetc_vf_probe(struct pci_dev *pdev,
 	if (err)
 		goto err_reg_netdev;
 
-	err = enetc_setup_irqs(priv);
-	if (err)
-		goto err_setup_irq;
-
 	netif_carrier_off(ndev);
 
 	netif_info(priv, probe, ndev, "%s v%s\n",
@@ -217,8 +213,6 @@ static int enetc_vf_probe(struct pci_dev *pdev,
 
 	return 0;
 
-err_setup_irq:
-	unregister_netdev(ndev);
 err_reg_netdev:
 	enetc_free_msix(priv);
 err_alloc_msix:
@@ -242,7 +236,6 @@ static void enetc_vf_remove(struct pci_dev *pdev)
 		   enetc_drv_name, enetc_drv_ver);
 	unregister_netdev(si->ndev);
 
-	enetc_free_irqs(priv);
 	enetc_free_msix(priv);
 
 	enetc_free_si_resources(priv);

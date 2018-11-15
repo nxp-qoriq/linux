@@ -1199,7 +1199,7 @@ static void enetc_clear_bdrs(struct enetc_ndev_priv *priv)
 	udelay(1);
 }
 
-int enetc_setup_irqs(struct enetc_ndev_priv *priv)
+static int enetc_setup_irqs(struct enetc_ndev_priv *priv)
 {
 	struct pci_dev *pdev = priv->si->pdev;
 	int i, j, err;
@@ -1239,7 +1239,7 @@ irq_err:
 	return err;
 }
 
-void enetc_free_irqs(struct enetc_ndev_priv *priv)
+static void enetc_free_irqs(struct enetc_ndev_priv *priv)
 {
 	struct pci_dev *pdev = priv->si->pdev;
 	int i;
@@ -1283,23 +1283,38 @@ static void adjust_link(struct net_device *ndev)
 	phy_print_status(phydev);
 }
 
+static int enetc_phy_connect(struct net_device *ndev)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct phy_device *phydev;
+
+	if (!priv->phy_node)
+		return 0; /* phy-less mode */
+
+	phydev = of_phy_connect(ndev, priv->phy_node, &adjust_link,
+				0, priv->if_mode);
+	if (!phydev) {
+		dev_err(&ndev->dev, "could not attach to PHY\n");
+		return -ENODEV;
+	}
+
+	phy_attached_info(phydev);
+
+	return 0;
+}
+
 int enetc_open(struct net_device *ndev)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	int i, err;
 
-	if (priv->phy_node) {
-		struct phy_device *phydev;
+	err = enetc_setup_irqs(priv);
+	if (err)
+		return err;
 
-		phydev = of_phy_connect(ndev, priv->phy_node, &adjust_link,
-					0, priv->if_mode);
-		if (!phydev) {
-			dev_err(&ndev->dev, "could not attach to PHY\n");
-			return -ENODEV;
-		}
-
-		phy_attached_info(phydev);
-	}
+	err = enetc_phy_connect(ndev);
+	if (err)
+		goto err_phy_connect;
 
 	err = enetc_alloc_tx_resources(priv);
 	if (err)
@@ -1338,6 +1353,10 @@ err_set_queues:
 err_alloc_rx:
 	enetc_free_tx_resources(priv);
 err_alloc_tx:
+	if (ndev->phydev)
+		phy_disconnect(ndev->phydev);
+err_phy_connect:
+	enetc_free_irqs(priv);
 
 	return err;
 }
@@ -1367,6 +1386,7 @@ int enetc_close(struct net_device *ndev)
 	enetc_free_rxtx_rings(priv);
 	enetc_free_rx_resources(priv);
 	enetc_free_tx_resources(priv);
+	enetc_free_irqs(priv);
 
 	return 0;
 }

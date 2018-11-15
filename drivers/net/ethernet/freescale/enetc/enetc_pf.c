@@ -729,6 +729,16 @@ static int enetc_of_get_phy(struct enetc_ndev_priv *priv)
 	return 0;
 }
 
+static void enetc_of_put_phy(struct enetc_ndev_priv *priv)
+{
+	struct device_node *np = priv->dev->of_node;
+
+	if (np && of_phy_is_fixed_link(np))
+		of_phy_deregister_fixed_link(np);
+	if (priv->phy_node)
+		of_node_put(priv->phy_node);
+}
+
 static int enetc_pf_probe(struct pci_dev *pdev,
 			  const struct pci_device_id *ent)
 {
@@ -789,30 +799,25 @@ static int enetc_pf_probe(struct pci_dev *pdev,
 		goto err_alloc_msix;
 	}
 
-	err = register_netdev(ndev);
-	if (err)
-		goto err_reg_netdev;
-
-	enetc_tsn_pf_init(ndev, pdev);
-
-	err = enetc_setup_irqs(priv);
-	if (err)
-		goto err_setup_irq;
-
 	err = enetc_of_get_phy(priv);
 	if (err)
 		dev_warn(&pdev->dev, "Fallback to PHY-less operation\n");
+
+	err = register_netdev(ndev);
+	if (err)
+		goto err_reg_netdev;
 
 	netif_carrier_off(ndev);
 
 	netif_info(priv, probe, ndev, "%s v%s\n",
 		   enetc_drv_name, enetc_drv_ver);
 
+	enetc_tsn_pf_init(ndev, pdev);
+
 	return 0;
 
-err_setup_irq:
-	unregister_netdev(ndev);
 err_reg_netdev:
+	enetc_of_put_phy(priv);
 	enetc_free_msix(priv);
 err_alloc_msix:
 	enetc_free_si_resources(priv);
@@ -843,12 +848,8 @@ static void enetc_pf_remove(struct pci_dev *pdev)
 
 	unregister_netdev(si->ndev);
 
-	if (pdev->dev.of_node && of_phy_is_fixed_link(pdev->dev.of_node))
-		of_phy_deregister_fixed_link(pdev->dev.of_node);
-	if (priv->phy_node)
-		of_node_put(priv->phy_node);
+	enetc_of_put_phy(priv);
 
-	enetc_free_irqs(priv);
 	enetc_free_msix(priv);
 
 	enetc_free_si_resources(priv);

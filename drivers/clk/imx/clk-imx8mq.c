@@ -217,7 +217,7 @@ static const char * const imx8mq_pwm4_sels[] = {"osc_25m", "sys2_pll_100m", "sys
 					 "sys3_pll_out", "clk_ext2", "sys1_pll_80m", "video_pll1_out", };
 
 static const char * const imx8mq_gpt1_sels[] = {"osc_25m", "sys2_pll_100m", "sys1_pll_400m", "sys1_pll_40m",
-					 "sys1_pll_80m", "audio_pll1_out", "clk_ext1", };
+					 "video_pll1_out", "sys1_pll_80m", "audio_pll1_out", "clk_ext1", };
 
 static const char * const imx8mq_wdog_sels[] = {"osc_25m", "sys1_pll_133m", "sys1_pll_160m", "vpu_pll_out",
 					 "sys2_pll_125m", "sys3_pll_out", "sys1_pll_80m", "sys2_pll_166m", };

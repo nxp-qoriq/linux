@@ -549,6 +549,10 @@ static int ocelot_port_xmit(struct sk_buff *skb, struct net_device *dev)
 	u8 grp = 0; /* Send everything on CPU group 0 */
 	unsigned int i, count, last;
 
+	/* defer frame xmit to cpu inject handler */
+	if (port->cpu_inj_handler)
+		return port->cpu_inj_handler(skb, port);
+
 	val = ocelot_read(ocelot, QS_INJ_STATUS);
 	if (!(val & QS_INJ_STATUS_FIFO_RDY(BIT(grp))) ||
 	    (val & QS_INJ_STATUS_WMARK_REACHED(BIT(grp))))
@@ -1630,6 +1634,7 @@ int ocelot_probe_port(struct ocelot *ocelot, u8 port,
 	dev->dev_addr[ETH_ALEN - 1] += port;
 	ocelot_mact_learn(ocelot, PGID_CPU, dev->dev_addr, ocelot_port->pvid,
 			  ENTRYTYPE_LOCKED);
+	dev->needed_headroom = XFH_LONG_PREFIX_LEN;
 
 	err = register_netdev(dev);
 	if (err) {
@@ -1651,7 +1656,7 @@ EXPORT_SYMBOL(ocelot_probe_port);
 int ocelot_init(struct ocelot *ocelot)
 {
 	u32 port;
-	int i, cpu = ocelot->num_phys_ports;
+	int i, cpu = ocelot->cpu_port_id;
 	char queue_name[32];
 
 	ocelot->lags = devm_kcalloc(ocelot->dev, ocelot->num_phys_ports,

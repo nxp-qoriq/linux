@@ -38,6 +38,9 @@
 
 #define IFH_LEN 4
 
+/* Length for long prefix header used for frame injection/extraction */
+#define XFH_LONG_PREFIX_LEN 32
+
 struct frame_info {
 	u32 len;
 	u16 port;
@@ -491,6 +494,7 @@ struct ocelot {
 
 	u8 num_phys_ports;
 	u8 num_cpu_ports;
+	u8 cpu_port_id;
 	struct ocelot_port **ports;
 
 	u32 *lags;
@@ -529,6 +533,10 @@ struct ocelot_port {
 	u8 vlan_aware;
 
 	u64 *stats;
+
+	/* cpu frame injection handler */
+	netdev_tx_t (*cpu_inj_handler)(struct sk_buff *skb, struct ocelot_port *port);
+	void *cpu_inj_handler_data;
 };
 
 u32 __ocelot_read_ix(struct ocelot *ocelot, u32 reg, u32 offset);

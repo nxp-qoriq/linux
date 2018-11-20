@@ -64,14 +64,14 @@
 	sys_mclk: clock-mclk {
 		compatible = "fixed-clock";
 		#clock-cells = <0>;
-		clock-frequency = <24576000>;
+		clock-frequency = <25000000>;
 	};
 
-	reg_3p3v: regulator-3p3v {
+	reg_1p8v: regulator-1p8v {
 		compatible = "regulator-fixed";
-		regulator-name = "3P3V";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
+		regulator-name = "1P8V";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
 		regulator-always-on;
 	};
 
@@ -91,7 +91,7 @@
 			"Speaker Ext", "LINE_OUT";
 
 		simple-audio-card,cpu {
-			sound-dai = <&sai2>;
+			sound-dai = <&sai4>;
 			frame-master;
 			bitclock-master;
 		};
@@ -100,7 +100,7 @@
 			sound-dai = <&codec>;
 			frame-master;
 			bitclock-master;
-			system-clock-frequency = <24576000>;
+			system-clock-frequency = <25000000>;
 		};
 	};
 };
@@ -122,8 +122,8 @@
 				#sound-dai-cells = <0>;
 				compatible = "fsl,sgtl5000";
 				reg = <0xa>;
-				VDDA-supply = <&reg_3p3v>;
-				VDDIO-supply = <&reg_3p3v>;
+				VDDA-supply = <&reg_1p8v>;
+				VDDIO-supply = <&reg_1p8v>;
 				clocks = <&sys_mclk>;
 			};
 		};

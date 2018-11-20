@@ -678,8 +678,8 @@
 			dma-channels = <32>;
 			big-endian;
 			clock-names = "dmamux0", "dmamux1";
-			clocks = <&clockgen 4 3>,
-				 <&clockgen 4 3>;
+			clocks = <&clockgen 4 1>,
+				 <&clockgen 4 1>;
 		};
 
 		sai1: sai@f100000 {
@@ -687,8 +687,8 @@
 			compatible = "fsl,vf610-sai";
 			reg = <0x0 0xf100000 0x0 0x10000>;
 			interrupts = <0 82 0x4>;
-			clocks = <&clockgen 4 3>, <&clockgen 4 3>,
-				 <&clockgen 4 3>, <&clockgen 4 3>;
+			clocks = <&clockgen 4 1>, <&clockgen 4 1>,
+				 <&clockgen 4 1>, <&clockgen 4 1>;
 			clock-names = "bus", "mclk1", "mclk2", "mclk3";
 			dma-names = "tx", "rx";
 			dmas = <&edma0 1 4>,
@@ -701,8 +701,8 @@
 			compatible = "fsl,vf610-sai";
 			reg = <0x0 0xf110000 0x0 0x10000>;
 			interrupts = <0 82 0x4>;
-			clocks = <&clockgen 4 3>, <&clockgen 4 3>,
-				 <&clockgen 4 3>, <&clockgen 4 3>;
+			clocks = <&clockgen 4 1>, <&clockgen 4 1>,
+				 <&clockgen 4 1>, <&clockgen 4 1>;
 			clock-names = "bus", "mclk1", "mclk2", "mclk3";
 			dma-names = "tx", "rx";
 			dmas = <&edma0 1 6>,
@@ -715,8 +715,8 @@
 			compatible = "fsl,vf610-sai";
 			reg = <0x0 0xf130000 0x0 0x10000>;
 			interrupts = <0 83 0x4>;
-			clocks = <&clockgen 4 3>, <&clockgen 4 3>,
-				 <&clockgen 4 3>, <&clockgen 4 3>;
+			clocks = <&clockgen 4 1>, <&clockgen 4 1>,
+				 <&clockgen 4 1>, <&clockgen 4 1>;
 			clock-names = "bus", "mclk1", "mclk2", "mclk3";
 			dma-names = "tx", "rx";
 			dmas = <&edma0 1 10>,

@@ -632,12 +632,18 @@
 			};
 			enetc_port2: pci@0,2 {
 				reg = <0x000200 0 0 0 0>;
+				phy-connection-type = "internal";
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
 			};
 			mdio0: pci@0,3 {
 				reg = <0x000300 0 0 0 0>;
 				device_type = "mdio";
 				#address-cells = <1>;
 				#size-cells = <0>;
+				little-endian;
 			};
 			pci@0,4 {
 				reg = <0x000400 0 0 0 0>;
@@ -680,6 +686,11 @@
 			};
 			enetc_port3: pci@0,6 {
 				reg = <0x000600 0 0 0 0>;
+				phy-connection-type = "internal";
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
 			};
 		};
 

@@ -174,6 +174,7 @@ static inline bool enetc_si_is_pf(struct enetc_si *si)
 }
 
 #define ENETC_MAX_NUM_TXQS	8
+#define ENETC_INT_NAME_MAX	(IFNAMSIZ + 8)
 
 struct enetc_int_vector {
 	void __iomem *rbier;
@@ -181,7 +182,7 @@ struct enetc_int_vector {
 	unsigned long tx_rings_map;
 	int count_tx_rings;
 	struct napi_struct napi;
-	char name[IFNAMSIZ + 8];
+	char name[ENETC_INT_NAME_MAX];
 
 	struct enetc_bdr rx_ring ____cacheline_aligned_in_smp;
 	struct enetc_bdr tx_ring[0];

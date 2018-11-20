@@ -1211,7 +1211,8 @@ static int enetc_setup_irqs(struct enetc_ndev_priv *priv)
 		int entry = ENETC_BDR_INT_BASE_IDX + i;
 		struct enetc_hw *hw = &priv->si->hw;
 
-		sprintf(v->name, "%s-rxtx%d", priv->ndev->name, i);
+		snprintf(v->name, sizeof(v->name), "%s-rxtx%d",
+			 priv->ndev->name, i);
 		err = request_irq(irq, enetc_msix, 0, v->name, v);
 		if (err) {
 			dev_err(priv->dev, "request_irq() failed!\n");

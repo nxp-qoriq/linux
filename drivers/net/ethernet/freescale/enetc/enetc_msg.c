@@ -110,7 +110,8 @@ int enetc_msg_psi_init(struct enetc_pf *pf)
 	int vector, i, err;
 
 	/* register message passing interrupt handler */
-	sprintf(pf->msg_int_name, "%s-vfmsg", si->ndev->name);
+	snprintf(pf->msg_int_name, sizeof(pf->msg_int_name), "%s-vfmsg",
+		 si->ndev->name);
 	vector = pci_irq_vector(si->pdev, ENETC_SI_INT_IDX);
 	err = request_irq(vector, enetc_msg_psi_msix, 0, pf->msg_int_name, si);
 	if (err) {

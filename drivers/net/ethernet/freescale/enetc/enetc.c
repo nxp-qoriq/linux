@@ -169,8 +169,8 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 
 		if (do_vlan) {
 			temp_bd.ext.vid = cpu_to_le16(skb_vlan_tag_get(skb));
-			temp_bd.ext.tpid = 0;
-			e_flags |= 1; /* < do VLAN */
+			temp_bd.ext.tpid = 0; /* < C-TAG */
+			e_flags |= ENETC_TXBD_E_FLAGS_VLAN_INS;
 		}
 
 		if (do_tstamp) {

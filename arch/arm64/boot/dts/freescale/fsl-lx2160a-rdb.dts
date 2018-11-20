@@ -170,3 +170,19 @@
 	phy-handle = <&rgmii_phy2>;
 	phy-connection-type = "rgmii-id";
 };
+
+&sata0 {
+	status = "okay";
+};
+
+&sata1 {
+	status = "okay";
+};
+
+&sata2 {
+	status = "okay";
+};
+
+&sata3 {
+	status = "okay";
+};

@@ -220,13 +220,15 @@ static void enetc_get_strings(struct net_device *ndev, u32 stringset, u8 *data)
 		}
 		for (i = 0; i < priv->num_tx_rings; i++) {
 			for (j = 0; j < ARRAY_SIZE(tx_ring_stats); j++) {
-				sprintf(p, tx_ring_stats[j], i);
+				snprintf(p, ETH_GSTRING_LEN, tx_ring_stats[j],
+					 i);
 				p += ETH_GSTRING_LEN;
 			}
 		}
 		for (i = 0; i < priv->num_rx_rings; i++) {
 			for (j = 0; j < ARRAY_SIZE(rx_ring_stats); j++) {
-				sprintf(p, rx_ring_stats[j], i);
+				snprintf(p, ETH_GSTRING_LEN, rx_ring_stats[j],
+					 i);
 				p += ETH_GSTRING_LEN;
 			}
 		}

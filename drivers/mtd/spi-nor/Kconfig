@@ -86,6 +86,16 @@ config SPI_NXP_SPIFI
 	  Flash. Enable this option if you have a device with a SPIFI
 	  controller and want to access the Flash as a mtd device.
 
+config	SPI_NXP_FLEXSPI
+	 tristate "NXP Flex SPI controller"
+	 help
+	   This enables support for the Flex SPI controller in master mode.
+	   Up to four slave devices can be connected on two buses with two
+	   chipselects each.
+	   This controller does not support generic SPI messages and only
+	   supports the high-level SPI memory interface using SPI-NOR
+	   framework.
+
 config SPI_INTEL_SPI
 	tristate
 

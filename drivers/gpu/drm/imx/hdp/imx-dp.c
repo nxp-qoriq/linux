@@ -447,6 +447,21 @@ int dp_get_hpd_state(state_struct *state, u8 *hpd)
 	return ret;
 }
 
+void dp_phy_pix_engine_reset_t28hpc(state_struct *state)
+{
+	GENERAL_Read_Register_response regresp;
+
+	CDN_API_General_Read_Register_blocking(state, ADDR_SOURCE_CAR +
+					       (SOURCE_HDTX_CAR << 2),
+					       &regresp);
+	CDN_API_General_Write_Register_blocking(state, ADDR_SOURCE_CAR +
+						(SOURCE_HDTX_CAR << 2),
+						regresp.val & 0xFD);
+	CDN_API_General_Write_Register_blocking(state, ADDR_SOURCE_CAR +
+						(SOURCE_HDTX_CAR << 2),
+						regresp.val);
+}
+
 int dp_phy_init_t28hpc(state_struct *state,
 		       struct drm_display_mode *mode,
 		       int format,
@@ -459,6 +474,9 @@ int dp_phy_init_t28hpc(state_struct *state,
 
 	/* reset phy */
 	imx_hdp_call(hdp, phy_reset, 0);
+
+	dp_phy_pix_engine_reset_t28hpc(state);
+	DRM_INFO("pixel engine reset\n");
 
 	if (hdp->is_edp) {
 		max_link_rate = hdp->edp_link_rate;

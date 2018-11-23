@@ -113,7 +113,7 @@
 
 &dspi0 {
 	bus-num = <0>;
-	status = "okay";
+	status = "disabled";
 
 	flash@0 {
 		#address-cells = <1>;

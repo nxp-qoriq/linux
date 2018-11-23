@@ -52,9 +52,6 @@
 	model = "Layerscape 1028A software Simulator model";
 	compatible = "fsl,ls1028a-simu", "fsl,ls1028a";
 
-	aliases {
-		crypto = &crypto;
-	};
 };
 
 &dp0 {

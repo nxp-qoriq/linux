@@ -2148,10 +2148,12 @@ int sdhci_execute_tuning(struct mmc_host *mmc, u32 opcode)
 	if (tuning_loop_counter < 0) {
 		ctrl &= ~SDHCI_CTRL_TUNED_CLK;
 		sdhci_writew(host, ctrl, SDHCI_HOST_CONTROL2);
+		err = -ETIMEDOUT;
+		goto out;
 	}
 	if (!(ctrl & SDHCI_CTRL_TUNED_CLK)) {
 		pr_info(DRIVER_NAME ": Tuning procedure failed, falling back to fixed sampling clock\n");
-		err = -EIO;
+		err = -EAGAIN;
 	}
 
 out:
@@ -2165,6 +2167,7 @@ out:
 		 */
 		err = 0;
 	}
+	host->tuning_err = err;
 
 	host->mmc->retune_period = err ? 0 : tuning_count;
 

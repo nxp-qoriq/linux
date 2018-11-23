@@ -153,54 +153,7 @@
 			#thermal-sensor-cells = <1>;
 		};
 
-		thermal-zones {
-			cpu_thermal: cpu-thermal {
-				polling-delay-passive = <1000>;
-				polling-delay = <5000>;
-
-				thermal-sensors = <&tmu 4>;
-
-				trips {
-					cpu_alert: cpu-alert {
-						temperature = <75000>;
-						hysteresis = <2000>;
-						type = "passive";
-					};
-					cpu_crit: cpu-crit {
-						temperature = <85000>;
-						hysteresis = <2000>;
-						type = "critical";
-					};
-				};
-
-				cooling-maps {
-					map0 {
-						trip = <&cpu_alert>;
-						cooling-device =
-							<&cpu0 THERMAL_NO_LIMIT
-							THERMAL_NO_LIMIT>;
-					};
-					map1 {
-						trip = <&cpu_alert>;
-						cooling-device =
-							<&cpu2 THERMAL_NO_LIMIT
-							THERMAL_NO_LIMIT>;
-					};
-					map2 {
-						trip = <&cpu_alert>;
-						cooling-device =
-							<&cpu4 THERMAL_NO_LIMIT
-							THERMAL_NO_LIMIT>;
-					};
-					map3 {
-						trip = <&cpu_alert>;
-						cooling-device =
-							<&cpu6 THERMAL_NO_LIMIT
-							THERMAL_NO_LIMIT>;
-					};
-				};
-			};
-		};
+		#include "fsl-tmu.dtsi"
 
 		serial0: serial@21c0500 {
 			compatible = "fsl,ns16550", "ns16550a";
@@ -655,7 +608,7 @@
 			interrupts = <0 34 0x4>; /* Level high type */
 			clock-names = "i2c";
 			clocks = <&clockgen 4 1>;
-			fsl-scl-gpio = <&gpio3 10 0>;
+			scl-gpios = <&gpio3 10 0>;
 		};
 
 		i2c1: i2c@2010000 {
@@ -882,5 +835,38 @@
 			compatible = "linaro,optee-tz";
 			method = "smc";
 		};
+	};
+};
+
+#include "fsl-tmu-map1.dtsi"
+#include "fsl-tmu-map2.dtsi"
+#include "fsl-tmu-map3.dtsi"
+&thermal_zones {
+	thermal-zone1 {
+		status = "okay";
+	};
+
+	thermal-zone2{
+		status = "okay";
+	};
+
+	thermal-zone3{
+		status = "okay";
+	};
+
+	thermal-zone4{
+		status = "okay";
+	};
+
+	thermal-zone5{
+		status = "okay";
+	};
+
+	thermal-zone6{
+		status = "okay";
+	};
+
+	thermal-zone7 {
+		status = "okay";
 	};
 };

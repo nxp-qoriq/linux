@@ -1,34 +1,9 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
 /* Copyright 2014-2016 Freescale Semiconductor Inc.
  * Copyright 2016-2017 NXP
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *     * Redistributions of source code must retain the above copyright
- *	 notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above copyright
- *	 notice, this list of conditions and the following disclaimer in the
- *	 documentation and/or other materials provided with the distribution.
- *     * Neither the name of Freescale Semiconductor nor the
- *	 names of its contributors may be used to endorse or promote products
- *	 derived from this software without specific prior written permission.
- *
- *
- * ALTERNATIVELY, this software may be distributed under the terms of the
- * GNU General Public License ("GPL") as published by the Free Software
- * Foundation, either version 2 of that License or (at your option) any
- * later version.
- *
- * THIS SOFTWARE IS PROVIDED BY Freescale Semiconductor ``AS IS'' AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL Freescale Semiconductor BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
+#include <linux/net_tstamp.h>
 
 #include "dpni.h"	/* DPNI_LINK_OPT_* */
 #include "dpaa2-eth.h"
@@ -52,6 +27,10 @@ static char dpaa2_ethtool_stats[][ETH_GSTRING_LEN] = {
 	"[hw] rx nobuffer discards",
 	"[hw] tx discarded frames",
 	"[hw] tx confirmed frames",
+	"[hw] tx dequeued bytes",
+	"[hw] tx dequeued frames",
+	"[hw] tx rejected bytes",
+	"[hw] tx rejected frames",
 };
 
 #define DPAA2_ETH_NUM_STATS	ARRAY_SIZE(dpaa2_ethtool_stats)
@@ -71,14 +50,12 @@ static char dpaa2_ethtool_extras[][ETH_GSTRING_LEN] = {
 	"[drv] channel pull errors",
 	"[drv] cdan",
 	"[drv] tx congestion state",
-#ifdef CONFIG_FSL_QBMAN_DEBUG
 	/* FQ stats */
 	"rx pending frames",
 	"rx pending bytes",
 	"tx conf pending frames",
 	"tx conf pending bytes",
 	"buffer count"
-#endif
 };
 
 #define DPAA2_ETH_NUM_EXTRA_STATS	ARRAY_SIZE(dpaa2_ethtool_extras)
@@ -89,14 +66,50 @@ static void dpaa2_eth_get_drvinfo(struct net_device *net_dev,
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 
 	strlcpy(drvinfo->driver, KBUILD_MODNAME, sizeof(drvinfo->driver));
-	strlcpy(drvinfo->version, dpaa2_eth_drv_version,
-		sizeof(drvinfo->version));
 
 	snprintf(drvinfo->fw_version, sizeof(drvinfo->fw_version),
 		 "%u.%u", priv->dpni_ver_major, priv->dpni_ver_minor);
 
 	strlcpy(drvinfo->bus_info, dev_name(net_dev->dev.parent->parent),
 		sizeof(drvinfo->bus_info));
+}
+
+#define DPNI_LINK_AUTONEG_VER_MAJOR		7
+#define DPNI_LINK_AUTONEG_VER_MINOR		8
+
+struct dpaa2_eth_link_mode_map {
+	u64 dpni_lm;
+	u64 ethtool_lm;
+};
+
+static const struct dpaa2_eth_link_mode_map dpaa2_eth_lm_map[] = {
+	{DPNI_ADVERTISED_10BASET_FULL, ETHTOOL_LINK_MODE_10baseT_Full_BIT},
+	{DPNI_ADVERTISED_100BASET_FULL, ETHTOOL_LINK_MODE_100baseT_Full_BIT},
+	{DPNI_ADVERTISED_1000BASET_FULL, ETHTOOL_LINK_MODE_1000baseT_Full_BIT},
+	{DPNI_ADVERTISED_10000BASET_FULL, ETHTOOL_LINK_MODE_10000baseT_Full_BIT},
+	{DPNI_ADVERTISED_2500BASEX_FULL, ETHTOOL_LINK_MODE_2500baseX_Full_BIT},
+	{DPNI_ADVERTISED_AUTONEG, ETHTOOL_LINK_MODE_Autoneg_BIT},
+};
+
+static void link_mode_dpni2ethtool(u64 dpni_lm, unsigned long *ethtool_lm)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(dpaa2_eth_lm_map); i++) {
+		if (dpni_lm & dpaa2_eth_lm_map[i].dpni_lm)
+			__set_bit(dpaa2_eth_lm_map[i].ethtool_lm, ethtool_lm);
+	}
+}
+
+static void link_mode_ethtool2dpni(const unsigned long *ethtool_lm,
+				   u64 *dpni_lm)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(dpaa2_eth_lm_map); i++) {
+		if (test_bit(dpaa2_eth_lm_map[i].ethtool_lm, ethtool_lm))
+			*dpni_lm |= dpaa2_eth_lm_map[i].dpni_lm;
+	}
 }
 
 static int
@@ -107,17 +120,27 @@ dpaa2_eth_get_link_ksettings(struct net_device *net_dev,
 	int err = 0;
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 
-	err = dpni_get_link_state(priv->mc_io, 0, priv->mc_token, &state);
-	if (err) {
-		netdev_err(net_dev, "ERROR %d getting link state\n", err);
-		goto out;
+	if (dpaa2_eth_cmp_dpni_ver(priv, DPNI_LINK_AUTONEG_VER_MAJOR,
+				   DPNI_LINK_AUTONEG_VER_MINOR) < 0) {
+		err = dpni_get_link_state(priv->mc_io, 0, priv->mc_token,
+					  &state);
+		if (err) {
+			netdev_err(net_dev, "dpni_get_link_state failed\n");
+			goto out;
+		}
+	} else {
+		err = dpni_get_link_state_v2(priv->mc_io, 0, priv->mc_token,
+					     &state);
+		if (err) {
+			netdev_err(net_dev, "dpni_get_link_state_v2 failed\n");
+			goto out;
+		}
+		link_mode_dpni2ethtool(state.supported,
+				       link_settings->link_modes.supported);
+		link_mode_dpni2ethtool(state.advertising,
+				       link_settings->link_modes.advertising);
 	}
 
-	/* At the moment, we have no way of interrogating the DPMAC
-	 * from the DPNI side - and for that matter there may exist
-	 * no DPMAC at all. So for now we just don't report anything
-	 * beyond the DPNI attributes.
-	 */
 	if (state.options & DPNI_LINK_OPT_AUTONEG)
 		link_settings->base.autoneg = AUTONEG_ENABLE;
 	if (!(state.options & DPNI_LINK_OPT_HALF_DUPLEX))
@@ -169,12 +192,16 @@ dpaa2_eth_set_link_ksettings(struct net_device *net_dev,
 	else
 		cfg.options &= ~DPNI_LINK_OPT_HALF_DUPLEX;
 
-	err = dpni_set_link_cfg(priv->mc_io, 0, priv->mc_token, &cfg);
+	if (dpaa2_eth_cmp_dpni_ver(priv, DPNI_LINK_AUTONEG_VER_MAJOR,
+				   DPNI_LINK_AUTONEG_VER_MINOR)) {
+		err = dpni_set_link_cfg(priv->mc_io, 0, priv->mc_token, &cfg);
+	} else {
+		link_mode_ethtool2dpni(link_settings->link_modes.advertising,
+				       &cfg.advertising);
+		dpni_set_link_cfg_v2(priv->mc_io, 0, priv->mc_token, &cfg);
+	}
 	if (err)
-		/* ethtool will be loud enough if we return an error; no point
-		 * in putting our own error message on the console by default
-		 */
-		netdev_dbg(net_dev, "ERROR %d setting link cfg\n", err);
+		netdev_err(net_dev, "dpni_set_link_cfg failed");
 
 out:
 	return err;
@@ -294,13 +321,10 @@ static void dpaa2_eth_get_ethtool_stats(struct net_device *net_dev,
 	int j, k, err;
 	int num_cnt;
 	union dpni_statistics dpni_stats;
-
-#ifdef CONFIG_FSL_QBMAN_DEBUG
 	u32 fcnt, bcnt;
 	u32 fcnt_rx_total = 0, fcnt_tx_total = 0;
 	u32 bcnt_rx_total = 0, bcnt_tx_total = 0;
 	u32 buf_cnt;
-#endif
 	u64 cdan = 0;
 	u64 portal_busy = 0, pull_err = 0;
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
@@ -311,7 +335,7 @@ static void dpaa2_eth_get_ethtool_stats(struct net_device *net_dev,
 	       sizeof(u64) * (DPAA2_ETH_NUM_STATS + DPAA2_ETH_NUM_EXTRA_STATS));
 
 	/* Print standard counters, from DPNI statistics */
-	for (j = 0; j <= 2; j++) {
+	for (j = 0; j <= 3; j++) {
 		err = dpni_get_statistics(priv->mc_io, 0, priv->mc_token,
 					  j, 0, &dpni_stats);
 		if (err != 0)
@@ -325,6 +349,9 @@ static void dpaa2_eth_get_ethtool_stats(struct net_device *net_dev,
 			break;
 		case 2:
 			num_cnt = sizeof(dpni_stats.page_2) / sizeof(u64);
+			break;
+		case 3:
+			num_cnt = sizeof(dpni_stats.page_3) / sizeof(u64);
 			break;
 		}
 		for (k = 0; k < num_cnt; k++)
@@ -352,7 +379,6 @@ static void dpaa2_eth_get_ethtool_stats(struct net_device *net_dev,
 
 	*(data + i++) = dpaa2_cscn_state_congested(priv->cscn_mem);
 
-#ifdef CONFIG_FSL_QBMAN_DEBUG
 	for (j = 0; j < priv->num_fqs; j++) {
 		/* Print FQ instantaneous counts */
 		err = dpaa2_io_query_fq_count(NULL, priv->fq[j].fqid,
@@ -382,279 +408,221 @@ static void dpaa2_eth_get_ethtool_stats(struct net_device *net_dev,
 		return;
 	}
 	*(data + i++) = buf_cnt;
-#endif
 }
 
-static int cls_key_off(struct dpaa2_eth_priv *priv, int prot, int field)
+static int prep_eth_rule(struct ethhdr *eth_value, struct ethhdr *eth_mask,
+			 void *key, void *mask, u64 *fields)
 {
-	int i, off = 0;
+	int off;
 
-	for (i = 0; i < priv->num_dist_fields; i++) {
-		if (priv->dist_fields[i].cls_prot == prot &&
-		    priv->dist_fields[i].cls_field == field)
-			return off;
-		off += priv->dist_fields[i].size;
+	if (eth_mask->h_proto) {
+		off = dpaa2_eth_cls_fld_off(NET_PROT_ETH, NH_FLD_ETH_TYPE);
+		*(__be16 *)(key + off) = eth_value->h_proto;
+		*(__be16 *)(mask + off) = eth_mask->h_proto;
+		*fields |= DPAA2_ETH_DIST_ETHTYPE;
 	}
 
-	return -1;
-}
-
-static u8 cls_key_size(struct dpaa2_eth_priv *priv)
-{
-	u8 i, size = 0;
-
-	for (i = 0; i < priv->num_dist_fields; i++)
-		size += priv->dist_fields[i].size;
-
-	return size;
-}
-
-void check_cls_support(struct dpaa2_eth_priv *priv)
-{
-	u8 key_size = cls_key_size(priv);
-	struct device *dev = priv->net_dev->dev.parent;
-
-	if (dpaa2_eth_hash_enabled(priv)) {
-		if (priv->dpni_attrs.fs_key_size < key_size) {
-			dev_info(dev, "max_dist_key_size = %d, expected %d. Hashing and steering are disabled\n",
-				 priv->dpni_attrs.fs_key_size,
-				 key_size);
-			goto disable_fs;
-		}
-		if (priv->num_dist_fields > DPKG_MAX_NUM_OF_EXTRACTS) {
-			dev_info(dev, "Too many key fields (max = %d). Hashing and steering are disabled\n",
-				 DPKG_MAX_NUM_OF_EXTRACTS);
-			goto disable_fs;
-		}
+	if (!is_zero_ether_addr(eth_mask->h_source)) {
+		off = dpaa2_eth_cls_fld_off(NET_PROT_ETH, NH_FLD_ETH_SA);
+		ether_addr_copy(key + off, eth_value->h_source);
+		ether_addr_copy(mask + off, eth_mask->h_source);
+		*fields |= DPAA2_ETH_DIST_ETHSRC;
 	}
 
-	if (dpaa2_eth_fs_enabled(priv)) {
-		if (!dpaa2_eth_hash_enabled(priv)) {
-			dev_info(dev, "Insufficient queues. Steering is disabled\n");
-			goto disable_fs;
-		}
-
-		if (!dpaa2_eth_fs_mask_enabled(priv)) {
-			dev_info(dev, "Key masks not supported. Steering is disabled\n");
-			goto disable_fs;
-		}
+	if (!is_zero_ether_addr(eth_mask->h_dest)) {
+		off = dpaa2_eth_cls_fld_off(NET_PROT_ETH, NH_FLD_ETH_DA);
+		ether_addr_copy(key + off, eth_value->h_dest);
+		ether_addr_copy(mask + off, eth_mask->h_dest);
+		*fields |= DPAA2_ETH_DIST_ETHDST;
 	}
 
-	return;
-
-disable_fs:
-	priv->dpni_attrs.options |= DPNI_OPT_NO_FS;
-	priv->dpni_attrs.options &= ~DPNI_OPT_HAS_KEY_MASKING;
+	return 0;
 }
 
-static int prep_l4_rule(struct dpaa2_eth_priv *priv,
-			struct ethtool_tcpip4_spec *l4_value,
-			struct ethtool_tcpip4_spec *l4_mask,
-			void *key, void *mask, u8 l4_proto)
+static int prep_user_ip_rule(struct ethtool_usrip4_spec *uip_value,
+			     struct ethtool_usrip4_spec *uip_mask,
+			     void *key, void *mask, u64 *fields)
 {
-	int offset;
+	int off;
+	u32 tmp_value, tmp_mask;
 
-	if (l4_mask->tos) {
-		netdev_err(priv->net_dev, "ToS is not supported for IPv4 L4\n");
+	if (uip_mask->tos || uip_mask->ip_ver)
 		return -EOPNOTSUPP;
+
+	if (uip_mask->ip4src) {
+		off = dpaa2_eth_cls_fld_off(NET_PROT_IP, NH_FLD_IP_SRC);
+		*(__be32 *)(key + off) = uip_value->ip4src;
+		*(__be32 *)(mask + off) = uip_mask->ip4src;
+		*fields |= DPAA2_ETH_DIST_IPSRC;
 	}
 
+	if (uip_mask->ip4dst) {
+		off = dpaa2_eth_cls_fld_off(NET_PROT_IP, NH_FLD_IP_DST);
+		*(__be32 *)(key + off) = uip_value->ip4dst;
+		*(__be32 *)(mask + off) = uip_mask->ip4dst;
+		*fields |= DPAA2_ETH_DIST_IPDST;
+	}
+
+	if (uip_mask->proto) {
+		off = dpaa2_eth_cls_fld_off(NET_PROT_IP, NH_FLD_IP_PROTO);
+		*(u8 *)(key + off) = uip_value->proto;
+		*(u8 *)(mask + off) = uip_mask->proto;
+		*fields |= DPAA2_ETH_DIST_IPPROTO;
+	}
+
+	if (uip_mask->l4_4_bytes) {
+		tmp_value = be32_to_cpu(uip_value->l4_4_bytes);
+		tmp_mask = be32_to_cpu(uip_mask->l4_4_bytes);
+
+		off = dpaa2_eth_cls_fld_off(NET_PROT_UDP, NH_FLD_UDP_PORT_SRC);
+		*(__be16 *)(key + off) = htons(tmp_value >> 16);
+		*(__be16 *)(mask + off) = htons(tmp_mask >> 16);
+		*fields |= DPAA2_ETH_DIST_L4SRC;
+
+		off = dpaa2_eth_cls_fld_off(NET_PROT_UDP, NH_FLD_UDP_PORT_DST);
+		*(__be16 *)(key + off) = htons(tmp_value & 0xFFFF);
+		*(__be16 *)(mask + off) = htons(tmp_mask & 0xFFFF);
+		*fields |= DPAA2_ETH_DIST_L4DST;
+	}
+
+	/* Only apply the rule for IPv4 frames */
+	off = dpaa2_eth_cls_fld_off(NET_PROT_ETH, NH_FLD_ETH_TYPE);
+	*(__be16 *)(key + off) = htons(ETH_P_IP);
+	*(__be16 *)(mask + off) = htons(0xFFFF);
+	*fields |= DPAA2_ETH_DIST_ETHTYPE;
+
+	return 0;
+}
+
+static int prep_l4_rule(struct ethtool_tcpip4_spec *l4_value,
+			struct ethtool_tcpip4_spec *l4_mask,
+			void *key, void *mask, u8 l4_proto, u64 *fields)
+{
+	int off;
+
+	if (l4_mask->tos)
+		return -EOPNOTSUPP;
 	if (l4_mask->ip4src) {
-		offset = cls_key_off(priv, NET_PROT_IP, NH_FLD_IP_SRC);
-		*(u32 *)(key + offset) = l4_value->ip4src;
-		*(u32 *)(mask + offset) = l4_mask->ip4src;
+		off = dpaa2_eth_cls_fld_off(NET_PROT_IP, NH_FLD_IP_SRC);
+		*(__be32 *)(key + off) = l4_value->ip4src;
+		*(__be32 *)(mask + off) = l4_mask->ip4src;
+		*fields |= DPAA2_ETH_DIST_IPSRC;
 	}
 
 	if (l4_mask->ip4dst) {
-		offset = cls_key_off(priv, NET_PROT_IP, NH_FLD_IP_DST);
-		*(u32 *)(key + offset) = l4_value->ip4dst;
-		*(u32 *)(mask + offset) = l4_mask->ip4dst;
+		off = dpaa2_eth_cls_fld_off(NET_PROT_IP, NH_FLD_IP_DST);
+		*(__be32 *)(key + off) = l4_value->ip4dst;
+		*(__be32 *)(mask + off) = l4_mask->ip4dst;
+		*fields |= DPAA2_ETH_DIST_IPDST;
 	}
 
 	if (l4_mask->psrc) {
-		offset = cls_key_off(priv, NET_PROT_UDP, NH_FLD_UDP_PORT_SRC);
-		*(u32 *)(key + offset) = l4_value->psrc;
-		*(u32 *)(mask + offset) = l4_mask->psrc;
+		off = dpaa2_eth_cls_fld_off(NET_PROT_UDP, NH_FLD_UDP_PORT_SRC);
+		*(__be16 *)(key + off) = l4_value->psrc;
+		*(__be16 *)(mask + off) = l4_mask->psrc;
+		*fields |= DPAA2_ETH_DIST_L4SRC;
 	}
 
 	if (l4_mask->pdst) {
-		offset = cls_key_off(priv, NET_PROT_UDP, NH_FLD_UDP_PORT_DST);
-		*(u32 *)(key + offset) = l4_value->pdst;
-		*(u32 *)(mask + offset) = l4_mask->pdst;
+		off = dpaa2_eth_cls_fld_off(NET_PROT_UDP, NH_FLD_UDP_PORT_DST);
+		*(__be16 *)(key + off) = l4_value->pdst;
+		*(__be16 *)(mask + off) = l4_mask->pdst;
+		*fields |= DPAA2_ETH_DIST_L4DST;
 	}
 
 	/* Only apply the rule for the user-specified L4 protocol
 	 * and if ethertype matches IPv4
 	 */
-	offset = cls_key_off(priv, NET_PROT_ETH, NH_FLD_ETH_TYPE);
-	*(u16 *)(key + offset) = htons(ETH_P_IP);
-	*(u16 *)(mask + offset) = 0xFFFF;
+	off = dpaa2_eth_cls_fld_off(NET_PROT_ETH, NH_FLD_ETH_TYPE);
+	*(__be16 *)(key + off) = htons(ETH_P_IP);
+	*(__be16 *)(mask + off) = htons(0xFFFF);
+	*fields |= DPAA2_ETH_DIST_ETHTYPE;
 
-	offset = cls_key_off(priv, NET_PROT_IP, NH_FLD_IP_PROTO);
-	*(u8 *)(key + offset) = l4_proto;
-	*(u8 *)(mask + offset) = 0xFF;
-
-	/* TODO: check IP version */
-
-	return 0;
-}
-
-static int prep_eth_rule(struct dpaa2_eth_priv *priv,
-			 struct ethhdr *eth_value, struct ethhdr *eth_mask,
-			 void *key, void *mask)
-{
-	int offset;
-
-	if (eth_mask->h_proto) {
-		netdev_err(priv->net_dev, "Ethertype is not supported!\n");
-		return -EOPNOTSUPP;
-	}
-
-	if (!is_zero_ether_addr(eth_mask->h_source)) {
-		offset = cls_key_off(priv, NET_PROT_ETH, NH_FLD_ETH_SA);
-		ether_addr_copy(key + offset, eth_value->h_source);
-		ether_addr_copy(mask + offset, eth_mask->h_source);
-	}
-
-	if (!is_zero_ether_addr(eth_mask->h_dest)) {
-		offset = cls_key_off(priv, NET_PROT_ETH, NH_FLD_ETH_DA);
-		ether_addr_copy(key + offset, eth_value->h_dest);
-		ether_addr_copy(mask + offset, eth_mask->h_dest);
-	}
+	off = dpaa2_eth_cls_fld_off(NET_PROT_IP, NH_FLD_IP_PROTO);
+	*(u8 *)(key + off) = l4_proto;
+	*(u8 *)(mask + off) = 0xFF;
+	*fields |= DPAA2_ETH_DIST_IPPROTO;
 
 	return 0;
 }
 
-static int prep_user_ip_rule(struct dpaa2_eth_priv *priv,
-			     struct ethtool_usrip4_spec *uip_value,
-			     struct ethtool_usrip4_spec *uip_mask,
-			     void *key, void *mask)
-{
-	int offset;
-
-	if (uip_mask->tos)
-		return -EOPNOTSUPP;
-
-	if (uip_mask->ip4src) {
-		offset = cls_key_off(priv, NET_PROT_IP, NH_FLD_IP_SRC);
-		*(u32 *)(key + offset) = uip_value->ip4src;
-		*(u32 *)(mask + offset) = uip_mask->ip4src;
-	}
-
-	if (uip_mask->ip4dst) {
-		offset = cls_key_off(priv, NET_PROT_IP, NH_FLD_IP_DST);
-		*(u32 *)(key + offset) = uip_value->ip4dst;
-		*(u32 *)(mask + offset) = uip_mask->ip4dst;
-	}
-
-	if (uip_mask->proto) {
-		offset = cls_key_off(priv, NET_PROT_IP, NH_FLD_IP_PROTO);
-		*(u32 *)(key + offset) = uip_value->proto;
-		*(u32 *)(mask + offset) = uip_mask->proto;
-	}
-	if (uip_mask->l4_4_bytes) {
-		offset = cls_key_off(priv, NET_PROT_UDP, NH_FLD_UDP_PORT_SRC);
-		*(u16 *)(key + offset) = uip_value->l4_4_bytes << 16;
-		*(u16 *)(mask + offset) = uip_mask->l4_4_bytes << 16;
-
-		offset = cls_key_off(priv, NET_PROT_UDP, NH_FLD_UDP_PORT_DST);
-		*(u16 *)(key + offset) = uip_value->l4_4_bytes & 0xFFFF;
-		*(u16 *)(mask + offset) = uip_mask->l4_4_bytes & 0xFFFF;
-	}
-
-	/* Ethertype must be IP */
-	offset = cls_key_off(priv, NET_PROT_ETH, NH_FLD_ETH_TYPE);
-	*(u16 *)(key + offset) = htons(ETH_P_IP);
-	*(u16 *)(mask + offset) = 0xFFFF;
-
-	return 0;
-}
-
-static int prep_ext_rule(struct dpaa2_eth_priv *priv,
-			 struct ethtool_flow_ext *ext_value,
+static int prep_ext_rule(struct ethtool_flow_ext *ext_value,
 			 struct ethtool_flow_ext *ext_mask,
-			 void *key, void *mask)
+			 void *key, void *mask, u64 *fields)
 {
-	int offset;
+	int off;
 
 	if (ext_mask->vlan_etype)
 		return -EOPNOTSUPP;
 
 	if (ext_mask->vlan_tci) {
-		offset = cls_key_off(priv, NET_PROT_VLAN, NH_FLD_VLAN_TCI);
-		*(u16 *)(key + offset) = ext_value->vlan_tci;
-		*(u16 *)(mask + offset) = ext_mask->vlan_tci;
+		off = dpaa2_eth_cls_fld_off(NET_PROT_VLAN, NH_FLD_VLAN_TCI);
+		*(__be16 *)(key + off) = ext_value->vlan_tci;
+		*(__be16 *)(mask + off) = ext_mask->vlan_tci;
+		*fields |= DPAA2_ETH_DIST_VLAN;
 	}
 
 	return 0;
 }
 
-static int prep_mac_ext_rule(struct dpaa2_eth_priv *priv,
-			     struct ethtool_flow_ext *ext_value,
+static int prep_mac_ext_rule(struct ethtool_flow_ext *ext_value,
 			     struct ethtool_flow_ext *ext_mask,
-			     void *key, void *mask)
+			     void *key, void *mask, u64 *fields)
 {
-	int offset;
+	int off;
 
 	if (!is_zero_ether_addr(ext_mask->h_dest)) {
-		offset = cls_key_off(priv, NET_PROT_ETH, NH_FLD_ETH_DA);
-		ether_addr_copy(key + offset, ext_value->h_dest);
-		ether_addr_copy(mask + offset, ext_mask->h_dest);
+		off = dpaa2_eth_cls_fld_off(NET_PROT_ETH, NH_FLD_ETH_DA);
+		ether_addr_copy(key + off, ext_value->h_dest);
+		ether_addr_copy(mask + off, ext_mask->h_dest);
+		*fields |= DPAA2_ETH_DIST_ETHDST;
 	}
 
 	return 0;
 }
 
-static int prep_cls_rule(struct net_device *net_dev,
-			 struct ethtool_rx_flow_spec *fs,
-			 void *key)
+static int prep_cls_rule(struct ethtool_rx_flow_spec *fs, void *key, void *mask,
+			 u64 *fields)
 {
-	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
-	const u8 key_size = cls_key_size(priv);
-	void *msk = key + key_size;
 	int err;
 
-	memset(key, 0, key_size * 2);
-
-	switch (fs->flow_type & 0xff) {
-	case TCP_V4_FLOW:
-		err = prep_l4_rule(priv, &fs->h_u.tcp_ip4_spec,
-				   &fs->m_u.tcp_ip4_spec, key, msk,
-				   IPPROTO_TCP);
-		break;
-	case UDP_V4_FLOW:
-		err = prep_l4_rule(priv, &fs->h_u.udp_ip4_spec,
-				   &fs->m_u.udp_ip4_spec, key, msk,
-				   IPPROTO_UDP);
-		break;
-	case SCTP_V4_FLOW:
-		err = prep_l4_rule(priv, &fs->h_u.sctp_ip4_spec,
-				   &fs->m_u.sctp_ip4_spec, key, msk,
-				   IPPROTO_SCTP);
-		break;
+	switch (fs->flow_type & 0xFF) {
 	case ETHER_FLOW:
-		err = prep_eth_rule(priv, &fs->h_u.ether_spec,
-				    &fs->m_u.ether_spec, key, msk);
+		err = prep_eth_rule(&fs->h_u.ether_spec, &fs->m_u.ether_spec,
+				    key, mask, fields);
 		break;
 	case IP_USER_FLOW:
-		err = prep_user_ip_rule(priv, &fs->h_u.usr_ip4_spec,
-					&fs->m_u.usr_ip4_spec, key, msk);
+		err = prep_user_ip_rule(&fs->h_u.usr_ip4_spec,
+				    &fs->m_u.usr_ip4_spec, key, mask, fields);
+		break;
+	case TCP_V4_FLOW:
+		err = prep_l4_rule(&fs->h_u.tcp_ip4_spec, &fs->m_u.tcp_ip4_spec,
+				   key, mask, IPPROTO_TCP, fields);
+		break;
+	case UDP_V4_FLOW:
+		err = prep_l4_rule(&fs->h_u.udp_ip4_spec, &fs->m_u.udp_ip4_spec,
+				   key, mask, IPPROTO_UDP, fields);
+		break;
+	case SCTP_V4_FLOW:
+		err = prep_l4_rule(&fs->h_u.sctp_ip4_spec, &fs->m_u.sctp_ip4_spec,
+				   key, mask, IPPROTO_SCTP, fields);
 		break;
 	default:
-		/* TODO: AH, ESP */
 		return -EOPNOTSUPP;
 	}
+
 	if (err)
 		return err;
 
 	if (fs->flow_type & FLOW_EXT) {
-		err = prep_ext_rule(priv, &fs->h_ext, &fs->m_ext, key, msk);
+		err = prep_ext_rule(&fs->h_ext, &fs->m_ext, key, mask, fields);
 		if (err)
 			return err;
 	}
 
 	if (fs->flow_type & FLOW_MAC_EXT) {
-		err = prep_mac_ext_rule(priv, &fs->h_ext, &fs->m_ext, key, msk);
+		err = prep_mac_ext_rule(&fs->h_ext, &fs->m_ext, key, mask,
+					fields);
 		if (err)
 			return err;
 	}
@@ -662,161 +630,158 @@ static int prep_cls_rule(struct net_device *net_dev,
 	return 0;
 }
 
-static int del_cls(struct net_device *net_dev, int location);
-
-static int do_cls(struct net_device *net_dev,
-		  struct ethtool_rx_flow_spec *fs,
-		  bool add)
+static int do_cls_rule(struct net_device *net_dev,
+		       struct ethtool_rx_flow_spec *fs,
+		       bool add)
 {
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 	struct device *dev = net_dev->dev.parent;
-	const int rule_cnt = dpaa2_eth_fs_count(priv);
-	struct dpni_rule_cfg rule_cfg;
+	struct dpni_rule_cfg rule_cfg = { 0 };
 	struct dpni_fs_action_cfg fs_act = { 0 };
-	void *dma_mem;
-	int err = 0, tc;
+	dma_addr_t key_iova;
+	u64 fields = 0;
+	void *key_buf;
+	int i, err = 0;
 
-	if (!dpaa2_eth_fs_enabled(priv)) {
-		netdev_err(net_dev, "dev does not support steering!\n");
-		/* dev doesn't support steering */
-		return -EOPNOTSUPP;
-	}
-
-	if ((fs->ring_cookie != RX_CLS_FLOW_DISC &&
-	     fs->ring_cookie >= dpaa2_eth_queue_count(priv)) ||
-	     fs->location >= rule_cnt)
+	if (fs->ring_cookie != RX_CLS_FLOW_DISC &&
+	    fs->ring_cookie >= dpaa2_eth_queue_count(priv))
 		return -EINVAL;
 
-	/* When adding a new rule, check if location if available
-	 * and if not, free the existing table entry before inserting
-	 * the new one
-	 */
-	if (add && (priv->cls_rule[fs->location].in_use == true))
-		del_cls(net_dev, fs->location);
-
-	memset(&rule_cfg, 0, sizeof(rule_cfg));
-	rule_cfg.key_size = cls_key_size(priv);
+	rule_cfg.key_size = dpaa2_eth_cls_key_size(DPAA2_ETH_DIST_ALL);
 
 	/* allocate twice the key size, for the actual key and for mask */
-	dma_mem = kzalloc(rule_cfg.key_size * 2, GFP_DMA | GFP_KERNEL);
-	if (!dma_mem)
+	key_buf = kzalloc(rule_cfg.key_size * 2, GFP_KERNEL);
+	if (!key_buf)
 		return -ENOMEM;
 
-	err = prep_cls_rule(net_dev, fs, dma_mem);
+	/* Fill the key and mask memory areas */
+	err = prep_cls_rule(fs, key_buf, key_buf + rule_cfg.key_size, &fields);
 	if (err)
-		goto err_free_mem;
+		goto free_mem;
 
-	rule_cfg.key_iova = dma_map_single(dev, dma_mem,
-					   rule_cfg.key_size * 2,
-					   DMA_TO_DEVICE);
+	if (!dpaa2_eth_fs_mask_enabled(priv)) {
+		/* Masking allows us to configure a maximal key during init and
+		 * use it for all flow steering rules. Without it, we include
+		 * in the key only the fields actually used, so we need to
+		 * extract the others from the final key buffer.
+		 *
+		 * Program the FS key if needed, or return error if previously
+		 * set key can't be used for the current rule. User needs to
+		 * delete existing rules in this case to allow for the new one.
+		 */
+		if (!priv->rx_cls_fields) {
+			err = dpaa2_eth_set_cls(net_dev, fields);
+			if (err)
+				goto free_mem;
 
-	rule_cfg.mask_iova = rule_cfg.key_iova + rule_cfg.key_size;
+			priv->rx_cls_fields = fields;
+		} else if (priv->rx_cls_fields != fields) {
+			netdev_err(net_dev, "No support for multiple FS keys, need to delete existing rules\n");
+			err = -EOPNOTSUPP;
+			goto free_mem;
+		}
 
-	if (fs->ring_cookie == RX_CLS_FLOW_DISC)
-		fs_act.options |= DPNI_FS_OPT_DISCARD;
-	else
-		fs_act.flow_id = fs->ring_cookie;
+		dpaa2_eth_cls_trim_rule(key_buf, fields);
+		rule_cfg.key_size = dpaa2_eth_cls_key_size(fields);
+	}
 
-	for (tc = 0; tc < dpaa2_eth_tc_count(priv); tc++) {
+	key_iova = dma_map_single(dev, key_buf, rule_cfg.key_size * 2,
+				  DMA_TO_DEVICE);
+	if (dma_mapping_error(dev, key_iova)) {
+		err = -ENOMEM;
+		goto free_mem;
+	}
+
+	rule_cfg.key_iova = key_iova;
+	if (dpaa2_eth_fs_mask_enabled(priv))
+		rule_cfg.mask_iova = key_iova + rule_cfg.key_size;
+
+	if (add) {
+		if (fs->ring_cookie == RX_CLS_FLOW_DISC)
+			fs_act.options |= DPNI_FS_OPT_DISCARD;
+		else
+			fs_act.flow_id = fs->ring_cookie;
+	}
+	for (i = 0; i < dpaa2_eth_tc_count(priv); i++) {
 		if (add)
 			err = dpni_add_fs_entry(priv->mc_io, 0, priv->mc_token,
-						tc, fs->location, &rule_cfg,
+						i, fs->location, &rule_cfg,
 						&fs_act);
 		else
 			err = dpni_remove_fs_entry(priv->mc_io, 0,
-						   priv->mc_token, tc,
+						   priv->mc_token, i,
 						   &rule_cfg);
-
 		if (err)
 			break;
 	}
 
-	dma_unmap_single(dev, rule_cfg.key_iova,
-			 rule_cfg.key_size * 2, DMA_TO_DEVICE);
+	dma_unmap_single(dev, key_iova, rule_cfg.key_size * 2, DMA_TO_DEVICE);
 
-	if (err)
-		netdev_err(net_dev, "dpaa2_add/remove_cls() error %d\n", err);
-
-err_free_mem:
-	kfree(dma_mem);
+free_mem:
+	kfree(key_buf);
 
 	return err;
 }
 
-static int add_cls(struct net_device *net_dev,
-		   struct ethtool_rx_flow_spec *fs)
+static int num_rules(struct dpaa2_eth_priv *priv)
 {
-	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
-	int err;
+	int i, rules = 0;
 
-	err = do_cls(net_dev, fs, true);
-	if (err)
-		return err;
+	for (i = 0; i < dpaa2_eth_fs_count(priv); i++)
+		if (priv->cls_rule[i].in_use)
+			rules++;
 
-	priv->cls_rule[fs->location].in_use = true;
-	priv->cls_rule[fs->location].fs = *fs;
-
-	return 0;
+	return rules;
 }
 
-static int del_cls(struct net_device *net_dev, int location)
+static int update_cls_rule(struct net_device *net_dev,
+			   struct ethtool_rx_flow_spec *new_fs,
+			   int location)
 {
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
-	int err;
+	struct dpaa2_eth_cls_rule *rule;
+	int err = -EINVAL;
 
-	err = do_cls(net_dev, &priv->cls_rule[location].fs, false);
-	if (err)
-		return err;
-
-	priv->cls_rule[location].in_use = false;
-
-	return 0;
-}
-
-static int set_hash(struct net_device *net_dev, u64 data)
-{
-	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
-	u32 key = 0;
-	int i;
-
-	if (data & RXH_DISCARD)
+	if (!priv->rx_cls_enabled)
 		return -EOPNOTSUPP;
 
-	for (i = 0; i < priv->num_dist_fields; i++)
-		if (priv->dist_fields[i].rxnfc_field & data)
-			key |= priv->dist_fields[i].id;
+	if (location >= dpaa2_eth_fs_count(priv))
+		return -EINVAL;
 
-	return dpaa2_eth_set_dist_key(priv, DPAA2_ETH_RX_DIST_HASH, key);
-}
+	rule = &priv->cls_rule[location];
 
-static int dpaa2_eth_set_rxnfc(struct net_device *net_dev,
-			       struct ethtool_rxnfc *rxnfc)
-{
-	int err = 0;
+	/* If a rule is present at the specified location, delete it. */
+	if (rule->in_use) {
+		err = do_cls_rule(net_dev, &rule->fs, false);
+		if (err)
+			return err;
 
-	switch (rxnfc->cmd) {
-	case ETHTOOL_SRXCLSRLINS:
-		err = add_cls(net_dev, &rxnfc->fs);
-		break;
-	case ETHTOOL_SRXCLSRLDEL:
-		err = del_cls(net_dev, rxnfc->fs.location);
-		break;
-	case ETHTOOL_SRXFH:
-		err = set_hash(net_dev, rxnfc->data);
-		break;
-	default:
-		err = -EOPNOTSUPP;
+		rule->in_use = 0;
+
+		if (!dpaa2_eth_fs_mask_enabled(priv) && !num_rules(priv))
+			priv->rx_cls_fields = 0;
 	}
 
-	return err;
+	/* If no new entry to add, return here */
+	if (!new_fs)
+		return err;
+
+	err = do_cls_rule(net_dev, new_fs, true);
+	if (err)
+		return err;
+
+	rule->in_use = 1;
+	rule->fs = *new_fs;
+
+	return 0;
 }
 
 static int dpaa2_eth_get_rxnfc(struct net_device *net_dev,
 			       struct ethtool_rxnfc *rxnfc, u32 *rule_locs)
 {
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
-	const int rule_cnt = dpaa2_eth_fs_count(priv);
-	int i, j;
+	int rule_cnt = dpaa2_eth_fs_count(priv);
+	int i, j = 0;
 
 	switch (rxnfc->cmd) {
 	case ETHTOOL_GRXFH:
@@ -829,23 +794,20 @@ static int dpaa2_eth_get_rxnfc(struct net_device *net_dev,
 	case ETHTOOL_GRXRINGS:
 		rxnfc->data = dpaa2_eth_queue_count(priv);
 		break;
-
 	case ETHTOOL_GRXCLSRLCNT:
-		for (i = 0, rxnfc->rule_cnt = 0; i < rule_cnt; i++)
-			if (priv->cls_rule[i].in_use)
-				rxnfc->rule_cnt++;
+		rxnfc->rule_cnt = 0;
+		rxnfc->rule_cnt = num_rules(priv);
 		rxnfc->data = rule_cnt;
 		break;
-
 	case ETHTOOL_GRXCLSRULE:
+		if (rxnfc->fs.location >= rule_cnt)
+			return -EINVAL;
 		if (!priv->cls_rule[rxnfc->fs.location].in_use)
 			return -EINVAL;
-
 		rxnfc->fs = priv->cls_rule[rxnfc->fs.location].fs;
 		break;
-
 	case ETHTOOL_GRXCLSRLALL:
-		for (i = 0, j = 0; i < rule_cnt; i++) {
+		for (i = 0; i < rule_cnt; i++) {
 			if (!priv->cls_rule[i].in_use)
 				continue;
 			if (j == rxnfc->rule_cnt)
@@ -855,12 +817,55 @@ static int dpaa2_eth_get_rxnfc(struct net_device *net_dev,
 		rxnfc->rule_cnt = j;
 		rxnfc->data = rule_cnt;
 		break;
-
 	default:
 		return -EOPNOTSUPP;
 	}
 
 	return 0;
+}
+
+int dpaa2_phc_index = -1;
+EXPORT_SYMBOL(dpaa2_phc_index);
+
+static int dpaa2_eth_get_ts_info(struct net_device *dev,
+				 struct ethtool_ts_info *info)
+{
+	info->so_timestamping = SOF_TIMESTAMPING_TX_HARDWARE |
+				SOF_TIMESTAMPING_RX_HARDWARE |
+				SOF_TIMESTAMPING_RAW_HARDWARE;
+
+	info->phc_index = dpaa2_phc_index;
+
+	info->tx_types = (1 << HWTSTAMP_TX_OFF) |
+			 (1 << HWTSTAMP_TX_ON);
+
+	info->rx_filters = (1 << HWTSTAMP_FILTER_NONE) |
+			   (1 << HWTSTAMP_FILTER_ALL);
+	return 0;
+}
+
+static int dpaa2_eth_set_rxnfc(struct net_device *net_dev,
+			       struct ethtool_rxnfc *rxnfc)
+{
+	int err = 0;
+
+	switch (rxnfc->cmd) {
+	case ETHTOOL_SRXFH:
+		if ((rxnfc->data & DPAA2_RXH_SUPPORTED) != rxnfc->data)
+			return -EOPNOTSUPP;
+		err = dpaa2_eth_set_hash(net_dev, rxnfc->data);
+		break;
+	case ETHTOOL_SRXCLSRLINS:
+		err = update_cls_rule(net_dev, &rxnfc->fs, rxnfc->fs.location);
+		break;
+	case ETHTOOL_SRXCLSRLDEL:
+		err = update_cls_rule(net_dev, NULL, rxnfc->fs.location);
+		break;
+	default:
+		err = -EOPNOTSUPP;
+	}
+
+	return err;
 }
 
 const struct ethtool_ops dpaa2_ethtool_ops = {
@@ -875,4 +880,5 @@ const struct ethtool_ops dpaa2_ethtool_ops = {
 	.get_strings = dpaa2_eth_get_strings,
 	.get_rxnfc = dpaa2_eth_get_rxnfc,
 	.set_rxnfc = dpaa2_eth_set_rxnfc,
+	.get_ts_info = dpaa2_eth_get_ts_info,
 };

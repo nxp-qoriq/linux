@@ -55,10 +55,6 @@
 /* Size in bytes of the FQ taildrop threshold */
 #define DPA_FQ_TD		0x200000
 
-#ifdef CONFIG_PTP_1588_CLOCK_DPAA
-struct ptp_priv_s ptp_priv;
-#endif
-
 static struct dpa_bp *dpa_bp_array[64];
 
 int dpa_max_frm;
@@ -326,7 +322,7 @@ EXPORT_SYMBOL(dpa_fix_features);
 u64 dpa_get_timestamp_ns(const struct dpa_priv_s *priv, enum port_type rx_tx,
 			const void *data)
 {
-	u64 *ts, ns;
+	u64 *ts;
 
 	ts = fm_port_get_buffer_time_stamp(priv->mac_dev->port_dev[rx_tx],
 					   data);
@@ -336,10 +332,7 @@ u64 dpa_get_timestamp_ns(const struct dpa_priv_s *priv, enum port_type rx_tx,
 
 	be64_to_cpus(ts);
 
-	/* multiple DPA_PTP_NOMINAL_FREQ_PERIOD_NS for case of non power of 2 */
-	ns = *ts << DPA_PTP_NOMINAL_FREQ_PERIOD_SHIFT;
-
-	return ns;
+	return *ts;
 }
 
 int dpa_get_ts(const struct dpa_priv_s *priv, enum port_type rx_tx,
@@ -595,23 +588,6 @@ dpa_mac_probe(struct platform_device *_of_dev)
 	}
 #endif
 
-#ifdef CONFIG_PTP_1588_CLOCK_DPAA
-	if ((mac_dev->phy_if != PHY_INTERFACE_MODE_SGMII) ||
-	    ((mac_dev->phy_if == PHY_INTERFACE_MODE_SGMII) &&
-			 (mac_dev->speed == SPEED_1000))) {
-		ptp_priv.node = of_parse_phandle(mac_node, "ptp-timer", 0);
-		if (ptp_priv.node) {
-			ptp_priv.of_dev = of_find_device_by_node(ptp_priv.node);
-			if (unlikely(ptp_priv.of_dev == NULL)) {
-				dev_err(dpa_dev,
-			"Cannot find device represented by timer_node\n");
-				of_node_put(ptp_priv.node);
-				return ERR_PTR(-EINVAL);
-			}
-			ptp_priv.mac_dev = mac_dev;
-		}
-	}
-#endif
 	return mac_dev;
 }
 EXPORT_SYMBOL(dpa_mac_probe);
@@ -857,13 +833,12 @@ bool dpa_bpid2pool_use(int bpid)
 	return false;
 }
 
-#ifdef CONFIG_FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
+#ifdef CONFIG_FMAN_PFC
 u16 dpa_select_queue(struct net_device *net_dev, struct sk_buff *skb,
 		     void *accel_priv, select_queue_fallback_t fallback)
 {
 	return dpa_get_queue_mapping(skb);
 }
-EXPORT_SYMBOL(dpa_select_queue);
 #endif
 
 struct dpa_fq *dpa_fq_alloc(struct device *dev,

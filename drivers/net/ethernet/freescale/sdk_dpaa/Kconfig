@@ -24,7 +24,7 @@ config FSL_DPAA_CEETM_CCS_THRESHOLD_1G
 	hex "CEETM egress congestion threshold on 1G ports"
 	depends on FSL_DPAA_CEETM
 	range 0x1000 0x10000000
-	default "0x000a0000"
+	default "0x00005000"
 	help
 	  The size in bytes of the CEETM egress Class Congestion State threshold on 1G ports.
 	  The threshold needs to be configured keeping in mind the following factors:
@@ -38,7 +38,7 @@ config FSL_DPAA_CEETM_CCS_THRESHOLD_10G
 	hex "CEETM egress congestion threshold on 10G ports"
 	depends on FSL_DPAA_CEETM
 	range 0x1000 0x20000000
-	default "0x00640000"
+	default "0x00032000"
 	help
 	  The size in bytes of the CEETM egress Class Congestion State threshold on 10G ports.
 	  See FSL_DPAA_CEETM_CCS_THRESHOLD_1G for details.
@@ -95,17 +95,6 @@ config FSL_DPAA_1588
         default n
         help
          Enable IEEE1588 support code.
-
-config FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
-	bool "Use driver's Tx queue selection mechanism"
-	default y
-	depends on FSL_SDK_DPAA_ETH
-	help
-	  The DPAA-Ethernet driver defines a ndo_select_queue() callback for optimal selection
-	  of the egress FQ. That will override the XPS support for this netdevice.
-	  If for whatever reason you want to be in control of the egress FQ-to-CPU selection and mapping,
-	  or simply don't want to use the driver's ndo_select_queue() callback, then unselect this
-	  and use the standard XPS support instead.
 
 config FSL_DPAA_ETH_MAX_BUF_COUNT
 	int "Maximum nuber of buffers in private bpool"
@@ -178,7 +167,7 @@ config FSL_DPAA_ETH_DEBUG
 
 config FSL_DPAA_DBG_LOOP
 	bool "DPAA Ethernet Debug loopback"
-	depends on FSL_DPAA_ETH_DEBUGFS && FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
+	depends on FSL_DPAA_ETH_DEBUGFS
 	default n
 	help
 	  This option allows to divert all received traffic on a certain interface A towards a

@@ -1,34 +1,6 @@
+/* SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause) */
 /* Copyright 2013-2016 Freescale Semiconductor Inc.
  * Copyright 2016 NXP
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- * * Redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer.
- * * Redistributions in binary form must reproduce the above copyright
- * notice, this list of conditions and the following disclaimer in the
- * documentation and/or other materials provided with the distribution.
- * * Neither the name of the above-listed copyright holders nor the
- * names of any contributors may be used to endorse or promote products
- * derived from this software without specific prior written permission.
- *
- *
- * ALTERNATIVELY, this software may be distributed under the terms of the
- * GNU General Public License ("GPL") as published by the Free Software
- * Foundation, either version 2 of that License or (at your option) any
- * later version.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
  */
 #ifndef _FSL_DPNI_CMD_H
 #define _FSL_DPNI_CMD_H
@@ -72,9 +44,11 @@
 #define DPNI_CMDID_GET_QDID				DPNI_CMD(0x210)
 #define DPNI_CMDID_GET_TX_DATA_OFFSET			DPNI_CMD(0x212)
 #define DPNI_CMDID_GET_LINK_STATE			DPNI_CMD(0x215)
+#define DPNI_CMDID_GET_LINK_STATE_V2			DPNI_CMD_V2(0x215)
 #define DPNI_CMDID_SET_MAX_FRAME_LENGTH			DPNI_CMD(0x216)
 #define DPNI_CMDID_GET_MAX_FRAME_LENGTH			DPNI_CMD(0x217)
 #define DPNI_CMDID_SET_LINK_CFG				DPNI_CMD(0x21A)
+#define DPNI_CMDID_SET_LINK_CFG_V2			DPNI_CMD_V2(0x21A)
 #define DPNI_CMDID_SET_TX_SHAPING			DPNI_CMD_V2(0x21B)
 
 #define DPNI_CMDID_SET_MCAST_PROMISC			DPNI_CMD(0x220)
@@ -331,8 +305,22 @@ struct dpni_cmd_set_link_cfg {
 	__le64 options;
 };
 
+struct dpni_cmd_set_link_cfg_v2 {
+	/* cmd word 0 */
+	__le64 pad0;
+	/* cmd word 1 */
+	__le32 rate;
+	__le32 pad1;
+	/* cmd word 2 */
+	__le64 options;
+	/* cmd word 3 */
+	__le64 advertising;
+};
+
 #define DPNI_LINK_STATE_SHIFT		0
 #define DPNI_LINK_STATE_SIZE		1
+#define DPNI_STATE_VALID_SHIFT		1
+#define DPNI_STATE_VALID_SIZE		1
 
 struct dpni_rsp_get_link_state {
 	/* response word 0 */
@@ -345,6 +333,23 @@ struct dpni_rsp_get_link_state {
 	__le32 pad2;
 	/* response word 2 */
 	__le64 options;
+};
+
+struct dpni_rsp_get_link_state_v2 {
+	/* response word 0 */
+	__le32 pad0;
+	/* from LSB: up:1, valid:1 */
+	u8 flags;
+	u8 pad1[3];
+	/* response word 1 */
+	__le32 rate;
+	__le32 pad2;
+	/* response word 2 */
+	__le64 options;
+	/* cmd word 3 */
+	__le64 supported;
+	/* cmd word 4 */
+	__le64 advertising;
 };
 
 #define DPNI_COUPLED_SHIFT	0

@@ -1,34 +1,6 @@
+/* SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause) */
 /* Copyright 2013-2016 Freescale Semiconductor Inc.
  * Copyright 2016 NXP
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- * * Redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer.
- * * Redistributions in binary form must reproduce the above copyright
- * notice, this list of conditions and the following disclaimer in the
- * documentation and/or other materials provided with the distribution.
- * * Neither the name of the above-listed copyright holders nor the
- * names of any contributors may be used to endorse or promote products
- * derived from this software without specific prior written permission.
- *
- *
- * ALTERNATIVELY, this software may be distributed under the terms of the
- * GNU General Public License ("GPL") as published by the Free Software
- * Foundation, either version 2 of that License or (at your option) any
- * later version.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
  */
 #ifndef __FSL_DPNI_H
 #define __FSL_DPNI_H
@@ -542,6 +514,19 @@ int dpni_reset_statistics(struct fsl_mc_io *mc_io,
  * Enable priority flow control pause frames
  */
 #define DPNI_LINK_OPT_PFC_PAUSE		0x0000000000000010ULL
+/**
+ * Advertised link speeds
+ */
+#define DPNI_ADVERTISED_10BASET_FULL           0x0000000000000001ULL
+#define DPNI_ADVERTISED_100BASET_FULL          0x0000000000000002ULL
+#define DPNI_ADVERTISED_1000BASET_FULL         0x0000000000000004ULL
+#define DPNI_ADVERTISED_10000BASET_FULL        0x0000000000000010ULL
+#define DPNI_ADVERTISED_2500BASEX_FULL         0x0000000000000020ULL
+
+/**
+ * Advertise auto-negotiation enabled
+ */
+#define DPNI_ADVERTISED_AUTONEG                0x0000000000000008ULL
 
 /**
  * struct - Structure representing DPNI link configuration
@@ -551,12 +536,18 @@ int dpni_reset_statistics(struct fsl_mc_io *mc_io,
 struct dpni_link_cfg {
 	u32 rate;
 	u64 options;
+	u64 advertising;
 };
 
 int dpni_set_link_cfg(struct fsl_mc_io			*mc_io,
 		      u32				cmd_flags,
 		      u16				token,
 		      const struct dpni_link_cfg	*cfg);
+
+int dpni_set_link_cfg_v2(struct fsl_mc_io		*mc_io,
+			 u32				cmd_flags,
+			 u16				token,
+			 const struct dpni_link_cfg	*cfg);
 
 /**
  * struct dpni_link_state - Structure representing DPNI link state
@@ -567,13 +558,21 @@ int dpni_set_link_cfg(struct fsl_mc_io			*mc_io,
 struct dpni_link_state {
 	u32	rate;
 	u64	options;
+	u64	supported;
+	u64	advertising;
 	int	up;
+	int	state_valid;
 };
 
 int dpni_get_link_state(struct fsl_mc_io	*mc_io,
 			u32			cmd_flags,
 			u16			token,
 			struct dpni_link_state	*state);
+
+int dpni_get_link_state_v2(struct fsl_mc_io	*mc_io,
+			   u32			cmd_flags,
+			   u16			token,
+			   struct dpni_link_state	*state);
 
 /**
  * struct dpni_tx_shaping - Structure representing DPNI tx shaping configuration

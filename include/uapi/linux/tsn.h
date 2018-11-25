@@ -13,6 +13,8 @@
 #define MAX_ENTRY_SIZE 2048
 #define MAX_ENTRY_NUMBER 128
 #define MAX_IFNAME_COUNT 64
+#define NUM_MSCC_QOS_PRIO 8
+#define MSCC_QOS_PRIO_MAX (NUM_MSCC_QOS_PRIO - 1)
 
 enum tsn_capability {
 	TSN_CAP_QBV = 0x1,
@@ -54,6 +56,9 @@ enum {
 	TSN_CMD_QAV_GET_CBS,
 	TSN_CMD_TSD_SET,
 	TSN_CMD_TSD_GET,
+	TSN_CMD_CT_SET,
+	TSN_CMD_CBGEN_SET,
+	TSN_CMD_CBREC_SET,
 	TSN_CMD_ECHO,			/* user->kernel request/get-response */
 	TSN_CMD_REPLY,			/* kernel->user event */
 	__TSN_CMD_MAX,
@@ -76,6 +81,9 @@ enum {
 	TSN_ATTR_CBS,			/* credit-based shaper */
 	TSN_ATTR_TSD,			/* Time Specific Departure */
 	TSN_ATTR_QBU,			/* preemption */
+	TSN_ATTR_CT,			/* cut through */
+	TSN_ATTR_CBGEN,			/* 802.1CB sequence generate */
+	TSN_ATTR_CBREC,			/* 802.1CB sequence recover */
 	__TSN_CMD_ATTR_MAX,
 };
 #define TSN_CMD_ATTR_MAX (__TSN_CMD_ATTR_MAX - 1)
@@ -118,6 +126,7 @@ enum {
 	TSN_STREAMID_ATTR_ENABLE,
 	TSN_STREAMID_ATTR_DISABLE,
 	TSN_STREAMID_ATTR_STREAM_HANDLE,
+	TSN_STREAMID_ATTR_SSID,
 	TSN_STREAMID_ATTR_IFOP,
 	TSN_STREAMID_ATTR_OFOP,
 	TSN_STREAMID_ATTR_IFIP,
@@ -266,6 +275,34 @@ enum {
 	TSN_QBV_ATTR_ENTRY_TM,
 	__TSN_QBV_ATTR_ENTRY_MAX,
 	TSN_QBV_ATTR_ENTRY_MAX = __TSN_QBV_ATTR_ENTRY_MAX - 1,
+};
+
+enum {
+	TSN_CT_ATTR_UNSPEC,
+	TSN_CT_ATTR_QUEUE_STATE,
+	__TSN_CT_ATTR_MAX,
+	TSN_CT_ATTR_MAX = __TSN_CT_ATTR_MAX - 1,
+};
+
+enum {
+	TSN_CBGEN_ATTR_UNSPEC,
+	TSN_CBGEN_ATTR_INDEX,
+	TSN_CBGEN_ATTR_PORT_MASK,
+	TSN_CBGEN_ATTR_SPLIT_MASK,
+	TSN_CBGEN_ATTR_SEQ_LEN,
+	TSN_CBGEN_ATTR_SEQ_NUM,
+	__TSN_CBGEN_ATTR_MAX,
+	TSN_CBGEN_ATTR_MAX = __TSN_CBGEN_ATTR_MAX - 1,
+};
+
+enum {
+	TSN_CBREC_ATTR_UNSPEC,
+	TSN_CBREC_ATTR_INDEX,
+	TSN_CBREC_ATTR_SEQ_LEN,
+	TSN_CBREC_ATTR_HIS_LEN,
+	TSN_CBREC_ATTR_TAG_POP_EN,
+	__TSN_CBREC_ATTR_MAX,
+	TSN_CBREC_ATTR_MAX = __TSN_CBREC_ATTR_MAX - 1,
 };
 
 #define ptptime_t uint64_t
@@ -437,6 +474,8 @@ struct tsn_cb_streamid {
 	 * tsnStreamIdHandle object.
 	 */
 	int32_t handle;
+
+	int32_t ssid;
 
 	/* The list of ports on which an in-facing Stream identification function
 	 * in the output (towards the system forwarding function) direction
@@ -808,6 +847,19 @@ struct tsn_qci_psfp_fmi {
 	 */
 	bool mark_red;
 
+};
+
+struct tsn_seq_gen_conf {
+	uint8_t iport_mask;
+	uint8_t split_mask;
+	uint8_t seq_len;
+	uint32_t seq_num;
+};
+
+struct tsn_seq_rec_conf {
+	uint8_t seq_len;
+	uint8_t his_len;
+	bool rtag_pop_en;
 };
 
 /* An entry for gate control list */

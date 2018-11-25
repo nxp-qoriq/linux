@@ -52,6 +52,11 @@ struct tsn_ops {
 						struct tsn_preempt_status *preemptstat);
 	int (*tsd_set)(struct net_device *, struct tsn_tsd *);
 	int (*tsd_get)(struct net_device *, struct tsn_tsd_status *);
+	int (*ct_set)(struct net_device *, u8 cut_thru);
+	int (*cbgen_set)(struct net_device *, u32 index,
+			 struct tsn_seq_gen_conf *);
+	int (*cbrec_set)(struct net_device *, u32 index,
+			 struct tsn_seq_rec_conf *);
 };
 
 #endif

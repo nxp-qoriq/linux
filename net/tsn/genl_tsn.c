@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 NXP
+ * Copyright 2017-2018 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -75,7 +75,29 @@ static const struct nla_policy tsn_cmd_policy[TSN_CMD_ATTR_MAX + 1] = {
 	[TSN_ATTR_QCI_FMI]		= { .type = NLA_NESTED },
 	[TSN_ATTR_CBS]			= { .type = NLA_NESTED },
 	[TSN_ATTR_TSD]			= { .type = NLA_NESTED },
-	[TSN_ATTR_QBU]			= {	.type = NLA_NESTED },
+	[TSN_ATTR_QBU]			= { .type = NLA_NESTED },
+	[TSN_ATTR_CT]			= { .type = NLA_NESTED },
+	[TSN_ATTR_CBGEN]                = { .type = NLA_NESTED },
+	[TSN_ATTR_CBREC]                = { .type = NLA_NESTED },
+};
+
+static const struct nla_policy ct_policy[TSN_CT_ATTR_MAX + 1] = {
+	[TSN_CT_ATTR_QUEUE_STATE]	= { .type = NLA_U8 }
+};
+
+static const struct nla_policy cbgen_policy[TSN_CBGEN_ATTR_MAX + 1] = {
+	[TSN_CBGEN_ATTR_INDEX]	        = { .type = NLA_U32 },
+	[TSN_CBGEN_ATTR_PORT_MASK]	= { .type = NLA_U8 },
+	[TSN_CBGEN_ATTR_SPLIT_MASK]	= { .type = NLA_U8 },
+	[TSN_CBGEN_ATTR_SEQ_LEN]	= { .type = NLA_U8 },
+	[TSN_CBGEN_ATTR_SEQ_NUM]        = { .type = NLA_U32 },
+};
+
+static const struct nla_policy cbrec_policy[TSN_CBREC_ATTR_MAX + 1] = {
+	[TSN_CBREC_ATTR_INDEX]          = { .type = NLA_U32 },
+	[TSN_CBREC_ATTR_SEQ_LEN]	= { .type = NLA_U8 },
+	[TSN_CBREC_ATTR_HIS_LEN]        = { .type = NLA_U8 },
+	[TSN_CBREC_ATTR_TAG_POP_EN]     = { .type = NLA_FLAG },
 };
 
 static const struct nla_policy qbu_policy[TSN_QBU_ATTR_MAX + 1] = {
@@ -136,6 +158,7 @@ static const struct nla_policy cb_streamid_policy[TSN_STREAMID_ATTR_MAX + 1] = {
 	[TSN_STREAMID_ATTR_ENABLE] 	= { .type = NLA_FLAG},
 	[TSN_STREAMID_ATTR_DISABLE]	= { .type = NLA_FLAG},
 	[TSN_STREAMID_ATTR_STREAM_HANDLE]	= { .type = NLA_S32},
+	[TSN_STREAMID_ATTR_SSID]	= { .type = NLA_S32},
 	[TSN_STREAMID_ATTR_IFOP]	= { .type = NLA_U32},
 	[TSN_STREAMID_ATTR_OFOP]	= { .type = NLA_U32},
 	[TSN_STREAMID_ATTR_IFIP]	= { .type = NLA_U32},
@@ -507,6 +530,8 @@ static int cmd_cb_streamid_set(struct genl_info *info)
 	if (sid[TSN_STREAMID_ATTR_STREAM_HANDLE])
 		sidconf.handle = nla_get_s32(sid[TSN_STREAMID_ATTR_STREAM_HANDLE]);
 
+	if (sid[TSN_STREAMID_ATTR_SSID])
+		sidconf.ssid = nla_get_s32(sid[TSN_STREAMID_ATTR_SSID]);
 	if (sid[TSN_STREAMID_ATTR_IFOP])
 		sidconf.ifac_oport = nla_get_u32(sid[TSN_STREAMID_ATTR_IFOP]);
 	if (sid[TSN_STREAMID_ATTR_OFOP])
@@ -2463,6 +2488,155 @@ static int tsn_tsd_get(struct sk_buff *skb, struct genl_info *info)
 	return tsn_send_reply(rep_skb, info);
 }
 
+static int tsn_ct_set(struct sk_buff *skb, struct genl_info *info)
+{
+	struct nlattr *na;
+	struct nlattr *cta[TSN_CT_ATTR_MAX + 1];
+	struct net_device *netdev;
+	const struct tsn_ops *tsnops;
+	int ret;
+	u8 queue_stat;
+
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
+
+	if (!info->attrs[TSN_ATTR_CT]) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
+		return -EINVAL;
+	}
+
+	na = info->attrs[TSN_ATTR_CT];
+
+
+	tsnops = netdev->tsn_ops;
+
+	if (!tsnops->ct_set) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
+		return -1;
+	}
+
+	ret = NLA_PARSE_NESTED(cta, TSN_CT_ATTR_MAX, na, ct_policy);
+	if (ret) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
+		return -EINVAL;
+	}
+
+	queue_stat = nla_get_u8(cta[TSN_CT_ATTR_QUEUE_STATE]);
+
+	ret = tsnops->ct_set(netdev, queue_stat);
+	if (ret < 0) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_DEVRETERR);
+		return -EINVAL;
+	}
+	tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, TSN_SUCCESS);
+	return 0;
+}
+
+static int tsn_cbgen_set(struct sk_buff *skb, struct genl_info *info)
+{
+	struct nlattr *na;
+	struct nlattr *cbgena[TSN_CBGEN_ATTR_MAX + 1];
+	struct net_device *netdev;
+	const struct tsn_ops *tsnops;
+	int ret;
+	u32 index;
+	struct tsn_seq_gen_conf sg_conf;
+
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
+
+	if (!info->attrs[TSN_ATTR_CBGEN]) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
+		return -EINVAL;
+	}
+
+	na = info->attrs[TSN_ATTR_CBGEN];
+
+
+	tsnops = netdev->tsn_ops;
+
+	if (!tsnops->cbgen_set) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
+		return -1;
+	}
+
+	ret = NLA_PARSE_NESTED(cbgena, TSN_CBGEN_ATTR_MAX, na, cbgen_policy);
+	if (ret) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
+		return -EINVAL;
+	}
+
+	index = nla_get_u32(cbgena[TSN_CBGEN_ATTR_INDEX]);
+
+	memset(&sg_conf, 0, sizeof(struct tsn_seq_gen_conf));
+	sg_conf.iport_mask = nla_get_u8(cbgena[TSN_CBGEN_ATTR_PORT_MASK]);
+	sg_conf.split_mask = nla_get_u8(cbgena[TSN_CBGEN_ATTR_SPLIT_MASK]);
+	sg_conf.seq_len = nla_get_u8(cbgena[TSN_CBGEN_ATTR_SEQ_LEN]);
+	sg_conf.seq_num = nla_get_u32(cbgena[TSN_CBGEN_ATTR_SEQ_NUM]);
+
+	ret = tsnops->cbgen_set(netdev, index, &sg_conf);
+	if (ret < 0) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_DEVRETERR);
+		return -EINVAL;
+	}
+	tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, TSN_SUCCESS);
+	return 0;
+}
+
+
+static int tsn_cbrec_set(struct sk_buff *skb, struct genl_info *info)
+{
+	struct nlattr *na;
+	struct nlattr *cbreca[TSN_CBREC_ATTR_MAX + 1];
+	struct net_device *netdev;
+	const struct tsn_ops *tsnops;
+	int ret;
+	u32 index;
+	struct tsn_seq_rec_conf sr_conf;
+
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
+
+	if (!info->attrs[TSN_ATTR_CBREC]) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
+		return -EINVAL;
+	}
+
+	na = info->attrs[TSN_ATTR_CBREC];
+
+
+	tsnops = netdev->tsn_ops;
+
+	if (!tsnops->cbrec_set) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
+		return -1;
+	}
+
+	ret = NLA_PARSE_NESTED(cbreca, TSN_CBREC_ATTR_MAX, na, cbrec_policy);
+	if (ret) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
+		return -EINVAL;
+	}
+
+	index = nla_get_u32(cbreca[TSN_CBREC_ATTR_INDEX]);
+
+	memset(&sr_conf, 0, sizeof(struct tsn_seq_rec_conf));
+	sr_conf.seq_len = nla_get_u8(cbreca[TSN_CBREC_ATTR_SEQ_LEN]);
+	sr_conf.his_len = nla_get_u8(cbreca[TSN_CBREC_ATTR_HIS_LEN]);
+	sr_conf.rtag_pop_en = nla_get_flag(cbreca[TSN_CBREC_ATTR_TAG_POP_EN]);
+
+	ret = tsnops->cbrec_set(netdev, index, &sr_conf);
+	if (ret < 0) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_DEVRETERR);
+		return -EINVAL;
+	}
+	tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, TSN_SUCCESS);
+	return 0;
+}
+
 static const struct genl_ops tsnnl_ops[] = {
 	{
 		.cmd		= TSN_CMD_ECHO,
@@ -2601,6 +2775,24 @@ static const struct genl_ops tsnnl_ops[] = {
 	{
 		.cmd		= TSN_CMD_TSD_GET,
 		.doit		= tsn_tsd_get,
+		.policy		= tsn_cmd_policy,
+		.flags		= GENL_ADMIN_PERM,
+	},
+	{
+		.cmd		= TSN_CMD_CT_SET,
+		.doit		= tsn_ct_set,
+		.policy		= tsn_cmd_policy,
+		.flags		= GENL_ADMIN_PERM,
+	},
+	{
+		.cmd		= TSN_CMD_CBGEN_SET,
+		.doit		= tsn_cbgen_set,
+		.policy		= tsn_cmd_policy,
+		.flags		= GENL_ADMIN_PERM,
+	},
+	{
+		.cmd		= TSN_CMD_CBREC_SET,
+		.doit		= tsn_cbrec_set,
 		.policy		= tsn_cmd_policy,
 		.flags		= GENL_ADMIN_PERM,
 	},

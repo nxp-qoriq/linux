@@ -13,9 +13,11 @@
 #include <linux/if_vlan.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
+#include <net/tsn.h>
 
 #include "ocelot_ana.h"
 #include "ocelot_dev.h"
+#include "ocelot_dev_gmii.h"
 #include "ocelot_hsio.h"
 #include "ocelot_qsys.h"
 #include "ocelot_rew.h"
@@ -24,6 +26,10 @@
 
 #define PGID_AGGR    64
 #define PGID_SRC     80
+#define TRUE 1
+#define FALSE 0
+#define SUCCESS 1
+#define FAILED 0
 
 /* Reserved PGIDs */
 #define PGID_CPU     (PGID_AGGR - 5)
@@ -40,6 +46,11 @@
 
 /* Length for long prefix header used for frame injection/extraction */
 #define XFH_LONG_PREFIX_LEN 32
+
+#define SWITCH_TAS_GCL_MAX 64
+#define SWITCH_TAS_CT_MAX 1000000000
+#define SWITCH_TAS_CT_MIN 100
+#define SWITCH_TAS_CTE_MAX 999999999
 
 struct frame_info {
 	u32 len;
@@ -70,6 +81,7 @@ enum ocelot_target {
 	QSYS,
 	REW,
 	SYS,
+	DEVCPU_PTP,
 	HSIO,
 	TARGET_MAX,
 };
@@ -336,6 +348,12 @@ enum ocelot_reg {
 //	SYS_CM_DATA_RD,
 //	SYS_CM_OP,
 	SYS_CM_DATA,
+	DEVCPU_PTP_PINS = DEVCPU_PTP << TARGET_OFFSET,
+	DEVCPU_PTP_CFG,
+	DEVCPU_PTP_CUR_NSF,
+	DEVCPU_PTP_CUR_NSEC,
+	DEVCPU_PTP_CUR_SEC_LSB,
+	DEVCPU_PTP_CUR_SEC_MSB,
 	HSIO_PLL5G_CFG0 = HSIO << TARGET_OFFSET,
 	HSIO_PLL5G_CFG1,
 	HSIO_PLL5G_CFG2,
@@ -456,6 +474,19 @@ enum ocelot_regfield {
 	SYS_RESET_CFG_CORE_ENA,
 	SYS_RESET_CFG_MEM_ENA,
 	SYS_RESET_CFG_MEM_INIT,
+	ANA_TABLES_STREAMDATA_SFID_0,
+	ANA_TABLES_STREAMDATA_SFID_VALID_0,
+	ANA_TABLES_SFIDTIDX_SFID_INDEX_0,
+	ANA_SG_ACCESS_CTRL_CONFIG_CHANGE_0,
+	ANA_SG_ACCESS_CTRL_SGID_0,
+	ANA_SG_CONFIG_REG_3_GATE_ENABLE_0,
+	QSYS_TAS_PARAM_CFG_CTRL_PORT_NUM_0,
+	QSYS_GCL_STATUS_REG_1_GCL_ENTRY_NUM_0,
+	QSYS_GCL_CFG_REG_1_GATE_STATE_0,
+	QSYS_GCL_CFG_REG_1_GCL_ENTRY_NUM_0,
+	QSYS_TAS_PARAM_CFG_CTRL_CONFIG_CHANGE_0,
+	QSYS_TAG_CONFIG_ENABLE_0,
+	SYS_STAT_CFG_STAT_VIEW_0,
 	REGFIELD_MAX
 };
 
@@ -534,6 +565,8 @@ struct ocelot_port {
 
 	u64 *stats;
 
+	u8 cbs_weight[MSCC_QOS_PRIO_MAX];
+
 	/* cpu frame injection handler */
 	netdev_tx_t (*cpu_inj_handler)(struct sk_buff *skb, struct ocelot_port *port);
 	void *cpu_inj_handler_data;
@@ -579,5 +612,41 @@ int ocelot_probe_port(struct ocelot *ocelot, u8 port,
 		      struct phy_device *phy);
 
 extern struct notifier_block ocelot_netdevice_nb;
+
+int switch_qbv_set(struct net_device *ndev,
+		   struct tsn_qbv_conf *shaper_config);
+int switch_qbv_get(struct net_device *ndev,
+		   struct tsn_qbv_conf *shaper_config);
+int switch_qbv_get_status(struct net_device *ndev,
+			  struct tsn_qbv_status *qbvstatus);
+int switch_cut_thru_set(struct net_device *ndev, u8 cut_thru);
+int switch_cbs_set(struct net_device *ndev, u8 tc, u8 bw);
+int switch_qbu_set(struct net_device *ndev, u8 preemptable);
+int switch_cb_streamid_get(struct net_device *ndev, u32 index,
+			   struct tsn_cb_streamid *streamid);
+int switch_cb_streamid_set(struct net_device *ndev, u32 index,
+			   bool enable, struct tsn_cb_streamid *streamid);
+int switch_qci_sfi_get(struct net_device *ndev, u32 index,
+		       struct tsn_qci_psfp_sfi_conf *sfi);
+int switch_qci_sfi_set(struct net_device *ndev, u32 index,
+		       bool enable, struct tsn_qci_psfp_sfi_conf *sfi);
+int switch_cb_streamid_counters_get(struct net_device *ndev, u32 index,
+				    struct tsn_cb_streamid_counters *s_counters);
+int switch_qci_sfi_counters_get(struct net_device *ndev, u32 index,
+				struct tsn_qci_psfp_sfi_counters *sfi_counters);
+int switch_qci_sgi_set(struct net_device *ndev, u32 index,
+		       struct tsn_qci_psfp_sgi_conf *sgi_conf);
+int switch_qci_sgi_get(struct net_device *ndev, u32 index,
+		       struct tsn_qci_psfp_sgi_conf *sgi_conf);
+int switch_qci_sgi_status_get(struct net_device *ndev, u16 index,
+			      struct tsn_psfp_sgi_status *sgi_status);
+int switch_qci_fmi_set(struct net_device *ndev, u32 index,
+		       bool enable, struct tsn_qci_psfp_fmi *fmi);
+int switch_qci_fmi_get(struct net_device *ndev, u32 index,
+		       struct tsn_qci_psfp_fmi *fmi);
+int switch_seq_gen_set(struct net_device *ndev, u32 index,
+		       struct tsn_seq_gen_conf *sg_conf);
+int switch_seq_rec_set(struct net_device *ndev, u32 index,
+		       struct tsn_seq_rec_conf *sr_conf);
 
 #endif

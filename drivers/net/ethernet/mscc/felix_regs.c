@@ -248,12 +248,22 @@ static const u32 felix_sys_regmap[] = {
 //	REG(SYS_CM_OP,                     0x000f34),
 };
 
+static const u32 felix_devcpu_ptp_regmap[] = {
+	REG(DEVCPU_PTP_PINS,		   0x000000),
+	REG(DEVCPU_PTP_CFG,		   0x0000a0),
+	REG(DEVCPU_PTP_CUR_NSF,		   0x0000bc),
+	REG(DEVCPU_PTP_CUR_NSEC,           0x0000c0),
+	REG(DEVCPU_PTP_CUR_SEC_LSB,        0x0000c4),
+	REG(DEVCPU_PTP_CUR_SEC_MSB,        0x0000c8),
+};
+
 static const u32 *felix_regmap[] = {
 	[ANA] = felix_ana_regmap,
 	[QS] = felix_qs_regmap,
 	[QSYS] = felix_qsys_regmap,
 	[REW] = felix_rew_regmap,
 	[SYS] = felix_sys_regmap,
+	[DEVCPU_PTP] = felix_devcpu_ptp_regmap,
 };
 
 static const struct reg_field felix_regfields[] = {
@@ -304,6 +314,32 @@ static const struct reg_field felix_regfields[] = {
 	[QSYS_TIMED_FRAME_ENTRY_TFRM_TM_T] =
 		REG_FIELD(QSYS_TIMED_FRAME_ENTRY, 0, 0),
 	[SYS_RESET_CFG_CORE_ENA] = REG_FIELD(SYS_RESET_CFG, 0, 0),
+	[SYS_RESET_CFG_MEM_ENA] = REG_FIELD(SYS_RESET_CFG, 1, 1),
+	[SYS_RESET_CFG_MEM_INIT] = REG_FIELD(SYS_RESET_CFG, 0, 0),
+	[ANA_TABLES_STREAMDATA_SFID_0] =
+		REG_FIELD(ANA_TABLES_STREAMDATA, 0, 7),
+	[ANA_TABLES_STREAMDATA_SFID_VALID_0] =
+		REG_FIELD(ANA_TABLES_STREAMDATA, 8, 8),
+	[ANA_TABLES_SFIDTIDX_SFID_INDEX_0] =
+		REG_FIELD(ANA_TABLES_SFIDTIDX, 0, 7),
+	[ANA_SG_ACCESS_CTRL_CONFIG_CHANGE_0] =
+		REG_FIELD(ANA_SG_ACCESS_CTRL, 28, 28),
+	[ANA_SG_ACCESS_CTRL_SGID_0] =
+		REG_FIELD(ANA_SG_ACCESS_CTRL, 0, 7),
+	[ANA_SG_CONFIG_REG_3_GATE_ENABLE_0] =
+		REG_FIELD(ANA_SG_CONFIG_REG_3, 20, 20),
+	[QSYS_TAS_PARAM_CFG_CTRL_PORT_NUM_0] =
+		REG_FIELD(QSYS_TAS_PARAM_CFG_CTRL, 0, 7),
+	[QSYS_GCL_STATUS_REG_1_GCL_ENTRY_NUM_0] =
+		REG_FIELD(QSYS_GCL_STATUS_REG_1, 0, 5),
+	[QSYS_GCL_CFG_REG_1_GATE_STATE_0] =
+		REG_FIELD(QSYS_GCL_CFG_REG_1, 8, 15),
+	[QSYS_GCL_CFG_REG_1_GCL_ENTRY_NUM_0] =
+		REG_FIELD(QSYS_GCL_CFG_REG_1, 0, 5),
+	[QSYS_TAS_PARAM_CFG_CTRL_CONFIG_CHANGE_0] =
+		REG_FIELD(QSYS_TAS_PARAM_CFG_CTRL, 16, 16),
+	[QSYS_TAG_CONFIG_ENABLE_0] = REG_FIELD(QSYS_TAG_CONFIG, 0, 0),
+	[SYS_STAT_CFG_STAT_VIEW_0] = REG_FIELD(SYS_STAT_CFG, 0, 9),
 };
 
 static const struct ocelot_stat_layout felix_stats_layout[] = {

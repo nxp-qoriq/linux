@@ -148,11 +148,10 @@
 	};
 
 	reboot {
-		compatible ="syscon-reboot";
-		regmap = <&dcfg>;
-		offset = <0xb0>;
+		compatible = "syscon-reboot";
+		regmap = <&rstcr>;
+		offset = <0x0>;
 		mask = <0x02>;
-		status = "disabled";
 	};
 
 	timer {
@@ -279,6 +278,11 @@
 			compatible = "fsl,ls1028a-dcfg", "syscon";
 			reg = <0x0 0x1e00000 0x0 0x10000>;
 			big-endian;
+		};
+
+		rstcr: syscon@1e60000 {
+		compatible = "fsl,ls1028a-rstcr", "syscon";
+		reg = <0x0 0x1e60000 0x0 0x4>;
 		};
 
 		clockgen: clocking@1300000 {

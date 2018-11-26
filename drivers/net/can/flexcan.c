@@ -1035,6 +1035,9 @@ static void flexcan_set_bittiming(struct net_device *dev)
 			reg_fdctrl |= FLEXCAN_FDCTRL_TDCOFF(tdcoff);
 			reg_fdctrl |= FLEXCAN_FDCTRL_MBDSR0(3) |
 				      FLEXCAN_FDCTRL_MBDSR1(3);
+			if (data_bt->brp != bt->brp)
+				netdev_warn(dev, "data brp = %d, brp = %d",
+					    data_bt->brp, bt->brp);
 		} else {
 			reg_fdctrl |= FLEXCAN_FDCTRL_MBDSR0(0) |
 				      FLEXCAN_FDCTRL_MBDSR1(0);

@@ -1103,8 +1103,9 @@ static void enetc_setup_txbdr(struct enetc_hw *hw, struct enetc_bdr *tx_ring)
 	enetc_txbdr_wr(hw, idx, ENETC_TBLENR,
 		       ENETC_RTBLENR_LEN(tx_ring->bd_count));
 
-	enetc_txbdr_wr(hw, idx, ENETC_TBPIR, 0);
-	enetc_txbdr_wr(hw, idx, ENETC_TBCIR, 0);
+	/* clearing PI/CI registers for Tx not supported, adjust sw indexes */
+	tx_ring->next_to_use = enetc_txbdr_rd(hw, idx, ENETC_TBPIR);
+	tx_ring->next_to_clean = enetc_txbdr_rd(hw, idx, ENETC_TBCIR);
 
 	/* enable Tx ints by setting pkt thr to 1 */
 	enetc_txbdr_wr(hw, idx, ENETC_TBICIR0, ENETC_TBICIR0_ICEN | 0x1);

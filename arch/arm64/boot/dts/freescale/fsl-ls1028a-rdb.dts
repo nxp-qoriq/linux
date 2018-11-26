@@ -255,9 +255,12 @@
 	};
 };
 
-&enetc_port0 {
-	phy-handle = <&sgmii_phy0>;
-	phy-connection-type = "sgmii";
+&enetc_port0 { /* workaround MDIO issue, normally it's sgmii_phy0 */
+	phy-connection-type = "internal";
+	fixed-link {
+		speed = <1000>;
+		full-duplex;
+	};
 };
 
 &enetc_port1 {
@@ -281,24 +284,36 @@
 };
 
 /* l2switch ports */
-&switch_port0 {
-	phy-handle = <&qsgmii_phy1>;
-	phy-connection-type = "qsgmii";
+&switch_port0 { /* workaround MDIO issue, normally it's gsgmii_phyX */
+	phy-connection-type = "internal";
+	fixed-link {
+		speed = <1000>;
+		full-duplex;
+	};
 };
 
 &switch_port1 {
-	phy-handle = <&qsgmii_phy2>;
-	phy-connection-type = "qsgmii";
+	phy-connection-type = "internal";
+	fixed-link {
+		speed = <1000>;
+		full-duplex;
+	};
 };
 
 &switch_port2 {
-	phy-handle = <&qsgmii_phy3>;
-	phy-connection-type = "qsgmii";
+	phy-connection-type = "internal";
+	fixed-link {
+		speed = <1000>;
+		full-duplex;
+	};
 };
 
 &switch_port3 {
-	phy-handle = <&qsgmii_phy3>;
-	phy-connection-type = "qsgmii";
+	phy-connection-type = "internal";
+	fixed-link {
+		speed = <1000>;
+		full-duplex;
+	};
 };
 
 &edp {

@@ -91,10 +91,10 @@ static void __install_bp_hardening_cb(bp_hardening_cb_t fn,
 				      const char *hyp_vecs_end)
 {
 	static int last_slot = -1;
-	static DEFINE_SPINLOCK(bp_lock);
+	static DEFINE_RAW_SPINLOCK(bp_lock);
 	int cpu, slot = -1;
 
-	spin_lock(&bp_lock);
+	raw_spin_lock(&bp_lock);
 	for_each_possible_cpu(cpu) {
 		if (per_cpu(bp_hardening_data.fn, cpu) == fn) {
 			slot = per_cpu(bp_hardening_data.hyp_vectors_slot, cpu);
@@ -112,7 +112,7 @@ static void __install_bp_hardening_cb(bp_hardening_cb_t fn,
 
 	__this_cpu_write(bp_hardening_data.hyp_vectors_slot, slot);
 	__this_cpu_write(bp_hardening_data.fn, fn);
-	spin_unlock(&bp_lock);
+	raw_spin_unlock(&bp_lock);
 }
 #else
 #define __qcom_hyp_sanitize_link_stack_start	NULL

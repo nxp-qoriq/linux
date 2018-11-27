@@ -18,8 +18,10 @@
 
 #include <linux/module.h>
 #include <linux/device.h>
+#include <linux/of.h>
 #include <linux/of_net.h>
 #include <linux/of_address.h>
+#include <linux/of_mdio.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <linux/clk.h>
@@ -89,11 +91,12 @@ static int pfe_get_gemac_if_proprties(struct device_node *parent, int port, int
 	}
 
 	addr = of_get_property(gem, "fsl,mdio-mux-val", &size);
-	if (!addr)
+	if (!addr) {
 		pr_err("%s: Invalid mdio-mux-val....\n", __func__);
-	else
+	} else {
 		phy_id = be32_to_cpup(addr);
 		pdata->ls1012a_eth_pdata[port].mdio_muxval = phy_id;
+	}
 
 	if (pdata->ls1012a_eth_pdata[port].phy_id < 32)
 		pfe->mdio_muxval[pdata->ls1012a_eth_pdata[port].phy_id] =
@@ -123,6 +126,8 @@ static int pfe_get_gemac_if_proprties(struct device_node *parent, int port, int
 	pdata->ls1012a_mdio_pdata[port].irq[0] = PHY_POLL;
 
 done:
+	if (of_phy_is_fixed_link(gem))
+		pdata->ls1012a_eth_pdata[port].phy_node = of_node_get(gem);
 
 	return 0;
 

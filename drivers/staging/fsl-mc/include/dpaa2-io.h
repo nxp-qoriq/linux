@@ -56,7 +56,8 @@ struct dpaa2_io_desc {
 	u32 qman_version;
 };
 
-struct dpaa2_io *dpaa2_io_create(const struct dpaa2_io_desc *desc);
+struct dpaa2_io *dpaa2_io_create(const struct dpaa2_io_desc *desc,
+				 struct device *dev);
 
 void dpaa2_io_down(struct dpaa2_io *d);
 
@@ -90,9 +91,11 @@ struct dpaa2_io_notification_ctx {
 };
 
 int dpaa2_io_service_register(struct dpaa2_io *service,
-			      struct dpaa2_io_notification_ctx *ctx);
+			      struct dpaa2_io_notification_ctx *ctx,
+			      struct device *dev);
 void dpaa2_io_service_deregister(struct dpaa2_io *service,
-				 struct dpaa2_io_notification_ctx *ctx);
+				 struct dpaa2_io_notification_ctx *ctx,
+				 struct device *dev);
 int dpaa2_io_service_rearm(struct dpaa2_io *service,
 			   struct dpaa2_io_notification_ctx *ctx);
 

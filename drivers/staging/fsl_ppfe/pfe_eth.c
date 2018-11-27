@@ -39,6 +39,9 @@
 #include <net/ip.h>
 #include <net/sock.h>
 
+#include <linux/of.h>
+#include <linux/of_mdio.h>
+
 #include <linux/io.h>
 #include <asm/irq.h>
 #include <linux/delay.h>
@@ -65,6 +68,36 @@ static void pfe_eth_exit_one(struct pfe_eth_priv_s *priv);
 static void pfe_eth_flush_tx(struct pfe_eth_priv_s *priv);
 static void pfe_eth_flush_txQ(struct pfe_eth_priv_s *priv, int tx_q_num, int
 				from_tx, int n_desc);
+
+/* MDIO registers */
+#define MDIO_SGMII_CR			0x00
+#define MDIO_SGMII_SR			0x01
+#define MDIO_SGMII_DEV_ABIL_SGMII	0x04
+#define MDIO_SGMII_LINK_TMR_L		0x12
+#define MDIO_SGMII_LINK_TMR_H		0x13
+#define MDIO_SGMII_IF_MODE		0x14
+
+/* SGMII Control defines */
+#define SGMII_CR_RST			0x8000
+#define SGMII_CR_AN_EN			0x1000
+#define SGMII_CR_RESTART_AN		0x0200
+#define SGMII_CR_FD			0x0100
+#define SGMII_CR_SPEED_SEL1_1G		0x0040
+#define SGMII_CR_DEF_VAL		(SGMII_CR_AN_EN | SGMII_CR_FD | \
+					 SGMII_CR_SPEED_SEL1_1G)
+
+/* SGMII IF Mode */
+#define SGMII_DUPLEX_HALF		0x10
+#define SGMII_SPEED_10MBPS		0x00
+#define SGMII_SPEED_100MBPS		0x04
+#define SGMII_SPEED_1GBPS		0x08
+#define SGMII_USE_SGMII_AN		0x02
+#define SGMII_EN			0x01
+
+/* SGMII Device Ability for SGMII */
+#define SGMII_DEV_ABIL_ACK		0x4000
+#define SGMII_DEV_ABIL_EEE_CLK_STP_EN	0x0100
+#define SGMII_DEV_ABIL_SGMII		0x0001
 
 unsigned int gemac_regs[] = {
 	0x0004, /* Interrupt event */
@@ -1042,6 +1075,10 @@ static int pfe_get_phydev_speed(struct phy_device *phydev)
 #define SCFG_RGMIIPCR_SETSP_10M         (0x00000002)
 #define SCFG_RGMIIPCR_SETFD             (0x00000001)
 
+#define MDIOSELCR	0x484
+#define MDIOSEL_SERDES	0x0
+#define MDIOSEL_EXTPHY  0x80000000
+
 static void pfe_set_rgmii_speed(struct phy_device *phydev)
 {
 	u32 rgmii_pcr;
@@ -1186,25 +1223,34 @@ static void ls1012a_configure_serdes(struct net_device *ndev)
 	netif_info(priv, drv, ndev, "%s\n", __func__);
 	/* PCS configuration done with corresponding GEMAC */
 
-	pfe_eth_mdio_read(bus, 0, 0);
-	pfe_eth_mdio_read(bus, 0, 1);
+	pfe_eth_mdio_read(bus, 0, MDIO_SGMII_CR);
+	pfe_eth_mdio_read(bus, 0, MDIO_SGMII_SR);
 
-       /*These settings taken from validtion team */
-	pfe_eth_mdio_write(bus, 0, 0x0, 0x8000);
+	pfe_eth_mdio_write(bus, 0, MDIO_SGMII_CR, SGMII_CR_RST);
+
 	if (sgmii_2500) {
-		pfe_eth_mdio_write(bus, 0, 0x14, 0x9);
-		pfe_eth_mdio_write(bus, 0, 0x4, 0x4001);
-		pfe_eth_mdio_write(bus, 0, 0x12, 0xa120);
-		pfe_eth_mdio_write(bus, 0, 0x13, 0x7);
+		pfe_eth_mdio_write(bus, 0, MDIO_SGMII_IF_MODE, SGMII_SPEED_1GBPS
+							       | SGMII_EN);
+		pfe_eth_mdio_write(bus, 0, MDIO_SGMII_DEV_ABIL_SGMII,
+				   SGMII_DEV_ABIL_ACK | SGMII_DEV_ABIL_SGMII);
+		pfe_eth_mdio_write(bus, 0, MDIO_SGMII_LINK_TMR_L, 0xa120);
+		pfe_eth_mdio_write(bus, 0, MDIO_SGMII_LINK_TMR_H, 0x7);
 		/* Autonegotiation need to be disabled for 2.5G SGMII mode*/
-		value = 0x0140;
-		pfe_eth_mdio_write(bus, 0, 0x0, value);
+		value = SGMII_CR_FD | SGMII_CR_SPEED_SEL1_1G;
+		pfe_eth_mdio_write(bus, 0, MDIO_SGMII_CR, value);
 	} else {
-		pfe_eth_mdio_write(bus, 0, 0x14, 0xb);
-		pfe_eth_mdio_write(bus, 0, 0x4, 0x1a1);
-		pfe_eth_mdio_write(bus, 0, 0x12, 0x400);
-		pfe_eth_mdio_write(bus, 0, 0x13, 0x0);
-		pfe_eth_mdio_write(bus, 0, 0x0, 0x1140);
+		pfe_eth_mdio_write(bus, 0, MDIO_SGMII_IF_MODE,
+				   SGMII_SPEED_1GBPS
+				   | SGMII_USE_SGMII_AN
+				   | SGMII_EN);
+		pfe_eth_mdio_write(bus, 0, MDIO_SGMII_DEV_ABIL_SGMII,
+				   SGMII_DEV_ABIL_EEE_CLK_STP_EN
+				   | 0xa0
+				   | SGMII_DEV_ABIL_SGMII);
+		pfe_eth_mdio_write(bus, 0, MDIO_SGMII_LINK_TMR_L, 0x400);
+		pfe_eth_mdio_write(bus, 0, MDIO_SGMII_LINK_TMR_H, 0x0);
+		value = SGMII_CR_AN_EN | SGMII_CR_FD | SGMII_CR_SPEED_SEL1_1G;
+		pfe_eth_mdio_write(bus, 0, MDIO_SGMII_CR, value);
 	}
 }
 
@@ -1219,6 +1265,8 @@ static int pfe_phy_init(struct net_device *ndev)
 	char phy_id[MII_BUS_ID_SIZE + 3];
 	char bus_id[MII_BUS_ID_SIZE];
 	phy_interface_t interface;
+	struct device_node *phy_node;
+	int rc;
 
 	priv->oldlink = 0;
 	priv->oldspeed = 0;
@@ -1234,22 +1282,35 @@ static int pfe_phy_init(struct net_device *ndev)
 	    (interface == PHY_INTERFACE_MODE_2500SGMII)) {
 		/*Configure SGMII PCS */
 		if (pfe->scfg) {
-			/*Config MDIO from serdes */
-			regmap_write(pfe->scfg, 0x484, 0x00000000);
+			/* Config MDIO from serdes */
+			regmap_write(pfe->scfg, MDIOSELCR, MDIOSEL_SERDES);
 		}
 		ls1012a_configure_serdes(ndev);
 	}
 
 	if (pfe->scfg) {
 		/*Config MDIO from PAD */
-		regmap_write(pfe->scfg, 0x484, 0x80000000);
+		regmap_write(pfe->scfg, MDIOSELCR, MDIOSEL_EXTPHY);
 	}
 
 	priv->oldlink = 0;
 	priv->oldspeed = 0;
 	priv->oldduplex = -1;
 	pr_info("%s interface %x\n", __func__, interface);
-	phydev = phy_connect(ndev, phy_id, &pfe_eth_adjust_link, interface);
+
+	if (of_phy_is_fixed_link(priv->phy_node)) {
+		rc = of_phy_register_fixed_link(priv->phy_node);
+		if (rc)
+			return rc;
+		phy_node = of_node_get(priv->phy_node);
+		phydev = of_phy_connect(ndev, phy_node, pfe_eth_adjust_link, 0,
+					priv->einfo->mii_config);
+		of_node_put(phy_node);
+
+	} else {
+		phydev = phy_connect(ndev, phy_id,
+				     &pfe_eth_adjust_link, interface);
+	}
 
 	if (IS_ERR(phydev)) {
 		netdev_err(ndev, "phy_connect() failed\n");
@@ -2327,6 +2388,7 @@ static int pfe_eth_init_one(struct pfe *pfe, int id)
 	priv->ndev = ndev;
 	priv->id = einfo[id].gem_id;
 	priv->pfe = pfe;
+	priv->phy_node = einfo[id].phy_node;
 
 	SET_NETDEV_DEV(priv->ndev, priv->pfe->dev);
 
@@ -2337,10 +2399,6 @@ static int pfe_eth_init_one(struct pfe *pfe, int id)
 	priv->EMAC_baseaddr = cbus_emac_base[id];
 	priv->PHY_baseaddr = cbus_emac_base[0];
 	priv->GPI_baseaddr = cbus_gpi_base[id];
-
-#define HIF_GEMAC_TMUQ_BASE	6
-	priv->low_tmu_q	=  HIF_GEMAC_TMUQ_BASE + (id * 2);
-	priv->high_tmu_q	=  priv->low_tmu_q + 1;
 
 	spin_lock_init(&priv->lock);
 

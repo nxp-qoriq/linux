@@ -70,6 +70,16 @@ int dp_fw_init(state_struct *state)
 		DRM_ERROR("echo test failed, check firmware!\n");
 		return -ENXIO;
 	}
+	DRM_INFO("CDN_API_General_Test_Echo_Ext_blocking (ret = %d echo_resp = %s)\n",
+		ret, echo_resp);
+
+	/* Line swaping */
+	CDN_API_General_Write_Register_blocking(state,
+						ADDR_SOURCD_PHY +
+						(LANES_CONFIG << 2),
+						0x00400000 |
+						hdp->lane_mapping);
+	DRM_INFO("CDN_API_General_Write_Register_blockin ... setting LANES_CONFIG\n");
 
 	return 0;
 }
@@ -469,6 +479,7 @@ int dp_phy_init_t28hpc(state_struct *state,
 {
 	struct imx_hdp *hdp = state_to_imx_hdp(state);
 	int max_link_rate = hdp->link_rate;
+	int lane_mapping = hdp->lane_mapping;
 	int num_lanes = 4;
 	int ret;
 
@@ -482,6 +493,14 @@ int dp_phy_init_t28hpc(state_struct *state,
 		max_link_rate = hdp->edp_link_rate;
 		num_lanes = hdp->edp_num_lanes;
 	}
+
+	/* Line swaping */
+	CDN_API_General_Write_Register_blocking(state,
+						ADDR_SOURCD_PHY +
+						(LANES_CONFIG << 2),
+						0x00400000 | lane_mapping);
+	DRM_INFO("CDN_*_Write_Register_blocking ... setting LANES_CONFIG %x\n",
+		 lane_mapping);
 
 	/* PHY initialization while phy reset pin is active */
 #ifdef CONFIG_EMU_PXP

@@ -58,11 +58,9 @@ static DEFINE_PER_CPU(int, last_cpu);
 /*
  * caam_qi_priv - CAAM QI backend private params
  * @cgr: QMan congestion group
- * @qi_pdev: platform device for QI backend
  */
 struct caam_qi_priv {
 	struct qman_cgr cgr;
-	struct platform_device *qi_pdev;
 };
 
 static struct caam_qi_priv qipriv ____cacheline_aligned;
@@ -495,7 +493,7 @@ EXPORT_SYMBOL(caam_drv_ctx_rel);
 int caam_qi_shutdown(struct device *qidev)
 {
 	int i, ret;
-	struct caam_qi_priv *priv = dev_get_drvdata(qidev);
+	struct caam_qi_priv *priv = &qipriv;
 	const cpumask_t *cpus = qman_affine_cpus();
 	struct cpumask old_cpumask = current->cpus_allowed;
 
@@ -528,7 +526,6 @@ int caam_qi_shutdown(struct device *qidev)
 	/* Now that we're done with the CGRs, restore the cpus allowed mask */
 	set_cpus_allowed_ptr(current, &old_cpumask);
 
-	platform_device_unregister(priv->qi_pdev);
 	return ret;
 }
 
@@ -712,15 +709,10 @@ static void free_rsp_fqs(void)
 int caam_qi_init(struct platform_device *caam_pdev)
 {
 	int err, i;
-	struct platform_device *qi_pdev;
 	struct device *ctrldev = &caam_pdev->dev, *qidev;
 	struct caam_drv_private *ctrlpriv;
 	const cpumask_t *cpus = qman_affine_cpus();
 	struct cpumask old_cpumask = current->cpus_allowed;
-	static struct platform_device_info qi_pdev_info = {
-		.name = "caam_qi",
-		.id = PLATFORM_DEVID_NONE
-	};
 
 	/*
 	 * QMAN requires CGRs to be removed from same CPU+portal from where it
@@ -732,24 +724,13 @@ int caam_qi_init(struct platform_device *caam_pdev)
 	mod_init_cpu = cpumask_first(cpus);
 	set_cpus_allowed_ptr(current, get_cpu_mask(mod_init_cpu));
 
-	qi_pdev_info.parent = ctrldev;
-	qi_pdev_info.dma_mask = dma_get_mask(ctrldev);
-	qi_pdev = platform_device_register_full(&qi_pdev_info);
-	if (IS_ERR(qi_pdev))
-		return PTR_ERR(qi_pdev);
-	set_dma_ops(&qi_pdev->dev, get_dma_ops(ctrldev));
-
 	ctrlpriv = dev_get_drvdata(ctrldev);
-	qidev = &qi_pdev->dev;
-
-	qipriv.qi_pdev = qi_pdev;
-	dev_set_drvdata(qidev, &qipriv);
+	qidev = ctrldev;
 
 	/* Initialize the congestion detection */
 	err = init_cgr(qidev);
 	if (err) {
 		dev_err(qidev, "CGR initialization failed: %d\n", err);
-		platform_device_unregister(qi_pdev);
 		return err;
 	}
 
@@ -758,7 +739,6 @@ int caam_qi_init(struct platform_device *caam_pdev)
 	if (err) {
 		dev_err(qidev, "Can't allocate CAAM response FQs: %d\n", err);
 		free_rsp_fqs();
-		platform_device_unregister(qi_pdev);
 		return err;
 	}
 
@@ -781,15 +761,11 @@ int caam_qi_init(struct platform_device *caam_pdev)
 		napi_enable(irqtask);
 	}
 
-	/* Hook up QI device to parent controlling caam device */
-	ctrlpriv->qidev = qidev;
-
 	qi_cache = kmem_cache_create("caamqicache", CAAM_QI_MEMCACHE_SIZE, 0,
 				     SLAB_CACHE_DMA, NULL);
 	if (!qi_cache) {
 		dev_err(qidev, "Can't allocate CAAM cache\n");
 		free_rsp_fqs();
-		platform_device_unregister(qi_pdev);
 		return -ENOMEM;
 	}
 
@@ -799,6 +775,8 @@ int caam_qi_init(struct platform_device *caam_pdev)
 	debugfs_create_file("qi_congested", 0444, ctrlpriv->ctl,
 			    &times_congested, &caam_fops_u64_ro);
 #endif
+
+	ctrlpriv->qi_init = 1;
 	dev_info(qidev, "Linux CAAM Queue I/F driver initialised\n");
 	return 0;
 }

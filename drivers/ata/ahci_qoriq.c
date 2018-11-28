@@ -2,6 +2,7 @@
  * Freescale QorIQ AHCI SATA platform driver
  *
  * Copyright 2015 Freescale, Inc.
+ * Copyright 2018 NXP
  *   Tang Yuantian <Yuantian.Tang@freescale.com>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -58,6 +59,7 @@ enum ahci_qoriq_type {
 	AHCI_LS1046A,
 	AHCI_LS1088A,
 	AHCI_LS2088A,
+	AHCI_LS1028A,
 };
 
 struct ahci_qoriq_priv {
@@ -74,6 +76,7 @@ static const struct of_device_id ahci_qoriq_of_match[] = {
 	{ .compatible = "fsl,ls1046a-ahci", .data = (void *)AHCI_LS1046A},
 	{ .compatible = "fsl,ls1088a-ahci", .data = (void *)AHCI_LS1088A},
 	{ .compatible = "fsl,ls2088a-ahci", .data = (void *)AHCI_LS2088A},
+	{ .compatible = "fsl,ls1028a-ahci", .data = (void *)AHCI_LS1028A},
 	{},
 };
 MODULE_DEVICE_TABLE(of, ahci_qoriq_of_match);
@@ -215,6 +218,7 @@ static int ahci_qoriq_phy_init(struct ahci_host_priv *hpriv)
 		break;
 
 	case AHCI_LS1088A:
+	case AHCI_LS1028A:
 		if (!qpriv->ecc_addr)
 			return -EINVAL;
 		writel(readl(qpriv->ecc_addr) | ECC_DIS_LS1088A,

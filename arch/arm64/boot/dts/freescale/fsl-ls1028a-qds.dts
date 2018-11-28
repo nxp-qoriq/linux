@@ -248,3 +248,7 @@
 	edp_num_lanes = <0x4>;
 	status = "okay";
 };
+
+&sata {
+	status = "okay";
+};

@@ -55,6 +55,7 @@
 		gpio0 = &gpio0;
 		gpio1 = &gpio1;
 		gpio2 = &gpio2;
+		crypto = &crypto;
 		serial0 = &duart0;
 		serial1 = &duart1;
 	};

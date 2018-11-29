@@ -1198,9 +1198,24 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 	/*
 	 * Create S/G table: req->assoclen, [IV,] req->src [, req->dst].
 	 * Input is not contiguous.
+	 * HW reads 4 S/G entries at a time; make sure the reads don't go beyond
+	 * the end of the table by allocating more S/G entries. Logic:
+	 * if (src != dst && output S/G)
+	 *      pad output S/G, if needed
+	 * else if (src == dst && S/G)
+	 *      overlapping S/Gs; pad one of them
+	 * else if (input S/G) ...
+	 *      pad input S/G, if needed
 	 */
-	qm_sg_ents = 1 + !!ivsize + mapped_src_nents +
-		     (mapped_dst_nents > 1 ? mapped_dst_nents : 0);
+	qm_sg_ents = 1 + !!ivsize + mapped_src_nents;
+	if (mapped_dst_nents > 1)
+		qm_sg_ents += ALIGN(mapped_dst_nents, 4);
+	else if ((req->src == req->dst) && (mapped_src_nents > 1))
+		qm_sg_ents = max(ALIGN(qm_sg_ents, 4),
+				 1 + !!ivsize + ALIGN(mapped_src_nents, 4));
+	else
+		qm_sg_ents = ALIGN(qm_sg_ents, 4);
+
 	if (unlikely(qm_sg_ents > CAAM_QI_MAX_AEAD_SG)) {
 		dev_err(qidev, "Insufficient S/G entries: %d > %lu\n",
 			qm_sg_ents, CAAM_QI_MAX_AEAD_SG);
@@ -1691,7 +1706,24 @@ static struct ablkcipher_edesc *ablkcipher_edesc_alloc(struct ablkcipher_request
 	}
 	dst_sg_idx = qm_sg_ents;
 
-	qm_sg_ents += mapped_dst_nents > 1 ? mapped_dst_nents : 0;
+	/*
+	 * HW reads 4 S/G entries at a time; make sure the reads don't go beyond
+	 * the end of the table by allocating more S/G entries. Logic:
+	 * if (src != dst && output S/G)
+	 *      pad output S/G, if needed
+	 * else if (src == dst && S/G)
+	 *      overlapping S/Gs; pad one of them
+	 * else if (input S/G) ...
+	 *      pad input S/G, if needed
+	 */
+	if (mapped_dst_nents > 1)
+		qm_sg_ents += ALIGN(mapped_dst_nents, 4);
+	else if ((req->src == req->dst) && (mapped_src_nents > 1))
+		qm_sg_ents = max(ALIGN(qm_sg_ents, 4),
+				 1 + ALIGN(mapped_src_nents, 4));
+	else
+		qm_sg_ents = ALIGN(qm_sg_ents, 4);
+
 	if (unlikely(qm_sg_ents > CAAM_QI_MAX_ABLKCIPHER_SG)) {
 		dev_err(qidev, "Insufficient S/G entries: %d > %lu\n",
 			qm_sg_ents, CAAM_QI_MAX_ABLKCIPHER_SG);

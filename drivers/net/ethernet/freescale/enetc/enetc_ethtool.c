@@ -89,7 +89,7 @@ static void enetc_get_regs(struct net_device *ndev, struct ethtool_regs *regs,
 	}
 }
 
-static struct {
+static const struct {
 	int reg;
 	char name[ETH_GSTRING_LEN];
 } enetc_si_counters[] =  {
@@ -119,7 +119,7 @@ static struct {
 	{ ENETC_RBDCR(15), "Rx ring 15 discarded frames" },
 };
 
-static struct {
+static const struct {
 	int reg;
 	char name[ETH_GSTRING_LEN];
 } enetc_port_counters[] = {
@@ -183,8 +183,15 @@ static struct {
 	{ ENETC_PICDR(3),   "ICM DR3 discarded frames" },
 };
 
-#define ENETC_TX_RING_STATS	1
-#define ENETC_RX_RING_STATS	2
+static const char rx_ring_stats[][ETH_GSTRING_LEN] = {
+	"Rx ring %2d frames",
+	"Rx ring %2d alloc errors",
+};
+
+static const char tx_ring_stats[][ETH_GSTRING_LEN] = {
+	"Tx ring %2d frames",
+};
+
 static int enetc_get_sset_count(struct net_device *ndev, int sset)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
@@ -192,8 +199,8 @@ static int enetc_get_sset_count(struct net_device *ndev, int sset)
 	switch (sset) {
 	case ETH_SS_STATS:
 		return ARRAY_SIZE(enetc_si_counters) +
-			ENETC_TX_RING_STATS * priv->num_tx_rings +
-			ENETC_RX_RING_STATS * priv->num_rx_rings +
+			ARRAY_SIZE(tx_ring_stats) * priv->num_tx_rings +
+			ARRAY_SIZE(rx_ring_stats) * priv->num_rx_rings +
 			(enetc_si_is_pf(priv->si) ?
 			ARRAY_SIZE(enetc_port_counters) : 0);
 	default:
@@ -205,7 +212,7 @@ static void enetc_get_strings(struct net_device *ndev, u32 stringset, u8 *data)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	u8 *p = data;
-	int i;
+	int i, j;
 
 	switch (stringset) {
 	case ETH_SS_STATS:
@@ -214,14 +221,16 @@ static void enetc_get_strings(struct net_device *ndev, u32 stringset, u8 *data)
 			p += ETH_GSTRING_LEN;
 		}
 		for (i = 0; i < priv->num_tx_rings; i++) {
-			sprintf(p, "Tx ring %2d frames", i);
-			p += ETH_GSTRING_LEN;
+			for (j = 0; j < ARRAY_SIZE(tx_ring_stats); j++) {
+				sprintf(p, tx_ring_stats[j], i);
+				p += ETH_GSTRING_LEN;
+			}
 		}
 		for (i = 0; i < priv->num_rx_rings; i++) {
-			sprintf(p, "Rx ring %2d frames", i);
-			p += ETH_GSTRING_LEN;
-			sprintf(p, "Rx ring %2d alloc errors", i);
-			p += ETH_GSTRING_LEN;
+			for (j = 0; j < ARRAY_SIZE(rx_ring_stats); j++) {
+				sprintf(p, rx_ring_stats[j], i);
+				p += ETH_GSTRING_LEN;
+			}
 		}
 
 		if (!enetc_si_is_pf(priv->si))

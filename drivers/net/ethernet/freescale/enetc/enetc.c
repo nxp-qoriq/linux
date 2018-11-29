@@ -453,8 +453,7 @@ static int enetc_refill_rx_ring(struct enetc_bdr *rx_ring, const int buff_cnt)
 		/* try reuse page */
 		if (unlikely(!rx_swbd->page)) {
 			if (unlikely(!enetc_new_page(rx_ring, rx_swbd))) {
-				// TODO: alloc error
-				WARN_ON(1);
+				rx_ring->stats.rx_alloc_errs++;
 				break;
 			}
 		}
@@ -564,10 +563,8 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 		dma_rmb(); /* for readig other rxbd fields */
 		size = le16_to_cpu(rxbd->r.buf_len);
 		skb = enetc_map_rx_buff_to_skb(rx_ring, i, size);
-		if (!skb) {
-			// TODO: increase alloc error counter
+		if (!skb)
 			break;
-		}
 
 		enetc_get_offloads(rx_ring, rxbd, skb);
 
@@ -705,7 +702,7 @@ static struct sk_buff *enetc_map_rx_buff_to_skb(struct enetc_bdr *rx_ring,
 	ba = page_address(rx_swbd->page) + rx_swbd->page_offset;
 	skb = build_skb(ba - ENETC_RXB_PAD, ENETC_RXB_TRUESIZE);
 	if (unlikely(!skb)) {
-		// TODO: alloc err counter
+		rx_ring->stats.rx_alloc_errs++;
 		return NULL;
 	}
 

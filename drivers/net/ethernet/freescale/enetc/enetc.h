@@ -41,6 +41,7 @@ struct enetc_rx_swbd {
 struct enetc_ring_stats {
 	unsigned int packets;
 	unsigned int bytes;
+	unsigned int rx_alloc_errs;
 };
 
 struct enetc_bdr {

@@ -183,6 +183,8 @@ static struct {
 	{ ENETC_PICDR(3),   "ICM DR3 discarded frames" },
 };
 
+#define ENETC_TX_RING_STATS	1
+#define ENETC_RX_RING_STATS	2
 static int enetc_get_sset_count(struct net_device *ndev, int sset)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
@@ -190,7 +192,8 @@ static int enetc_get_sset_count(struct net_device *ndev, int sset)
 	switch (sset) {
 	case ETH_SS_STATS:
 		return ARRAY_SIZE(enetc_si_counters) +
-			priv->num_tx_rings + priv->num_rx_rings +
+			ENETC_TX_RING_STATS * priv->num_tx_rings +
+			ENETC_RX_RING_STATS * priv->num_rx_rings +
 			(enetc_si_is_pf(priv->si) ?
 			ARRAY_SIZE(enetc_port_counters) : 0);
 	default:
@@ -216,6 +219,8 @@ static void enetc_get_strings(struct net_device *ndev, u32 stringset, u8 *data)
 		}
 		for (i = 0; i < priv->num_rx_rings; i++) {
 			sprintf(p, "Rx ring %2d frames", i);
+			p += ETH_GSTRING_LEN;
+			sprintf(p, "Rx ring %2d alloc errors", i);
 			p += ETH_GSTRING_LEN;
 		}
 
@@ -244,8 +249,10 @@ static void enetc_get_ethtool_stats(struct net_device *ndev,
 	for (i = 0; i < priv->num_tx_rings; i++)
 		data[o++] = priv->tx_ring[i]->stats.packets;
 
-	for (i = 0; i < priv->num_rx_rings; i++)
+	for (i = 0; i < priv->num_rx_rings; i++) {
 		data[o++] = priv->rx_ring[i]->stats.packets;
+		data[o++] = priv->rx_ring[i]->stats.rx_alloc_errs;
+	}
 
 	if (!enetc_si_is_pf(priv->si))
 		return;

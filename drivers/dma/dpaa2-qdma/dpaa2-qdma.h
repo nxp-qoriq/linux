@@ -36,7 +36,6 @@
 
 #define DPAA2_QDMA_STORE_SIZE 16
 #define NUM_CH 8
-#define NUM_SG_PER_BLK	16
 
 #define QDMA_DMR_OFFSET	0x0
 #define QDMA_DQ_EN (0 << 30)
@@ -67,37 +66,7 @@ struct dpaa2_qdma_sd_d {
 /* Destination descriptor command write transaction type for RBP=0:
  coherent copy of cacheable memory */
 #define QDMA_DD_CMD_WRTTYPE_COHERENT (0x6 << 28)
-
-#define QDMA_SG_FMT_SDB		0x0 /* single data buffer */
-#define QDMA_SG_FMT_FDS		0x1 /* frame data section */
-#define QDMA_SG_FMT_SGTE	0x2 /* SGT extension */
-#define QDMA_SG_SL_SHORT	0x1 /* short length */
-#define QDMA_SG_SL_LONG		0x0 /* short length */
-#define QDMA_SG_F		0x1 /* last sg entry */
-struct dpaa2_qdma_sg {
-	uint32_t addr_lo;		/* address 0:31 */
-	uint32_t addr_hi:17;	/* address 32:48 */
-	uint32_t rsv:15;
-	union {
-		uint32_t data_len_sl0; /* SL=0, the long format */
-		struct {
-			uint32_t len:17; /* SL=1, the short format */
-			uint32_t reserve:3;
-			uint32_t sf:1;
-			uint32_t sr:1;
-			uint32_t size:10; /* buff size */
-		} data_len_sl1;
-	} data_len;	/* AVAIL_LENGTH */
-	struct {
-		uint32_t bpid:14;
-		uint32_t ivp:1;
-		uint32_t mbt:1;
-		uint32_t offset:12;
-		uint32_t fmt:2;
-		uint32_t sl:1;
-		uint32_t f:1;
-	} ctrl;
-} __attribute__((__packed__));
+#define LX2160_QDMA_DD_CMD_WRTTYPE_COHERENT (0xb << 28)
 
 #define QMAN_FD_FMT_ENABLE (1) /* frame list table enable */
 #define QMAN_FD_BMT_ENABLE (1 << 15) /* bypass memory translation */
@@ -105,8 +74,6 @@ struct dpaa2_qdma_sg {
 #define QMAN_FD_SL_DISABLE (0 << 14) /* short lengthe disabled */
 #define QMAN_FD_SL_ENABLE (1 << 14) /* short lengthe enabled */
 
-#define QDMA_SB_FRAME (0 << 28) /* single frame */
-#define QDMA_SG_FRAME (2 << 28) /* scatter gather frames */
 #define QDMA_FINAL_BIT_DISABLE (0 << 31) /* final bit disable */
 #define QDMA_FINAL_BIT_ENABLE (1 << 31) /* final bit enable */
 
@@ -142,35 +109,19 @@ struct dpaa2_qdma_chan {
 	struct mutex            dpaa2_queue_mutex;
 	spinlock_t		queue_lock;
 	struct dma_pool		*fd_pool;
-	struct dma_pool		*sg_blk_pool;
 
 	struct list_head	comp_used;
 	struct list_head	comp_free;
 
-	struct list_head	sgb_free;
-};
-
-struct qdma_sg_blk {
-	dma_addr_t	blk_bus_addr;
-	void		*blk_virt_addr;
-	struct list_head	list;
 };
 
 struct dpaa2_qdma_comp {
 	dma_addr_t		fd_bus_addr;
 	dma_addr_t		fl_bus_addr;
 	dma_addr_t		desc_bus_addr;
-	dma_addr_t		sge_src_bus_addr;
-	dma_addr_t		sge_dst_bus_addr;
 	void			*fd_virt_addr;
 	void			*fl_virt_addr;
 	void			*desc_virt_addr;
-	void			*sg_src_virt_addr;
-	void			*sg_dst_virt_addr;
-	struct qdma_sg_blk	*sg_blk;
-	uint32_t		sg_blk_num;
-	struct list_head	sg_src_head;
-	struct list_head	sg_dst_head;
 	struct dpaa2_qdma_chan	*qchan;
 	struct virt_dma_desc	vdesc;
 	struct list_head	list;
@@ -180,6 +131,7 @@ struct dpaa2_qdma_engine {
 	struct dma_device	dma_dev;
 	u32			n_chans;
 	struct dpaa2_qdma_chan	chans[NUM_CH];
+	bool			qdma_wrtype_fixup;
 
 	struct dpaa2_qdma_priv *priv;
 };
@@ -216,12 +168,14 @@ struct dpaa2_qdma_priv_per_prio {
 	struct dpaa2_qdma_priv *priv;
 };
 
+static struct soc_device_attribute soc_fixup_tuning[] = {
+	{ .family = "QorIQ LX2160A"},
+	{ },
+};
+
 /* FD pool size: one FD + 3 Frame list + 2 source/destination descriptor */
 #define FD_POOL_SIZE (sizeof(struct dpaa2_fd) + \
 		sizeof(struct dpaa2_fl_entry) * 3 + \
 		sizeof(struct dpaa2_qdma_sd_d) * 2)
 
-/* qdma_sg_blk + 16 SGs */
-#define SG_POOL_SIZE (sizeof(struct qdma_sg_blk) +\
-		sizeof(struct dpaa2_qdma_sg) * NUM_SG_PER_BLK)
 #endif /* __DPAA2_QDMA_H */

@@ -114,7 +114,7 @@ static int tmu_get_temp(void *p, int *temp)
 	return 0;
 }
 
-static struct thermal_zone_of_device_ops tmu_tz_ops = {
+static const struct thermal_zone_of_device_ops tmu_tz_ops = {
 	.get_temp = tmu_get_temp,
 };
 
@@ -201,7 +201,6 @@ static void qoriq_tmu_init_device(struct qoriq_tmu_data *data)
 static int qoriq_tmu_probe(struct platform_device *pdev)
 {
 	int ret;
-	const struct thermal_trip *trip;
 	struct qoriq_tmu_data *data;
 	struct device_node *np = pdev->dev.of_node;
 
@@ -239,8 +238,6 @@ static int qoriq_tmu_probe(struct platform_device *pdev)
 		goto err_iomap;
 	}
 
-	trip = of_thermal_get_trip_points(data->tz);
-
 	return 0;
 
 err_tmu:
@@ -255,8 +252,6 @@ err_iomap:
 static int qoriq_tmu_remove(struct platform_device *pdev)
 {
 	struct qoriq_tmu_data *data = platform_get_drvdata(pdev);
-
-	thermal_zone_of_sensor_unregister(&pdev->dev, data->tz);
 
 	/* Disable monitoring */
 	tmu_write(data, TMR_DISABLE, &data->regs->tmr);

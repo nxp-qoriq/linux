@@ -132,7 +132,6 @@ static bool enetc_tx_csum(struct sk_buff *skb, union enetc_tx_bd *txbd)
 static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 			      bool tstamp)
 {
-	unsigned int nr_frags = skb_shinfo(skb)->nr_frags;
 	struct enetc_tx_swbd *tx_swbd;
 	struct skb_frag_struct *frag;
 	int len = skb_headlen(skb);
@@ -169,16 +168,14 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 	if (enetc_tx_csum(skb, txbd))
 		flags |= ENETC_TXBD_FLAGS_CSUM | ENETC_TXBD_FLAGS_L4CS;
 
-	/* first BD needs frm_len set */
+	/* first BD needs frm_len and offload flags set */
 	txbd->frm_len = cpu_to_le16(skb->len);
-	/* last BD needs 'F' bit set */
-	if (!nr_frags && !(flags & ENETC_TXBD_FLAGS_EX))
-		flags |= ENETC_TXBD_FLAGS_F;
-
 	txbd->flags = flags;
 
 	if (flags & ENETC_TXBD_FLAGS_EX) {
+		u8 e_flags = 0;
 		/* add extension BD for VLAN and/or timestamping */
+		flags = 0;
 		tx_swbd++;
 		txbd++;
 		i++;
@@ -191,28 +188,27 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 		if (do_vlan) {
 			txbd->ext.vid = cpu_to_le16(skb_vlan_tag_get(skb));
 			txbd->ext.tpid = 0; /* < C-TAG */
-			txbd->ext.e_flags |= 1; /* < do VLAN */
+			e_flags |= 1; /* < do VLAN */
 		}
 
 		if (do_tstamp) {
 			skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
-			txbd->ext.e_flags |= ENETC_TXBD_E_FLAGS_TWO_STEP_PTP;
+			e_flags |= ENETC_TXBD_E_FLAGS_TWO_STEP_PTP;
 		}
 
-		if (!nr_frags)
-			txbd->ext.flags = ENETC_TXBD_FLAGS_F;
-
+		txbd->ext.e_flags = e_flags;
 		count++;
 	}
 
 	frag = &skb_shinfo(skb)->frags[0];
-	for (f = 0; f < nr_frags; f++, frag++) {
+	for (f = 0; f < skb_shinfo(skb)->nr_frags; f++, frag++) {
 		len = skb_frag_size(frag);
 		dma = skb_frag_dma_map(tx_ring->dev, frag, 0, len,
 				       DMA_TO_DEVICE);
 		if (dma_mapping_error(tx_ring->dev, dma))
 			goto dma_err;
 
+		flags = 0;
 		tx_swbd++;
 		txbd++;
 		i++;
@@ -231,9 +227,9 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 		count++;
 	}
 
-	if (nr_frags)
-		/* last BD needs 'F' bit set */
-		txbd->flags = ENETC_TXBD_FLAGS_F;
+	/* last BD needs 'F' bit set */
+	flags |= ENETC_TXBD_FLAGS_F;
+	txbd->flags = flags;
 
 	tx_ring->tx_swbd[i].skb = skb;
 

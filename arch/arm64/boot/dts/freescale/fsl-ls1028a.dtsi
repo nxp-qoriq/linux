@@ -709,6 +709,26 @@
 				 <&clockgen 4 1>;
 		};
 
+		qdma: qdma@8380000 {
+			compatible = "fsl,ls1021a-qdma", "fsl,ls1028a-qdma";
+			reg = <0x0 0x8380000 0x0 0x1000>, /* Controller regs */
+			      <0x0 0x8390000 0x0 0x10000>, /* Status regs */
+			      <0x0 0x83a0000 0x0 0x40000>; /* Block regs */
+			interrupts = <0 43 0x4>,
+				     <0 251 0x4>,
+				     <0 252 0x4>,
+				     <0 253 0x4>,
+				     <0 254 0x4>;
+			interrupt-names = "qdma-error", "qdma-queue0",
+				"qdma-queue1", "qdma-queue2", "qdma-queue3";
+			channels = <8>;
+			block-number = <1>;
+			block-offset = <0x10000>;
+			queues = <2>;
+			status-sizes = <64>;
+			queue-sizes = <64 64>;
+		};
+
 		sai1: sai@f100000 {
 			#sound-dai-cells = <0>;
 			compatible = "fsl,vf610-sai";

@@ -1010,7 +1010,7 @@ static void flexcan_set_bittiming(struct net_device *dev)
 
 		reg_fdcbt |= FLEXCAN_FDCBT_FPRESDIV(data_bt->brp - 1) |
 			     FLEXCAN_FDCBT_FRJW(data_bt->sjw - 1) |
-			     FLEXCAN_FDCBT_FPROPSEG(data_bt->prop_seg - 1) |
+			     FLEXCAN_FDCBT_FPROPSEG(data_bt->prop_seg) |
 			     FLEXCAN_FDCBT_FPSEG1(data_bt->phase_seg1 - 1) |
 			     FLEXCAN_FDCBT_FPSEG2(data_bt->phase_seg2 - 1);
 

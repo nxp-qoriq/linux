@@ -729,6 +729,15 @@
 			queue-sizes = <64 64>;
 		};
 
+		ftm0: ftm0@2800000 {
+			compatible = "fsl,ls1028a-ftm";
+			reg = <0x0 0x2800000 0x0 0x10000>,
+			      <0x0 0x1e34050 0x0 0x4>;
+			reg-names = "ftm", "FlexTimer1";
+			interrupts = <GIC_SPI 44 IRQ_TYPE_LEVEL_HIGH>;
+			status = "okay";
+		};
+
 		sai1: sai@f100000 {
 			#sound-dai-cells = <0>;
 			compatible = "fsl,vf610-sai";

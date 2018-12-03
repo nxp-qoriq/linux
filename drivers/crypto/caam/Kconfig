@@ -129,7 +129,6 @@ config CRYPTO_DEV_FSL_CAAM_AHASH_API
 
 config CRYPTO_DEV_FSL_CAAM_PKC_API
         tristate "Register public key cryptography implementations with Crypto API"
-        depends on !SIMU
         default y
         select CRYPTO_RSA
         help

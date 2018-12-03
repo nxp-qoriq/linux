@@ -9,12 +9,12 @@
 #include <linux/io.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
-#ifdef DEBUG_FW_LOAD
-#include "mhdp_firmware.h"
-#endif
 #include "imx-hdp.h"
 #include "imx-hdmi.h"
 #include "imx-dp.h"
+#ifdef DEBUG_FW_LOAD
+#include "mhdp_firmware.h"
+#endif
 
 #define EDP_PHY_RESET	0x230
 

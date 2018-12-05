@@ -934,13 +934,15 @@ static int inc_dec(struct xgkr_params *xgkr, int field, int request)
 		if (!is_value_allowed((const u32 *)&preq_table, ld_coe[2])) {
 			dev_dbg(&xgkr->phydev->mdio.dev,
 				"preq skipped value: %d\n", ld_coe[2]);
-			return 0;
+			/* NOT UPDATED */
+			return 3;
 		}
 
 		if (!is_value_allowed((const u32 *)&pst1q_table, ld_coe[0])) {
 			dev_dbg(&xgkr->phydev->mdio.dev,
 				"pst1q skipped value: %d\n", ld_coe[0]);
-			return 0;
+			/* NOT UPDATED */
+			return 3;
 		}
 
 		tune_tecr(xgkr);
@@ -953,12 +955,13 @@ static int inc_dec(struct xgkr_params *xgkr, int field, int request)
 			return 2;
 	}
 
+	/* UPDATED */
 	return 0;
 }
 
 static void min_max_updated(struct xgkr_params *xgkr, int field, int new_ld)
 {
-	u32 ld_coe[] = {COE_UPDATED, COE_MIN, COE_MAX};
+	u32 ld_coe[] = {COE_UPDATED, COE_MIN, COE_MAX, COE_NOTUPDATED};
 	u32 mask, val;
 
 	switch (field) {

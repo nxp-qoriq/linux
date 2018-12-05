@@ -367,6 +367,7 @@
 			interrupts= <0 80 0x4>;
 			dr_mode= "host";
 			snps,dis_rxdet_inp3_quirk;
+			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
 		};
 
 		usb1:usb3@3110000 {
@@ -375,6 +376,7 @@
 			interrupts= <0 81 0x4>;
 			dr_mode= "host";
 			snps,dis_rxdet_inp3_quirk;
+			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
 		};
 
 		i2c0: i2c@2000000 {

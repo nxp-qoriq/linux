@@ -216,6 +216,9 @@ struct xgkr_params {
 	u32 ratio_preq;
 	u32 ratio_pst1q;
 	u32 adpt_eq;
+	u32 tuned_ratio_preq;
+	u32 tuned_ratio_pst1q;
+	u32 tuned_adpt_eq;
 };
 
 struct xgkr_phy_data {
@@ -374,6 +377,10 @@ void tune_tecr(struct xgkr_params *xgkr)
 	}
 	
 	xgkr->srds->tune_tecr(xgkr->reg_base, xgkr->ratio_preq, xgkr->ratio_pst1q, xgkr->adpt_eq, reset);
+
+	xgkr->tuned_ratio_preq = xgkr->ratio_preq;
+	xgkr->tuned_ratio_pst1q = xgkr->ratio_pst1q;
+	xgkr->tuned_adpt_eq = xgkr->adpt_eq;
 }
 
 static void start_lt(struct xgkr_params *xgkr)
@@ -1101,7 +1108,7 @@ static void xgkr_start_train(struct xgkr_params *xgkr)
 	struct phy_device *phydev = xgkr->phydev;
 	struct xgkr_phy_data *xgkr_inst = phydev->priv;
 	struct tx_condition *tx_c = &xgkr->tx_c;
-	int val = 0, i;
+	int val = 0, i, j;
 	int lt_state;
 	unsigned long dead_line;
 	int lp_rx_ready, tx_training_complete;
@@ -1202,21 +1209,34 @@ static void xgkr_start_train(struct xgkr_params *xgkr)
 			{
 			case PHY_BACKPLANE_10GBASE_KR:
 				if (phydev->attached_dev == NULL)
-					dev_info(&phydev->mdio.dev, "10GBase-KR link trained\n");
+					dev_info(&phydev->mdio.dev, "10GBase-KR link trained (Tx equalization: RATIO_PREQ = 0x%x, RATIO_PST1Q = 0x%x, ADPT_EQ = 0x%x)\n",
+							xgkr->tuned_ratio_preq, xgkr->tuned_ratio_pst1q, xgkr->tuned_adpt_eq);
 				else
-					dev_info(&phydev->mdio.dev, "%s %s: 10GBase-KR link trained\n",
+					dev_info(&phydev->mdio.dev, "%s %s: 10GBase-KR link trained (Tx equalization: RATIO_PREQ = 0x%x, RATIO_PST1Q = 0x%x, ADPT_EQ = 0x%x)\n",
 							dev_driver_string(phydev->attached_dev->dev.parent), 
-							dev_name(phydev->attached_dev->dev.parent));
+							dev_name(phydev->attached_dev->dev.parent),
+							xgkr->tuned_ratio_preq, xgkr->tuned_ratio_pst1q, xgkr->tuned_adpt_eq);
 				break;
 				
 			case PHY_BACKPLANE_40GBASE_KR:
 				if (xgkr->idx == xgkr_inst->phy_lanes - 1) {
 					if (phydev->attached_dev == NULL)
-						dev_info(&phydev->mdio.dev, "40GBase-KR link trained\n");
+						dev_info(&phydev->mdio.dev, "40GBase-KR link trained at lanes Tx equalization:\n");
 					else
-						dev_info(&phydev->mdio.dev, "%s %s: 40GBase-KR link trained\n",
+						dev_info(&phydev->mdio.dev, "%s %s: 40GBase-KR link trained at lanes Tx equalization:\n",
 								dev_driver_string(phydev->attached_dev->dev.parent), 
 								dev_name(phydev->attached_dev->dev.parent));
+
+					for (j = 0; j < xgkr_inst->phy_lanes; j++) {
+						if (phydev->attached_dev == NULL)
+							dev_info(&phydev->mdio.dev, "40GBase-KR Lane %d: RATIO_PREQ = 0x%x, RATIO_PST1Q = 0x%x, ADPT_EQ = 0x%x\n",
+									j, xgkr_inst->xgkr[j].tuned_ratio_preq, xgkr_inst->xgkr[j].tuned_ratio_pst1q, xgkr_inst->xgkr[j].tuned_adpt_eq);
+						else
+							dev_info(&phydev->mdio.dev, "%s %s: 40GBase-KR Lane %d: RATIO_PREQ = 0x%x, RATIO_PST1Q = 0x%x, ADPT_EQ = 0x%x\n",
+									dev_driver_string(phydev->attached_dev->dev.parent),
+									dev_name(phydev->attached_dev->dev.parent),
+									j, xgkr_inst->xgkr[j].tuned_ratio_preq, xgkr_inst->xgkr[j].tuned_ratio_pst1q, xgkr_inst->xgkr[j].tuned_adpt_eq);
+					}
 				}
 				break;
 			}

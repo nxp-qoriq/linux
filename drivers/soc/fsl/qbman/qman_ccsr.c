@@ -273,6 +273,7 @@ static const struct qman_error_info_mdata error_mdata[] = {
 static u32 __iomem *qm_ccsr_start;
 /* A SDQCR mask comprising all the available/visible pool channels */
 static u32 qm_pools_sdqcr;
+static int __qman_probed;
 
 static inline u32 qm_ccsr_in(u32 offset)
 {
@@ -597,6 +598,7 @@ static int qman_init_ccsr(struct device *dev)
 #define LIO_CFG_LIODN_MASK 0x0fff0000
 void qman_liodn_fixup(u16 channel)
 {
+#ifdef CONFIG_PPC
 	static int done;
 	static u32 liodn_offset;
 	u32 before, after;
@@ -616,6 +618,7 @@ void qman_liodn_fixup(u16 channel)
 		qm_ccsr_out(REG_REV3_QCSP_LIO_CFG(idx), after);
 	else
 		qm_ccsr_out(REG_QCSP_LIO_CFG(idx), after);
+#endif
 }
 
 #define IO_CFG_SDEST_MASK 0x00ff0000
@@ -686,6 +689,12 @@ static int qman_resource_init(struct device *dev)
 	return 0;
 }
 
+int qman_is_probed(void)
+{
+	return __qman_probed;
+}
+EXPORT_SYMBOL_GPL(qman_is_probed);
+
 static int fsl_qman_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -695,6 +704,8 @@ static int fsl_qman_probe(struct platform_device *pdev)
 	u16 id;
 	u8 major, minor;
 	u64 size;
+
+	__qman_probed = -1;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
@@ -870,6 +881,8 @@ static int fsl_qman_probe(struct platform_device *pdev)
 	ret = qman_wq_alloc();
 	if (ret)
 		return ret;
+
+	__qman_probed = 1;
 
 	return 0;
 }

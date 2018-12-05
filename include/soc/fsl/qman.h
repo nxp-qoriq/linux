@@ -1186,4 +1186,21 @@ int qman_alloc_cgrid_range(u32 *result, u32 count);
  */
 int qman_release_cgrid(u32 id);
 
+/**
+ * qman_is_probed - Check if qman is probed
+ *
+ * Returns 1 if the qman driver successfully probed, -1 if the qman driver
+ * failed to probe or 0 if the qman driver did not probed yet.
+ */
+int qman_is_probed(void);
+
+/**
+ * qman_portals_probed - Check if all cpu bound qman portals are probed
+ *
+ * Returns 1 if all the required cpu bound qman portals successfully probed,
+ * -1 if probe errors appeared or 0 if the qman portals did not yet finished
+ * probing.
+ */
+int qman_portals_probed(void);
+
 #endif	/* __FSL_QMAN_H */

@@ -518,7 +518,7 @@ static void initialize(struct xgkr_params *xgkr)
 	ld_coe_status(xgkr);
 }
 
-static void train_tx(struct xgkr_params *xgkr)
+static void train_remote_tx(struct xgkr_params *xgkr)
 {
 	struct tx_condition *tx_c = &xgkr->tx_c;
 	bool bin_m1_early, bin_long_early;
@@ -1037,7 +1037,7 @@ static void preset(struct xgkr_params *xgkr)
 	ld_coe_status(xgkr);
 }
 
-static void train_rx(struct xgkr_params *xgkr)
+static void train_local_tx(struct xgkr_params *xgkr)
 {
 	int request, old_ld_status;
 
@@ -1104,7 +1104,7 @@ static void xgkr_start_train(struct xgkr_params *xgkr)
 	int val = 0, i;
 	int lt_state;
 	unsigned long dead_line;
-	int rx_ok, tx_ok;
+	int lp_rx_ready, tx_training_complete;
 	u32 lt_timeout = 500;
 
 	init_xgkr(xgkr, 0);
@@ -1150,8 +1150,8 @@ static void xgkr_start_train(struct xgkr_params *xgkr)
 		}
 
 		/* init process */
-		rx_ok = false;
-		tx_ok = false;
+		lp_rx_ready = false;
+		tx_training_complete = false;
 		/* the LT should be finished in 500ms, failed or OK. */
 		dead_line = jiffies + msecs_to_jiffies(lt_timeout);
 
@@ -1174,17 +1174,17 @@ static void xgkr_start_train(struct xgkr_params *xgkr)
 				break;
 			}
 
-			rx_ok = check_rx(xgkr);
-			tx_ok = tx_c->tx_complete;
+			lp_rx_ready = check_rx(xgkr);
+			tx_training_complete = tx_c->tx_complete;
 
-			if (rx_ok && tx_ok)
+			if (lp_rx_ready && tx_training_complete)
 				break;
 
-			if (!rx_ok)
-				train_rx(xgkr);
+			if (!lp_rx_ready)
+				train_local_tx(xgkr);
 
-			if (!tx_ok)
-				train_tx(xgkr);
+			if (!tx_training_complete)
+				train_remote_tx(xgkr);
 
 			usleep_range(100, 500);
 		}

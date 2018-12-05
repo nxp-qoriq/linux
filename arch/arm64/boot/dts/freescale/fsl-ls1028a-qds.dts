@@ -108,6 +108,14 @@
 	};
 };
 
+&esdhc {
+	status = "okay";
+};
+
+&esdhc1 {
+	status = "okay";
+};
+
 &dp0 {
 	status = "okay";
 };

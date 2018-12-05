@@ -516,10 +516,12 @@
 			reg = <0x0 0x2140000 0x0 0x10000>;
 			interrupts = <0 28 0x4>; /* Level high type */
 			clock-frequency = <0>;
+			clocks = <&clockgen 2 1>;
 			voltage-ranges = <1800 1800 3300 3300>;
 			sdhci,auto-cmd12;
 			little-endian;
 			bus-width = <4>;
+			status = "disabled";
 		};
 
 		esdhc1: esdhc@2150000 {
@@ -527,11 +529,13 @@
 			reg = <0x0 0x2150000 0x0 0x10000>;
 			interrupts = <0 63 0x4>; /* Level high type */
 			clock-frequency = <0>;
+			clocks = <&clockgen 2 1>;
 			voltage-ranges = <1800 1800 3300 3300>;
 			sdhci,auto-cmd12;
 			broken-cd;
 			little-endian;
 			bus-width = <4>;
+			status = "disabled";
 		};
 
 		sata: sata@3200000 {

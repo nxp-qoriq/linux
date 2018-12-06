@@ -335,16 +335,16 @@ int qos_shaper_conf_set(struct net_device *ndev, u32 port_ix)
 
 	switch (ndev->phydev->speed) {
 	case SPEED_10:
-		cir = 10000000;
+		cir = 10000;
 		break;
 	case SPEED_100:
-		cir = 100000000;
+		cir = 100000;
 		break;
 	case SPEED_1000:
-		cir = 1000000000;
+		cir = 1000000;
 		break;
 	case SPEED_2500:
-		cir = 2500000000;
+		cir = 2500000;
 		break;
 	}
 

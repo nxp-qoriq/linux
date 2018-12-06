@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2016, Freescale Semiconductor
+ * Copyright 2018 NXP
  *
  * This file is licensed under the terms of the GNU General Public
  * License version 2.  This program is licensed "as is" without any
@@ -9,7 +10,7 @@
 /dts-v1/;
 
 / {
-	description = "Image file for the LS1012A Linux Kernel";
+	description = "Image file for the LS1028A Linux Kernel";
 	#address-cells = <1>;
 
 	images {
@@ -32,8 +33,8 @@
 			load = <0x90000000>;
 		};
 		ramdisk@1 {
-			description = "LS2 Ramdisk";
-			data = /incbin/("./fsl-image-busybox-ls1028.cpio.gz");
+			description = "LS1028A Ramdisk";
+			data = /incbin/("./fsl-image-core-ls1028a-20170524.rootfs.ext2.gz");
 			type = "ramdisk";
 			arch = "arm64";
 			os = "linux";

@@ -158,7 +158,6 @@ static const struct nla_policy cb_streamid_policy[TSN_STREAMID_ATTR_MAX + 1] = {
 	[TSN_STREAMID_ATTR_ENABLE] 	= { .type = NLA_FLAG},
 	[TSN_STREAMID_ATTR_DISABLE]	= { .type = NLA_FLAG},
 	[TSN_STREAMID_ATTR_STREAM_HANDLE]	= { .type = NLA_S32},
-	[TSN_STREAMID_ATTR_SSID]	= { .type = NLA_S32},
 	[TSN_STREAMID_ATTR_IFOP]	= { .type = NLA_U32},
 	[TSN_STREAMID_ATTR_OFOP]	= { .type = NLA_U32},
 	[TSN_STREAMID_ATTR_IFIP]	= { .type = NLA_U32},
@@ -530,8 +529,6 @@ static int cmd_cb_streamid_set(struct genl_info *info)
 	if (sid[TSN_STREAMID_ATTR_STREAM_HANDLE])
 		sidconf.handle = nla_get_s32(sid[TSN_STREAMID_ATTR_STREAM_HANDLE]);
 
-	if (sid[TSN_STREAMID_ATTR_SSID])
-		sidconf.ssid = nla_get_s32(sid[TSN_STREAMID_ATTR_SSID]);
 	if (sid[TSN_STREAMID_ATTR_IFOP])
 		sidconf.ifac_oport = nla_get_u32(sid[TSN_STREAMID_ATTR_IFOP]);
 	if (sid[TSN_STREAMID_ATTR_OFOP])

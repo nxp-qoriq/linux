@@ -126,7 +126,6 @@ enum {
 	TSN_STREAMID_ATTR_ENABLE,
 	TSN_STREAMID_ATTR_DISABLE,
 	TSN_STREAMID_ATTR_STREAM_HANDLE,
-	TSN_STREAMID_ATTR_SSID,
 	TSN_STREAMID_ATTR_IFOP,
 	TSN_STREAMID_ATTR_OFOP,
 	TSN_STREAMID_ATTR_IFIP,
@@ -474,8 +473,6 @@ struct tsn_cb_streamid {
 	 * tsnStreamIdHandle object.
 	 */
 	int32_t handle;
-
-	int32_t ssid;
 
 	/* The list of ports on which an in-facing Stream identification function
 	 * in the output (towards the system forwarding function) direction

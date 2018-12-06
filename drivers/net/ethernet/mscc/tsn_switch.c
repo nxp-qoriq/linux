@@ -506,9 +506,9 @@ int switch_cb_streamid_set(struct net_device *ndev, u32 index, bool enable,
 
 	if (streamid->type == 1) {
 		if (enable == TRUE) {
-			netdev_dbg(ndev, "index=%d mac=0x%llx vid=0x%x ssid=%d sfid=%d dst=%d\n",
+			netdev_dbg(ndev, "index=%d mac=0x%llx vid=0x%x sfid=%d dst=%d\n",
 				   index, streamid->para.nid.dmac,
-				   streamid->para.nid.vid, streamid->ssid,
+				   streamid->para.nid.vid,
 				   streamid->handle,
 				   port->chip_port);
 
@@ -521,8 +521,8 @@ int switch_cb_streamid_set(struct net_device *ndev, u32 index, bool enable,
 					ANA_TABLES_MACHDATA_MACHDATA(mach),
 					ANA_TABLES_MACHDATA);
 
-			sfid = streamid->handle;
-			ssid = streamid->ssid;
+			sfid = streamid->handle * 2;
+			ssid = streamid->handle;
 			ocelot_write(ocelot,
 				     ((sfid >= 0) ? ANA_TABLES_STREAMDATA_SFID_VALID : 0) |
 				     ((sfid >= 0) ? ANA_TABLES_STREAMDATA_SFID(sfid) : 0) |
@@ -587,6 +587,7 @@ int switch_qci_sfi_set(struct net_device *ndev, u32 index, bool enable,
 	u16 sgid  = sfi->stream_gate_instance_id;
 	u16 pol_idx = sfi->stream_filter.flow_meter_instance_id;
 	u16 max_sdu_len = sfi->stream_filter.maximum_sdu_size;
+	int sfid = index * 2;
 
 	netdev_dbg(ndev, "sfid=%d prio=%d sgid=%d pol_idx=%d\n",
 		   index, igr_prio, sgid, pol_idx);
@@ -595,7 +596,7 @@ int switch_qci_sfi_set(struct net_device *ndev, u32 index, bool enable,
 		     ANA_TABLES_SFIDTIDX_SGID(sgid) |
 		     ANA_TABLES_SFIDTIDX_POL_ENA |
 		     ANA_TABLES_SFIDTIDX_POL_IDX(pol_idx) |
-		     ANA_TABLES_SFIDTIDX_SFID_INDEX(index),
+		     ANA_TABLES_SFIDTIDX_SFID_INDEX(sfid),
 		     ANA_TABLES_SFIDTIDX);
 
 	ocelot_write(ocelot,

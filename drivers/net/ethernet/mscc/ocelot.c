@@ -488,7 +488,7 @@ static int ocelot_port_open(struct net_device *dev)
 			 ANA_PORT_PORT_CFG_PORTID_VAL(port->chip_port),
 			 ANA_PORT_PORT_CFG, port->chip_port);
 
-	err = phy_connect_direct(dev, port->phy, &ocelot_port_adjust_link_dummy,
+	err = phy_connect_direct(dev, port->phy, ocelot->port_adjust_link,
 				 PHY_INTERFACE_MODE_NA);
 	if (err) {
 		netdev_err(dev, "Could not attach to PHY\n");

@@ -317,7 +317,10 @@ static int aquantia_read_status(struct phy_device *phydev)
 {
 	int reg;
 
+	/* Read the link status twice; the bit is latching low */
 	reg = aquantia_read_reg(phydev, MDIO_MMD_AN, MDIO_STAT1);
+	reg = aquantia_read_reg(phydev, MDIO_MMD_AN, MDIO_STAT1);
+
 	if (reg & MDIO_STAT1_LSTATUS)
 		phydev->link = 1;
 	else

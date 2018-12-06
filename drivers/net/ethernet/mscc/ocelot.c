@@ -1648,7 +1648,9 @@ int ocelot_probe_port(struct ocelot *ocelot, u8 port,
 	dev->netdev_ops = &ocelot_port_netdev_ops;
 	dev->ethtool_ops = &ocelot_ethtool_ops;
 	dev->switchdev_ops = &ocelot_port_switchdev_ops;
+#ifdef CONFIG_TSN
 	dev->tsn_ops = &switch_tsn_ops;
+#endif
 
 	dev->hw_features |= NETIF_F_HW_VLAN_CTAG_FILTER;
 	dev->features |= NETIF_F_HW_VLAN_CTAG_FILTER;

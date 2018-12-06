@@ -44,6 +44,7 @@ static int enetc_mdio_probe(struct pci_dev *pdev,
 {
 	const struct xgmac_mdio_cfg cfg = {
 		.bus_name = "Freescale ENETC MDIO Bus",
+		.regs_offset = 0x1C00,
 	};
 	int err;
 

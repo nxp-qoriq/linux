@@ -53,5 +53,6 @@ int switch_seq_gen_set(struct net_device *ndev, u32 index,
 		       struct tsn_seq_gen_conf *sg_conf);
 int switch_seq_rec_set(struct net_device *ndev, u32 index,
 		       struct tsn_seq_rec_conf *sr_conf);
+int switch_pcp_map_set(struct net_device *ndev, bool enable);
 
 #endif

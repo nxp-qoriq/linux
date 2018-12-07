@@ -59,6 +59,7 @@ enum {
 	TSN_CMD_CT_SET,
 	TSN_CMD_CBGEN_SET,
 	TSN_CMD_CBREC_SET,
+	TSN_CMD_PCPMAP_SET,
 	TSN_CMD_ECHO,			/* user->kernel request/get-response */
 	TSN_CMD_REPLY,			/* kernel->user event */
 	__TSN_CMD_MAX,
@@ -84,6 +85,7 @@ enum {
 	TSN_ATTR_CT,			/* cut through */
 	TSN_ATTR_CBGEN,			/* 802.1CB sequence generate */
 	TSN_ATTR_CBREC,			/* 802.1CB sequence recover */
+	TSN_ATTR_PCPMAP,		/* map queue number to PCP tag */
 	__TSN_CMD_ATTR_MAX,
 };
 #define TSN_CMD_ATTR_MAX (__TSN_CMD_ATTR_MAX - 1)
@@ -302,6 +304,13 @@ enum {
 	TSN_CBREC_ATTR_TAG_POP_EN,
 	__TSN_CBREC_ATTR_MAX,
 	TSN_CBREC_ATTR_MAX = __TSN_CBREC_ATTR_MAX - 1,
+};
+
+enum {
+	TSN_PCPMAP_ATTR_UNSPEC,
+	TSN_PCPMAP_ATTR_ENABLE,
+	__TSN_PCPMAP_ATTR_MAX,
+	TSN_PCPMAP_ATTR_MAX = __TSN_PCPMAP_ATTR_MAX - 1,
 };
 
 #define ptptime_t uint64_t

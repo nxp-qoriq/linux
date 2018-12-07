@@ -1011,3 +1011,26 @@ int switch_seq_rec_set(struct net_device *ndev, u32 index,
 
 	return 0;
 }
+
+int switch_pcp_map_set(struct net_device *ndev, bool enable)
+{
+	struct ocelot_port *port = netdev_priv(ndev);
+	struct ocelot *ocelot = port->ocelot;
+	int i;
+
+	ocelot_rmw_gix(ocelot,
+		       (enable ? ANA_PORT_QOS_CFG_QOS_PCP_ENA : 0),
+		       ANA_PORT_QOS_CFG_QOS_PCP_ENA,
+		       ANA_PORT_QOS_CFG,
+		       port->chip_port);
+
+	for (i = 0; i < NUM_MSCC_QOS_PRIO; i++) {
+		ocelot_rmw_ix(ocelot,
+			      ANA_PORT_PCP_DEI_MAP_QOS_PCP_DEI_VAL(i),
+			      ANA_PORT_PCP_DEI_MAP_QOS_PCP_DEI_VAL_M,
+			      ANA_PORT_PCP_DEI_MAP,
+			      port->chip_port, i);
+	}
+
+	return 0;
+}

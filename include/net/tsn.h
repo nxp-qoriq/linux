@@ -57,6 +57,7 @@ struct tsn_ops {
 			 struct tsn_seq_gen_conf *);
 	int (*cbrec_set)(struct net_device *, u32 index,
 			 struct tsn_seq_rec_conf *);
+	int (*pcpmap_set)(struct net_device *, bool enable);
 };
 
 #endif

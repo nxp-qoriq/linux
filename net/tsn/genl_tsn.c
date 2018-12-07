@@ -79,6 +79,7 @@ static const struct nla_policy tsn_cmd_policy[TSN_CMD_ATTR_MAX + 1] = {
 	[TSN_ATTR_CT]			= { .type = NLA_NESTED },
 	[TSN_ATTR_CBGEN]                = { .type = NLA_NESTED },
 	[TSN_ATTR_CBREC]                = { .type = NLA_NESTED },
+	[TSN_ATTR_PCPMAP]               = { .type = NLA_NESTED },
 };
 
 static const struct nla_policy ct_policy[TSN_CT_ATTR_MAX + 1] = {
@@ -98,6 +99,10 @@ static const struct nla_policy cbrec_policy[TSN_CBREC_ATTR_MAX + 1] = {
 	[TSN_CBREC_ATTR_SEQ_LEN]	= { .type = NLA_U8 },
 	[TSN_CBREC_ATTR_HIS_LEN]        = { .type = NLA_U8 },
 	[TSN_CBREC_ATTR_TAG_POP_EN]     = { .type = NLA_FLAG },
+};
+
+static const struct nla_policy pcpmap_policy[TSN_PCPMAP_ATTR_MAX + 1] = {
+	[TSN_PCPMAP_ATTR_ENABLE]	= { .type = NLA_FLAG},
 };
 
 static const struct nla_policy qbu_policy[TSN_QBU_ATTR_MAX + 1] = {
@@ -2634,6 +2639,52 @@ static int tsn_cbrec_set(struct sk_buff *skb, struct genl_info *info)
 	return 0;
 }
 
+static int tsn_pcpmap_set(struct sk_buff *skb, struct genl_info *info)
+{
+	struct nlattr *na;
+	struct nlattr *pcpmapa[TSN_PCPMAP_ATTR_MAX + 1];
+	struct net_device *netdev;
+	const struct tsn_ops *tsnops;
+	int ret;
+	bool enable = 0;
+
+	ret = tsn_init_check(info, &netdev);
+	if (ret)
+		return ret;
+
+	if (!info->attrs[TSN_ATTR_PCPMAP]) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
+		return -EINVAL;
+	}
+
+	na = info->attrs[TSN_ATTR_PCPMAP];
+
+
+	tsnops = netdev->tsn_ops;
+
+	if (!tsnops->pcpmap_set) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
+		return -1;
+	}
+
+	ret = NLA_PARSE_NESTED(pcpmapa, TSN_PCPMAP_ATTR_MAX,
+			       na, pcpmap_policy);
+	if (ret) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
+		return -EINVAL;
+	}
+
+	enable = nla_get_flag(pcpmapa[TSN_PCPMAP_ATTR_ENABLE]);
+	ret = tsnops->pcpmap_set(netdev, enable);
+	if (ret < 0) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_DEVRETERR);
+		return -EINVAL;
+	}
+	tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, TSN_SUCCESS);
+
+	return 0;
+}
+
 static const struct genl_ops tsnnl_ops[] = {
 	{
 		.cmd		= TSN_CMD_ECHO,
@@ -2790,6 +2841,12 @@ static const struct genl_ops tsnnl_ops[] = {
 	{
 		.cmd		= TSN_CMD_CBREC_SET,
 		.doit		= tsn_cbrec_set,
+		.policy		= tsn_cmd_policy,
+		.flags		= GENL_ADMIN_PERM,
+	},
+	{
+		.cmd		= TSN_CMD_PCPMAP_SET,
+		.doit		= tsn_pcpmap_set,
 		.policy		= tsn_cmd_policy,
 		.flags		= GENL_ADMIN_PERM,
 	},

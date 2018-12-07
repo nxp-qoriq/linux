@@ -880,7 +880,7 @@ static int is_value_allowed(const u32 *val_table, u32 val)
 	}
 }
 
-static int inc_dec(struct xgkr_params *xgkr, int field, int request)
+static enum coe_update inc_dec(struct xgkr_params *xgkr, int field, int request)
 {
 	u32 ld_limit[3], ld_coe[3], step[3];
 
@@ -906,7 +906,7 @@ static int inc_dec(struct xgkr_params *xgkr, int field, int request)
 			ld_coe[field] += step[field];
 		else
 			/* MAX */
-			return 2;
+			return COE_MAX;
 		break;
 	case DECREMENT:
 		ld_limit[0] = POST_COE_MIN;
@@ -916,7 +916,7 @@ static int inc_dec(struct xgkr_params *xgkr, int field, int request)
 			ld_coe[field] -= step[field];
 		else
 			/* MIN */
-			return 1;
+			return COE_MIN;
 		break;
 	default:
 		break;
@@ -935,47 +935,50 @@ static int inc_dec(struct xgkr_params *xgkr, int field, int request)
 			dev_dbg(&xgkr->phydev->mdio.dev,
 				"preq skipped value: %d\n", ld_coe[2]);
 			/* NOT UPDATED */
-			return 3;
+			return COE_NOTUPDATED;
 		}
 
 		if (!is_value_allowed((const u32 *)&pst1q_table, ld_coe[0])) {
 			dev_dbg(&xgkr->phydev->mdio.dev,
 				"pst1q skipped value: %d\n", ld_coe[0]);
 			/* NOT UPDATED */
-			return 3;
+			return COE_NOTUPDATED;
 		}
 
 		tune_tecr(xgkr);
 	} else {
 		if (request == DECREMENT)
 			/* MIN */
-			return 1;
+			return COE_MIN;
 		if (request == INCREMENT)
 			/* MAX */
-			return 2;
+			return COE_MAX;
 	}
 
 	/* UPDATED */
-	return 0;
+	return COE_UPDATED;
 }
 
-static void min_max_updated(struct xgkr_params *xgkr, int field, int new_ld)
+static void min_max_updated(struct xgkr_params *xgkr, int field, enum coe_update cs)
 {
-	u32 ld_coe[] = {COE_UPDATED, COE_MIN, COE_MAX, COE_NOTUPDATED};
 	u32 mask, val;
+	u32 ld_cs = cs;
+
+	if (cs == COE_INV)
+		return;
 
 	switch (field) {
 	case COE_COP1:
 		mask = COP1_MASK;
-		val = ld_coe[new_ld] << COP1_SHIFT;
+		val = ld_cs << COP1_SHIFT;
 		break;
 	case COE_COZ:
 		mask = COZ_MASK;
-		val = ld_coe[new_ld] << COZ_SHIFT;
+		val = ld_cs << COZ_SHIFT;
 		break;
 	case COE_COM:
 		mask = COM1_MASK;
-		val = ld_coe[new_ld] << COM1_SHIFT;
+		val = ld_cs << COM1_SHIFT;
 		break;
 	default:
 		return;
@@ -988,7 +991,8 @@ static void min_max_updated(struct xgkr_params *xgkr, int field, int new_ld)
 static void check_request(struct xgkr_params *xgkr, int request)
 {
 	int cop1_req, coz_req, com_req;
-	int old_status, new_ld_sta;
+	int old_status;
+	enum coe_update cu;
 
 	cop1_req = (request & COP1_MASK) >> COP1_SHIFT;
 	coz_req = (request & COZ_MASK) >> COZ_SHIFT;
@@ -1000,18 +1004,18 @@ static void check_request(struct xgkr_params *xgkr, int request)
 	old_status = xgkr->ld_status;
 
 	if (cop1_req && !(xgkr->ld_status & COP1_MASK)) {
-		new_ld_sta = inc_dec(xgkr, COE_COP1, cop1_req);
-		min_max_updated(xgkr, COE_COP1, new_ld_sta);
+		cu = inc_dec(xgkr, COE_COP1, cop1_req);
+		min_max_updated(xgkr, COE_COP1, cu);
 	}
 
 	if (coz_req && !(xgkr->ld_status & COZ_MASK)) {
-		new_ld_sta = inc_dec(xgkr, COE_COZ, coz_req);
-		min_max_updated(xgkr, COE_COZ, new_ld_sta);
+		cu = inc_dec(xgkr, COE_COZ, coz_req);
+		min_max_updated(xgkr, COE_COZ, cu);
 	}
 
 	if (com_req && !(xgkr->ld_status & COM1_MASK)) {
-		new_ld_sta = inc_dec(xgkr, COE_COM, com_req);
-		min_max_updated(xgkr, COE_COM, new_ld_sta);
+		cu = inc_dec(xgkr, COE_COM, com_req);
+		min_max_updated(xgkr, COE_COM, cu);
 	}
 
 	if (old_status != xgkr->ld_status)

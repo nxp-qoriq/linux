@@ -15,6 +15,7 @@
 #include <linux/kernel.h>
 #include <linux/phy.h>
 #include "ocelot.h"
+#include "tsn_switch.h"
 
 /* Round x divided by y to nearest higher integer. x and y are integers */
 #define MSCC_DIV_ROUND_UP(x, y) (((x) + (y) - 1) / (y))

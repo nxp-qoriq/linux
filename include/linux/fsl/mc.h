@@ -200,7 +200,6 @@ struct fsl_mc_device {
 	struct fsl_mc_device_irq **irqs;
 	struct fsl_mc_resource *resource;
 	const char *driver_override;
-	struct device_link *consumer_link;
 };
 
 #define to_fsl_mc_device(_dev) \

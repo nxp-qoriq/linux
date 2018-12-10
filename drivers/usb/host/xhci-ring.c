@@ -1852,7 +1852,6 @@ static int finish_td(struct xhci_hcd *xhci, struct xhci_td *td,
 	struct xhci_dequeue_state deq_state;
 	struct xhci_virt_device *xdev;
 	struct xhci_ring *ep_ring;
-	unsigned int stream_id;
 	unsigned int slot_id;
 	int ep_index;
 	struct urb *urb = NULL;
@@ -1897,7 +1896,7 @@ static int finish_td(struct xhci_hcd *xhci, struct xhci_td *td,
 			xhci_find_new_dequeue_state(xhci, slot_id,
 				ep_index, td->urb->stream_id, td, &deq_state);
 			xhci_queue_new_dequeue_state(xhci, slot_id, ep_index,
-							stream_id, &deq_state);
+						ep_ring->stream_id, &deq_state);
 			xhci_ring_cmd_db(xhci);
 		} else {
 			/* Issue a reset endpoint command to clear the host side

@@ -245,6 +245,8 @@
 &mdio0 {
 	sgmii_phy0: ethernet-phy@2 {
 		reg = <0x2>;
+		// Atheros PHY on RDB seems to cause traffic loss @ 1Gbps w EEE
+		eee-broken-1000t;
 	};
 
 	qsgmii_phy1: ethernet-phy@4 {

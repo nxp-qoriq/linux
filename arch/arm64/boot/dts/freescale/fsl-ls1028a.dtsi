@@ -369,6 +369,8 @@
 			snps,dis_rxdet_inp3_quirk;
 			snps,quirk-frame-length-adjustment = <0x20>;
 			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
+			usb3-lpm-capable;
+			snps,dis-u1u2-when-u3-quirk;
 		};
 
 		usb1:usb3@3110000 {
@@ -379,6 +381,8 @@
 			snps,dis_rxdet_inp3_quirk;
 			snps,quirk-frame-length-adjustment = <0x20>;
 			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
+			usb3-lpm-capable;
+			snps,dis-u1u2-when-u3-quirk;
 		};
 
 		i2c0: i2c@2000000 {

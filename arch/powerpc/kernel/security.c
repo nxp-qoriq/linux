@@ -181,6 +181,8 @@ ssize_t cpu_show_spectre_v2(struct device *dev, struct device_attribute *attr, c
 
 		if (ccd)
 			seq_buf_printf(&s, "Indirect branch cache disabled");
+	} else if (btb_flush_enabled) {
+		seq_buf_printf(&s, "Mitigation: Branch predictor state flush");
 	} else
 		seq_buf_printf(&s, "Vulnerable");
 

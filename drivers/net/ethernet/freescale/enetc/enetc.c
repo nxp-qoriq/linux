@@ -345,6 +345,7 @@ static int enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
 	int tx_frm_cnt = 0, tx_byte_cnt = 0;
 	struct enetc_tx_swbd *tx_swbd;
 	struct enetc_ndev_priv *priv;
+	union enetc_tx_bd *txbd;
 	int i, bds_to_clean;
 	bool do_tstamp, first;
 	u64 tstamp = 0;
@@ -354,6 +355,7 @@ static int enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
 
 	i = tx_ring->next_to_clean;
 	tx_swbd = &tx_ring->tx_swbd[i];
+	txbd = ENETC_TXBD(*tx_ring, i);
 	first = true;
 	bds_to_clean = enetc_bd_ready_count(tx_ring, i);
 
@@ -362,9 +364,6 @@ static int enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
 
 		if (unlikely(do_tstamp)) {
 			if (unlikely(first)) {
-				union enetc_tx_bd *txbd;
-
-				txbd = ENETC_TXBD(*tx_ring, i);
 				enetc_get_tx_tstamp(&priv->si->hw, txbd,
 						    &tstamp);
 
@@ -374,14 +373,20 @@ static int enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
 		}
 
 		enetc_unmap_tx_buff(tx_ring, tx_swbd);
+		/* clear BD fields that may leak */
+		txbd->frm_len = 0;
+		txbd->buf_len = 0;
+		txbd->lstatus = 0;
 		tx_byte_cnt += tx_swbd->len;
 
 		bds_to_clean--;
 		tx_swbd++;
+		txbd++;
 		i++;
 		if (unlikely(i == tx_ring->bd_count)) {
 			i = 0;
 			tx_swbd = tx_ring->tx_swbd;
+			txbd = ENETC_TXBD(*tx_ring, 0);
 		}
 
 		/* BD iteration loop end */

@@ -338,6 +338,7 @@ union enetc_tx_bd {
 				u8 l4_csoff;
 				u8 flags;
 			}; /* default layout */
+			__le32 lstatus;
 		};
 	};
 	struct {

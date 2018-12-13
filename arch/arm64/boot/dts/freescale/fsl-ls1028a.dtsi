@@ -335,8 +335,8 @@
 			clocks = <&sysclk>;
 		};
 
-		dspi0: dspi@2100000 {
-			compatible = "fsl,ls1021a-v1.0-dspi";
+		dspi0: spi@2100000 {
+			compatible = "fsl,ls1028a-dspi", "fsl,ls1021a-v1.0-dspi";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x0 0x2100000 0x0 0x10000>;
@@ -344,12 +344,12 @@
 			clock-names = "dspi";
 			clocks = <&clockgen 4 1>;
 			spi-num-chipselects = <5>;
-			big-endian;
+			little-endian;
 			status = "disabled";
 		};
 
-		dspi1: dspi@2110000 {
-			compatible = "fsl,ls1021a-v1.0-dspi";
+		dspi1: spi@2110000 {
+			compatible = "fsl,ls1028a-dspi", "fsl,ls1021a-v1.0-dspi";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x0 0x2110000 0x0 0x10000>;
@@ -357,7 +357,20 @@
 			clock-names = "dspi";
 			clocks = <&clockgen 4 1>;
 			spi-num-chipselects = <5>;
-			big-endian;
+			little-endian;
+			status = "disabled";
+		};
+
+		dspi2: spi@2120000 {
+			compatible = "fsl,ls1028a-dspi", "fsl,ls1021a-v1.0-dspi";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x0 0x2120000 0x0 0x10000>;
+			interrupts = <GIC_SPI 26 IRQ_TYPE_LEVEL_HIGH>;
+			clock-names = "dspi";
+			clocks = <&clockgen 4 1>;
+			spi-num-chipselects = <5>;
+			little-endian;
 			status = "disabled";
 		};
 

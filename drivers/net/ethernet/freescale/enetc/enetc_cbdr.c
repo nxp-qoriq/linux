@@ -127,7 +127,7 @@ int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 	cbd.opt[3] = cpu_to_le32(0); /* SI */
 
 	tmp = dma_alloc_coherent(&si->pdev->dev, sizeof(*rfse) + RFSE_ALIGN,
-				 &dma, DMA_TO_DEVICE);
+				 &dma, GFP_KERNEL);
 	if (!tmp) {
 		dev_err(&si->pdev->dev, "DMA mapping of RFS entry failed!\n");
 		return -ENOMEM;
@@ -164,7 +164,7 @@ static int enetc_cmd_rss_table(struct enetc_si *si, u32 *table, int count,
 		return -EINVAL;
 
 	tmp = dma_alloc_coherent(&si->pdev->dev, count + RSSE_ALIGN,
-				 &dma, read ? DMA_FROM_DEVICE : DMA_TO_DEVICE);
+				 &dma, GFP_KERNEL);
 	if (!tmp) {
 		dev_err(&si->pdev->dev, "DMA mapping of RSS table failed!\n");
 		return -ENOMEM;

@@ -233,6 +233,40 @@ void imx8mq_phy_reset(sc_ipc_t ipcHndl, struct hdp_mem *mem, u8 reset)
 
 	return;
 }
+
+#else
+
+static void ls1028a_pixel_link_mux(state_struct *state,
+				   struct drm_display_mode *mode)
+{
+	struct imx_hdp *hdp = state_to_imx_hdp(state);
+	u32 val;
+
+	if (mode->hdisplay == 3840
+	    && mode->vdisplay == 2160)
+		val = 0x0402002c;
+	else if (mode->hdisplay == 1920
+		 && mode->vdisplay == 1080)
+		val = 0x1002002c;
+	else if (mode->hdisplay == 1280
+		 && mode->vdisplay == 720)
+		val = 0x2002002c;
+	else if (mode->hdisplay == 720
+		 && mode->vdisplay == 480)
+		val = 0x5802002c;
+	else
+		/* Set deafault pixel clock to 1080p*/
+		val = 0x1002002c;
+
+	writel(val, hdp->mem.ss_base + CSR_PLLDIG_PLLDV);
+
+	/* Recommend register set for PLL Divider */
+	writel(0x40000000, hdp->mem.ss_base + CSR_PLLDIG_PLLFM);
+	writel(0x40030000, hdp->mem.ss_base + CSR_PLLDIG_PLLFD);
+	writel(0x44000000, hdp->mem.ss_base + CSR_PLLDIG_PLLCAL1);
+	writel(0x0005002b, hdp->mem.ss_base + CSR_PLLDIG_PLLCAL2);
+}
+
 #endif
 
 static const struct of_device_id scfg_device_ids[] = {
@@ -971,6 +1005,7 @@ static struct hdp_ops ls1028a_dp_ops = {
 	.get_edid_block = dp_get_edid_block,
 	.get_hpd_state = dp_get_hpd_state,
 	.phy_reset = ls1028a_phy_reset,
+	.pixel_link_mux = ls1028a_pixel_link_mux,
 	.clock_init = imx8qm_clock_init,
 	.ipg_clock_enable = imx8qm_ipg_clock_enable,
 	.ipg_clock_disable = imx8qm_ipg_clock_disable,
@@ -1083,21 +1118,21 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 	}
 
 	mutex_init(&hdp->mem.mutex);
-	/* register map */
+
+	/* PLL register map */
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	hdp->mem.ss_base = devm_ioremap_resource(dev, res);
+	if (IS_ERR(hdp->mem.ss_base)) {
+		dev_err(dev, "Failed to get Multimedia PLL base register\n");
+		return -EINVAL;
+	}
+
+	/* register map */
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
 	hdp->mem.regs_base = devm_ioremap_resource(dev, res);
 	if (IS_ERR(hdp->mem.regs_base)) {
 		dev_err(dev, "Failed to get HDP CTRL base register\n");
 		return -EINVAL;
-	}
-
-	if (!of_device_is_compatible(dev->of_node, "fsl,ls1028a-dp")) {
-		res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-		hdp->mem.ss_base = devm_ioremap_resource(dev, res);
-		if (IS_ERR(hdp->mem.ss_base)) {
-			dev_err(dev, "Failed to get HDP CRS base register\n");
-			return -EINVAL;
-		}
 	}
 
 	hdp->is_edp = of_property_read_bool(pdev->dev.of_node, "fsl,edp");

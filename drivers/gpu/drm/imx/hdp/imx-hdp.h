@@ -51,6 +51,14 @@
 #define VIC_MODE_96_50Hz 96
 #define VIC_MODE_97_60Hz 97
 
+#ifdef CONFIG_ARCH_LAYERSCAPE
+#define CSR_PLLDIG_PLLDV 0x28
+#define CSR_PLLDIG_PLLFM 0x2c
+#define CSR_PLLDIG_PLLFD 0x30
+#define CSR_PLLDIG_PLLCAL1 0x38
+#define CSR_PLLDIG_PLLCAL2 0x3c
+#endif
+
 /**
  * imx_hdp_call - Calls a struct imx hdp_operations operation on
  *	an entity

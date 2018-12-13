@@ -824,7 +824,8 @@
 
 	edp: phy@f200000 {
 		compatible = "fsl,ls1028a-dp";
-		reg = <0x0 0xf200000 0x0 0x100000>;
+		reg = <0x0 0xf1f0000 0x0 0xffff>, /* Multimedia PLL Register */
+		    <0x0 0xf200000 0x0 0xfffff>; /* HDP Register*/
 		interrupts = <0 221 0x4>;
 		clocks = <&coreclk>,
 			 <&coreclk>,

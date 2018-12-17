@@ -692,14 +692,6 @@
 						full-duplex;
 					};
 				};
-				port@5 {
-					reg = <5>;
-					phy-connection-type = "internal";
-					fixed-link {
-						speed = <1000>;
-						full-duplex;
-					};
-				};
 			};
 			enetc_port3: pci@0,6 {
 				reg = <0x000600 0 0 0 0>;

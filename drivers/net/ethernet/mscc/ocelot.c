@@ -198,7 +198,7 @@ static void ocelot_vlan_port_apply(struct ocelot *ocelot,
 
 	/* Drop frames with multicast source address */
 	val = ANA_PORT_DROP_CFG_DROP_MC_SMAC_ENA;
-	if (port->vlan_aware && !port->vid)
+	if (port->vlan_aware && !port->pvid)
 		/* If port is vlan-aware and tagged, drop untagged and priority
 		 * tagged frames.
 		 */

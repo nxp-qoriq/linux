@@ -120,37 +120,37 @@ static void __iomem *regs;
 
 int felix_chip_init(struct ocelot *ocelot);
 
-static inline void felix_set_xfh_field(u32 *efh, u8 bit, u8 w, u16 v)
-{
-	u8 wi = bit >> 5;
-	u8 bi = 32 - (bit - wi * 32 + w);
-	u32 val = *(efh + wi);
+/* Felix header bytes length */
+#define FELIX_XFH_LEN 16
 
-	v = v & GENMASK(w - 1, 0);
-	*(efh + wi) = val | htonl(v << bi);
+static inline void felix_set_xfh_field(u64 *efh, u8 nth_bit, u8 w, u16 v)
+{
+	u8 i = (8 * FELIX_XFH_LEN - nth_bit) >> 6; /* MSB0 dword index */
+	u8 bit = nth_bit & GENMASK(5, 0); /* modulo: field start bit index */
+	u64 val = v & GENMASK(w - 1, 0);
+
+	efh[i] |= cpu_to_be64(val << bit);
 }
 
-static inline u32 felix_get_xfh_field(u32 *efh, u8 bit, u8 w)
+static inline u32 felix_get_xfh_field(u64 *efh, u8 nth_bit, u8 w)
 {
-	u8 wi = bit >> 5;
-	u8 bi = 32 - (bit - wi * 32 + w);
+	u8 i = (8 * FELIX_XFH_LEN - nth_bit) >> 6; /* MSB0 dword index */
+	u8 bit = nth_bit & GENMASK(5, 0); /* modulo: field start bit index */
 
-	return (ntohl(*(efh + wi)) >> bi) & GENMASK(w - 1, 0);
+	return (be64_to_cpu(efh[i]) >> bit) & GENMASK(w - 1, 0);
 }
 
 #define FELIX_IFH_FIELD(name, bit, w) \
-static inline void felix_set_ifh_##name(u32 *ifh, u16 v) \
+static inline void felix_set_ifh_##name(u64 *ifh, u16 v) \
 { \
 	felix_set_xfh_field(ifh, bit, w, v); \
 }
 
 #define FELIX_EFH_FIELD(name, bit, w) \
-static inline u32 felix_get_efh_##name(u32 *efh) \
+static inline u32 felix_get_efh_##name(u64 *efh) \
 { \
 	return felix_get_xfh_field(efh, bit, w); \
 }
-
-#define FELIX_XFH_LEN 16
 
 /* Felix 128bit-value frame injection header:
  *
@@ -174,59 +174,57 @@ FELIX_EFH_FIELD(srcp, 43, 4)
 
 static void felix_tx_hdr_set(struct sk_buff *skb, struct ocelot_port *port)
 {
-	u32 *ifh = skb_push(skb, FELIX_XFH_LEN);
-	u16 *hdel = skb_push(skb, 2);
-	struct ethhdr *ethh = skb_push(skb, ETH_HLEN);
+	u64 *ifh = skb_push(skb, FELIX_XFH_LEN);
 
 	/* fill frame injection header */
-	ether_addr_copy(ethh->h_dest, port->dev->dev_addr);
-	eth_zero_addr(ethh->h_source);
-	ethh->h_proto = htons(0x8880);
-	*hdel = htons(0x000A);
-
 	memset(ifh, 0x0, FELIX_XFH_LEN);
 	felix_set_ifh_bypass(ifh, 1);
 	felix_set_ifh_dstp(ifh, BIT(port->chip_port));
 	felix_set_ifh_srcp(ifh, FELIX_EXT_CPU_PORT_ID);
 	felix_set_ifh_popcnt(ifh, FELIX_IFH_INJ_POP_CNT_DISABLE);
-	felix_set_ifh_cpuq(ifh, 0xff);
-}
-
-static void felix_rx_hdr_extract(struct sk_buff *skb, struct frame_info *info)
-{
-	char *efh;
-
-	/* ETH_HLEN bytes were already pulled by receivig driver */
-	efh = skb_pull(skb, 2);
-
-	info->port = felix_get_efh_srcp((u32 *)efh);
-	/* TODO: set traffic class from header */
-
-	/* pull cpu extraction header */
-	skb_pull(skb, FELIX_XFH_LEN);
+	felix_set_ifh_cpuq(ifh, 0x0);
 }
 
 static rx_handler_result_t felix_frm_ext_handler(struct sk_buff **pskb)
 {
-	struct frame_info info = {0};
+	struct net_device *ndev = (*pskb)->dev;
 	struct sk_buff *skb = *pskb;
 	struct ocelot_port *port;
-	struct net_device *ndev;
 	struct ocelot *ocelot;
-	int err;
+	u64 *efh;
+	u32 p;
 
-	ndev = skb->dev;
-	felix_rx_hdr_extract(skb, &info);
+	/* ETH_HLEN bytes were already pulled by receivig driver */
+	efh = skb_pull(skb, 2);
 
-	/* frame for a CPU port */
-	if (info.port >= FELIX_EXT_CPU_PORT_ID)
+	p = felix_get_efh_srcp(efh);
+	/* TODO: use traffic class from header */
+
+	/* pull cpu extraction header */
+	skb_pull(skb, FELIX_XFH_LEN);
+
+	/* don't pass frames with unknown header format back to interface */
+	if (unlikely(p >= FELIX_MAX_NUM_PHY_PORTS)) {
+		kfree_skb(skb);
+		return RX_HANDLER_CONSUMED;
+	}
+
+	/* get the intf to fwd the frame */
+	if (p != FELIX_EXT_CPU_PORT_ID) {
+		ocelot = rcu_dereference(ndev->rx_handler_data);
+		port = ocelot->ports[p];
+		ndev = port->dev;
+	}
+
+	skb->protocol = eth_type_trans(skb, ndev);
+	/* TODO: recompute checksum */
+	skb->ip_summed = CHECKSUM_NONE;
+
+	/* frame for CPU */
+	if (p == FELIX_EXT_CPU_PORT_ID)
 		return RX_HANDLER_PASS;
 
-	ocelot = rcu_dereference(ndev->rx_handler_data);
-
-	port = ocelot->ports[info.port];
-	skb->dev = port->dev;
-	err = netif_rx(skb);
+	netif_rx(skb);
 
 	return RX_HANDLER_CONSUMED;
 }
@@ -236,12 +234,12 @@ static netdev_tx_t felix_cpu_inj_handler(struct sk_buff *skb,
 {
 	struct net_device *ndev = port->cpu_inj_handler_data;
 
-	if (!netif_running(ndev)) {
+	if (!netif_running(ndev))
 		return NETDEV_TX_BUSY;
-	}
 
 	if (unlikely(skb_headroom(skb) < FELIX_XFH_LEN)) {
 		struct sk_buff *skb_orig = skb;
+
 		skb = skb_realloc_headroom(skb, FELIX_XFH_LEN);
 
 		/* TODO: free skb in non irq context */
@@ -271,7 +269,7 @@ static netdev_tx_t felix_cpu_inj_handler(struct sk_buff *skb,
 }
 
 static void felix_register_xmit_handler(struct ocelot_port *port,
-				      struct net_device *ndev)
+					struct net_device *ndev)
 {
 	struct ocelot *ocelot = port->ocelot;
 
@@ -354,7 +352,7 @@ static int felix_ports_init(struct ocelot *ocelot)
 	struct resource *felix_res;
 	void __iomem *port_regs;
 	struct net_device *ndev;
-	u32 port;
+	u32 port, frmt;
 	int err;
 
 	ocelot->num_cpu_ports = 1;
@@ -422,6 +420,15 @@ static int felix_ports_init(struct ocelot *ocelot)
 		pr_info("%s: port:%d %s\n", __func__, port,
 			phy_is_pseudo_fixed_link(phydev)
 			? "fixed-link" : phydev->drv->name);
+
+		/* expected frame format */
+		if (port == FELIX_EXT_CPU_PORT_ID)
+			/* short prefix frame tag on tx and long on rx */
+			frmt = SYS_PORT_MODE_INCL_XTR_HDR(3) |
+			      SYS_PORT_MODE_INCL_INJ_HDR(1);
+		else
+			frmt = 0; /* no CPU header, only normal frames */
+		ocelot_write_rix(ocelot, frmt, SYS_PORT_MODE, port);
 
 		/* TODO: probe only if its not CPU port */
 		err = ocelot_probe_port(ocelot, port, port_regs, phydev);
@@ -532,11 +539,6 @@ static int felix_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	ocelot_write(ocelot, QSYS_EXT_CPU_CFG_EXT_CPUQ_MSK_M |
 		     QSYS_EXT_CPU_CFG_EXT_CPU_PORT(FELIX_EXT_CPU_PORT_ID),
 		     QSYS_EXT_CPU_CFG);
-	/* long prefix frame tagging */
-	ocelot_write_rix(ocelot, SYS_PORT_MODE_INCL_XTR_HDR(3) |
-			 SYS_PORT_MODE_INCL_INJ_HDR(3), SYS_PORT_MODE,
-			 FELIX_EXT_CPU_PORT_ID);
-
 	register_netdevice_notifier(&ocelot_netdevice_nb);
 
 	dev_info(&pdev->dev, "%s - version %s probed\n", felix_driver_string,

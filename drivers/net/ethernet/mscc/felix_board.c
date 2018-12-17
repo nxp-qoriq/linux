@@ -441,6 +441,10 @@ static int felix_ports_init(struct ocelot *ocelot)
 			felix_register_xmit_handler(ocelot->ports[port], ndev);
 		/* TODO: check if FL phy require phy_start */
 	}
+	/* set port for external CPU frame extraction/injection */
+	ocelot_write(ocelot, QSYS_EXT_CPU_CFG_EXT_CPUQ_MSK_M |
+		     QSYS_EXT_CPU_CFG_EXT_CPU_PORT(FELIX_EXT_CPU_PORT_ID),
+		     QSYS_EXT_CPU_CFG);
 
 	return 0;
 
@@ -535,10 +539,6 @@ static int felix_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (err)
 		goto err_ports_init;
 
-	/* set port for external CPU frame extraction/injection */
-	ocelot_write(ocelot, QSYS_EXT_CPU_CFG_EXT_CPUQ_MSK_M |
-		     QSYS_EXT_CPU_CFG_EXT_CPU_PORT(FELIX_EXT_CPU_PORT_ID),
-		     QSYS_EXT_CPU_CFG);
 	register_netdevice_notifier(&ocelot_netdevice_nb);
 
 	dev_info(&pdev->dev, "%s - version %s probed\n", felix_driver_string,

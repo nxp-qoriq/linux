@@ -2,6 +2,7 @@
  * QorIQ 10G MDIO Controller
  *
  * Copyright 2012 Freescale Semiconductor, Inc.
+ * Copyright 2018 NXP
  *
  * Authors: Andy Fleming <afleming@freescale.com>
  *          Timur Tabi <timur@freescale.com>
@@ -75,15 +76,17 @@ static int xgmac_wait_until_free(struct device *dev,
 				 struct fsl_mdio_regs __iomem *regs,
 				 bool is_little_endian)
 {
-	unsigned int timeout;
+	unsigned int timeout = TIMEOUT;
+	int mdio_stat;
 
 	/* Wait till the bus is free */
-	timeout = TIMEOUT;
-	while ((xgmac_read32(&regs->mdio_stat, is_little_endian) &
-		MDIO_STAT_BSY) && timeout) {
+	do {
+		mdio_stat = xgmac_read32(&regs->mdio_stat, is_little_endian);
+		/* LS1028a WA: mdio status is non-zero */
+		if (mdio_stat && !(mdio_stat & MDIO_STAT_BSY))
+			break;
 		cpu_relax();
-		timeout--;
-	}
+	} while (timeout--);
 
 	if (!timeout) {
 		dev_err(dev, "timeout waiting for bus to be free\n");
@@ -100,15 +103,17 @@ static int xgmac_wait_until_done(struct device *dev,
 				 struct fsl_mdio_regs __iomem *regs,
 				 bool is_little_endian)
 {
-	unsigned int timeout;
+	unsigned int timeout = TIMEOUT;
+	int mdio_stat;
 
 	/* Wait till the MDIO write is complete */
-	timeout = TIMEOUT;
-	while ((xgmac_read32(&regs->mdio_stat, is_little_endian) &
-		MDIO_STAT_BSY) && timeout) {
+	do {
+		mdio_stat = xgmac_read32(&regs->mdio_stat, is_little_endian);
+		/*LS1028a WA: mdio status is non-zero */
+		if (mdio_stat && !(mdio_stat & MDIO_STAT_BSY))
+			break;
 		cpu_relax();
-		timeout--;
-	}
+	} while (timeout--);
 
 	if (!timeout) {
 		dev_err(dev, "timeout waiting for operation to complete\n");
@@ -127,12 +132,23 @@ static int xgmac_mdio_write(struct mii_bus *bus, int phy_id, int regnum, u16 val
 {
 	struct mdio_fsl_priv *priv = (struct mdio_fsl_priv *)bus->priv;
 	struct fsl_mdio_regs __iomem *regs = priv->mdio_base;
+	int timeout = TIMEOUT;
 	uint16_t dev_addr;
 	u32 mdio_ctl, mdio_stat;
 	int ret;
 	bool endian = priv->is_little_endian;
 
-	mdio_stat = xgmac_read32(&regs->mdio_stat, endian);
+	/* LS1028a WA: wait till mdio status is non-zero */
+	do {
+		mdio_stat = xgmac_read32(&regs->mdio_stat, endian);
+		if (mdio_stat)
+			break;
+		cpu_relax();
+	} while (timeout--);
+
+	if (!mdio_stat)
+		return -EBUSY;
+
 	if (regnum & MII_ADDR_C45) {
 		/* Clause 45 (ie 10G) */
 		dev_addr = (regnum >> 16) & 0x1f;
@@ -181,6 +197,7 @@ static int xgmac_mdio_read(struct mii_bus *bus, int phy_id, int regnum)
 {
 	struct mdio_fsl_priv *priv = (struct mdio_fsl_priv *)bus->priv;
 	struct fsl_mdio_regs __iomem *regs = priv->mdio_base;
+	int timeout = TIMEOUT;
 	uint16_t dev_addr;
 	uint32_t mdio_stat;
 	uint32_t mdio_ctl;
@@ -188,7 +205,17 @@ static int xgmac_mdio_read(struct mii_bus *bus, int phy_id, int regnum)
 	int ret;
 	bool endian = priv->is_little_endian;
 
-	mdio_stat = xgmac_read32(&regs->mdio_stat, endian);
+	/* LS1028a WA: wait till mdio status is non-zero */
+	do {
+		mdio_stat = xgmac_read32(&regs->mdio_stat, endian);
+		if (mdio_stat)
+			break;
+		cpu_relax();
+	} while (timeout--);
+
+	if (!mdio_stat)
+		return -EBUSY;
+
 	if (regnum & MII_ADDR_C45) {
 		dev_addr = (regnum >> 16) & 0x1f;
 		mdio_stat |= MDIO_STAT_ENC;

@@ -7,9 +7,6 @@
 #ifndef _IMX_DP_H_
 #define _IMX_DP_H_
 
-/* Loading FW in the kernel */
-#define DEBUG_FW_LOAD
-
 void dp_fw_load(state_struct *state);
 int dp_fw_init(state_struct *state);
 void dp_mode_set(state_struct *state,

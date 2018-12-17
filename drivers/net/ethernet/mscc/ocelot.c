@@ -348,11 +348,6 @@ static u16 ocelot_wm_enc(u16 value)
 	return value;
 }
 
-static void ocelot_port_adjust_link_dummy(struct net_device *dev)
-{
-	return;
-}
-
 void ocelot_port_adjust_link(struct net_device *dev)
 {
 	struct ocelot_port *port = netdev_priv(dev);

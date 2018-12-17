@@ -439,7 +439,6 @@ static int felix_ports_init(struct ocelot *ocelot)
 		/* register xmit handler for external ports */
 		if (ndev && port != FELIX_EXT_CPU_PORT_ID)
 			felix_register_xmit_handler(ocelot->ports[port], ndev);
-		/* TODO: check if FL phy require phy_start */
 	}
 	/* set port for external CPU frame extraction/injection */
 	ocelot_write(ocelot, QSYS_EXT_CPU_CFG_EXT_CPUQ_MSK_M |

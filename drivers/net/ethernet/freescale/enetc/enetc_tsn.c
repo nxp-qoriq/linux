@@ -328,11 +328,8 @@ int enetc_qbv_get(struct net_device *ndev, struct tsn_qbv_conf *admin_conf)
 	cbdr->addr[1] = upper_32_bits(dma);
 	cbdr->cmd = 1;
 	cbdr->cls = BDCR_CMD_PORT_GCL;
-	DUMP_CBDR(cbdr);
 	xmit_cbdr(priv->si, curr_cbd);
 	dma_unmap_single(&priv->si->pdev->dev, dma, data_size, DMA_FROM_DEVICE);
-	DUMP_CBDR(cbdr);
-	DUMP_DATA((char *)gcl_data, data_size);
 
 	/* since cbdr already passed to free, below could be get wrong */
 	admin_len = le16_to_cpu(gcl_query->admin_list_len);
@@ -437,17 +434,12 @@ int enetc_qbv_get_status(struct net_device *ndev,
 	cbdr->addr[1] = upper_32_bits(dma);
 	cbdr->cmd = 1;
 	cbdr->cls = BDCR_CMD_PORT_GCL;
-	DUMP_CBDR(cbdr);
 	xmit_cbdr(priv->si, curr_cbd);
 	dma_unmap_single(&priv->si->pdev->dev, dma, data_size, DMA_FROM_DEVICE);
-	DUMP_CBDR(cbdr);
-	DUMP_DATA((char *)gcl_data, data_size);
 
 	/* since cbdr already passed to free, below could be get wrong */
 	admin_len = le16_to_cpu(gcl_query->admin_list_len);
 	oper_len = le16_to_cpu(gcl_query->oper_list_len);
-
-	gce += admin_len;
 
 	if (enetc_rd(&priv->si->hw, QBV_PTGAGLSR_OFFSET) &
 						QBV_CFG_PEND_MASK) {
@@ -492,9 +484,8 @@ int enetc_qbv_get_status(struct net_device *ndev,
 	}
 
 	for (i = 0; i < oper_len; i++) {
-		struct gce *temp_gce = gce + i;
+		struct gce *temp_gce = gce + maxlen + i;
 		struct tsn_qbv_entry *temp_entry = oper_basic->control_list + i;
-
 		temp_entry->gate_state = temp_gce->gate;
 		temp_entry->time_interval = le32_to_cpu(temp_gce->period);
 	}
@@ -708,7 +699,6 @@ int enetc_cb_streamid_get(struct net_device *ndev, u32 index,
 		/* VID Match. If set (b1) then the VID must match, otherwise
 		 * any VID is considered a match.
 		*/
-		/* if (si_data->vid_vidm_tg & ENETC_CBDR_SID_VIDM) */
 		streamid->para.nid.vid =
 				le16_to_cpu(si_data->vid_vidm_tg & ENETC_CBDR_SID_VID_MASK);
 		streamid->para.nid.tagged =
@@ -720,7 +710,6 @@ int enetc_cb_streamid_get(struct net_device *ndev, u32 index,
 		/* VID Match. If set (b1) then the VID must match, otherwise
 		 * any VID is considered a match.
 		 */
-		/* if (si_data->vid_vidm_tg & ENETC_CBDR_SID_VIDM) */
 		streamid->para.sid.vid =
 				le16_to_cpu(si_data->vid_vidm_tg & ENETC_CBDR_SID_VID_MASK);
 		streamid->para.sid.tagged =
@@ -729,7 +718,7 @@ int enetc_cb_streamid_get(struct net_device *ndev, u32 index,
 
 	streamid->handle = le32_to_cpu(si_data->stream_handle);
 	streamid->ifac_iport = le32_to_cpu(si_data->input_ports);
-	valid = si_data->en;
+	valid = si_data->en ? 1 : 0;
 
 	memset(cbdr, 0, sizeof(*cbdr));
 	kfree(si_data);
@@ -845,7 +834,6 @@ int enetc_qci_sfi_get(struct net_device *ndev, u32 index,
 	cbdr->status_flags = 0x80;
 
 	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_CBDR(cbdr);
 
 	sfi_config = &cbdr->sfi_conf;
 	if (sfi_config->sthm & 0x80)
@@ -929,10 +917,7 @@ int enetc_qci_sfi_counters_get(struct net_device *ndev, u32 index,
 	dma_size = cpu_to_le16(data_size);
 	cbdr->length = dma_size;
 
-	DUMP_CBDR(cbdr);
 	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_CBDR(cbdr);
-	DUMP_DATA((char *)sfi_counter_data, data_size);
 
 	counters->matching_frames_count =
 			((u64)le32_to_cpu(sfi_counter_data->matchh) << 32)
@@ -1485,7 +1470,8 @@ int enetc_qci_fmi_set(struct net_device *ndev, u32 index, bool enable,
 
 /* CBD Class 10: Flow Meter Instance Query Descriptor - Short Format */
 int enetc_qci_fmi_get(struct net_device *ndev, u32 index,
-						struct tsn_qci_psfp_fmi *tsn_qci_fmi)
+						struct tsn_qci_psfp_fmi *tsn_qci_fmi,
+						struct tsn_qci_psfp_fmi_counters *counters)
 {
 	struct enetc_cbd *cbdr;
 	struct fmi_conf *fmi_config;
@@ -1503,9 +1489,7 @@ int enetc_qci_fmi_get(struct net_device *ndev, u32 index,
 	cbdr->cls = BDCR_CMD_FLOW_METER;
 	cbdr->status_flags = 0x80;
 
-	DUMP_CBDR(cbdr);
 	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_CBDR(cbdr);
 
 	fmi_config = &cbdr->fmi_conf;
 	if (fmi_config->cir) {
@@ -1564,10 +1548,10 @@ int enetc_qci_fmi_get(struct net_device *ndev, u32 index,
 	dma_size = cpu_to_le16(data_size);
 	cbdr->length = dma_size;
 
-	DUMP_CBDR(cbdr);
 	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_CBDR(cbdr);
 	DUMP_DATA((char *)fmi_counter_data, data_size);
+
+	memcpy(counters, fmi_counter_data, sizeof(*counters));
 
 	return 0;
 }

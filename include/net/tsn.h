@@ -40,7 +40,8 @@ struct tsn_ops {
 	int (*qci_fmi_set)(struct net_device *ndev, u32 index, bool enable,
 							struct tsn_qci_psfp_fmi *fmi);
 	int (*qci_fmi_get)(struct net_device *ndev, u32 index,
-							struct tsn_qci_psfp_fmi *fmi);
+							struct tsn_qci_psfp_fmi *fmi,
+							struct tsn_qci_psfp_fmi_counters *counters);
 	int (*cbs_set)(struct net_device *ndev, u8 tc, u8 bw);
 	int (*cbs_get)(struct net_device *ndev, u8 tc);
 	/* To set a 8 bits vector shows 8 traffic classes

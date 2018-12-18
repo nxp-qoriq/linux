@@ -235,6 +235,7 @@ enum {
 	TSN_QCI_FMI_ATTR_DROPYL,
 	TSN_QCI_FMI_ATTR_MAREDEN,
 	TSN_QCI_FMI_ATTR_MARED,
+	TSN_QCI_FMI_ATTR_COUNTERS,
 	__TSN_QCI_FMI_ATTR_MAX,
 	TSN_QCI_FMI_ATTR_MAX = __TSN_QCI_FMI_ATTR_MAX - 1,
 };
@@ -852,7 +853,17 @@ struct tsn_qci_psfp_fmi {
 	 * frames are to be discarded (TRUE) or not (FALSE).
 	 */
 	bool mark_red;
+};
 
+struct tsn_qci_psfp_fmi_counters {
+	uint64_t bytecount;
+	uint64_t drop;
+	uint64_t dr0_green;
+	uint64_t dr1_green;
+	uint64_t dr2_yellow;
+	uint64_t remark_yellow;
+	uint64_t dr3_red;
+	uint64_t remark_red;
 };
 
 struct tsn_seq_gen_conf {

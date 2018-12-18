@@ -254,6 +254,7 @@ static const struct nla_policy qci_fmi_policy[] = {
 	[TSN_QCI_FMI_ATTR_DROPYL]	= { .type = NLA_FLAG},
 	[TSN_QCI_FMI_ATTR_MAREDEN]	= { .type = NLA_FLAG},
 	[TSN_QCI_FMI_ATTR_MARED]	= { .type = NLA_FLAG},
+	[TSN_QCI_FMI_ATTR_COUNTERS]	= { .len = sizeof(struct tsn_qci_psfp_fmi_counters)},
 };
 
 static int tsn_prepare_reply(struct genl_info *info, u8 cmd, struct sk_buff **skbp, size_t size)
@@ -640,13 +641,13 @@ static int cmd_cb_streamid_get(struct genl_info *info)
 	switch (sidconf.type) {
 	case STREAMID_NULL:
 		NLA_PUT_U64(rep_skb, TSN_STREAMID_ATTR_NDMAC, sidconf.para.nid.dmac);
-		nla_put_u16(rep_skb, TSN_STREAMID_ATTR_NTAGGED, sidconf.para.nid.vid);
-		nla_put_u8(rep_skb, TSN_STREAMID_ATTR_NVID, sidconf.para.nid.tagged);
+		nla_put_u16(rep_skb, TSN_STREAMID_ATTR_NVID, sidconf.para.nid.vid);
+		nla_put_u8(rep_skb, TSN_STREAMID_ATTR_NTAGGED, sidconf.para.nid.tagged);
 		break;
 	case STREAMID_SMAC_VLAN:
 		NLA_PUT_U64(rep_skb, TSN_STREAMID_ATTR_SMAC, sidconf.para.sid.smac);
-		nla_put_u16(rep_skb, TSN_STREAMID_ATTR_STAGGED, sidconf.para.sid.vid);
-		nla_put_u8(rep_skb, TSN_STREAMID_ATTR_SVID, sidconf.para.sid.tagged);
+		nla_put_u16(rep_skb, TSN_STREAMID_ATTR_SVID, sidconf.para.sid.vid);
+		nla_put_u8(rep_skb, TSN_STREAMID_ATTR_STAGGED, sidconf.para.sid.tagged);
 		break;
 	case STREAMID_DMAC_VLAN:
 	case STREAMID_IP:
@@ -1640,6 +1641,7 @@ static int cmd_qci_fmi_get(struct genl_info *info)
 	int ret;
 	struct net_device *netdev;
 	struct tsn_qci_psfp_fmi fmiconf;
+	struct tsn_qci_psfp_fmi_counters counters;
 	const struct tsn_ops *tsnops;
 	struct genlmsghdr *genlhdr;
 
@@ -1667,13 +1669,14 @@ static int cmd_qci_fmi_get(struct genl_info *info)
 	tsnops = netdev->tsn_ops;
 
 	memset(&fmiconf, 0, sizeof(struct tsn_qci_psfp_fmi));
+	memset(&counters, 0, sizeof(struct tsn_qci_psfp_fmi_counters));
 
 	if (!tsnops->qci_fmi_get) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
 		return -EINVAL;
 	}
 
-	tsnops->qci_fmi_get(netdev, index, &fmiconf);
+	tsnops->qci_fmi_get(netdev, index, &fmiconf, &counters);
 
 	genlhdr = info->genlhdr;
 
@@ -1710,6 +1713,9 @@ static int cmd_qci_fmi_get(struct genl_info *info)
 
 	if (fmiconf.mark_red)
 		nla_put_flag(rep_skb, TSN_QCI_FMI_ATTR_MAREDEN);
+
+	nla_put(rep_skb, TSN_QCI_FMI_ATTR_COUNTERS,
+		sizeof(struct tsn_qci_psfp_fmi_counters), &counters);
 
 	nla_nest_end(rep_skb, fmiattr);
 
@@ -1931,9 +1937,10 @@ static int cmd_qbv_get(struct genl_info *info)
 
 		kfree(qbvconf.admin.control_list);
 
-		nla_nest_end(rep_skb, qbvadminattr);
 	} else
 		pr_info("tsn: error get administrator data.");
+
+	nla_nest_end(rep_skb, qbvadminattr);
 
 	if (qbvconf.gate_enabled)
 		nla_put_flag(rep_skb, TSN_QBV_ATTR_ENABLE);
@@ -1950,7 +1957,6 @@ static int cmd_qbv_get(struct genl_info *info)
 
 	tsn_send_reply(rep_skb, info);
 
-	nlmsg_free(rep_skb);
 	return ret;
 }
 
@@ -2028,11 +2034,11 @@ static int cmd_qbv_status_get(struct genl_info *info)
 			NLA_PUT_U64(rep_skb, TSN_QBV_ATTR_CTRL_BASETIME, qbvstatus.oper.base_time);
 
 		kfree(qbvstatus.oper.control_list);
-
-		nla_nest_end(rep_skb, qbvoperattr);
 	} else {
 		pr_info("tsn: error get operation list data.");
 	}
+
+	nla_nest_end(rep_skb, qbvoperattr);
 
 	if (qbvstatus.config_change_time)
 		NLA_PUT_U64(rep_skb, TSN_QBV_ATTR_CONFIGCHANGETIME, qbvstatus.config_change_time);
@@ -2056,7 +2062,6 @@ static int cmd_qbv_status_get(struct genl_info *info)
 
 	tsn_send_reply(rep_skb, info);
 
-	nlmsg_free(rep_skb);
 	return ret;
 }
 

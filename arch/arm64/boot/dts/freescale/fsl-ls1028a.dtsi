@@ -522,8 +522,9 @@
 			compatible = "fsl,ls1021a-lpuart";
 			reg = <0x0 0x2260000 0x0 0x1000>;
 			interrupts = <GIC_SPI 232 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&clockgen 0 0>;
+			clocks = <&clockgen 4 1>;
 			clock-names = "ipg";
+			little-endian;
 			status = "disabled";
 		};
 
@@ -533,6 +534,7 @@
 			interrupts = <GIC_SPI 233 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clockgen 4 1>;
 			clock-names = "ipg";
+			little-endian;
 			status = "disabled";
 		};
 
@@ -542,6 +544,7 @@
 			interrupts = <GIC_SPI 234 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clockgen 4 1>;
 			clock-names = "ipg";
+			little-endian;
 			status = "disabled";
 		};
 
@@ -551,6 +554,7 @@
 			interrupts = <GIC_SPI 235 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clockgen 4 1>;
 			clock-names = "ipg";
+			little-endian;
 			status = "disabled";
 		};
 
@@ -560,6 +564,7 @@
 			interrupts = <GIC_SPI 236 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clockgen 4 1>;
 			clock-names = "ipg";
+			little-endian;
 			status = "disabled";
 		};
 
@@ -569,6 +574,7 @@
 			interrupts = <GIC_SPI 237 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clockgen 4 1>;
 			clock-names = "ipg";
+			little-endian;
 			status = "disabled";
 		};
 

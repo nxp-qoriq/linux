@@ -327,7 +327,7 @@ int switch_cut_thru_set(struct net_device *ndev, u8 cut_thru)
 }
 
 
-int qos_shaper_conf_set(struct net_device *ndev, u32 port_ix)
+int qos_shaper_conf_set(struct net_device *ndev, u32 port_ix, u8 percent)
 {
 	struct ocelot_port *ocelot_port = netdev_priv(ndev);
 	struct ocelot *ocelot = ocelot_port->ocelot;
@@ -349,13 +349,13 @@ int qos_shaper_conf_set(struct net_device *ndev, u32 port_ix)
 		break;
 	}
 
+	cir = cir * percent / 100;
 	cir = MSCC_DIV_ROUND_UP(cir, 100);  /* Rate unit is 100 kbps */
 	cir = (cir ? cir : 1);                    /* Avoid using zero rate */
 	cbs = MSCC_DIV_ROUND_UP(cbs, 4096); /* Burst unit is 4kB */
 	cbs = (cbs ? cbs : 1);                    /* Avoid using zero burst size */
 	cir = MIN(GENMASK(15, 0), cir);
 	cbs = MIN(GENMASK(6, 0), cbs);
-
 	ocelot_write_gix(ocelot,
 			 QSYS_CIR_CFG_CIR_RATE(cir) |
 			 QSYS_CIR_CFG_CIR_BURST(cbs),
@@ -369,12 +369,31 @@ int switch_cbs_set(struct net_device *ndev, u8 tc, u8 bw)
 {
 	struct ocelot_port *ocelot_port = netdev_priv(ndev);
 	struct ocelot *ocelot = ocelot_port->ocelot;
+
+	qos_shaper_conf_set(ndev, ocelot_port->chip_port * 8 + tc, bw);
+
+	ocelot_rmw_gix(ocelot,
+		       QSYS_SE_CFG_SE_AVB_ENA,
+		       QSYS_SE_CFG_SE_AVB_ENA,
+		       QSYS_SE_CFG,
+		       ocelot_port->chip_port * 8 + tc);
+
+	return 0;
+
+}
+
+int switch_port_shaper_set(struct net_device *ndev, u8 tc, u8 bw)
+{
+	struct ocelot_port *ocelot_port = netdev_priv(ndev);
+	struct ocelot *ocelot = ocelot_port->ocelot;
 	u8 *weight = ocelot_port->cbs_weight;
 	int i;
+	int percent = 100;
 	u8 w_min = 100;
 	u32 c_max = 1 << 5;
 
-	qos_shaper_conf_set(ndev, SE_IX_PORT + ocelot_port->chip_port);
+	qos_shaper_conf_set(ndev, SE_IX_PORT + ocelot_port->chip_port,
+			    percent);
 
 	ocelot_rmw_gix(ocelot,
 		       QSYS_SE_CFG_SE_DWRR_CNT(7) |

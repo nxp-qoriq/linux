@@ -321,8 +321,8 @@ static void felix_release_ports(struct ocelot_port **ports)
 			continue;
 
 		pr_info("%s: port:%d %s\n", __func__, i,
-			phy_is_pseudo_fixed_link(phydev)
-			? "fixed-link" : phydev->drv->name);
+			phy_is_pseudo_fixed_link(phydev) ? "fixed-link" :
+			(phydev->drv ? phydev->drv->name : "Generic PHY"));
 
 		unregister_netdev(ports[i]->dev);
 		free_netdev(ports[i]->dev);
@@ -418,8 +418,8 @@ static int felix_ports_init(struct ocelot *ocelot)
 		phy_node = NULL;
 
 		pr_info("%s: port:%d %s\n", __func__, port,
-			phy_is_pseudo_fixed_link(phydev)
-			? "fixed-link" : phydev->drv->name);
+			phy_is_pseudo_fixed_link(phydev) ? "fixed-link" :
+			(phydev->drv ? phydev->drv->name : "Generic PHY"));
 
 		/* expected frame format */
 		if (port == FELIX_EXT_CPU_PORT_ID)

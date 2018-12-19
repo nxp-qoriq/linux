@@ -44,11 +44,11 @@
  */
 #define DPAA2_ETH_BUFS_PER_CMD		7
 
-/* Set the taildrop threshold (in bytes) to allow the enqueue of several jumbo
- * frames in the Rx queues (length of the current frame is not
- * taken into account when making the taildrop decision)
+/* Set the taildrop threshold to 1MB to allow the enqueue of a sufficiently
+ * large number of jumbo frames in the Rx queues (length of the current frame
+ * is not taken into account when making the taildrop decision)
  */
-#define DPAA2_ETH_TAILDROP_THRESH	(64 * 1024)
+#define DPAA2_ETH_TAILDROP_THRESH	(1024 * 1024)
 
 /* Maximum number of Tx confirmation frames to be processed
  * in a single NAPI call

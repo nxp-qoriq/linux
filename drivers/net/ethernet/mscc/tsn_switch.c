@@ -931,7 +931,8 @@ int switch_qci_fmi_set(struct net_device *ndev, u32 index,
 }
 
 int switch_qci_fmi_get(struct net_device *ndev, u32 index,
-		       struct tsn_qci_psfp_fmi *fmi)
+		       struct tsn_qci_psfp_fmi *fmi,
+			   struct tsn_qci_psfp_fmi_counters *counters)
 {
 	struct ocelot_port *port = netdev_priv(ndev);
 	struct ocelot *ocelot = port->ocelot;

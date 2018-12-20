@@ -48,7 +48,8 @@ int switch_qci_sgi_status_get(struct net_device *ndev, u16 index,
 int switch_qci_fmi_set(struct net_device *ndev, u32 index,
 		       bool enable, struct tsn_qci_psfp_fmi *fmi);
 int switch_qci_fmi_get(struct net_device *ndev, u32 index,
-		       struct tsn_qci_psfp_fmi *fmi);
+		       struct tsn_qci_psfp_fmi *fmi,
+			   struct tsn_qci_psfp_fmi_counters *counters);
 int switch_seq_gen_set(struct net_device *ndev, u32 index,
 		       struct tsn_seq_gen_conf *sg_conf);
 int switch_seq_rec_set(struct net_device *ndev, u32 index,

@@ -139,6 +139,7 @@
 				VDDA-supply = <&reg_1p8v>;
 				VDDIO-supply = <&reg_1p8v>;
 				clocks = <&sys_mclk>;
+				sclk-strength = <3>;
 			};
 		};
 

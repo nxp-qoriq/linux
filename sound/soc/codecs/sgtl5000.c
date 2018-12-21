@@ -1,11 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * sgtl5000.c  --  SGTL5000 ALSA SoC Audio driver
  *
  * Copyright 2010-2011 Freescale Semiconductor, Inc. All Rights Reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Copyright 2018 NXP
  */
 
 #include <linux/module.h>
@@ -120,6 +118,13 @@ enum  {
 	I2S_LRCLK_STRENGTH_HIGH,
 };
 
+enum  {
+	I2S_SCLK_STRENGTH_DISABLE,
+	I2S_SCLK_STRENGTH_LOW,
+	I2S_SCLK_STRENGTH_MEDIUM,
+	I2S_SCLK_STRENGTH_HIGH,
+};
+
 /* sgtl5000 private structure in codec */
 struct sgtl5000_priv {
 	int sysclk;	/* sysclk rate */
@@ -133,6 +138,7 @@ struct sgtl5000_priv {
 	u8 micbias_resistor;
 	u8 micbias_voltage;
 	u8 lrclk_strength;
+	u8 sclk_strength;
 };
 
 /*
@@ -1227,7 +1233,9 @@ static int sgtl5000_probe(struct snd_soc_codec *codec)
 			SGTL5000_DAC_MUTE_RIGHT |
 			SGTL5000_DAC_MUTE_LEFT);
 
-	reg = ((sgtl5000->lrclk_strength) << SGTL5000_PAD_I2S_LRCLK_SHIFT | 0x5f);
+	reg = ((sgtl5000->lrclk_strength) << SGTL5000_PAD_I2S_LRCLK_SHIFT |
+	       (sgtl5000->sclk_strength) << SGTL5000_PAD_I2S_SCLK_SHIFT |
+	       0x1f);
 	snd_soc_write(codec, SGTL5000_CHIP_PAD_STRENGTH, reg);
 
 	snd_soc_write(codec, SGTL5000_CHIP_ANA_CTRL,
@@ -1462,6 +1470,13 @@ static int sgtl5000_i2c_probe(struct i2c_client *client,
 		if (value > I2S_LRCLK_STRENGTH_HIGH)
 			value = I2S_LRCLK_STRENGTH_LOW;
 		sgtl5000->lrclk_strength = value;
+	}
+
+	sgtl5000->sclk_strength = I2S_SCLK_STRENGTH_LOW;
+	if (!of_property_read_u32(np, "sclk-strength", &value)) {
+		if (value > I2S_SCLK_STRENGTH_HIGH)
+			value = I2S_SCLK_STRENGTH_LOW;
+		sgtl5000->sclk_strength = value;
 	}
 
 	/* Ensure sgtl5000 will start with sane register values */

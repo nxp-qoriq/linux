@@ -173,5 +173,7 @@ int ptp_qoriq_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts);
 int ptp_qoriq_settime(struct ptp_clock_info *ptp, const struct timespec64 *ts);
 int ptp_qoriq_enable(struct ptp_clock_info *ptp,
 		     struct ptp_clock_request *rq, int on);
+int qoriq_ptp_init(struct device *dev, struct qoriq_ptp *qoriq_ptp,
+		   void __iomem *base, const struct ptp_clock_info caps);
 
 #endif

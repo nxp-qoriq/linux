@@ -417,24 +417,17 @@ static int qoriq_ptp_auto_config(struct qoriq_ptp *qoriq_ptp,
 	return 0;
 }
 
-static int qoriq_ptp_probe(struct platform_device *dev)
+int qoriq_ptp_init(struct device *dev, struct qoriq_ptp *qoriq_ptp,
+		   void __iomem *base, const struct ptp_clock_info caps)
 {
-	struct device_node *node = dev->dev.of_node;
-	struct qoriq_ptp *qoriq_ptp;
+	struct device_node *node = dev->of_node;
 	struct qoriq_ptp_registers *regs;
 	struct timespec64 now;
-	int err = -ENOMEM;
-	u32 tmr_ctrl;
 	unsigned long flags;
-	void __iomem *base;
+	u32 tmr_ctrl;
 
-	qoriq_ptp = kzalloc(sizeof(*qoriq_ptp), GFP_KERNEL);
-	if (!qoriq_ptp)
-		goto no_memory;
-
-	err = -EINVAL;
-
-	qoriq_ptp->caps = ptp_qoriq_caps;
+	qoriq_ptp->base = base;
+	qoriq_ptp->caps = caps;
 
 	if (of_property_read_u32(node, "fsl,cksel", &qoriq_ptp->cksel))
 		qoriq_ptp->cksel = DEFAULT_CKSEL;
@@ -454,8 +447,60 @@ static int qoriq_ptp_probe(struct platform_device *dev)
 		pr_warn("device tree node missing required elements, try automatic configuration\n");
 
 		if (qoriq_ptp_auto_config(qoriq_ptp, node))
-			goto no_config;
+			return -EINVAL;
 	}
+
+	if (of_device_is_compatible(node, "fsl,fman-ptp-timer")) {
+		qoriq_ptp->regs.ctrl_regs = base + FMAN_CTRL_REGS_OFFSET;
+		qoriq_ptp->regs.alarm_regs = base + FMAN_ALARM_REGS_OFFSET;
+		qoriq_ptp->regs.fiper_regs = base + FMAN_FIPER_REGS_OFFSET;
+		qoriq_ptp->regs.etts_regs = base + FMAN_ETTS_REGS_OFFSET;
+	} else {
+		qoriq_ptp->regs.ctrl_regs = base + CTRL_REGS_OFFSET;
+		qoriq_ptp->regs.alarm_regs = base + ALARM_REGS_OFFSET;
+		qoriq_ptp->regs.fiper_regs = base + FIPER_REGS_OFFSET;
+		qoriq_ptp->regs.etts_regs = base + ETTS_REGS_OFFSET;
+	}
+
+	ktime_get_real_ts64(&now);
+	ptp_qoriq_settime(&qoriq_ptp->caps, &now);
+
+	tmr_ctrl =
+	  (qoriq_ptp->tclk_period & TCLK_PERIOD_MASK) << TCLK_PERIOD_SHIFT |
+	  (qoriq_ptp->cksel & CKSEL_MASK) << CKSEL_SHIFT;
+
+	spin_lock_init(&qoriq_ptp->lock);
+	spin_lock_irqsave(&qoriq_ptp->lock, flags);
+
+	regs = &qoriq_ptp->regs;
+	qoriq_write(&regs->ctrl_regs->tmr_ctrl,   tmr_ctrl);
+	qoriq_write(&regs->ctrl_regs->tmr_add,    qoriq_ptp->tmr_add);
+	qoriq_write(&regs->ctrl_regs->tmr_prsc,   qoriq_ptp->tmr_prsc);
+	qoriq_write(&regs->fiper_regs->tmr_fiper1, qoriq_ptp->tmr_fiper1);
+	qoriq_write(&regs->fiper_regs->tmr_fiper2, qoriq_ptp->tmr_fiper2);
+	set_alarm(qoriq_ptp);
+	qoriq_write(&regs->ctrl_regs->tmr_ctrl,   tmr_ctrl|FIPERST|RTPE|TE|FRD);
+
+	spin_unlock_irqrestore(&qoriq_ptp->lock, flags);
+
+	qoriq_ptp->clock = ptp_clock_register(&qoriq_ptp->caps, dev);
+	if (IS_ERR(qoriq_ptp->clock))
+		return PTR_ERR(qoriq_ptp->clock);
+
+	qoriq_ptp->phc_index = ptp_clock_index(qoriq_ptp->clock);
+	return 0;
+}
+
+static int qoriq_ptp_probe(struct platform_device *dev)
+{
+	struct device *ptp_dev = &dev->dev;
+	struct qoriq_ptp *qoriq_ptp;
+	void __iomem *base;
+	int err = -ENOMEM;
+
+	qoriq_ptp = kzalloc(sizeof(*qoriq_ptp), GFP_KERNEL);
+	if (!qoriq_ptp)
+		goto no_memory;
 
 	err = -ENODEV;
 
@@ -481,8 +526,6 @@ static int qoriq_ptp_probe(struct platform_device *dev)
 		goto no_resource;
 	}
 
-	spin_lock_init(&qoriq_ptp->lock);
-
 	base = ioremap(qoriq_ptp->rsrc->start,
 		       resource_size(qoriq_ptp->rsrc));
 	if (!base) {
@@ -490,46 +533,9 @@ static int qoriq_ptp_probe(struct platform_device *dev)
 		goto no_ioremap;
 	}
 
-	qoriq_ptp->base = base;
-
-	if (of_device_is_compatible(node, "fsl,fman-ptp-timer")) {
-		qoriq_ptp->regs.ctrl_regs = base + FMAN_CTRL_REGS_OFFSET;
-		qoriq_ptp->regs.alarm_regs = base + FMAN_ALARM_REGS_OFFSET;
-		qoriq_ptp->regs.fiper_regs = base + FMAN_FIPER_REGS_OFFSET;
-		qoriq_ptp->regs.etts_regs = base + FMAN_ETTS_REGS_OFFSET;
-	} else {
-		qoriq_ptp->regs.ctrl_regs = base + CTRL_REGS_OFFSET;
-		qoriq_ptp->regs.alarm_regs = base + ALARM_REGS_OFFSET;
-		qoriq_ptp->regs.fiper_regs = base + FIPER_REGS_OFFSET;
-		qoriq_ptp->regs.etts_regs = base + ETTS_REGS_OFFSET;
-	}
-
-	ktime_get_real_ts64(&now);
-	ptp_qoriq_settime(&qoriq_ptp->caps, &now);
-
-	tmr_ctrl =
-	  (qoriq_ptp->tclk_period & TCLK_PERIOD_MASK) << TCLK_PERIOD_SHIFT |
-	  (qoriq_ptp->cksel & CKSEL_MASK) << CKSEL_SHIFT;
-
-	spin_lock_irqsave(&qoriq_ptp->lock, flags);
-
-	regs = &qoriq_ptp->regs;
-	qoriq_write(&regs->ctrl_regs->tmr_ctrl,   tmr_ctrl);
-	qoriq_write(&regs->ctrl_regs->tmr_add,    qoriq_ptp->tmr_add);
-	qoriq_write(&regs->ctrl_regs->tmr_prsc,   qoriq_ptp->tmr_prsc);
-	qoriq_write(&regs->fiper_regs->tmr_fiper1, qoriq_ptp->tmr_fiper1);
-	qoriq_write(&regs->fiper_regs->tmr_fiper2, qoriq_ptp->tmr_fiper2);
-	set_alarm(qoriq_ptp);
-	qoriq_write(&regs->ctrl_regs->tmr_ctrl,   tmr_ctrl|FIPERST|RTPE|TE|FRD);
-
-	spin_unlock_irqrestore(&qoriq_ptp->lock, flags);
-
-	qoriq_ptp->clock = ptp_clock_register(&qoriq_ptp->caps, &dev->dev);
-	if (IS_ERR(qoriq_ptp->clock)) {
-		err = PTR_ERR(qoriq_ptp->clock);
+	err = qoriq_ptp_init(ptp_dev, qoriq_ptp, base, ptp_qoriq_caps);
+	if (err)
 		goto no_clock;
-	}
-	qoriq_ptp->phc_index = ptp_clock_index(qoriq_ptp->clock);
 
 	platform_set_drvdata(dev, qoriq_ptp);
 
@@ -541,7 +547,6 @@ no_ioremap:
 	release_resource(qoriq_ptp->rsrc);
 no_resource:
 	free_irq(qoriq_ptp->irq, qoriq_ptp);
-no_config:
 no_node:
 	kfree(qoriq_ptp);
 no_memory:

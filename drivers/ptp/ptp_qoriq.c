@@ -462,11 +462,11 @@ int qoriq_ptp_init(struct device *dev, struct qoriq_ptp *qoriq_ptp,
 	else
 		qoriq_ptp->little_endian = false;
 
-	if (of_device_is_compatible(node, "fsl,fman-ptp-timer")) {
-		qoriq_ptp->regs.ctrl_regs = base + FMAN_CTRL_REGS_OFFSET;
-		qoriq_ptp->regs.alarm_regs = base + FMAN_ALARM_REGS_OFFSET;
-		qoriq_ptp->regs.fiper_regs = base + FMAN_FIPER_REGS_OFFSET;
-		qoriq_ptp->regs.etts_regs = base + FMAN_ETTS_REGS_OFFSET;
+	if (of_device_is_compatible(node, "fsl,etsec-ptp")) {
+		qoriq_ptp->regs.ctrl_regs = base + ETSEC_CTRL_REGS_OFFSET;
+		qoriq_ptp->regs.alarm_regs = base + ETSEC_ALARM_REGS_OFFSET;
+		qoriq_ptp->regs.fiper_regs = base + ETSEC_FIPER_REGS_OFFSET;
+		qoriq_ptp->regs.etts_regs = base + ETSEC_ETTS_REGS_OFFSET;
 	} else {
 		qoriq_ptp->regs.ctrl_regs = base + CTRL_REGS_OFFSET;
 		qoriq_ptp->regs.alarm_regs = base + ALARM_REGS_OFFSET;

@@ -166,4 +166,12 @@ static inline void qoriq_write(unsigned __iomem *addr, u32 val)
 	iowrite32be(val, addr);
 }
 
+irqreturn_t ptp_qoriq_isr(int irq, void *priv);
+int ptp_qoriq_adjfine(struct ptp_clock_info *ptp, long scaled_ppm);
+int ptp_qoriq_adjtime(struct ptp_clock_info *ptp, s64 delta);
+int ptp_qoriq_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts);
+int ptp_qoriq_settime(struct ptp_clock_info *ptp, const struct timespec64 *ts);
+int ptp_qoriq_enable(struct ptp_clock_info *ptp,
+		     struct ptp_clock_request *rq, int on);
+
 #endif

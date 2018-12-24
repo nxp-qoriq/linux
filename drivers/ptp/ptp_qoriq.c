@@ -92,7 +92,7 @@ static void set_fipers(struct qoriq_ptp *qoriq_ptp)
  * Interrupt service routine
  */
 
-static irqreturn_t isr(int irq, void *priv)
+irqreturn_t ptp_qoriq_isr(int irq, void *priv)
 {
 	struct qoriq_ptp *qoriq_ptp = priv;
 	struct qoriq_ptp_registers *regs = &qoriq_ptp->regs;
@@ -170,7 +170,7 @@ static irqreturn_t isr(int irq, void *priv)
  * PTP clock operations
  */
 
-static int ptp_qoriq_adjfine(struct ptp_clock_info *ptp, long scaled_ppm)
+int ptp_qoriq_adjfine(struct ptp_clock_info *ptp, long scaled_ppm)
 {
 	u64 adj, diff;
 	u32 tmr_add;
@@ -199,7 +199,7 @@ static int ptp_qoriq_adjfine(struct ptp_clock_info *ptp, long scaled_ppm)
 	return 0;
 }
 
-static int ptp_qoriq_adjtime(struct ptp_clock_info *ptp, s64 delta)
+int ptp_qoriq_adjtime(struct ptp_clock_info *ptp, s64 delta)
 {
 	s64 now;
 	unsigned long flags;
@@ -217,8 +217,7 @@ static int ptp_qoriq_adjtime(struct ptp_clock_info *ptp, s64 delta)
 	return 0;
 }
 
-static int ptp_qoriq_gettime(struct ptp_clock_info *ptp,
-			       struct timespec64 *ts)
+int ptp_qoriq_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
 {
 	u64 ns;
 	unsigned long flags;
@@ -235,8 +234,7 @@ static int ptp_qoriq_gettime(struct ptp_clock_info *ptp,
 	return 0;
 }
 
-static int ptp_qoriq_settime(struct ptp_clock_info *ptp,
-			       const struct timespec64 *ts)
+int ptp_qoriq_settime(struct ptp_clock_info *ptp, const struct timespec64 *ts)
 {
 	u64 ns;
 	unsigned long flags;
@@ -254,8 +252,8 @@ static int ptp_qoriq_settime(struct ptp_clock_info *ptp,
 	return 0;
 }
 
-static int ptp_qoriq_enable(struct ptp_clock_info *ptp,
-			      struct ptp_clock_request *rq, int on)
+int ptp_qoriq_enable(struct ptp_clock_info *ptp,
+		     struct ptp_clock_request *rq, int on)
 {
 	struct qoriq_ptp *qoriq_ptp = container_of(ptp, struct qoriq_ptp, caps);
 	struct qoriq_ptp_registers *regs = &qoriq_ptp->regs;
@@ -467,7 +465,8 @@ static int qoriq_ptp_probe(struct platform_device *dev)
 		pr_err("irq not in device tree\n");
 		goto no_node;
 	}
-	if (request_irq(qoriq_ptp->irq, isr, IRQF_SHARED, DRIVER, qoriq_ptp)) {
+	if (request_irq(qoriq_ptp->irq, ptp_qoriq_isr,
+			IRQF_SHARED, DRIVER, qoriq_ptp)) {
 		pr_err("request_irq failed\n");
 		goto no_node;
 	}

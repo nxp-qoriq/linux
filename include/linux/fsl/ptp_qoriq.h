@@ -143,6 +143,7 @@ struct qoriq_ptp {
 	struct resource *rsrc;
 	int irq;
 	int phc_index;
+	bool little_endian;
 	u64 alarm_interval; /* for periodic alarm */
 	u64 alarm_value;
 	u32 tclk_period;  /* nanoseconds */
@@ -153,17 +154,22 @@ struct qoriq_ptp {
 	u32 tmr_fiper2;
 };
 
-static inline u32 qoriq_read(unsigned __iomem *addr)
+static inline u32 qoriq_read(struct qoriq_ptp *qoriq_ptp,
+			     unsigned __iomem *addr)
 {
-	u32 val;
-
-	val = ioread32be(addr);
-	return val;
+	if (qoriq_ptp->little_endian)
+		return ioread32(addr);
+	else
+		return ioread32be(addr);
 }
 
-static inline void qoriq_write(unsigned __iomem *addr, u32 val)
+static inline void qoriq_write(struct qoriq_ptp *qoriq_ptp,
+			       unsigned __iomem *addr, u32 val)
 {
-	iowrite32be(val, addr);
+	if (qoriq_ptp->little_endian)
+		iowrite32(val, addr);
+	else
+		iowrite32be(val, addr);
 }
 
 irqreturn_t ptp_qoriq_isr(int irq, void *priv);

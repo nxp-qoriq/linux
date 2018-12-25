@@ -1044,9 +1044,11 @@ int switch_pcp_map_set(struct net_device *ndev, bool enable)
 		       ANA_PORT_QOS_CFG,
 		       port->chip_port);
 
-	for (i = 0; i < NUM_MSCC_QOS_PRIO; i++) {
+	for (i = 0; i < NUM_MSCC_QOS_PRIO * 2; i++) {
 		ocelot_rmw_ix(ocelot,
+			      (ANA_PORT_PCP_DEI_MAP_DP_PCP_DEI_VAL & i) |
 			      ANA_PORT_PCP_DEI_MAP_QOS_PCP_DEI_VAL(i),
+			      ANA_PORT_PCP_DEI_MAP_DP_PCP_DEI_VAL |
 			      ANA_PORT_PCP_DEI_MAP_QOS_PCP_DEI_VAL_M,
 			      ANA_PORT_PCP_DEI_MAP,
 			      port->chip_port, i);

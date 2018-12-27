@@ -14,36 +14,36 @@ struct tsn_ops {
 	int (*qbv_set)(struct net_device *ndev, struct tsn_qbv_conf *qbvconf);
 	int (*qbv_get)(struct net_device *ndev, struct tsn_qbv_conf *qbvconf);
 	int (*qbv_get_status)(struct net_device *ndev,
-							struct tsn_qbv_status *qbvstat);
+				struct tsn_qbv_status *qbvstat);
 	int (*cb_streamid_set)(struct net_device *ndev, u32 index,
-							bool enable, struct tsn_cb_streamid *sid);
+				bool enable, struct tsn_cb_streamid *sid);
 	int (*cb_streamid_get)(struct net_device *ndev, u32 index,
-							struct tsn_cb_streamid *sid);
+				struct tsn_cb_streamid *sid);
 	int (*cb_streamid_counters_get)(struct net_device *ndev, u32 index,
-							struct tsn_cb_streamid_counters *sidcounter);
+				struct tsn_cb_streamid_counters *sidcounter);
 	int (*qci_get_maxcap)(struct net_device *ndev,
-							struct tsn_qci_psfp_stream_param *qcicapa);
+				struct tsn_qci_psfp_stream_param *qcicapa);
 	int (*qci_sfi_set)(struct net_device *ndev, u32 index, bool enable,
-							struct tsn_qci_psfp_sfi_conf *sficonf);
+				struct tsn_qci_psfp_sfi_conf *sficonf);
 	/* return: 0 stream filter instance not valid
 	 * 1 stream filter instance valid
 	 * -1 error happened
 	 */
 	int (*qci_sfi_get)(struct net_device *ndev, u32 index,
-						struct tsn_qci_psfp_sfi_conf *sficonf);
+				struct tsn_qci_psfp_sfi_conf *sficonf);
 	int (*qci_sfi_counters_get)(struct net_device *ndev, u32 index,
-								struct tsn_qci_psfp_sfi_counters *sficounter);
+				struct tsn_qci_psfp_sfi_counters *sficounter);
 	int (*qci_sgi_set)(struct net_device *ndev, u32 index,
-							struct tsn_qci_psfp_sgi_conf *sgiconf);
+				struct tsn_qci_psfp_sgi_conf *sgiconf);
 	int (*qci_sgi_get)(struct net_device *ndev, u32 index,
-							struct tsn_qci_psfp_sgi_conf *sgiconf);
+				struct tsn_qci_psfp_sgi_conf *sgiconf);
 	int (*qci_sgi_status_get)(struct net_device *ndev, u16 index,
-							struct tsn_psfp_sgi_status *sgistat);
+				struct tsn_psfp_sgi_status *sgistat);
 	int (*qci_fmi_set)(struct net_device *ndev, u32 index, bool enable,
-							struct tsn_qci_psfp_fmi *fmi);
+				struct tsn_qci_psfp_fmi *fmi);
 	int (*qci_fmi_get)(struct net_device *ndev, u32 index,
-							struct tsn_qci_psfp_fmi *fmi,
-							struct tsn_qci_psfp_fmi_counters *counters);
+				struct tsn_qci_psfp_fmi *fmi,
+				struct tsn_qci_psfp_fmi_counters *counters);
 	int (*cbs_set)(struct net_device *ndev, u8 tc, u8 bw);
 	int (*cbs_get)(struct net_device *ndev, u8 tc);
 	/* To set a 8 bits vector shows 8 traffic classes
@@ -52,15 +52,15 @@ struct tsn_ops {
 	int (*qbu_set)(struct net_device *ndev, u8 ptvector);
 	/* To get port preemtion status */
 	int (*qbu_get)(struct net_device *ndev,
-						struct tsn_preempt_status *preemptstat);
-	int (*tsd_set)(struct net_device *, struct tsn_tsd *);
-	int (*tsd_get)(struct net_device *, struct tsn_tsd_status *);
-	int (*ct_set)(struct net_device *, u8 cut_thru);
-	int (*cbgen_set)(struct net_device *, u32 index,
-			 struct tsn_seq_gen_conf *);
-	int (*cbrec_set)(struct net_device *, u32 index,
-			 struct tsn_seq_rec_conf *);
-	int (*pcpmap_set)(struct net_device *, bool enable);
+				struct tsn_preempt_status *preemptstat);
+	int (*tsd_set)(struct net_device *ndev, struct tsn_tsd *tsd);
+	int (*tsd_get)(struct net_device *ndev, struct tsn_tsd_status *stats);
+	int (*ct_set)(struct net_device *ndev, u8 cut_thru);
+	int (*cbgen_set)(struct net_device *ndev, u32 index,
+			 struct tsn_seq_gen_conf *seqgen);
+	int (*cbrec_set)(struct net_device *ndev, u32 index,
+			 struct tsn_seq_rec_conf *seqrec);
+	int (*pcpmap_set)(struct net_device *ndev, bool enable);
 };
 
 enum ethdev_type {
@@ -78,6 +78,7 @@ struct tsn_port {
 	enum ethdev_type type;
 };
 
-int tsn_port_register(struct net_device *netdev, struct tsn_ops *tsnops, u16 groupid);
+int tsn_port_register(struct net_device *netdev,
+				struct tsn_ops *tsnops, u16 groupid);
 void tsn_port_unregister(struct net_device *netdev);
 #endif

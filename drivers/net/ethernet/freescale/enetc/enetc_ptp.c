@@ -32,7 +32,7 @@ static int enetc_ptp_probe(struct pci_dev *pdev,
 	struct device *ptp_dev = &pdev->dev;
 	struct qoriq_ptp *qoriq_ptp;
 	void __iomem *base;
-	int err, len;
+	int err, len, n;
 
 	err = pci_enable_device_mem(pdev);
 	if (err) {
@@ -74,6 +74,21 @@ static int enetc_ptp_probe(struct pci_dev *pdev,
 		goto err_ioremap;
 	}
 
+	/* Allocate 1 interrupt */
+	n = pci_alloc_irq_vectors(pdev, 1, 1, PCI_IRQ_MSIX);
+	if (n != 1) {
+		err = -EPERM;
+		goto err_irq;
+	}
+
+	qoriq_ptp->irq = pci_irq_vector(pdev, 0);
+
+	err = request_irq(qoriq_ptp->irq, ptp_qoriq_isr, 0, DRIVER, qoriq_ptp);
+	if (err) {
+		dev_err(&pdev->dev, "request_irq() failed!\n");
+		goto err_irq;
+	}
+
 	err = qoriq_ptp_init(ptp_dev, qoriq_ptp, base, enetc_ptp_caps);
 	if (err)
 		goto err_no_clock;
@@ -84,6 +99,8 @@ static int enetc_ptp_probe(struct pci_dev *pdev,
 	return 0;
 
 err_no_clock:
+	free_irq(qoriq_ptp->irq, qoriq_ptp);
+err_irq:
 	iounmap(base);
 err_ioremap:
 	kfree(qoriq_ptp);

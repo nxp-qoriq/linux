@@ -120,6 +120,8 @@ struct qoriq_ptp_registers {
 /* Bit definitions for the TMR_STAT register */
 #define STAT_VEC_SHIFT        (0) /* Timer general purpose status vector */
 #define STAT_VEC_MASK         (0x3f)
+#define ETS1_VLD              (1<<24)
+#define ETS2_VLD              (1<<25)
 
 /* Bit definitions for the TMR_PRSC register */
 #define PRSC_OCK_SHIFT        (0) /* Output clock division/prescale factor. */

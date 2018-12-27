@@ -90,6 +90,39 @@ static void set_fipers(struct qoriq_ptp *qoriq_ptp)
 		    qoriq_ptp->tmr_fiper2);
 }
 
+/* Caller must hold qoriq_ptp->lock. */
+static int extts_read_clean(struct qoriq_ptp *qoriq_ptp,
+			    int index, u32 *lo, u32 *hi)
+{
+	struct qoriq_ptp_registers *regs = &qoriq_ptp->regs;
+	void __iomem *reg_etts_l;
+	void __iomem *reg_etts_h;
+	u32 valid;
+
+	switch (index) {
+	case 0:
+		valid = ETS1_VLD;
+		reg_etts_l = &regs->etts_regs->tmr_etts1_l;
+		reg_etts_h = &regs->etts_regs->tmr_etts1_h;
+		break;
+	case 1:
+		valid = ETS2_VLD;
+		reg_etts_l = &regs->etts_regs->tmr_etts2_l;
+		reg_etts_h = &regs->etts_regs->tmr_etts2_h;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	/* Read latest extts, and drop all others to clean FIFO */
+	while (qoriq_read(qoriq_ptp, &regs->ctrl_regs->tmr_stat) & valid) {
+		*lo = qoriq_read(qoriq_ptp, reg_etts_l);
+		*hi = qoriq_read(qoriq_ptp, reg_etts_h);
+	}
+
+	return 0;
+}
+
 /*
  * Interrupt service routine
  */
@@ -106,8 +139,9 @@ irqreturn_t ptp_qoriq_isr(int irq, void *priv)
 
 	if (val & ETS1) {
 		ack |= ETS1;
-		hi = qoriq_read(qoriq_ptp, &regs->etts_regs->tmr_etts1_h);
-		lo = qoriq_read(qoriq_ptp, &regs->etts_regs->tmr_etts1_l);
+		spin_lock(&qoriq_ptp->lock);
+		extts_read_clean(qoriq_ptp, 0, &lo, &hi);
+		spin_unlock(&qoriq_ptp->lock);
 		event.type = PTP_CLOCK_EXTTS;
 		event.index = 0;
 		event.timestamp = ((u64) hi) << 32;
@@ -117,8 +151,9 @@ irqreturn_t ptp_qoriq_isr(int irq, void *priv)
 
 	if (val & ETS2) {
 		ack |= ETS2;
-		hi = qoriq_read(qoriq_ptp, &regs->etts_regs->tmr_etts2_h);
-		lo = qoriq_read(qoriq_ptp, &regs->etts_regs->tmr_etts2_l);
+		spin_lock(&qoriq_ptp->lock);
+		extts_read_clean(qoriq_ptp, 1, &lo, &hi);
+		spin_unlock(&qoriq_ptp->lock);
 		event.type = PTP_CLOCK_EXTTS;
 		event.index = 1;
 		event.timestamp = ((u64) hi) << 32;
@@ -265,7 +300,7 @@ int ptp_qoriq_enable(struct ptp_clock_info *ptp,
 	struct qoriq_ptp *qoriq_ptp = container_of(ptp, struct qoriq_ptp, caps);
 	struct qoriq_ptp_registers *regs = &qoriq_ptp->regs;
 	unsigned long flags;
-	u32 bit, mask;
+	u32 bit, mask, lo, hi;
 
 	switch (rq->type) {
 	case PTP_CLK_REQ_EXTTS:
@@ -280,6 +315,7 @@ int ptp_qoriq_enable(struct ptp_clock_info *ptp,
 			return -EINVAL;
 		}
 		spin_lock_irqsave(&qoriq_ptp->lock, flags);
+		extts_read_clean(qoriq_ptp, rq->extts.index, &lo, &hi);
 		mask = qoriq_read(qoriq_ptp, &regs->ctrl_regs->tmr_temask);
 		if (on)
 			mask |= bit;

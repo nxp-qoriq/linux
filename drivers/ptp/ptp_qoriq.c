@@ -133,11 +133,16 @@ irqreturn_t ptp_qoriq_isr(int irq, void *priv)
 	struct qoriq_ptp_registers *regs = &qoriq_ptp->regs;
 	struct ptp_clock_event event;
 	u64 ns;
-	u32 ack = 0, lo, hi, mask, val;
+	u32 ack = 0, lo, hi, mask, val, interrupt;
 
+	spin_lock(&qoriq_ptp->lock);
 	val = qoriq_read(qoriq_ptp, &regs->ctrl_regs->tmr_tevent);
+	mask = qoriq_read(qoriq_ptp, &regs->ctrl_regs->tmr_temask);
+	spin_unlock(&qoriq_ptp->lock);
 
-	if (val & ETS1) {
+	interrupt = val & mask;
+
+	if (interrupt & ETS1) {
 		ack |= ETS1;
 		spin_lock(&qoriq_ptp->lock);
 		extts_read_clean(qoriq_ptp, 0, &lo, &hi);
@@ -149,7 +154,7 @@ irqreturn_t ptp_qoriq_isr(int irq, void *priv)
 		ptp_clock_event(qoriq_ptp->clock, &event);
 	}
 
-	if (val & ETS2) {
+	if (interrupt & ETS2) {
 		ack |= ETS2;
 		spin_lock(&qoriq_ptp->lock);
 		extts_read_clean(qoriq_ptp, 1, &lo, &hi);
@@ -161,7 +166,7 @@ irqreturn_t ptp_qoriq_isr(int irq, void *priv)
 		ptp_clock_event(qoriq_ptp->clock, &event);
 	}
 
-	if (val & ALM2) {
+	if (interrupt & ALM2) {
 		ack |= ALM2;
 		if (qoriq_ptp->alarm_value) {
 			event.type = PTP_CLOCK_ALARM;
@@ -195,16 +200,17 @@ irqreturn_t ptp_qoriq_isr(int irq, void *priv)
 		}
 	}
 
-	if (val & PP1) {
+	if (interrupt & PP1) {
 		ack |= PP1;
 		event.type = PTP_CLOCK_PPS;
 		ptp_clock_event(qoriq_ptp->clock, &event);
 	}
 
-	if (ack) {
-		qoriq_write(qoriq_ptp, &regs->ctrl_regs->tmr_tevent, ack);
+	qoriq_write(qoriq_ptp, &regs->ctrl_regs->tmr_tevent, val);
+
+	if (ack)
 		return IRQ_HANDLED;
-	} else
+	else
 		return IRQ_NONE;
 }
 
@@ -300,7 +306,12 @@ int ptp_qoriq_enable(struct ptp_clock_info *ptp,
 	struct qoriq_ptp *qoriq_ptp = container_of(ptp, struct qoriq_ptp, caps);
 	struct qoriq_ptp_registers *regs = &qoriq_ptp->regs;
 	unsigned long flags;
-	u32 bit, mask, lo, hi;
+	u32 bit, event, mask, lo, hi;
+
+	spin_lock_irqsave(&qoriq_ptp->lock, flags);
+	event = qoriq_read(qoriq_ptp, &regs->ctrl_regs->tmr_tevent);
+	qoriq_write(qoriq_ptp, &regs->ctrl_regs->tmr_tevent, event);
+	spin_unlock_irqrestore(&qoriq_ptp->lock, flags);
 
 	switch (rq->type) {
 	case PTP_CLK_REQ_EXTTS:

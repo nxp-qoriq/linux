@@ -308,11 +308,6 @@ int ptp_qoriq_enable(struct ptp_clock_info *ptp,
 	unsigned long flags;
 	u32 bit, event, mask, lo, hi;
 
-	spin_lock_irqsave(&qoriq_ptp->lock, flags);
-	event = qoriq_read(qoriq_ptp, &regs->ctrl_regs->tmr_tevent);
-	qoriq_write(qoriq_ptp, &regs->ctrl_regs->tmr_tevent, event);
-	spin_unlock_irqrestore(&qoriq_ptp->lock, flags);
-
 	switch (rq->type) {
 	case PTP_CLK_REQ_EXTTS:
 		switch (rq->extts.index) {
@@ -325,6 +320,7 @@ int ptp_qoriq_enable(struct ptp_clock_info *ptp,
 		default:
 			return -EINVAL;
 		}
+
 		spin_lock_irqsave(&qoriq_ptp->lock, flags);
 		extts_read_clean(qoriq_ptp, rq->extts.index, &lo, &hi);
 		mask = qoriq_read(qoriq_ptp, &regs->ctrl_regs->tmr_temask);
@@ -332,10 +328,8 @@ int ptp_qoriq_enable(struct ptp_clock_info *ptp,
 			mask |= bit;
 		else
 			mask &= ~bit;
-		qoriq_write(qoriq_ptp, &regs->ctrl_regs->tmr_temask, mask);
 		spin_unlock_irqrestore(&qoriq_ptp->lock, flags);
-		return 0;
-
+		break;
 	case PTP_CLK_REQ_PPS:
 		spin_lock_irqsave(&qoriq_ptp->lock, flags);
 		mask = qoriq_read(qoriq_ptp, &regs->ctrl_regs->tmr_temask);
@@ -343,15 +337,19 @@ int ptp_qoriq_enable(struct ptp_clock_info *ptp,
 			mask |= PP1EN;
 		else
 			mask &= ~PP1EN;
-		qoriq_write(qoriq_ptp, &regs->ctrl_regs->tmr_temask, mask);
 		spin_unlock_irqrestore(&qoriq_ptp->lock, flags);
-		return 0;
-
-	default:
 		break;
+	default:
+		return -EOPNOTSUPP;
 	}
 
-	return -EOPNOTSUPP;
+	spin_lock_irqsave(&qoriq_ptp->lock, flags);
+	event = qoriq_read(qoriq_ptp, &regs->ctrl_regs->tmr_tevent);
+	qoriq_write(qoriq_ptp, &regs->ctrl_regs->tmr_tevent, event);
+	qoriq_write(qoriq_ptp, &regs->ctrl_regs->tmr_temask, mask);
+	spin_unlock_irqrestore(&qoriq_ptp->lock, flags);
+
+	return 0;
 }
 
 static const struct ptp_clock_info ptp_qoriq_caps = {

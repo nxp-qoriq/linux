@@ -63,13 +63,39 @@ static void tmr_cnt_write(struct qoriq_ptp *qoriq_ptp, u64 ns)
 }
 
 /* Caller must hold qoriq_ptp->lock. */
+static u64 tmr_off_read(struct qoriq_ptp *qoriq_ptp)
+{
+	struct qoriq_ptp_registers *regs = &qoriq_ptp->regs;
+	u64 ns;
+	u32 lo, hi;
+
+	lo = qoriq_read(qoriq_ptp, &regs->ctrl_regs->tmroff_l);
+	hi = qoriq_read(qoriq_ptp, &regs->ctrl_regs->tmroff_h);
+	ns = ((u64) hi) << 32;
+	ns |= lo;
+	return ns;
+}
+
+/* Caller must hold qoriq_ptp->lock. */
+static void tmr_off_write(struct qoriq_ptp *qoriq_ptp, u64 ns)
+{
+	struct qoriq_ptp_registers *regs = &qoriq_ptp->regs;
+	u32 hi = ns >> 32;
+	u32 lo = ns & 0xffffffff;
+
+	qoriq_write(qoriq_ptp, &regs->ctrl_regs->tmroff_l, lo);
+	qoriq_write(qoriq_ptp, &regs->ctrl_regs->tmroff_h, hi);
+}
+
+/* Caller must hold qoriq_ptp->lock. */
 static void set_alarm(struct qoriq_ptp *qoriq_ptp)
 {
 	struct qoriq_ptp_registers *regs = &qoriq_ptp->regs;
 	u64 ns;
 	u32 lo, hi;
 
-	ns = tmr_cnt_read(qoriq_ptp) + 1500000000ULL;
+	ns = tmr_cnt_read(qoriq_ptp) + tmr_off_read(qoriq_ptp);
+	ns += 1500000000ULL;
 	ns = div_u64(ns, 1000000000UL) * 1000000000ULL;
 	ns -= qoriq_ptp->tclk_period;
 	hi = ns >> 32;
@@ -249,15 +275,23 @@ int ptp_qoriq_adjfine(struct ptp_clock_info *ptp, long scaled_ppm)
 
 int ptp_qoriq_adjtime(struct ptp_clock_info *ptp, s64 delta)
 {
-	s64 now;
+	s64 cnt, off;
 	unsigned long flags;
 	struct qoriq_ptp *qoriq_ptp = container_of(ptp, struct qoriq_ptp, caps);
 
 	spin_lock_irqsave(&qoriq_ptp->lock, flags);
 
-	now = tmr_cnt_read(qoriq_ptp);
-	now += delta;
-	tmr_cnt_write(qoriq_ptp, now);
+	off = tmr_off_read(qoriq_ptp);
+	off += delta;
+
+	/* Try to adjust time through tmroff_h/l register first */
+	if (off >= 0) {
+		tmr_off_write(qoriq_ptp, off);
+	} else {
+		cnt = tmr_cnt_read(qoriq_ptp);
+		cnt += delta;
+		tmr_cnt_write(qoriq_ptp, cnt);
+	}
 	set_fipers(qoriq_ptp);
 
 	spin_unlock_irqrestore(&qoriq_ptp->lock, flags);
@@ -272,9 +306,7 @@ int ptp_qoriq_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
 	struct qoriq_ptp *qoriq_ptp = container_of(ptp, struct qoriq_ptp, caps);
 
 	spin_lock_irqsave(&qoriq_ptp->lock, flags);
-
-	ns = tmr_cnt_read(qoriq_ptp);
-
+	ns = tmr_cnt_read(qoriq_ptp) + tmr_off_read(qoriq_ptp);
 	spin_unlock_irqrestore(&qoriq_ptp->lock, flags);
 
 	*ts = ns_to_timespec64(ns);
@@ -293,6 +325,7 @@ int ptp_qoriq_settime(struct ptp_clock_info *ptp, const struct timespec64 *ts)
 	spin_lock_irqsave(&qoriq_ptp->lock, flags);
 
 	tmr_cnt_write(qoriq_ptp, ns);
+	tmr_off_write(qoriq_ptp, 0);
 	set_fipers(qoriq_ptp);
 
 	spin_unlock_irqrestore(&qoriq_ptp->lock, flags);

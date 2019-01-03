@@ -7,6 +7,8 @@
 #include <uapi/linux/tsn.h>
 
 struct tsn_ops {
+	void (*device_init)(struct net_device *ndev);
+	void (*device_deinit)(struct net_device *ndev);
 	u32 (*get_capability)(struct net_device *ndev);
 	/* Qbv standard */
 	int (*qbv_set)(struct net_device *ndev, struct tsn_qbv_conf *qbvconf);
@@ -61,4 +63,21 @@ struct tsn_ops {
 	int (*pcpmap_set)(struct net_device *, bool enable);
 };
 
+enum ethdev_type {
+	TSN_SWITCH,
+	TSN_ENDPOINT,
+};
+
+#define GROUP_OFFSET_SWITCH 256
+
+struct tsn_port {
+	u16 groupid;
+	struct tsn_ops *tsnops;
+	struct net_device *netdev;
+	struct list_head list;
+	enum ethdev_type type;
+};
+
+int tsn_port_register(struct net_device *netdev, struct tsn_ops *tsnops, u16 groupid);
+void tsn_port_unregister(struct net_device *netdev);
 #endif

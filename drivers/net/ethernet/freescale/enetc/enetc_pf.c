@@ -794,11 +794,11 @@ static int enetc_pf_probe(struct pci_dev *pdev,
 		goto err_alloc_msix;
 	}
 
-	enetc_tsn_init(si);
-
 	err = register_netdev(ndev);
 	if (err)
 		goto err_reg_netdev;
+
+	enetc_tsn_pf_init(ndev, pdev);
 
 	err = enetc_setup_irqs(priv);
 	if (err)
@@ -843,6 +843,9 @@ static void enetc_pf_remove(struct pci_dev *pdev)
 	priv = netdev_priv(si->ndev);
 	netif_info(priv, drv, si->ndev, "%s v%s remove\n",
 		   enetc_drv_name, enetc_drv_ver);
+
+	enetc_tsn_pf_deinit(si->ndev);
+
 	unregister_netdev(si->ndev);
 
 	if (pdev->dev.of_node && of_phy_is_fixed_link(pdev->dev.of_node))

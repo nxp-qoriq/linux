@@ -21,7 +21,6 @@
 #include <net/switchdev.h>
 
 #include "ocelot.h"
-#include "tsn_switch.h"
 
 /* MAC table entry types.
  * ENTRYTYPE_NORMAL is subject to aging.
@@ -1358,31 +1357,6 @@ static const struct switchdev_ops ocelot_port_switchdev_ops = {
 	.switchdev_port_obj_del		= ocelot_port_obj_del,
 };
 
-#ifdef CONFIG_MSCC_FELIX_SWITCH_TSN
-const struct tsn_ops switch_tsn_ops = {
-	.qbv_set			= switch_qbv_set,
-	.qbv_get			= switch_qbv_get,
-	.qbv_get_status			= switch_qbv_get_status,
-	.qbu_set			= switch_qbu_set,
-	.cb_streamid_set		= switch_cb_streamid_set,
-	.cb_streamid_get		= switch_cb_streamid_get,
-	.cb_streamid_counters_get	= switch_cb_streamid_counters_get,
-	.qci_sfi_set			= switch_qci_sfi_set,
-	.qci_sfi_get			= switch_qci_sfi_get,
-	.qci_sfi_counters_get		= switch_qci_sfi_counters_get,
-	.qci_sgi_set			= switch_qci_sgi_set,
-	.qci_sgi_get			= switch_qci_sgi_get,
-	.qci_sgi_status_get		= switch_qci_sgi_status_get,
-	.qci_fmi_set			= switch_qci_fmi_set,
-	.qci_fmi_get			= switch_qci_fmi_get,
-	.cbs_set			= switch_cbs_set,
-	.ct_set				= switch_cut_thru_set,
-	.cbgen_set			= switch_seq_gen_set,
-	.cbrec_set			= switch_seq_rec_set,
-	.pcpmap_set			= switch_pcp_map_set,
-};
-#endif
-
 static int ocelot_port_bridge_join(struct ocelot_port *ocelot_port,
 				   struct net_device *bridge)
 {
@@ -1647,9 +1621,6 @@ int ocelot_probe_port(struct ocelot *ocelot, u8 port,
 	dev->netdev_ops = &ocelot_port_netdev_ops;
 	dev->ethtool_ops = &ocelot_ethtool_ops;
 	dev->switchdev_ops = &ocelot_port_switchdev_ops;
-#ifdef CONFIG_MSCC_FELIX_SWITCH_TSN
-	dev->tsn_ops = &switch_tsn_ops;
-#endif
 
 	dev->hw_features |= NETIF_F_HW_VLAN_CTAG_FILTER;
 	dev->features |= NETIF_F_HW_VLAN_CTAG_FILTER;

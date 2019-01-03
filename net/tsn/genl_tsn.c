@@ -55,6 +55,8 @@
 /* the netlink family */
 static struct genl_family tsn_family;
 
+LIST_HEAD(port_list);
+
 enum TSN_REPLY_VALUE {
 	TSN_SUCCESS = 0,
 	TSN_NODEVOPS,
@@ -406,36 +408,45 @@ static int tsn_simple_reply(struct genl_info *info, u32 cmd, char *portname, s32
 	return tsn_send_reply(rep_skb, info);
 }
 
-int tsn_init_check(struct genl_info *info, struct net_device **ndev)
+struct tsn_port *tsn_init_check(struct genl_info *info, struct net_device **ndev)
 {
 	struct nlattr *na;
 	char *portname;
 	struct net_device *netdev;
+	struct tsn_port *port;
+	bool tsn_found = false;
 
 	na = info->attrs[TSN_ATTR_IFNAME];
 	if (!na) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, "no portname", -TSN_ATTRERR);
-		return -EINVAL;
+		return NULL;
 	}
 
 	portname = (char *)nla_data(na);
 	netdev = __dev_get_by_name(genl_info_net(info), portname);
 	if (!netdev) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
-		return -EOPNOTSUPP;
+		return NULL;
 	}
 
-	pr_info("tsn: cmd_cb_streamid_set : netdev index is %d name is %s\n",
+	pr_info("%s: netdev index is %d name is %s\n", __func__,
 			netdev->ifindex, netdev->name);
 
-	if (!netdev->tsn_ops) {
+	list_for_each_entry(port, &port_list, list) {
+		if (port->netdev == netdev) {
+			tsn_found = true;
+			break;
+		}
+	}
+
+	if (!tsn_found) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
-		return -EOPNOTSUPP;
+		return NULL;
 	}
 
 	*ndev = netdev;
 
-	return 0;
+	return port;
 }
 
 static int cmd_cb_streamid_set(struct genl_info *info)
@@ -448,12 +459,13 @@ static int cmd_cb_streamid_set(struct genl_info *info)
 	struct net_device *netdev;
 	struct tsn_cb_streamid sidconf;
 	const struct tsn_ops *tsnops;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
 
-	tsnops = netdev->tsn_ops;
+	tsnops = port->tsnops;
 
 	memset(&sidconf, 0, sizeof(struct tsn_cb_streamid));
 
@@ -570,12 +582,13 @@ static int cmd_cb_streamid_get(struct genl_info *info)
 	struct tsn_cb_streamid sidconf;
 	struct tsn_cb_streamid_counters sidcounts;
 	const struct tsn_ops *tsnops;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return -EINVAL;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
 
-	tsnops = netdev->tsn_ops;
+	tsnops = port->tsnops;
 
 	memset(&sidconf, 0, sizeof(struct tsn_cb_streamid));
 	memset(&sidcounts, 0, sizeof(struct tsn_cb_streamid_counters));
@@ -728,12 +741,13 @@ static int cmd_qci_sfi_set(struct genl_info *info)
 	struct net_device *netdev;
 	struct tsn_qci_psfp_sfi_conf sficonf;
 	const struct tsn_ops *tsnops;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
 
-	tsnops = netdev->tsn_ops;
+	tsnops = port->tsnops;
 
 	memset(&sficonf, 0, sizeof(struct tsn_qci_psfp_sfi_conf));
 
@@ -834,10 +848,13 @@ static int cmd_qci_sfi_get(struct genl_info *info)
 	struct tsn_qci_psfp_sfi_conf sficonf;
 	struct tsn_qci_psfp_sfi_counters sficount;
 	const struct tsn_ops *tsnops;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
+
+	tsnops = port->tsnops;
 
 	genlhdr = info->genlhdr;
 
@@ -855,8 +872,6 @@ static int cmd_qci_sfi_get(struct genl_info *info)
 		return -EINVAL;
 
 	sfi_handle = nla_get_u32(sfi[TSN_QCI_SFI_ATTR_INDEX]);
-
-	tsnops = netdev->tsn_ops;
 
 	memset(&sficonf, 0, sizeof(struct tsn_qci_psfp_sfi_conf));
 	memset(&sficount, 0, sizeof(struct tsn_qci_psfp_sfi_counters));
@@ -942,10 +957,13 @@ static int cmd_qci_sfi_counters_get(struct genl_info *info)
 	struct genlmsghdr *genlhdr;
 	struct tsn_qci_psfp_sfi_counters sficount;
 	const struct tsn_ops *tsnops;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
+
+	tsnops = port->tsnops;
 
 	genlhdr = info->genlhdr;
 
@@ -963,8 +981,6 @@ static int cmd_qci_sfi_counters_get(struct genl_info *info)
 		return -EINVAL;
 
 	sfi_handle = nla_get_u32(sfi[TSN_QCI_SFI_ATTR_INDEX]);
-
-	tsnops = netdev->tsn_ops;
 
 	memset(&sficount, 0, sizeof(struct tsn_qci_psfp_sfi_counters));
 	if (!tsnops->qci_sfi_counters_get) {
@@ -1028,12 +1044,13 @@ static int cmd_qci_sgi_set(struct genl_info *info)
 	struct tsn_qci_psfp_gcl *gcl = NULL;
 	u16 sgi_handle = 0;
 	u16 listcount = 0;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
 
-	tsnops = netdev->tsn_ops;
+	tsnops = port->tsnops;
 
 	memset(&sgi, 0, sizeof(struct tsn_qci_psfp_sgi_conf));
 
@@ -1205,10 +1222,13 @@ static int cmd_qci_sgi_get(struct genl_info *info)
 	const struct tsn_ops *tsnops;
 	u16 sgi_handle;
 	u8 listcount, i;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
+
+	tsnops = port->tsnops;
 
 	if (!info->attrs[TSN_ATTR_QCI_SGI]) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
@@ -1233,8 +1253,6 @@ static int cmd_qci_sgi_get(struct genl_info *info)
 
 	/* Get config data from device */
 	genlhdr = info->genlhdr;
-
-	tsnops = netdev->tsn_ops;
 
 	memset(&sgiadmin, 0, sizeof(struct tsn_qci_psfp_sgi_conf));
 
@@ -1383,10 +1401,13 @@ static int cmd_qci_sgi_status_get(struct genl_info *info)
 	u16 sgi_handle;
 	u8 listcount;
 	int valid, i;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
+
+	tsnops = port->tsnops;
 
 	if (!info->attrs[TSN_ATTR_QCI_SGI]) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
@@ -1411,8 +1432,6 @@ static int cmd_qci_sgi_status_get(struct genl_info *info)
 
 	/* Get status data from device */
 	genlhdr = info->genlhdr;
-
-	tsnops = netdev->tsn_ops;
 
 	memset(&sgistat, 0, sizeof(struct tsn_psfp_sgi_status));
 
@@ -1551,12 +1570,13 @@ static int cmd_qci_fmi_set(struct genl_info *info)
 	struct tsn_qci_psfp_fmi fmiconf;
 	const struct tsn_ops *tsnops;
 	bool enable = 0;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
 
-	tsnops = netdev->tsn_ops;
+	tsnops = port->tsnops;
 
 	memset(&fmiconf, 0, sizeof(struct tsn_qci_psfp_fmi));
 
@@ -1644,10 +1664,13 @@ static int cmd_qci_fmi_get(struct genl_info *info)
 	struct tsn_qci_psfp_fmi_counters counters;
 	const struct tsn_ops *tsnops;
 	struct genlmsghdr *genlhdr;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
+
+	tsnops = port->tsnops;
 
 	if (!info->attrs[TSN_ATTR_QCI_FMI])
 		return -EINVAL;
@@ -1666,8 +1689,6 @@ static int cmd_qci_fmi_get(struct genl_info *info)
 	index = nla_get_u32(fmi[TSN_QCI_FMI_ATTR_INDEX]);
 
 	/* Get data from device */
-	tsnops = netdev->tsn_ops;
-
 	memset(&fmiconf, 0, sizeof(struct tsn_qci_psfp_fmi));
 	memset(&counters, 0, sizeof(struct tsn_qci_psfp_fmi_counters));
 
@@ -1745,15 +1766,15 @@ static int cmd_qbv_set(struct genl_info *info)
 	struct net_device *netdev;
 	struct tsn_qbv_conf qbvconfig;
 	const struct tsn_ops *tsnops;
-
 	struct tsn_qbv_entry *gatelist = NULL;
 	int count = 0;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
 
-	tsnops = netdev->tsn_ops;
+	tsnops = port->tsnops;
 
 	memset(&qbvconfig, 0, sizeof(struct tsn_qbv_conf));
 
@@ -1870,14 +1891,15 @@ static int cmd_qbv_get(struct genl_info *info)
 	struct genlmsghdr *genlhdr;
 	struct tsn_qbv_conf qbvconf;
 	const struct tsn_ops *tsnops;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
+
+	tsnops = port->tsnops;
 
 	genlhdr = info->genlhdr;
-
-	tsnops = netdev->tsn_ops;
 
 	memset(&qbvconf, 0, sizeof(struct tsn_qbv_conf));
 
@@ -1970,14 +1992,15 @@ static int cmd_qbv_status_get(struct genl_info *info)
 	struct genlmsghdr *genlhdr;
 	struct tsn_qbv_status qbvstatus;
 	const struct tsn_ops *tsnops;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
+
+	tsnops = port->tsnops;
 
 	genlhdr = info->genlhdr;
-
-	tsnops = netdev->tsn_ops;
 
 	memset(&qbvstatus, 0, sizeof(struct tsn_qbv_status));
 
@@ -2089,10 +2112,13 @@ static int tsn_cbs_set(struct sk_buff *skb, struct genl_info *info)
 	const struct tsn_ops *tsnops;
 	int ret;
 	u8 tc, bw;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
+
+	tsnops = port->tsnops;
 
 	if (!info->attrs[TSN_ATTR_CBS]) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
@@ -2100,9 +2126,6 @@ static int tsn_cbs_set(struct sk_buff *skb, struct genl_info *info)
 	}
 
 	na = info->attrs[TSN_ATTR_CBS];
-
-
-	tsnops = netdev->tsn_ops;
 
 	if (!tsnops->cbs_set) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
@@ -2155,17 +2178,18 @@ static int tsn_cbs_get(struct sk_buff *skb, struct genl_info *info)
 	int ret;
 	struct genlmsghdr *genlhdr;
 	u8 tc;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
+
+	tsnops = port->tsnops;
 
 	if (!info->attrs[TSN_ATTR_CBS]) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
-
-	tsnops = netdev->tsn_ops;
 
 	if (!tsnops->cbs_get) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
@@ -2224,10 +2248,13 @@ static int cmd_qbu_set(struct genl_info *info)
 	const struct tsn_ops *tsnops;
 	int ret;
 	u8 preemptable = 0;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
+
+	tsnops = port->tsnops;
 
 	if (!info->attrs[TSN_ATTR_QBU]) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
@@ -2246,8 +2273,6 @@ static int cmd_qbu_set(struct genl_info *info)
 		preemptable = nla_get_u8(qbua[TSN_QBU_ATTR_ADMIN_STATE]);
 	else
 		pr_info("Disable Qbu since no preemptable TSN_QBU_ATTR_ADMIN_STATE config!\n");
-
-	tsnops = netdev->tsn_ops;
 
 	if (!tsnops->qbu_set) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
@@ -2283,15 +2308,16 @@ static int cmd_qbu_get_status(struct genl_info *info)
 	int ret;
 	struct genlmsghdr *genlhdr;
 	struct tsn_preempt_status pps;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
+
+	tsnops = port->tsnops;
 
 	/* Get status data from device */
 	genlhdr = info->genlhdr;
-
-	tsnops = netdev->tsn_ops;
 
 	memset(&pps, 0, sizeof(struct tsn_preempt_status));
 
@@ -2348,12 +2374,15 @@ static int tsn_tsd_set(struct sk_buff *skb, struct genl_info *info)
 	const struct tsn_ops *tsnops;
 	struct tsn_tsd tsd;
 	int ret;
+	struct tsn_port *port;
+
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
+
+	tsnops = port->tsnops;
 
 	memset(&tsd, 0, sizeof(struct tsn_tsd));
-
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
 
 	if (!info->attrs[TSN_ATTR_TSD]) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
@@ -2364,15 +2393,9 @@ static int tsn_tsd_set(struct sk_buff *skb, struct genl_info *info)
 
 	ret = NLA_PARSE_NESTED(ntsd, TSN_TSD_ATTR_MAX, na, tsd_policy);
 	if (ret) {
-		printk("tsn: parse value TSN_TSD_ATTR_MAX error.");
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
-
-	if (!netdev->tsn_ops)
-		return -EINVAL;
-
-	tsnops = netdev->tsn_ops;
 
 	if (!tsnops->tsd_set) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
@@ -2387,18 +2410,17 @@ static int tsn_tsd_set(struct sk_buff *skb, struct genl_info *info)
 		}
 
 		if (!tsd.period) {
-			printk("tsn: parse value TSN_TSD_ATTR_PERIOD error.");
-				tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
-				return -EINVAL;
+			tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
+			return -EINVAL;
 		}
 
 		if (ntsd[TSN_TSD_ATTR_MAX_FRM_NUM])
 			tsd.maxFrameNum = nla_get_u32(ntsd[TSN_TSD_ATTR_MAX_FRM_NUM]);
 
 		if (ntsd[TSN_TSD_ATTR_SYN_IMME])
-			tsd.syn_flag = 2; // Cycle timer begins immediately.
+			tsd.syn_flag = 2;
 		else
-			tsd.syn_flag = 1; // TSD enable and Cycle timer will begin at the first frame coming.
+			tsd.syn_flag = 1;
 
 		tsd.enable = true;
 	}
@@ -2423,17 +2445,18 @@ static int tsn_tsd_get(struct sk_buff *skb, struct genl_info *info)
 	int ret;
 	struct genlmsghdr *genlhdr;
 	struct tsn_tsd_status tts;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
+
+	tsnops = port->tsnops;
 
 	if (!info->attrs[TSN_ATTR_TSD]) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
 		return -EINVAL;
 	}
-
-	tsnops = netdev->tsn_ops;
 
 	if (!tsnops->tsd_get) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
@@ -2497,10 +2520,13 @@ static int tsn_ct_set(struct sk_buff *skb, struct genl_info *info)
 	const struct tsn_ops *tsnops;
 	int ret;
 	u8 queue_stat;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
+
+	tsnops = port->tsnops;
 
 	if (!info->attrs[TSN_ATTR_CT]) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
@@ -2508,9 +2534,6 @@ static int tsn_ct_set(struct sk_buff *skb, struct genl_info *info)
 	}
 
 	na = info->attrs[TSN_ATTR_CT];
-
-
-	tsnops = netdev->tsn_ops;
 
 	if (!tsnops->ct_set) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
@@ -2543,10 +2566,13 @@ static int tsn_cbgen_set(struct sk_buff *skb, struct genl_info *info)
 	int ret;
 	u32 index;
 	struct tsn_seq_gen_conf sg_conf;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
+
+	tsnops = port->tsnops;
 
 	if (!info->attrs[TSN_ATTR_CBGEN]) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
@@ -2554,9 +2580,6 @@ static int tsn_cbgen_set(struct sk_buff *skb, struct genl_info *info)
 	}
 
 	na = info->attrs[TSN_ATTR_CBGEN];
-
-
-	tsnops = netdev->tsn_ops;
 
 	if (!tsnops->cbgen_set) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
@@ -2596,10 +2619,13 @@ static int tsn_cbrec_set(struct sk_buff *skb, struct genl_info *info)
 	int ret;
 	u32 index;
 	struct tsn_seq_rec_conf sr_conf;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
+
+	tsnops = port->tsnops;
 
 	if (!info->attrs[TSN_ATTR_CBREC]) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
@@ -2607,9 +2633,6 @@ static int tsn_cbrec_set(struct sk_buff *skb, struct genl_info *info)
 	}
 
 	na = info->attrs[TSN_ATTR_CBREC];
-
-
-	tsnops = netdev->tsn_ops;
 
 	if (!tsnops->cbrec_set) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
@@ -2646,10 +2669,13 @@ static int tsn_pcpmap_set(struct sk_buff *skb, struct genl_info *info)
 	const struct tsn_ops *tsnops;
 	int ret;
 	bool enable = 0;
+	struct tsn_port *port;
 
-	ret = tsn_init_check(info, &netdev);
-	if (ret)
-		return ret;
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
+
+	tsnops = port->tsnops;
 
 	if (!info->attrs[TSN_ATTR_PCPMAP]) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_ATTRERR);
@@ -2657,9 +2683,6 @@ static int tsn_pcpmap_set(struct sk_buff *skb, struct genl_info *info)
 	}
 
 	na = info->attrs[TSN_ATTR_PCPMAP];
-
-
-	tsnops = netdev->tsn_ops;
 
 	if (!tsnops->pcpmap_set) {
 		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, -TSN_NODEVOPS);
@@ -2757,20 +2780,6 @@ static const struct genl_ops tsnnl_ops[] = {
 		.policy		= tsn_cmd_policy,
 		.flags		= GENL_ADMIN_PERM,
 	},
-#if 0
-	{
-		.cmd		= TSN_CMD_QCI_SGI_SET_LIST,
-		.doit		= tsn_qci_sgi_list_set,
-		.policy		= tsn_cmd_policy,
-		.flags		= GENL_ADMIN_PERM,
-	},
-	{
-		.cmd		= TSN_CMD_QCI_SGI_GET_LIST,
-		.doit		= tsn_qci_sgi_list_get,
-		.policy		= tsn_cmd_policy,
-		.flags		= GENL_ADMIN_PERM,
-	},
-#endif
 	{
 		.cmd		= TSN_CMD_QCI_SGI_GET_STATUS,
 		.doit		= tsn_qci_sgi_status_get,
@@ -2865,6 +2874,61 @@ static struct genl_family tsn_family = {
 	.n_ops		= ARRAY_SIZE(tsnnl_ops),
 #endif
 };
+
+int tsn_port_register(struct net_device *netdev, struct tsn_ops *tsnops, u16 groupid)
+{
+	struct tsn_port *port;
+
+	if (list_empty(&port_list)) {
+		INIT_LIST_HEAD(&port_list);
+	} else {
+		list_for_each_entry(port, &port_list, list) {
+			if (port->netdev == netdev) {
+				pr_info("TSN device already registered!\n");
+				return -1;
+			}
+		}
+	}
+
+	port = kzalloc(sizeof(struct tsn_port), GFP_KERNEL);
+	if (!port)
+		return -1;
+
+	port->netdev = netdev;
+	port->groupid = groupid;
+	port->tsnops = tsnops;
+
+	if (groupid < GROUP_OFFSET_SWITCH)
+		port->type = TSN_ENDPOINT;
+	else
+		port->type = TSN_SWITCH;
+
+	list_add_tail(&port->list, &port_list);
+
+	if (tsnops && tsnops->device_init)
+		port->tsnops->device_init(netdev);
+
+	return 0;
+}
+
+EXPORT_SYMBOL(tsn_port_register);
+
+void tsn_port_unregister(struct net_device *netdev)
+{
+	struct tsn_port *p;
+
+	list_for_each_entry(p, &port_list, list) {
+		if (p->netdev == netdev) {
+			if (p && p->tsnops->device_deinit)
+				p->tsnops->device_deinit(netdev);
+			list_del(&p->list);
+			kfree(p);
+			break;
+		}
+	}
+}
+
+EXPORT_SYMBOL(tsn_port_unregister);
 
 static int __init tsn_genetlink_init(void)
 {

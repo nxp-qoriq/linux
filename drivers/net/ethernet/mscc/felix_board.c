@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: (GPL-2.0 OR MIT)
 /* Felix Switch driver
  *
- * Copyright 2018 NXP
+ * Copyright 2018-2019 NXP
  */
 
 #include <linux/module.h>
@@ -21,7 +21,7 @@ static const char felix_driver_version[] = DRV_VERSION;
 
 #define FELIX_MAX_NUM_PHY_PORTS	5
 #define FELIX_EXT_CPU_PORT_ID	4
-#define PORT_RES_START		(DEVCPU_PTP + 1)
+#define PORT_RES_START		(SYS + 1)
 
 #define PCI_DEVICE_ID_FELIX_PF5	0xEEF0
 
@@ -75,6 +75,12 @@ static struct resource felix_switch_res[] = {
 		.flags = IORESOURCE_MEM,
 	},
 	{
+		.start = 0x0090000,
+		.end = 0x00900ff,
+		.name = "ptp",
+		.flags = IORESOURCE_MEM,
+	},
+	{
 		.start = 0x0080000,
 		.end = 0x00800ff,
 		.name = "qs",
@@ -96,12 +102,6 @@ static struct resource felix_switch_res[] = {
 		.start = 0x0010000,
 		.end = 0x001ffff,
 		.name = "sys",
-		.flags = IORESOURCE_MEM,
-	},
-	{
-		.start = 0x0090000,
-		.end = 0x00900ff,
-		.name = "devcpu_ptp",
 		.flags = IORESOURCE_MEM,
 	},
 	{
@@ -545,7 +545,7 @@ static int felix_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 			felix_switch_res[i].end += offset;
 		}
 
-	for (i = ANA; i <= DEVCPU_PTP; i++) {
+	for (i = ANA; i <= SYS; i++) {
 		struct regmap *target;
 
 		target = felix_io_init(ocelot, i);

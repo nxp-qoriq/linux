@@ -22,6 +22,7 @@
 #include "ocelot_rew.h"
 #include "ocelot_sys.h"
 #include "ocelot_qs.h"
+#include "ocelot_ptp.h"
 
 #define PGID_AGGR    64
 #define PGID_SRC     80
@@ -67,11 +68,11 @@ struct frame_info {
 
 enum ocelot_target {
 	ANA = 1,
+	PTP,
 	QS,
 	QSYS,
 	REW,
 	SYS,
-	DEVCPU_PTP,
 	HSIO,
 	TARGET_MAX,
 };
@@ -176,6 +177,24 @@ enum ocelot_reg {
 	ANA_POL_FLOWC,
 	ANA_POL_HYST,
 //	ANA_POL_MISC_CFG,
+	PTP_MISC_CFG = PTP << TARGET_OFFSET,
+	PTP_CLK_ADJ_CFG,
+	PTP_CLK_ADJ_FRQ,
+	PTP_PIN_INTR,
+	PTP_PIN_INTR_ENA,
+	PTP_INTR_IDENT,
+	PTP_SYS_CLK_CFG,
+	PTP_CUR_NSF,
+	PTP_CUR_NSEC,
+	PTP_CUR_SEC_LSB,
+	PTP_CUR_SEC_MSB,
+	PTP_PIN_CFG,
+	PTP_TOD_SEC_MSB,
+	PTP_TOD_SEC_LSB,
+	PTP_TOD_NSEC,
+	PTP_NSF,
+	PTP_PIN_WF_HIGH_PERIOD,
+	PTP_PIN_WF_LOW_PERIOD,
 	QS_XTR_GRP_CFG = QS << TARGET_OFFSET,
 	QS_XTR_RD,
 	QS_XTR_FRM_PRUNING,
@@ -338,12 +357,6 @@ enum ocelot_reg {
 //	SYS_CM_DATA_RD,
 //	SYS_CM_OP,
 	SYS_CM_DATA,
-	DEVCPU_PTP_PINS = DEVCPU_PTP << TARGET_OFFSET,
-	DEVCPU_PTP_CFG,
-	DEVCPU_PTP_CUR_NSF,
-	DEVCPU_PTP_CUR_NSEC,
-	DEVCPU_PTP_CUR_SEC_LSB,
-	DEVCPU_PTP_CUR_SEC_MSB,
 	HSIO_PLL5G_CFG0 = HSIO << TARGET_OFFSET,
 	HSIO_PLL5G_CFG1,
 	HSIO_PLL5G_CFG2,
@@ -478,6 +491,13 @@ enum ocelot_regfield {
 	QSYS_TAG_CONFIG_ENABLE_0,
 	SYS_STAT_CFG_STAT_VIEW_0,
 	REGFIELD_MAX
+};
+
+enum ocelot_clk_pins {
+	ALT_PPS_PIN = 1,
+	EXT_CLK_PIN,
+	ALT_LDST_PIN,
+	TOD_ACC_PIN
 };
 
 struct ocelot_multicast {

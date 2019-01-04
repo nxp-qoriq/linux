@@ -2,7 +2,7 @@
  *
  * TSN_SWITCH driver
  *
- * Copyright 2018 NXP
+ * Copyright 2018-2019 NXP
  */
 #include <linux/io.h>
 #include <linux/of.h>
@@ -110,13 +110,13 @@ int switch_qbv_set(struct net_device *ndev, struct tsn_qbv_conf *shaper_config)
 		return -EINVAL;
 	}
 
-	cur_time = ocelot_read(ocelot, DEVCPU_PTP_CUR_SEC_MSB);
+	cur_time = ocelot_read(ocelot, PTP_CUR_SEC_MSB);
 	cur_time = cur_time << 32;
-	cur_time += ocelot_read(ocelot, DEVCPU_PTP_CUR_SEC_LSB);
+	cur_time += ocelot_read(ocelot, PTP_CUR_SEC_LSB);
 
 	if (base_time_sec < cur_time) {
 		base_time_sec = cur_time;
-		base_time_nsec = ocelot_read(ocelot, DEVCPU_PTP_CUR_NSEC);
+		base_time_nsec = ocelot_read(ocelot, PTP_CUR_NSEC);
 	}
 
 	/* Select port */
@@ -709,12 +709,12 @@ int switch_qci_sgi_set(struct net_device *ndev, u32 index,
 		return 0;
 	}
 	/*admin parameters*/
-	cur_time = ocelot_read(ocelot, DEVCPU_PTP_CUR_SEC_MSB);
+	cur_time = ocelot_read(ocelot, PTP_CUR_SEC_MSB);
 	cur_time = cur_time << 32;
-	cur_time += ocelot_read(ocelot, DEVCPU_PTP_CUR_SEC_LSB);
+	cur_time += ocelot_read(ocelot, PTP_CUR_SEC_LSB);
 	if (h_basetime < cur_time) {
 		h_basetime = cur_time;
-		l_basetime = ocelot_read(ocelot, DEVCPU_PTP_CUR_NSEC);
+		l_basetime = ocelot_read(ocelot, PTP_CUR_NSEC);
 	}
 
 	ocelot_write(ocelot, l_basetime, ANA_SG_CONFIG_REG_1);

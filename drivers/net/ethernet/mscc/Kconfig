@@ -35,6 +35,13 @@ config MSCC_FELIX_SWITCH
 	  This driver supports the Felix network switch device, connected as a
 	  PCI device.
 
+config MSCC_FELIX_SWITCH_PTP_CLOCK
+	bool "FELIX switch PTP clock support"
+	depends on MSCC_FELIX_SWITCH
+	select PTP_1588_CLOCK
+	help
+	  This driver supports PTP clock on Felix switch.
+
 config MSCC_FELIX_SWITCH_TSN
 	tristate "TSN on FELIX switch driver"
 	depends on MSCC_FELIX_SWITCH

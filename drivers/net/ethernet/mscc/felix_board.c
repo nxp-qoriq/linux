@@ -559,6 +559,10 @@ static int felix_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (err)
 		goto err_chip_init;
 
+	err = felix_ptp_init(ocelot);
+	if (err)
+		goto err_ptp_init;
+
 	ocelot_write(ocelot, SYS_RAM_INIT_RAM_INIT, SYS_RAM_INIT);
 
 	timeout = 50000;
@@ -580,6 +584,8 @@ static int felix_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	return 0;
 
 err_ports_init:
+	felix_ptp_remove(ocelot);
+err_ptp_init:
 err_chip_init:
 	pci_iounmap(pdev, regs);
 err_iomap:

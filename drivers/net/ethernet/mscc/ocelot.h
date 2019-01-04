@@ -13,6 +13,7 @@
 #include <linux/if_vlan.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
+#include <linux/ptp_clock_kernel.h>
 #include <net/tsn.h>
 #include "ocelot_ana.h"
 #include "ocelot_dev.h"
@@ -469,6 +470,9 @@ enum ocelot_regfield {
 	ANA_TABLES_MACACCESS_B_DOM,
 	ANA_TABLES_MACTINDX_BUCKET,
 	ANA_TABLES_MACTINDX_M_INDEX,
+	PTP_MISC_CFG_ENA,
+	PTP_SYS_CLK_CFG_PER_NS,
+	PTP_SYS_CLK_CFG_PER_PS100,
 	QSYS_TIMED_FRAME_ENTRY_TFRM_VLD,
 	QSYS_TIMED_FRAME_ENTRY_TFRM_FP,
 	QSYS_TIMED_FRAME_ENTRY_TFRM_PORTNO,
@@ -552,6 +556,10 @@ struct ocelot {
 	struct workqueue_struct *stats_queue;
 
 	void (*port_adjust_link)(struct net_device *dev);
+
+	struct ptp_clock_info ptp_caps;
+	struct ptp_clock *clock;
+	int phc_index;
 };
 
 struct ocelot_port {
@@ -620,6 +628,17 @@ int ocelot_chip_init(struct ocelot *ocelot);
 int ocelot_probe_port(struct ocelot *ocelot, u8 port,
 		      void __iomem *regs,
 		      struct phy_device *phy);
+#ifdef CONFIG_MSCC_FELIX_SWITCH_PTP_CLOCK
+int felix_ptp_init(struct ocelot *ocelot);
+void felix_ptp_remove(struct ocelot *ocelot);
+#else
+static inline int felix_ptp_init(struct ocelot *ocelot)
+{
+	return 0;
+}
+
+static inline void felix_ptp_remove(struct ocelot *ocelot) { }
+#endif
 
 extern struct notifier_block ocelot_netdevice_nb;
 

@@ -75,7 +75,10 @@ the common properties defined in mobiveil-pcie.txt.
 
 Required properties:
 - compatible: should contain the platform identifier such as:
-  "fsl,lx2160a-pcie"
+  RC mode:
+	"fsl,lx2160a-pcie"
+  EP mode:
+	"fsl,lx2160a-pcie-ep"
 - reg: base addresses and lengths of the PCIe controller register blocks.
   "config_axi_slave": PCIe controller registers
   "csr_axi_slave": Bridge config registers

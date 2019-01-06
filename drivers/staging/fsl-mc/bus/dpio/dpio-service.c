@@ -218,6 +218,12 @@ done:
 	return IRQ_HANDLED;
 }
 
+int dpaa2_io_get_cpu(struct dpaa2_io *d)
+{
+	return d->dpio_desc.cpu;
+}
+EXPORT_SYMBOL(dpaa2_io_get_cpu);
+
 /**
  * dpaa2_io_service_register() - Prepare for servicing of FQDAN or CDAN
  *                               notifications on the given DPIO service.
@@ -783,10 +789,20 @@ int dpaa2_io_service_orp_seqnum_drop(struct dpaa2_io *d, u16 orpid, u16 seqnum)
 {
 	struct qbman_eq_desc ed;
 	struct dpaa2_fd fd;
+	unsigned long irqflags;
+	int ret;
 
 	d = service_select(d);
 	if (!d)
 		return -ENODEV;
+
+	if ((d->swp->desc->qman_version & QMAN_REV_MASK) >= QMAN_REV_5000) {
+		spin_lock_irqsave(&d->lock_mgmt_cmd, irqflags);
+		ret = qbman_orp_drop(d->swp, orpid, seqnum);
+		spin_unlock_irqrestore(&d->lock_mgmt_cmd, irqflags);
+		return ret;
+	}
+
 	qbman_eq_desc_clear(&ed);
 	qbman_eq_desc_set_orp_hole(&ed, orpid, seqnum);
 	return qbman_swp_enqueue(d->swp, &ed, &fd);

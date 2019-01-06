@@ -52,7 +52,7 @@ struct dpaa2_io_desc {
 	int has_8prio;
 	int cpu;
 	void *regs_cena;
-	void *regs_cinh;
+	void __iomem *regs_cinh;
 	int dpio_id;
 	u32 qman_version;
 };
@@ -90,6 +90,8 @@ struct dpaa2_io_notification_ctx {
 	struct list_head node;
 	void *dpio_private;
 };
+
+int dpaa2_io_get_cpu(struct dpaa2_io *d);
 
 int dpaa2_io_service_register(struct dpaa2_io *service,
 			      struct dpaa2_io_notification_ctx *ctx,

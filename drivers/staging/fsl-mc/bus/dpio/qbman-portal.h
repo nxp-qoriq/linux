@@ -9,13 +9,20 @@
 
 #include "../../include/dpaa2-fd.h"
 
+#define QMAN_REV_4000   0x04000000
+#define QMAN_REV_4100   0x04010000
+#define QMAN_REV_4101   0x04010001
+#define QMAN_REV_5000   0x05000000
+
+#define QMAN_REV_MASK   0xffff0000
+
 struct dpaa2_dq;
 struct qbman_swp;
 
 /* qbman software portal descriptor structure */
 struct qbman_swp_desc {
 	void *cena_bar; /* Cache-enabled portal base address */
-	void *cinh_bar; /* Cache-inhibited portal base address */
+	void __iomem *cinh_bar; /* Cache-inhibited portal base address */
 	u32 qman_version;
 };
 
@@ -102,13 +109,18 @@ struct qbman_release_desc {
 /* portal data structure */
 struct qbman_swp {
 	const struct qbman_swp_desc *desc;
-	void __iomem *addr_cena;
+	void *addr_cena;
 	void __iomem *addr_cinh;
 
 	/* Management commands */
 	struct {
 		u32 valid_bit; /* 0x00 or 0x80 */
 	} mc;
+
+	/* Management response */
+	struct {
+		u32 valid_bit; /* 0x00 or 0x80 */
+	} mr;
 
 	/* Push dequeues */
 	u32 sdq;
@@ -172,6 +184,8 @@ void qbman_eq_desc_set_qd(struct qbman_eq_desc *d, u32 qdid,
 
 int qbman_swp_enqueue(struct qbman_swp *p, const struct qbman_eq_desc *d,
 		      const struct dpaa2_fd *fd);
+
+int qbman_orp_drop(struct qbman_swp *s, u16 orpid, u16 seqnum);
 
 void qbman_release_desc_clear(struct qbman_release_desc *d);
 void qbman_release_desc_set_bpid(struct qbman_release_desc *d, u16 bpid);

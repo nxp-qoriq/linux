@@ -15,6 +15,10 @@
 #include <linux/msi.h>
 #include "../pci.h"
 
+#include <linux/pci-epc.h>
+#include <linux/pci-epf.h>
+
+#define MAX_IATU_OUT			256
 /* register offsets and bit positions */
 
 /*
@@ -40,6 +44,9 @@
 #define  PAGE_SEL_MASK			0x3f
 #define  PAGE_LO_MASK			0x3ff
 #define  PAGE_SEL_OFFSET_SHIFT		10
+#define  FUNC_SEL_SHIFT	19
+#define  FUNC_SEL_MASK		0x1ff
+#define  MSI_SW_CTRL_EN	(1 << 29)
 
 #define PAB_ACTIVITY_STAT		0x81c
 
@@ -100,6 +107,19 @@
 #define PAB_PEX_AMAP_PEX_WIN_L(win)	PAB_REG_ADDR(0x4ba8, win)
 #define PAB_PEX_AMAP_PEX_WIN_H(win)	PAB_REG_ADDR(0x4bac, win)
 
+/* PPIO WINs EP mode */
+#define PAB_PEX_BAR_AMAP(func, bar)		(0x1ba0 + 0x20 * func + 4 * bar)
+#define PAB_EXT_PEX_BAR_AMAP(func, bar)		(0x84a0 + 0x20 * func + 4 * bar)
+#define PEX_BAR_AMAP_EN				(1 << 0)
+
+#define PAB_AXI_AMAP_PCI_HDR_PARAM(idx)		(0x5ba0 + 0x04 * idx)
+#define PAB_MSIX_TABLE_PBA_ACCESS		0xD000
+
+#define GPEX_BAR_ENABLE                         0x4D4
+#define GPEX_BAR_SIZE_LDW                       0x4D8
+#define GPEX_BAR_SIZE_UDW                       0x4DC
+#define GPEX_BAR_SELECT                         0x4E0
+
 /* starting offset of INTX bits in status register */
 #define PAB_INTX_START			5
 
@@ -137,6 +157,7 @@
 	((off >> PAGE_SEL_OFFSET_SHIFT) & PAGE_SEL_MASK)
 
 struct mobiveil_pcie;
+struct mobiveil_pcie_ep;
 
 struct mobiveil_msi {			/* MSI information */
 	struct mutex lock;		/* protect bitmap variable */
@@ -168,6 +189,29 @@ struct mobiveil_pab_ops {
 	int (*link_up)(struct mobiveil_pcie *pcie);
 };
 
+struct mobiveil_pcie_ep_ops {
+	void (*ep_init)(struct mobiveil_pcie_ep *ep);
+	int (*raise_irq)(struct mobiveil_pcie_ep *ep,
+			 enum pci_epc_irq_type type, u8 interrupt_num);
+};
+
+struct mobiveil_pcie_ep {
+	struct pci_epc *epc;
+	struct mobiveil_pcie_ep_ops *ops;
+	phys_addr_t phys_base;
+	size_t addr_size;
+	size_t page_size;
+	phys_addr_t *outbound_addr;
+	unsigned long *ob_window_map;
+	u32 num_ob_windows;
+	void __iomem *msi_mem;
+	phys_addr_t msi_mem_phys;
+	u8 msi_cap;	/* MSI capability offset */
+	u8 msix_cap;	/* MSI-X capability offset */
+	u8 bar_num;
+	u32 pf_num;
+};
+
 struct mobiveil_pcie {
 	struct platform_device *pdev;
 	struct list_head *resources;
@@ -180,7 +224,10 @@ struct mobiveil_pcie {
 	u32 ib_wins_configured;		/* configured inbound windows */
 	const struct mobiveil_pab_ops *ops;
 	struct root_port rp;
+	struct mobiveil_pcie_ep ep;
 };
+#define to_mobiveil_pcie_from_ep(endpoint)   \
+			    container_of((endpoint), struct mobiveil_pcie, ep)
 
 int mobiveil_pcie_host_probe(struct mobiveil_pcie *pcie);
 int mobiveil_host_init(struct mobiveil_pcie *pcie, bool reinit);
@@ -225,4 +272,19 @@ static inline void csr_writeb(struct mobiveil_pcie *pcie, u32 val, u32 off)
 	csr_write(pcie, val, off, 0x1);
 }
 
+void program_ib_windows_ep(struct mobiveil_pcie *pcie, u8 func_no,
+			   int bar, u64 phys);
+int program_ob_windows_ep(struct mobiveil_pcie *pcie, int win_num, int type,
+			  u64 phys, u64 bus_addr, u8 func, u64 size);
+void mobiveil_pcie_disable_ib_win_ep(struct mobiveil_pcie *pci,
+				     u8 func_no, u8 bar);
+int mobiveil_pcie_ep_init(struct mobiveil_pcie_ep *ep);
+int mobiveil_pcie_ep_raise_legacy_irq(struct mobiveil_pcie_ep *ep);
+int mobiveil_pcie_ep_raise_msi_irq(struct mobiveil_pcie_ep *ep,
+				   u8 interrupt_num);
+void mobiveil_pcie_ep_reset_bar(struct mobiveil_pcie *pci, enum pci_barno bar);
+void mobiveil_pcie_enable_bridge_pio(struct mobiveil_pcie *pci);
+void mobiveil_pcie_enable_engine_apio(struct mobiveil_pcie *pci);
+void mobiveil_pcie_enable_engine_ppio(struct mobiveil_pcie *pci);
+void mobiveil_pcie_enable_msi_ep(struct mobiveil_pcie *pci);
 #endif /* _PCIE_MOBIVEIL_H */

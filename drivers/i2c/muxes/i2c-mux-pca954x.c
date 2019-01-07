@@ -457,6 +457,8 @@ static int pca954x_probe(struct i2c_client *client,
 		 num, data->chip->muxtype == pca954x_ismux
 				? "mux" : "switch", client->name);
 
+	ret = i2c_smbus_read_byte_data(client, 0xe);
+	/*Check return value*/
 	return 0;
 
 fail_del_adapters:

@@ -1,7 +1,7 @@
 /*
  * Device Tree Include file for NXP Layerscape-1028A family SoC.
  *
- * Copyright 2018 NXP
+ * Copyright 2018-2019 NXP
  *
  * Harninder Rai <harninder.rai@nxp.com>
  *
@@ -403,7 +403,7 @@
 			interrupts = <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clockgen 4 1>;
 			dma-names = "tx", "rx";
-			status = "disabled";
+			status = "enabled";
 		};
 
 		i2c1: i2c@2010000 {
@@ -493,7 +493,7 @@
 		gpio0: gpio@2300000 {
 			compatible = "fsl,qoriq-gpio";
 			reg = <0x0 0x2300000 0x0 0x10000>;
-			interrupts = <GIC_SPI 36 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts = <GIC_SPI 36 IRQ_TYPE_EDGE_FALLING>;
 			gpio-controller;
 			#gpio-cells = <2>;
 			interrupt-controller;

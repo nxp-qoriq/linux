@@ -3,6 +3,7 @@
  *
  * Copyright (C) 2008 Peter Korsgaard <jacmet@sunsite.dk>
  * Copyright (C) 2016 Freescale Semiconductor Inc.
+ * Copyright 2019 NXP
  *
  * This file is licensed under the terms of the GNU General Public License
  * version 2.  This program is licensed "as is" without any warranty of any
@@ -160,6 +161,9 @@ static int mpc8xxx_irq_set_type(struct irq_data *d, unsigned int flow_type)
 		raw_spin_lock_irqsave(&mpc8xxx_gc->lock, flags);
 		gc->write_reg(mpc8xxx_gc->regs + GPIO_ICR,
 			gc->read_reg(mpc8xxx_gc->regs + GPIO_ICR)
+			| gc->pin2mask(gc, irqd_to_hwirq(d)));
+		gc->write_reg(mpc8xxx_gc->regs + GPIO_ICR2,
+			gc->read_reg(mpc8xxx_gc->regs + GPIO_ICR2)
 			| gc->pin2mask(gc, irqd_to_hwirq(d)));
 		raw_spin_unlock_irqrestore(&mpc8xxx_gc->lock, flags);
 		break;

@@ -1,7 +1,7 @@
 /*
  * Device Tree Include file for NXP Layerscape-1028A family SoC.
  *
- * Copyright 2018 NXP
+ * Copyright 2018-2019 NXP
  *
  * Harninder Rai <harninder.rai@nxp.com>
  *
@@ -167,6 +167,20 @@
 			rtc@51 {
 				compatible = "nxp,pcf2129";
 				reg = <0x51>;
+			};
+		};
+
+		i2c@6 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x6>;
+
+			pn547: pn547@28 {
+				compatible = "nxp,pn547", "nxp,pn544-i2c";
+				reg = <0x28>;
+				clock-frequency = <400000>;
+				interrupt-parent = <&gpio0>;
+				interrupt-gpios = <&gpio0 1 IRQ_TYPE_EDGE_FALLING>;
 			};
 		};
 	};

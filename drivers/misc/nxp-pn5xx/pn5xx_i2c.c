@@ -148,6 +148,7 @@ static int pn544_enable(struct pn54x_dev *dev, int mode)
 		gpio_set_value_cansleep(dev->ven_gpio, 1);
 		msleep(100);
 	}
+#ifdef VEN_GPIO
 	else if (MODE_FW == mode) {
 		/* power on with firmware download (requires hw reset)
 		 */
@@ -167,6 +168,7 @@ static int pn544_enable(struct pn54x_dev *dev, int mode)
 		gpio_set_value(dev->ven_gpio, 1);
 		msleep(20);
 	}
+#endif
 	else {
 		pr_err("%s bad arg %d\n", __func__, mode);
 		return -EINVAL;
@@ -217,7 +219,7 @@ static ssize_t pn54x_dev_read(struct file *filp, char __user *buf,
 
 	mutex_lock(&pn54x_dev->read_mutex);
 
-	if (!gpio_get_value(pn54x_dev->irq_gpio)) {
+	if (gpio_get_value(pn54x_dev->irq_gpio)) {
 		if (filp->f_flags & O_NONBLOCK) {
 			ret = -EAGAIN;
 			goto fail;
@@ -235,7 +237,7 @@ static ssize_t pn54x_dev_read(struct file *filp, char __user *buf,
 			if (ret)
 				goto fail;
 
-			if (gpio_get_value(pn54x_dev->irq_gpio))
+			if (!gpio_get_value(pn54x_dev->irq_gpio))
 				break;
 
 			pr_warning("%s: spurious interrupt detected\n", __func__);
@@ -249,7 +251,7 @@ static ssize_t pn54x_dev_read(struct file *filp, char __user *buf,
 
 	/* pn54x seems to be slow in handling I2C read requests
 	 * so add 1ms delay after recv operation */
-	udelay(1000);
+	udelay(2000);
 
 	if (ret < 0) {
 		pr_err("%s: i2c_master_recv returned %d\n", __func__, ret);
@@ -419,7 +421,7 @@ static int pn54x_get_pdata(struct device *dev,
 	memset(pdata, 0, sizeof(*pdata));
 
 	/* read the dev tree data */
-
+#ifdef VEN_GPIO
 	/* ven pin - enable's power to the chip - REQUIRED */
 	val = of_get_named_gpio_flags(node, "enable-gpios", 0, &flags);
 	if (val >= 0) {
@@ -429,6 +431,7 @@ static int pn54x_get_pdata(struct device *dev,
 		dev_err(dev, "VEN GPIO error getting from OF node\n");
 		return val;
 	}
+#endif
 
 	/* firm pin - controls firmware download - OPTIONAL */
 	val = of_get_named_gpio_flags(node, "firmware-gpios", 0, &flags);
@@ -568,13 +571,14 @@ static int pn54x_probe(struct i2c_client *client,
 	else{
 		client->irq = ret;
 	}
-
+#ifdef VEN_GPIO
 	pr_info("%s: request ven_gpio %d\n", __func__, pdata->ven_gpio);
 	ret = gpio_request(pdata->ven_gpio, "nfc_ven");
 	if (ret){
 		pr_err("%s :not able to get GPIO ven_gpio\n", __func__);
 		goto err_ven;
 	}
+#endif
 
 	if (gpio_is_valid(pdata->firm_gpio)) {
 		pr_info("%s: request firm_gpio %d\n", __func__, pdata->firm_gpio);
@@ -604,7 +608,9 @@ static int pn54x_probe(struct i2c_client *client,
 
 	/* store the platform data in the driver info struct */
 	pn54x_dev->irq_gpio = pdata->irq_gpio;
+#ifdef VEN_GPIO
 	pn54x_dev->ven_gpio = pdata->ven_gpio;
+#endif
 	pn54x_dev->firm_gpio = pdata->firm_gpio;
 	pn54x_dev->clkreq_gpio = pdata->clkreq_gpio;
 	pn54x_dev->pvdd_reg = pdata->pvdd_reg;
@@ -621,11 +627,13 @@ static int pn54x_probe(struct i2c_client *client,
 		goto err_exit;
 	}
 
+#ifdef VEN_GPIO
 	ret = gpio_direction_output(pn54x_dev->ven_gpio, 0);
 	if (ret < 0) {
 		pr_err("%s : not able to set ven_gpio as output\n", __func__);
 		goto err_exit;
 	}
+#endif
 
 	if (gpio_is_valid(pn54x_dev->firm_gpio)) {
 		ret = gpio_direction_output(pn54x_dev->firm_gpio, 0);
@@ -666,7 +674,7 @@ static int pn54x_probe(struct i2c_client *client,
 	pr_info("%s : requesting IRQ %d\n", __func__, client->irq);
 	pn54x_dev->irq_enabled = true;
 	ret = request_irq(client->irq, pn54x_dev_irq_handler,
-				IRQF_TRIGGER_HIGH, client->name, pn54x_dev);
+				IRQF_TRIGGER_FALLING, client->name, pn54x_dev);
 	if (ret) {
 		dev_err(&client->dev, "request_irq failed\n");
 		goto err_request_irq_failed;
@@ -687,7 +695,9 @@ err_clkreq:
 	if (gpio_is_valid(pdata->firm_gpio))
 		gpio_free(pdata->firm_gpio);
 err_firm:
+#ifdef VEN_GPIO
 	gpio_free(pdata->ven_gpio);
+#endif
 err_ven:
 	gpio_free(pdata->irq_gpio);
 	return ret;
@@ -708,7 +718,9 @@ static int pn54x_remove(struct i2c_client *client)
 	misc_deregister(&pn54x_dev->pn54x_device);
 	mutex_destroy(&pn54x_dev->read_mutex);
 	gpio_free(pn54x_dev->irq_gpio);
+#ifdef VEN_GPIO
 	gpio_free(pn54x_dev->ven_gpio);
+#endif
 	if (gpio_is_valid(pn54x_dev->firm_gpio))
 		gpio_free(pn54x_dev->firm_gpio);
 	if (gpio_is_valid(pn54x_dev->clkreq_gpio))

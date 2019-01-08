@@ -166,15 +166,13 @@
 					  IRQ_TYPE_LEVEL_LOW)>;
 	};
 
+
 	pmu {
 		compatible = "arm,cortex-a72-pmu";
-		interrupts = <GIC_SPI 106 IRQ_TYPE_LEVEL_HIGH>,
-			     <GIC_SPI 107 IRQ_TYPE_LEVEL_HIGH>,
-			     <GIC_SPI 95 IRQ_TYPE_LEVEL_HIGH>,
-			     <GIC_SPI 97 IRQ_TYPE_LEVEL_HIGH>;
-		interrupt-affinity = <&cpu0>,
-				     <&cpu1>;
-		status = "disabled";
+		interrupts = <GIC_SPI 38 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 39 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 40 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 41 IRQ_TYPE_LEVEL_HIGH>;
 	};
 
 	gic: interrupt-controller@6000000 {

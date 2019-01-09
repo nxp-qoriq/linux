@@ -330,10 +330,10 @@ static int enetc_set_cls_entry(struct enetc_si *si,
 		l4ip4_h = &fs->h_u.sctp_ip4_spec;
 		l4ip4_m = &fs->m_u.sctp_ip4_spec;
 l4ip4:
-		rfse.sip_h[0] = ntohl(l4ip4_h->ip4src);
-		rfse.sip_m[0] = ntohl(l4ip4_m->ip4src);
-		rfse.dip_h[0] = ntohl(l4ip4_h->ip4dst);
-		rfse.dip_m[0] = ntohl(l4ip4_m->ip4dst);
+		rfse.sip_h[0] = l4ip4_h->ip4src;
+		rfse.sip_m[0] = l4ip4_m->ip4src;
+		rfse.dip_h[0] = l4ip4_h->ip4dst;
+		rfse.dip_m[0] = l4ip4_m->ip4dst;
 		rfse.sport_h = ntohs(l4ip4_h->psrc);
 		rfse.sport_m = ntohs(l4ip4_m->psrc);
 		rfse.dport_h = ntohs(l4ip4_h->pdst);
@@ -347,10 +347,10 @@ l4ip4:
 		l3ip4_h = &fs->h_u.usr_ip4_spec;
 		l3ip4_m = &fs->m_u.usr_ip4_spec;
 
-		rfse.sip_h[0] = ntohl(l3ip4_h->ip4src);
-		rfse.sip_m[0] = ntohl(l3ip4_m->ip4src);
-		rfse.dip_h[0] = ntohl(l3ip4_h->ip4dst);
-		rfse.dip_m[0] = ntohl(l3ip4_m->ip4dst);
+		rfse.sip_h[0] = l3ip4_h->ip4src;
+		rfse.sip_m[0] = l3ip4_m->ip4src;
+		rfse.dip_h[0] = l3ip4_h->ip4dst;
+		rfse.dip_m[0] = l3ip4_m->ip4dst;
 		if (l3ip4_m->tos)
 			netdev_warn(si->ndev, "ToS field is not supported and was ignored\n");
 		rfse.ethtype_h = 0x0800; /* IPv4 */

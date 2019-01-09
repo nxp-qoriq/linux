@@ -104,8 +104,8 @@ void pci_epf_free_space(struct pci_epf *epf, void *addr, enum pci_barno bar)
 	if (!addr)
 		return;
 
-	free_pages((unsigned long)addr,
-		get_order(epf->bar[bar].size));
+	dma_free_coherent(dev, epf->bar[bar].size, addr,
+			  epf->bar[bar].phys_addr);
 
 	epf->bar[bar].phys_addr = 0;
 	epf->bar[bar].size = 0;
@@ -129,9 +129,7 @@ void *pci_epf_alloc_space(struct pci_epf *epf, size_t size, enum pci_barno bar)
 		size = 128;
 	size = roundup_pow_of_two(size);
 
-	space = (void *)__get_free_pages(GFP_KERNEL | __GFP_ZERO,
-						get_order(size));
-	phys_addr = virt_to_phys(space);
+	space = dma_alloc_coherent(dev, size, &phys_addr, GFP_KERNEL);
 	if (!space) {
 		dev_err(dev, "failed to allocate mem space\n");
 		return NULL;

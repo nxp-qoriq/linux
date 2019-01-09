@@ -471,7 +471,7 @@ static int pci_epf_test_probe(struct pci_epf *epf)
 	const struct pci_epf_device_id *match;
 	struct pci_epf_test_data *data;
 	enum pci_barno test_reg_bar = BAR_0;
-	bool linkup_notifier = false;
+	bool linkup_notifier = true;
 
 	match = pci_epf_match_device(pci_epf_test_ids, epf);
 	data = (struct pci_epf_test_data *)match->driver_data;

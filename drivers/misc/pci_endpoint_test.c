@@ -98,7 +98,6 @@ struct pci_endpoint_test {
 	enum pci_barno test_reg_bar;
 	size_t alignment;
 	char name[20];
-	int irq_num;
 };
 
 struct pci_endpoint_test_data {
@@ -456,6 +455,7 @@ static int pci_endpoint_test_probe(struct pci_dev *pdev,
 {
 	int i;
 	int err;
+	int irq = 0;
 	int id;
 	enum pci_barno bar;
 	void __iomem *base;
@@ -501,19 +501,19 @@ static int pci_endpoint_test_probe(struct pci_dev *pdev,
 	pci_set_master(pdev);
 
 	if (!no_msi) {
-		test->irq_num = pci_alloc_irq_vectors(pdev, 1, 32, PCI_IRQ_MSI);
-		if (test->irq_num < 0)
+		irq = pci_alloc_irq_vectors(pdev, 1, 32, PCI_IRQ_MSI);
+		if (irq < 0)
 			dev_err(dev, "failed to get MSI interrupts\n");
 	}
 
-	err = request_irq(pdev->irq, pci_endpoint_test_irqhandler,
+	err = devm_request_irq(dev, pdev->irq, pci_endpoint_test_irqhandler,
 			       IRQF_SHARED, DRV_MODULE_NAME, test);
 	if (err) {
 		dev_err(dev, "failed to request IRQ %d\n", pdev->irq);
 		goto err_disable_msi;
 	}
 
-	for (i = 1; i < test->irq_num; i++) {
+	for (i = 1; i < irq; i++) {
 		err = devm_request_irq(dev, pdev->irq + i,
 				       pci_endpoint_test_irqhandler,
 				       IRQF_SHARED, DRV_MODULE_NAME, test);
@@ -584,7 +584,6 @@ err_disable_pdev:
 static void pci_endpoint_test_remove(struct pci_dev *pdev)
 {
 	int id;
-	int i;
 	enum pci_barno bar;
 	struct pci_endpoint_test *test = pci_get_drvdata(pdev);
 	struct miscdevice *misc_device = &test->miscdev;
@@ -600,8 +599,6 @@ static void pci_endpoint_test_remove(struct pci_dev *pdev)
 		if (test->bar[bar])
 			pci_iounmap(pdev, test->bar[bar]);
 	}
-	for (i = 0; i < test->irq_num; i++)
-		free_irq(pdev->irq + i, test);
 	pci_disable_msi(pdev);
 	pci_release_regions(pdev);
 	pci_disable_device(pdev);

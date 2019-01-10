@@ -28,49 +28,6 @@ static irqreturn_t enetc_msg_psi_msix(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static u16 enetc_msg_psi_set_vf_primary_mac_addr(struct enetc_pf *pf,
-						 int mbox_id)
-{
-	struct enetc_msg_swbd *msg = &pf->rxmsg[mbox_id];
-	struct enetc_msg_cmd_set_primary_mac *cmd;
-	struct enetc_si *si = pf->si;
-	u16 cmd_id;
-	char *addr;
-
-	cmd = (struct enetc_msg_cmd_set_primary_mac *)msg->vaddr;
-	cmd_id = cmd->header.id;
-	if (cmd_id != ENETC_MSG_CMD_MNG_ADD)
-		return ENETC_MSG_CMD_STATUS_FAIL;
-
-	addr = cmd->mac.sa_data;
-	dev_info(&si->pdev->dev, "Request from VF#%d for %x:%x:%x:%x:%x:%x\n",
-		 mbox_id, addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
-
-	return ENETC_MSG_CMD_STATUS_OK;
-}
-
-static void enetc_msg_handle_rxmsg(struct enetc_pf *pf, int mbox_id,
-				   u16 *status)
-{
-	struct enetc_msg_swbd *msg = &pf->rxmsg[mbox_id];
-	struct enetc_msg_cmd_header *cmd_hdr;
-	u16 cmd_type;
-
-	*status = ENETC_MSG_CMD_STATUS_OK;
-	/* TODO: dispatch command */
-	cmd_hdr = (struct enetc_msg_cmd_header *)msg->vaddr;
-	cmd_type = cmd_hdr->type;
-	pr_info("cmd_type: 0x%x\n", cmd_type);
-
-	switch (cmd_type) {
-	case ENETC_MSG_CMD_MNG_MAC:
-		*status = enetc_msg_psi_set_vf_primary_mac_addr(pf, mbox_id);
-		break;
-	default:
-		pr_err("command not supported (cmd_type: 0x%x)\n", cmd_type);
-	}
-}
-
 static void enetc_msg_task(struct work_struct *work)
 {
 	struct enetc_pf *pf = container_of(work, struct enetc_pf, msg_task);
@@ -104,7 +61,6 @@ static void enetc_msg_task(struct work_struct *work)
 }
 
 /* Init */
-
 static int enetc_msg_alloc_mbx(struct enetc_si *si, int idx)
 {
 	struct enetc_pf *pf = enetc_si_priv(si);

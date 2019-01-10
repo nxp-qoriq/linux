@@ -214,6 +214,7 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PM0_IF_MODE	0x8300
 #define ENETC_PMO_IFM_RG	BIT(2)
 #define ENETC_PM0_IFM_RLP	(BIT(5) | BIT(11))
+#define ENETC_PM0_IFM_RGAUTO	(BIT(15) | ENETC_PMO_IFM_RG | BIT(1))
 
 /* MAC counters */
 #define ENETC_PM0_REOCT		0x8100

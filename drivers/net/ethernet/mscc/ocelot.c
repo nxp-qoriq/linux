@@ -1727,7 +1727,7 @@ int ocelot_init(struct ocelot *ocelot)
 				 ANA_PORT_CPU_FWD_BPDU_CFG,
 				 port);
 		/* Ensure bridging is disabled */
-		ocelot_write_rix(ocelot, 0, ANA_PGID_PGID, PGID_SRC + port);
+		ocelot_write_rix(ocelot, BIT(cpu), ANA_PGID_PGID, PGID_SRC + port);
 	}
 
 	/* Configure and enable the CPU port. */

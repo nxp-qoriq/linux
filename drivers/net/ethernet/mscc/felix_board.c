@@ -13,6 +13,7 @@
 #include <net/sock.h>
 
 #include "ocelot.h"
+#include "tsn_switch.h"
 
 static const char felix_driver_string[] = "Felix Switch Driver";
 #define DRV_VERSION "0.2"
@@ -36,6 +37,31 @@ static struct pci_device_id felix_ids[] = {
 	{ 0, }
 };
 MODULE_DEVICE_TABLE(pci, felix_ids);
+
+#ifdef CONFIG_MSCC_FELIX_SWITCH_TSN
+const struct tsn_ops switch_tsn_ops = {
+	.qbv_set			= switch_qbv_set,
+	.qbv_get			= switch_qbv_get,
+	.qbv_get_status			= switch_qbv_get_status,
+	.qbu_set			= switch_qbu_set,
+	.cb_streamid_set		= switch_cb_streamid_set,
+	.cb_streamid_get		= switch_cb_streamid_get,
+	.cb_streamid_counters_get	= switch_cb_streamid_counters_get,
+	.qci_sfi_set			= switch_qci_sfi_set,
+	.qci_sfi_get			= switch_qci_sfi_get,
+	.qci_sfi_counters_get		= switch_qci_sfi_counters_get,
+	.qci_sgi_set			= switch_qci_sgi_set,
+	.qci_sgi_get			= switch_qci_sgi_get,
+	.qci_sgi_status_get		= switch_qci_sgi_status_get,
+	.qci_fmi_set			= switch_qci_fmi_set,
+	.qci_fmi_get			= switch_qci_fmi_get,
+	.cbs_set			= switch_cbs_set,
+	.ct_set				= switch_cut_thru_set,
+	.cbgen_set			= switch_seq_gen_set,
+	.cbrec_set			= switch_seq_rec_set,
+	.pcpmap_set			= switch_pcp_map_set,
+};
+#endif
 
 /* Mimic the order of ocelot_target */
 static struct resource felix_switch_res[] = {
@@ -326,7 +352,9 @@ static void felix_release_ports(struct ocelot_port **ports)
 
 		unregister_netdev(ports[i]->dev);
 		free_netdev(ports[i]->dev);
-
+#ifdef CONFIG_MSCC_FELIX_SWITCH_TSN
+		tsn_port_unregister(ports[i]->dev);
+#endif
 		if (phy_is_pseudo_fixed_link(phydev)) {
 			dn = phydev->mdio.dev.of_node;
 			/* decr refcnt: of_phy_register_fixed_link */
@@ -343,8 +371,9 @@ static void felix_release_ports(struct ocelot_port **ports)
 	}
 }
 
-static int felix_ports_init(struct ocelot *ocelot)
+static int felix_ports_init(struct pci_dev *pdev)
 {
+	struct ocelot *ocelot = pci_get_drvdata(pdev);
 	struct device_node *np = ocelot->dev->of_node;
 	struct device_node *phy_node = NULL;
 	struct device_node *portnp = NULL;
@@ -436,6 +465,12 @@ static int felix_ports_init(struct ocelot *ocelot)
 			dev_err(ocelot->dev, "failed to probe ports\n");
 			goto release_ports;
 		}
+
+#ifdef CONFIG_MSCC_FELIX_SWITCH_TSN
+		tsn_port_register(ocelot->ports[port]->dev, (struct tsn_ops *)&switch_tsn_ops,
+				(u16)pdev->bus->number + GROUP_OFFSET_SWITCH);
+#endif
+
 		/* register xmit handler for external ports */
 		if (ndev && port != FELIX_EXT_CPU_PORT_ID)
 			felix_register_xmit_handler(ocelot->ports[port], ndev);
@@ -534,7 +569,7 @@ static int felix_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	regmap_field_write(ocelot->regfields[SYS_RESET_CFG_CORE_ENA], 1);
 
-	err = felix_ports_init(ocelot);
+	err = felix_ports_init(pdev);
 	if (err)
 		goto err_ports_init;
 

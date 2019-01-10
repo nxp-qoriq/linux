@@ -1793,30 +1793,6 @@ static int enetc_get_tsd(struct net_device *ndev, struct tsn_tsd_status *tts)
 	return 0;
 }
 
-static struct tsn_ops enetc_tsn_ops = {
-	.get_capability = enetc_tsn_get_capability,
-	.qbv_set = enetc_qbv_set,
-	.qbv_get = enetc_qbv_get,
-	.qbv_get_status = enetc_qbv_get_status,
-	.cb_streamid_set = enetc_cb_streamid_set,
-	.cb_streamid_get = enetc_cb_streamid_get,
-	.cb_streamid_counters_get = enetc_cb_streamid_counters_get,
-	.qci_sfi_set = enetc_qci_sfi_set,
-	.qci_sfi_get = enetc_qci_sfi_get,
-	.qci_sfi_counters_get = enetc_qci_sfi_counters_get,
-	.qci_sgi_set = enetc_qci_sgi_set,
-	.qci_sgi_get = enetc_qci_sgi_get,
-	.qci_sgi_status_get = enetc_qci_sgi_status_get,
-	.qci_fmi_set = enetc_qci_fmi_set,
-	.qci_fmi_get = enetc_qci_fmi_get,
-	.qbu_set = enetc_qbu_set,
-	.qbu_get = enetc_qbu_get,
-	.cbs_set = enetc_set_cbs,
-	.cbs_get = enetc_get_cbs,
-	.tsd_set = enetc_set_tsd,
-	.tsd_get = enetc_get_tsd,
-};
-
 static u32 get_ndev_speed(struct net_device *netdev)
 {
 	struct ethtool_link_ksettings ksettings;
@@ -1875,11 +1851,11 @@ static void enetc_qbv_init(struct enetc_hw *hw)
 	enetc_port_wr(hw, ENETC_PMR, (enetc_port_rd(hw, ENETC_PMR) & (~0xf00)) | 0x200);
 }
 
-void enetc_tsn_init(struct enetc_si *si)
+void enetc_tsn_init(struct net_device *ndev)
 {
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_si *si = priv->si;
 	u32 capability = 0;
-
-	si->ndev->tsn_ops = &enetc_tsn_ops;
 
 	capability = __enetc_tsn_get_cap(si);
 
@@ -1893,5 +1869,67 @@ void enetc_tsn_init(struct enetc_si *si)
 		enetc_qci_enable(&si->hw);
 
 	dev_info(&si->pdev->dev, "%s: setup done\n", __func__);
+}
+
+void enetc_tsn_deinit(struct net_device *ndev)
+{
+	return;
+}
+
+static struct tsn_ops enetc_tsn_ops_full = {
+	.device_init = enetc_tsn_init,
+	.device_deinit = enetc_tsn_deinit,
+	.get_capability = enetc_tsn_get_capability,
+	.qbv_set = enetc_qbv_set,
+	.qbv_get = enetc_qbv_get,
+	.qbv_get_status = enetc_qbv_get_status,
+	.cb_streamid_set = enetc_cb_streamid_set,
+	.cb_streamid_get = enetc_cb_streamid_get,
+	.cb_streamid_counters_get = enetc_cb_streamid_counters_get,
+	.qci_sfi_set = enetc_qci_sfi_set,
+	.qci_sfi_get = enetc_qci_sfi_get,
+	.qci_sfi_counters_get = enetc_qci_sfi_counters_get,
+	.qci_sgi_set = enetc_qci_sgi_set,
+	.qci_sgi_get = enetc_qci_sgi_get,
+	.qci_sgi_status_get = enetc_qci_sgi_status_get,
+	.qci_fmi_set = enetc_qci_fmi_set,
+	.qci_fmi_get = enetc_qci_fmi_get,
+	.qbu_set = enetc_qbu_set,
+	.qbu_get = enetc_qbu_get,
+	.cbs_set = enetc_set_cbs,
+	.cbs_get = enetc_get_cbs,
+	.tsd_set = enetc_set_tsd,
+	.tsd_get = enetc_get_tsd,
+};
+
+static struct tsn_ops enetc_tsn_ops_part = {
+	.device_init = enetc_tsn_init,
+	.device_deinit = enetc_tsn_deinit,
+	.get_capability = enetc_tsn_get_capability,
+	.cb_streamid_set = enetc_cb_streamid_set,
+	.cb_streamid_get = enetc_cb_streamid_get,
+	.cb_streamid_counters_get = enetc_cb_streamid_counters_get,
+	.qci_sfi_set = enetc_qci_sfi_set,
+	.qci_sfi_get = enetc_qci_sfi_get,
+	.qci_sfi_counters_get = enetc_qci_sfi_counters_get,
+	.qci_sgi_set = enetc_qci_sgi_set,
+	.qci_sgi_get = enetc_qci_sgi_get,
+	.qci_sgi_status_get = enetc_qci_sgi_status_get,
+	.qci_fmi_set = enetc_qci_fmi_set,
+	.qci_fmi_get = enetc_qci_fmi_get,
+};
+
+void enetc_tsn_pf_init(struct net_device *netdev, struct pci_dev *pdev)
+{
+	int port = pdev->devfn & 0x7;
+	if (port == 1 || port == 3)
+		tsn_port_register(netdev, &enetc_tsn_ops_part, (u16)pdev->bus->number);
+	else
+		tsn_port_register(netdev, &enetc_tsn_ops_full, (u16)pdev->bus->number);
+}
+
+void enetc_tsn_pf_deinit(struct net_device *netdev)
+{
+	tsn_port_unregister(netdev);
 }
 #endif	/* #if IS_ENABLED(CONFIG_ENETC_TSN) */

@@ -323,7 +323,7 @@ struct tsn_preempt_status {
 	 * the framePreemptionAdminStatus parameter and PreemptionPriority
 	 * for the traffic class. Bit-7 is the highest priority traffic class
 	 * and the bit-0 is the lowest priority traffic class.
-	 * The bit is express (0) and is preemptable (1).
+	 * The bit is express (0) and is preemptible (1).
 	 */
 	uint8_t admin_state;
 	/* The value of the holdAdvance parameter for the port in nanoseconds.
@@ -364,7 +364,7 @@ enum tsn_tx_mode  {
 };
 
 #define QUEUE_TX_MASK ((1 << TX_MODE_STRICT) | (1 << TX_MODE_CBS) \
-						| (1 << TX_MODE_ETS) | (1 << TX_MODE_VENDOR_DEFINE))
+			| (1 << TX_MODE_ETS) | (1 << TX_MODE_VENDOR_DEFINE))
 
 struct cbs_status {
 	uint8_t delta_bw; /* percentage, 0~100 */
@@ -417,30 +417,32 @@ enum tsn_cb_streamid_type {
 	STREAMID_IP,
 };
 
-/* When instantiating an instance of the Null Stream identification function 8021CB(6.4)
- * for a particular input Stream, the managed objects in the following subsections
- * serve as the tsnStreamIdParameters managed object 8021CB claus(9.1.1.7).
+/* When instantiating an instance of the Null Stream identification function
+ * 8021CB(6.4) for a particular input Stream, the managed objects in the
+ * following subsections serve as the tsnStreamIdParameters managed object
+ * 8021CB claus(9.1.1.7).
  */
 struct tsn_cb_null_streamid {
-
-	/* tsnCpeNullDownDestMac. Specifies the destination_address that identifies
-	 * a packet in an Enhanced Internal Sublayer Service (EISS) indication primitive,
-	 * to the Null Stream identification function.
+	/* tsnCpeNullDownDestMac. Specifies the destination_address that
+	 * identifies a packet in an Enhanced Internal Sublayer Service (EISS)
+	 * indication primitive, to the Null Stream identification function.
 	 */
 	uint64_t dmac;
 
 	/* tsnCpeNullDownTagged. It can take the following values:
-	 * 1 tagged: A frame must have a VLAN tag to be recognized as belonging to the Stream.
-	 * 2 priority: A frame must be untagged, or have a VLAN tag with a VLAN ID = 0 to be
-	 * recognized as belonging to the Stream.
-	 * 3 all: A frame is recognized as belonging to the Stream whether tagged or not.
+	 * 1 tagged: A frame must have a VLAN tag to be recognized as belonging
+	 * to the Stream.
+	 * 2 priority: A frame must be untagged, or have a VLAN tag with a VLAN
+	 * ID = 0 to be recognized as belonging to the Stream.
+	 * 3 all: A frame is recognized as belonging to the Stream whether
+	 * tagged or not.
 	 */
 	uint8_t tagged;
 
-	/* tsnCpeNullDownVlan. Specifies the vlan_identifier parameter that identifies
-	 * a packet in an EISS indication primitive to the Null Stream identification
-	 * function. A value of 0 indicates that the vlan_identifier parameter is ignored
-	 * on EISS indication primitives.
+	/* tsnCpeNullDownVlan. Specifies the vlan_identifier parameter that
+	 * identifies a packet in an EISS indication primitive to the Null
+	 * Stream identification function. A value of 0 indicates that the vlan
+	 * _identifier parameter is ignored on EISS indication primitives.
 	 */
 	uint16_t vid;
 };
@@ -478,41 +480,43 @@ struct tsn_cb_ip_streamid {
 
 /* 802.1CB stream identify table clause 9.1 */
 struct tsn_cb_streamid {
-	/* The objects in a given entry of the Stream identity table are used to
-	 * control packets whose stream_handle subparameter is equal to the entry’s
-	 * tsnStreamIdHandle object.
+	/* The objects in a given entry of the Stream identity table are used
+	 * to control packets whose stream_handle subparameter is equal to the
+	 * entry tsnStreamIdHandle object.
 	 */
 	int32_t handle;
 
-	/* The list of ports on which an in-facing Stream identification function
-	 * in the output (towards the system forwarding function) direction
-	 * Only Active Destination MAC and VLAN Stream identification (or nothing)
-	 * can be configured.
+	/* The list of ports on which an in-facing Stream identification
+	 * function in the output (towards the system forwarding function)
+	 * direction Only Active Destination MAC and VLAN Stream identification
+	 * (or nothing) can be configured.
 	 */
 	uint32_t ifac_oport;
 
-	/* The list of ports on which an out-facing Stream identification function
-	 * in the output (towards the physical interface) direction.
-	 * Only Active Destination MAC and VLAN Stream identification (or nothing)
-	 * can be configured.
+	/* The list of ports on which an out-facing Stream identification
+	 * function in the output (towards the physical interface) direction.
+	 * Only Active Destination MAC and VLAN Stream identification
+	 * (or nothing) can be configured.
 	 */
 	uint32_t ofac_oport;
 
-	/* The list of ports on which an in-facing Stream identification function
-	 * in the input (coming from the system forwarding function) direction
+	/* The list of ports on which an in-facing Stream identification
+	 * function in the input (coming from the system forwarding function)
+	 * direction
 	 */
 	uint32_t ifac_iport;
 
-	/* The list of ports on which an out-facing Stream identification function
-	 * in the input (coming from the physical interface) direction.
+	/* The list of ports on which an out-facing Stream identification
+	 * function in the input (coming from the physical interface) direction
+	 * .
 	 */
 	uint32_t ofac_iport;
 
-	/* An enumerated value indicating the method used to identify packets belonging
-	 * to the Stream.
-	 * The Organizationally Unique Identifier (OUI) or Company Identifier (CID) to
-	 * identify the organization defining the enumerated type should be:
-	 * 00-80-C2
+	/* An enumerated value indicating the method used to identify packets
+	 * belonging to the Stream.
+	 * The Organizationally Unique Identifier (OUI) or Company Identifier
+	 * (CID) to identify the organization defining the enumerated type
+	 * should be: 00-80-C2
 	 * 1: null stream identification
 	 * 2: source mac and vlan stream identification
 	 * 3: activ destination mac and vlan stream identification
@@ -520,9 +524,9 @@ struct tsn_cb_streamid {
 	 */
 	uint8_t type;
 
-	/* tsnStreamIdParameters The number of controlling parameters for a Stream
-	 * identification method, their types and values, are specific to the
-	 * tsnStreamIdIdentificationType
+	/* tsnStreamIdParameters The number of controlling parameters for a
+	 * Stream identification method, their types and values, are specific
+	 * to the tsnStreamIdIdentificationType
 	 */
 	union {
 		struct tsn_cb_null_streamid nid;
@@ -532,9 +536,10 @@ struct tsn_cb_streamid {
 	} para;
 };
 
-/* Following counters are instantiated for each port on which the Stream identification
- * function (6.2) is configured. The counters are indexed by port number, facing
- * (in-facing or out-facing), and stream_handle value (tsnStreamIdHandle, 9.1.1.1).
+/* Following counters are instantiated for each port on which the Stream
+ * identification function (6.2) is configured. The counters are indexed by
+ * port number, facing (in-facing or out-facing), and stream_handle value
+ * (tsnStreamIdHandle, 9.1.1.1).
  */
 struct tsn_cb_streamid_counters {
 	struct {
@@ -551,29 +556,32 @@ struct tsn_cb_streamid_counters {
 /* 802.1Qci Stream Parameter Table, read from port */
 struct tsn_qci_psfp_stream_param {
 	/* MaxStreamFilterInstances.
-	 * The maximum number of Stream Filter instances supported by this Bridge component.
+	 * The maximum number of Stream Filter instances supported by this
+	 * Bridge component.
 	 */
 	int32_t max_sf_instance;
 
 	/* MaxStreamGateInstances
-	 * The maximum number of Stream Gate instances supported by this Bridge component.
+	 * The maximum number of Stream Gate instances supported by this Bridge
+	 * component.
 	 */
 	int32_t max_sg_instance;
 
 	/* MaxFlowMeterInstances
-	 * The maximum number of Flow Meter instances supported by this Bridge component.
+	 * The maximum number of Flow Meter instances supported by this Bridge
+	 * component.
 	 */
 	int32_t max_fm_instance;
 
 	/* SupportedListMax
-	 * The maximum value supported by this Bridge component of the AdminControlListLength and
-	 * OperControlListLength parameters.
+	 * The maximum value supported by this Bridge component of the
+	 * AdminControlListLength and OperControlListLength parameters.
 	 */
 	int32_t supported_list_max;
 };
 
 /* 802.1Qci Stream Filter Instance Table, counters part only. */
-struct tsn_qci_psfp_sfi_counters{
+struct tsn_qci_psfp_sfi_counters {
 	/* The MatchingFramesCount counter counts received frames that match
 	 * this stream filter.
 	 */
@@ -626,21 +634,22 @@ struct tsn_qci_psfp_sfi_conf {
 	 */
 	uint32_t stream_gate_instance_id;
 
-	/* The filter specifications. The actions specified in a filter specification
-	 * can result in a frame passing or failing the specified filter. Frames that
-	 * fail a filter are discarded.
+	/* The filter specifications. The actions specified in a filter
+	 * specification can result in a frame passing or failing the specified
+	 * filter. Frames that fail a filter are discarded.
 	 */
 	struct {
-		/* The MaximumSDUSize parameter specifies the maximum allowed frame size
-		 * for the stream. Any frame exceeding this value will be dropped.  A
-		 * value of 0 denote that the MaximumSDUSize filter is disabled for this
-		 * stream.
+		/* The MaximumSDUSize parameter specifies the maximum allowed
+		 * frame size for the stream. Any frame exceeding this value
+		 * will be dropped.  A value of 0 denote that the MaximumSDUSize
+		 * filter is disabled for this stream.
 		 */
 		uint16_t maximum_sdu_size;
 
-		/* The FlowMeterInstanceID parameter contains the index of an entry in
-		 * the Flow Meter Table.  A value of -1 denotes that no flow meter is
-		 * assigned; zero or positive values denote flow meter IDs.
+		/* The FlowMeterInstanceID parameter contains the index of an
+		 * entry in the Flow Meter Table.  A value of -1 denotes that
+		 * no flow meter is assigned; zero or positive values denote
+		 * flow meter IDs.
 		 */
 		int32_t flow_meter_instance_id;
 	} stream_filter;
@@ -660,7 +669,7 @@ struct tsn_qci_psfp_sfi_conf {
 };
 
 /* 802.1Qci Stream Gate Control List Entry. */
-struct tsn_qci_psfp_gcl{
+struct tsn_qci_psfp_gcl {
 	/* The GateState parameter specifies a desired state, open (true) or
 	 * closed (false), for the stream gate.
 	 */
@@ -685,41 +694,45 @@ struct tsn_qci_psfp_gcl{
 
 /* 802.1Qci Stream Gate Admin/Operation common list control parameters */
 struct tsn_qci_sg_control {
-	/* The administrative/operation value of the GateStates parameter for the stream
-	 * gate.  A value of false indicates closed; a value of true indicates
-	 * open.
+	/* The administrative/operation value of the GateStates parameter
+	 * for the stream gate.  A value of false indicates closed;
+	 * a value of true indicates open.
 	 */
 	bool gate_states;
 
-	/* The administrative/operation value of the ListMax parameter for the gate. The
-	 * integer value indicates the number of entries (TLVs) in the
-	 * AdminControlList/OperControlList.
+	/* The administrative/operation value of the ListMax parameter for the
+	 * gate. The integer value indicates the number of entries (TLVs) in
+	 * the AdminControlList/OperControlList.
 	 */
 	uint8_t control_list_length;
 
-	/* The administrative/operation value of the CycleTime parameter for the
-	 * gate.  The value is an unsigned integer number of nanoseconds.
+	/* The administrative/operation value of the CycleTime parameter for
+	 * the gate.  The value is an unsigned integer number of nanoseconds.
 	 */
 	uint32_t cycle_time;
 
-	/* The administrative/operation value of the CycleTimeExtension parameter for the
-	 * gate.  The value is an unsigned integer number of nanoseconds.
+	/* The administrative/operation value of the CycleTimeExtension
+	 * parameter for the gate.  The value is an unsigned integer number
+	 * of nanoseconds.
 	 */
 	uint32_t cycle_time_extension;
 
-	/* The administrative/operation value of the BaseTime parameter for the gate.  The
-	 * value is a representation of a PTPtime value, consisting of a 48-bit
-	 * integer number of seconds and a 32-bit integer number of nanoseconds.
+	/* The administrative/operation value of the BaseTime parameter for the
+	 * gate.  The value is a representation of a PTPtime value, consisting
+	 * of a 48-bit integer number of seconds and a 32-bit integer number of
+	 * nanoseconds.
 	 */
 	ptptime_t base_time;
 
-	/* The administrative/operation value of the IPV parameter for the gate.  A value
-	 * of -1 denotes the null value; zero or positive values denote internal
-	 * priority values.
+	/* The administrative/operation value of the IPV parameter for the gate.
+	 * A value of -1 denotes the null value; zero or positive values denote
+	 * internal priority values.
 	 */
 	int8_t init_ipv;
 
-	/* control_list contend the gate control list of administrative/operation */
+	/* control_list contend the gate control list of
+	 * administrative/operation
+	 */
 	struct tsn_qci_psfp_gcl *gcl;
 };
 
@@ -758,8 +771,9 @@ struct tsn_qci_psfp_sgi_conf {
 	bool block_octets_exceeded_enable;
 
 	/* The GateClosedDueToOctetsExceeded object contains a Boolean value
-	 * that indicates whether, if the GateClosedDueToOctetsExceeded function
-	 * is enabled, all frames are to be discarded (TRUE) or not (FALSE).
+	 * that indicates whether, if the GateClosedDueToOctetsExceeded
+	 * function is enabled, all frames are to be discarded (TRUE) or not
+	 * (FALSE).
 	 */
 	bool block_octets_exceeded;
 };
@@ -782,9 +796,10 @@ struct tsn_psfp_sgi_status {
 	 */
 	uint32_t tick_granularity;
 
-	/* The current time, in PTPtime, as maintained by the local system.  The
-	 * value is a representation of a PTPtime value, consisting of a 48-bit
-	 * integer number of seconds and a 32-bit integer number of nanoseconds.
+	/* The current time, in PTPtime, as maintained by the local system.
+	 * The value is a representation of a PTPtime value, consisting of a
+	 * 48-bit integer number of seconds and a 32-bit integer number of
+	 * nanoseconds.
 	 */
 	ptptime_t current_time;
 
@@ -843,14 +858,14 @@ struct tsn_qci_psfp_fmi {
 	bool drop_on_yellow;
 
 	/* The FlowMeterMarkAllFramesRedEnable parameter contains a Boolean
-	 * value that indicates whether the MarkAllFramesRed function is enabled
-	 * (TRUE) or disabled (FALSE).
+	 * value that indicates whether the MarkAllFramesRed function
+	 * is enabled (TRUE) or disabled (FALSE).
 	 */
 	bool mark_red_enable;
 
-	/* The FlowMeterMarkAllFramesRed parameter contains a Boolean value that
-	 * indicates whether, if the MarkAllFramesRed function is enabled, all
-	 * frames are to be discarded (TRUE) or not (FALSE).
+	/* The FlowMeterMarkAllFramesRed parameter contains a Boolean value
+	 * that indicates whether, if the MarkAllFramesRed function is enabled,
+	 * all frames are to be discarded (TRUE) or not (FALSE).
 	 */
 	bool mark_red;
 };
@@ -881,7 +896,8 @@ struct tsn_seq_rec_conf {
 
 /* An entry for gate control list */
 struct tsn_qbv_entry {
-	/* Octet represent the gate states for the corresponding traffic classes
+	/* Octet represent the gate states for the corresponding traffic
+	 * classes.
 	 * The MS bit corresponds to traffic class 7.
 	 * The LS bit to traffic class 0.
 	 * A bit value of 0 indicates closed;
@@ -897,19 +913,21 @@ struct tsn_qbv_entry {
 
 /* The administrative/operation time and gate list */
 struct tsn_qbv_basic {
-	/* The administrative/operation value of the GateStates parameter for the Port.
-	 * The bits of the octet represent the gate states for the corresponding
-	 * traffic classes; the MS bit corresponds to traffic class 7, the LS
-	 * bit to traffic class 0. A bit value of 0 indicates closed; a bit
-	 * value of 1 indicates open. The value of this object MUST be retained
+	/* The administrative/operation value of the GateStates parameter for
+	 * the Port.
+	 * The bits of the octet represent the gate states for the
+	 * corresponding traffic classes; the MS bit corresponds to traffic
+	 * class 7, the LS bit to traffic class 0. A bit value of 0 indicates
+	 * closed; a bit value of 1 indicates open.
+	 * The value of this object MUST be retained
 	 * across reinitializations of the management system.
 	 */
 	uint8_t gate_states;
 
-	/* The administrative/operation value of the ListMax parameter for the port. The
-	 * integer value indicates the number of entries (TLVs) in the
-	 * AdminControlList. The value of this object MUST be retained across
-	 * reinitializations of the management system.
+	/* The administrative/operation value of the ListMax parameter for the
+	 * port. The integer value indicates the number of entries (TLVs) in
+	 * the AdminControlList. The value of this object MUST be retained
+	 * across reinitializations of the management system.
 	 */
 	uint32_t control_list_length;
 
@@ -921,17 +939,19 @@ struct tsn_qbv_basic {
 	 */
 	uint32_t cycle_time;
 
-	/* The administrative/operation value of the CycleTimeExtension parameter for the
-	 * Port. The value is an unsigned integer number of nanoseconds. The
-	 * value of this object MUST be retained across reinitializations of the
-	 * management system.
+	/* The administrative/operation value of the CycleTimeExtension
+	 * parameter for the Port. The value is an unsigned integer number of
+	 * nanoseconds.
+	 * The value of this object MUST be retained across reinitializations
+	 * of the management system.
 	 */
 
 	uint32_t cycle_time_extension;
 
-	/* The administrative/operation value of the BaseTime parameter for the Port.  The
-	 * value is a representation of a PTPtime value, consisting of a 48-bit
-	 * integer number of seconds and a 32-bit integer number of nanoseconds.
+	/* The administrative/operation value of the BaseTime parameter for the
+	 * Port.  The value is a representation of a PTPtime value, consisting
+	 * of a 48-bit integer number of seconds and a 32-bit integer number of
+	 * nanoseconds.
 	 * The value of this object MUST be retained across reinitializations of
 	 * the management system.
 	 */
@@ -946,10 +966,12 @@ struct tsn_qbv_basic {
 struct tsn_qbv_conf {
 	/* The GateEnabled parameter determines whether traffic scheduling is
 	 * active (true) or inactive (false).  The value of this object MUST be
-	 * retained across reinitializations of the management system. */
+	 * retained across reinitializations of the management system.
+	 */
 	bool gate_enabled;
 
-	/* The maxsdu parameter denoting the maximum SDU size supported by the queue.
+	/* The maxsdu parameter denoting the maximum SDU size supported by the
+	 * queue.
 	 */
 	uint32_t maxsdu;
 
@@ -981,9 +1003,10 @@ struct tsn_qbv_status {
 	 */
 	uint32_t tick_granularity;
 
-	/* The current time, in PTPtime, as maintained by the local system.  The
-	 * value is a representation of a PTPtime value, consisting of a 48-bit
-	 * integer number of seconds and a 32-bit integer number of nanoseconds.
+	/* The current time, in PTPtime, as maintained by the local system.
+	 * The value is a representation of a PTPtime value, consisting of a
+	 * 48-bit integer number of seconds and a 32-bit integer number of
+	 * nanoseconds.
 	 */
 	ptptime_t  current_time;
 
@@ -1015,13 +1038,15 @@ struct tsn_tsd {
 	/* The cycle time, in units of microsecond(us)*/
 	uint32_t period;
 
-	/* The maximum number of frames which could be transmitted on one cycle.
-	 *  The exceeding frames will be transmitted on next cycle.*/
+	/* The maximum number of frames which could be transmitted on one cycle
+	 *  The exceeding frames will be transmitted on next cycle.
+	 */
 	uint32_t maxFrameNum;
 
 	/* Specify the time of the first cycle begins.
 	 *      1:  begin when the queue get the first frame to transmit.
-	 *      2:  begin immediately at the end of setting function.*/
+	 *      2:  begin immediately at the end of setting function.
+	 */
 	uint32_t syn_flag;
 };
 
@@ -1035,4 +1060,3 @@ struct tsn_tsd_status {
 };
 
 #endif /* _UAPI_GENL_TSN_H */
-

@@ -14,7 +14,6 @@
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <net/tsn.h>
-
 #include "ocelot_ana.h"
 #include "ocelot_dev.h"
 #include "ocelot_dev_gmii.h"
@@ -555,9 +554,9 @@ struct ocelot_port {
 	u8 vlan_aware;
 
 	u64 *stats;
-
+#ifdef CONFIG_MSCC_FELIX_SWITCH_TSN
 	u8 cbs_weight[MSCC_QOS_PRIO_MAX];
-
+#endif
 	/* cpu frame injection handler */
 	netdev_tx_t (*cpu_inj_handler)(struct sk_buff *skb, struct ocelot_port *port);
 	void *cpu_inj_handler_data;

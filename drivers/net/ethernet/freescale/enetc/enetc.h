@@ -269,9 +269,11 @@ int enetc_get_rss_table(struct enetc_si *si, u32 *table, int count);
 int enetc_set_rss_table(struct enetc_si *si, const u32 *table, int count);
 
 #ifdef CONFIG_ENETC_TSN
-void enetc_tsn_init(struct enetc_si *si);
+void enetc_tsn_pf_init(struct net_device *netdev, struct pci_dev *pdev);
+void enetc_tsn_pf_deinit(struct net_device *netdev);
 #else
-#define enetc_tsn_init(si) (void)0
+#define enetc_tsn_pf_init(netdev, pdev) (void)0
+#define enetc_tsn_pf_deinit(netdev) (void)0
 #endif
 
 /* PTP driver exports */

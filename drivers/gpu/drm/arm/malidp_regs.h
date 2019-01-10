@@ -193,6 +193,16 @@
 #define MALIDP500_COEF_TABLE_ADDR	0x000a8
 #define MALIDP500_COEF_TABLE_DATA	0x000ac
 
+#ifdef CONFIG_ARCH_LAYERSCAPE
+#define MALIDP500_RQOS_QUALITY          0x00500
+#define MALIDP500_CONFIG_VALID          0x00f00
+/* Normal QoS level signal */
+#define GREEN_ARQOS_CONFIG              (0xd << 28)
+/* Close to underflow QoS level signal */
+#define RED_ARQOS_CONFIG                (0xd << 12)
+#define CONFIG_VALID                    0x3
+#endif
+
 /*
  * The YUV2RGB coefficients on the DP500 are not in the video layer's register
  * block. They belong in a separate block above the layer's registers, hence

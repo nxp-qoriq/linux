@@ -152,7 +152,7 @@ int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 
 #define RSSE_ALIGN	64
 static int enetc_cmd_rss_table(struct enetc_si *si, u32 *table, int count,
-			       int read)
+			       bool read)
 {
 	struct enetc_cbd cbd = {.cmd = 0};
 	dma_addr_t dma, dma_align;

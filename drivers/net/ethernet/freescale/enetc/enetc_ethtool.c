@@ -52,7 +52,7 @@ static void enetc_get_regs(struct net_device *ndev, struct ethtool_regs *regs,
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	struct enetc_hw *hw = &priv->si->hw;
-	u32 *buf = (u32 *) regbuf;
+	u32 *buf = (u32 *)regbuf;
 	int i, j;
 	u32 addr;
 
@@ -196,16 +196,14 @@ static int enetc_get_sset_count(struct net_device *ndev, int sset)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 
-	switch (sset) {
-	case ETH_SS_STATS:
+	if (sset == ETH_SS_STATS)
 		return ARRAY_SIZE(enetc_si_counters) +
 			ARRAY_SIZE(tx_ring_stats) * priv->num_tx_rings +
 			ARRAY_SIZE(rx_ring_stats) * priv->num_rx_rings +
 			(enetc_si_is_pf(priv->si) ?
 			ARRAY_SIZE(enetc_port_counters) : 0);
-	default:
-		return -EOPNOTSUPP;
-	}
+
+	return -EOPNOTSUPP;
 }
 
 static void enetc_get_strings(struct net_device *ndev, u32 stringset, u8 *data)

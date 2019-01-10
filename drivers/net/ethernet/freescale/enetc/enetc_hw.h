@@ -25,8 +25,7 @@
 #define ENETC_SICAR0	0x40
 #define ENETC_SICAR1	0x44
 #define ENETC_SICAR2	0x48
-/*
- * rd snoop, no alloc
+/* rd snoop, no alloc
  * wr snoop, no alloc, partial cache line update for BDs and full cache line
  * update for data
  */
@@ -44,6 +43,7 @@ static inline u32 enetc_vsi_set_msize(u32 size)
 {
 	return size < ENETC_DEFAULT_MSG_SIZE ? size >> 5 : 0;
 }
+
 #define ENETC_PSIMSGRR	0x204
 #define ENETC_PSIMSGRR_MR_MASK	GENMASK(2, 1)
 #define ENETC_PSIMSGRR_MR(n) BIT((n) + 1) /* n = VSI index */

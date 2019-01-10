@@ -5380,21 +5380,31 @@ static int __cold dpaa2_dpseci_setup(struct fsl_mc_device *ls_dev)
 
 	i = 0;
 	for_each_online_cpu(cpu) {
-		dev_info(dev, "pair %d: rx queue %d, tx queue %d\n", i,
-			 priv->rx_queue_attr[i].fqid,
-			 priv->tx_queue_attr[i].fqid);
+		u8 j;
+
+		j = i % priv->num_pairs;
 
 		ppriv = per_cpu_ptr(priv->ppriv, cpu);
-		ppriv->req_fqid = priv->tx_queue_attr[i].fqid;
-		ppriv->rsp_fqid = priv->rx_queue_attr[i].fqid;
-		ppriv->prio = i;
+		ppriv->req_fqid = priv->tx_queue_attr[j].fqid;
+
+		/*
+		 * Allow all cores to enqueue, while only some of them
+		 * will take part in dequeuing.
+		 */
+		if (++i > priv->num_pairs)
+			continue;
+
+		ppriv->rsp_fqid = priv->rx_queue_attr[j].fqid;
+		ppriv->prio = j;
+
+		dev_info(dev, "pair %d: rx queue %d, tx queue %d\n", j,
+			 priv->rx_queue_attr[j].fqid,
+			 priv->tx_queue_attr[j].fqid);
 
 		ppriv->net_dev.dev = *dev;
 		INIT_LIST_HEAD(&ppriv->net_dev.napi_list);
 		netif_napi_add(&ppriv->net_dev, &ppriv->napi, dpaa2_dpseci_poll,
 			       DPAA2_CAAM_NAPI_WEIGHT);
-		if (++i == priv->num_pairs)
-			break;
 	}
 
 	return 0;

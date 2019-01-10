@@ -460,7 +460,7 @@ OnError:
 /* Set to 1 to enable module clock gating debug function.
 *  Following options take effect when it is set to 1.
 */
-#define gcdDEBUG_MODULE_CLOCK_GATING          0
+#define gcdDEBUG_MODULE_CLOCK_GATING          1
 /* Set to 1 to disable module clock gating of all modules. */
 #define gcdDISABLE_MODULE_CLOCK_GATING        0
 /* Set to 1 to disable module clock gating of each module. */
@@ -469,8 +469,8 @@ OnError:
 #define gcdDISABLE_PE_CLOCK_GATING            0
 #define gcdDISABLE_SH_CLOCK_GATING            0
 #define gcdDISABLE_PA_CLOCK_GATING            0
-#define gcdDISABLE_SE_CLOCK_GATING            0
-#define gcdDISABLE_RA_CLOCK_GATING            0
+#define gcdDISABLE_SE_CLOCK_GATING            1
+#define gcdDISABLE_RA_CLOCK_GATING            1
 #define gcdDISABLE_RA_EZ_CLOCK_GATING         0
 #define gcdDISABLE_RA_HZ_CLOCK_GATING         0
 #define gcdDISABLE_TX_CLOCK_GATING            0

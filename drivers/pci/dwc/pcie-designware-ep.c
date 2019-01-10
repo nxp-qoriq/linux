@@ -30,7 +30,7 @@ void dw_pcie_ep_reset_bar(struct dw_pcie *pci, enum pci_barno bar)
 	dw_pcie_dbi_ro_wr_dis(pci);
 }
 
-static int dw_pcie_ep_write_header(struct pci_epc *epc,
+static int dw_pcie_ep_write_header(struct pci_epc *epc, u8 func_no,
 				   struct pci_epf_header *hdr)
 {
 	struct dw_pcie_ep *ep = epc_get_drvdata(epc);
@@ -103,7 +103,8 @@ static int dw_pcie_ep_outbound_atu(struct dw_pcie_ep *ep, phys_addr_t phys_addr,
 	return 0;
 }
 
-static void dw_pcie_ep_clear_bar(struct pci_epc *epc, enum pci_barno bar)
+static void dw_pcie_ep_clear_bar(struct pci_epc *epc, u8 func_no,
+				 enum pci_barno bar)
 {
 	struct dw_pcie_ep *ep = epc_get_drvdata(epc);
 	struct dw_pcie *pci = to_dw_pcie_from_ep(ep);
@@ -115,7 +116,8 @@ static void dw_pcie_ep_clear_bar(struct pci_epc *epc, enum pci_barno bar)
 	clear_bit(atu_index, ep->ib_window_map);
 }
 
-static int dw_pcie_ep_set_bar(struct pci_epc *epc, enum pci_barno bar,
+static int dw_pcie_ep_set_bar(struct pci_epc *epc, u8 func_no,
+			      enum pci_barno bar,
 			      dma_addr_t bar_phys, size_t size, int flags)
 {
 	int ret;
@@ -156,7 +158,8 @@ static int dw_pcie_find_index(struct dw_pcie_ep *ep, phys_addr_t addr,
 	return -EINVAL;
 }
 
-static void dw_pcie_ep_unmap_addr(struct pci_epc *epc, phys_addr_t addr)
+static void dw_pcie_ep_unmap_addr(struct pci_epc *epc, u8 func_no,
+				  phys_addr_t addr)
 {
 	int ret;
 	u32 atu_index;
@@ -171,7 +174,8 @@ static void dw_pcie_ep_unmap_addr(struct pci_epc *epc, phys_addr_t addr)
 	clear_bit(atu_index, ep->ob_window_map);
 }
 
-static int dw_pcie_ep_map_addr(struct pci_epc *epc, phys_addr_t addr,
+static int dw_pcie_ep_map_addr(struct pci_epc *epc, u8 func_no,
+			       phys_addr_t addr,
 			       u64 pci_addr, size_t size)
 {
 	int ret;
@@ -187,7 +191,7 @@ static int dw_pcie_ep_map_addr(struct pci_epc *epc, phys_addr_t addr,
 	return 0;
 }
 
-static int dw_pcie_ep_get_msi(struct pci_epc *epc)
+static int dw_pcie_ep_get_msi(struct pci_epc *epc, u8 func_no)
 {
 	int val;
 	struct dw_pcie_ep *ep = epc_get_drvdata(epc);
@@ -201,7 +205,7 @@ static int dw_pcie_ep_get_msi(struct pci_epc *epc)
 	return val;
 }
 
-static int dw_pcie_ep_set_msi(struct pci_epc *epc, u8 encode_int)
+static int dw_pcie_ep_set_msi(struct pci_epc *epc, u8 func_no, u8 encode_int)
 {
 	int val;
 	struct dw_pcie_ep *ep = epc_get_drvdata(epc);
@@ -217,7 +221,7 @@ static int dw_pcie_ep_set_msi(struct pci_epc *epc, u8 encode_int)
 	return 0;
 }
 
-static int dw_pcie_ep_raise_irq(struct pci_epc *epc,
+static int dw_pcie_ep_raise_irq(struct pci_epc *epc, u8 func_no,
 				enum pci_epc_irq_type type, u8 interrupt_num)
 {
 	struct dw_pcie_ep *ep = epc_get_drvdata(epc);

@@ -7,7 +7,7 @@
 #include "enetc_pf.h"
 
 #define ENETC_DRV_VER_MAJ 0
-#define ENETC_DRV_VER_MIN 8
+#define ENETC_DRV_VER_MIN 9
 
 #define ENETC_DRV_VER_STR __stringify(ENETC_DRV_VER_MAJ) "." \
 			  __stringify(ENETC_DRV_VER_MIN)

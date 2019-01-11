@@ -111,14 +111,6 @@ config PCI_LAYERSCAPE
 	help
 	  Say Y here if you want PCIe controller support on Layerscape SoCs.
 
-config PCI_LAYERSCAPE_EP
-	bool "PCI layerscape Endpoint Mode"
-	depends on PCI_ENDPOINT
-	select PCIE_DW_EP
-	help
-	 Enables support for the PCIe controller in the layerscape SoC to work in
-	 endpoint mode.
-
 config PCI_HISI
 	depends on OF && ARM64
 	bool "HiSilicon Hip05 and Hip06 SoCs PCIe controllers"

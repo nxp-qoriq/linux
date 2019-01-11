@@ -330,7 +330,7 @@ static int dw_pcie_ep_raise_irq(struct pci_epc *epc, u8 func_no,
 	if (!ep->ops->raise_irq)
 		return -EINVAL;
 
-	return ep->ops->raise_irq(ep, type, interrupt_num);
+	return ep->ops->raise_irq(ep, func_no, type, interrupt_num);
 }
 
 static void dw_pcie_ep_stop(struct pci_epc *epc)
@@ -380,7 +380,7 @@ int dw_pcie_ep_raise_legacy_irq(struct dw_pcie_ep *ep, u8 func_no)
 	return -EINVAL;
 }
 
-int dw_pcie_ep_raise_msi_irq(struct dw_pcie_ep *ep,
+int dw_pcie_ep_raise_msi_irq(struct dw_pcie_ep *ep, u8 func_no,
 			     u8 interrupt_num)
 {
 	struct dw_pcie *pci = to_dw_pcie_from_ep(ep);
@@ -411,14 +411,14 @@ int dw_pcie_ep_raise_msi_irq(struct dw_pcie_ep *ep,
 		msg_data = dw_pcie_readw_dbi(pci, reg);
 	}
 	msg_addr = ((u64) msg_addr_upper) << 32 | msg_addr_lower;
-	ret = dw_pcie_ep_map_addr(epc, ep->msi_mem_phys, msg_addr,
+	ret = dw_pcie_ep_map_addr(epc, func_no, ep->msi_mem_phys, msg_addr,
 				  epc->mem->page_size);
 	if (ret)
 		return ret;
 
 	writel(msg_data | (interrupt_num - 1), ep->msi_mem);
 
-	dw_pcie_ep_unmap_addr(epc, ep->msi_mem_phys);
+	dw_pcie_ep_unmap_addr(epc, func_no, ep->msi_mem_phys);
 
 	return 0;
 }

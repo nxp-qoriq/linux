@@ -24,7 +24,6 @@
 #include "pcie-designware.h"
 
 struct dw_plat_pcie {
-	struct dw_pcie		*pci;
 	struct dw_pcie			*pci;
 	struct regmap			*regmap;
 	enum dw_pcie_device_mode	mode;

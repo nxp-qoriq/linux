@@ -147,13 +147,6 @@ static void enetc_vf_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 		ndev->features &= ~NETIF_F_HW_CSUM;
 	}
 
-	if (si->errata & ENETC_ERR_TXSG) {
-		/* disable Tx SG until final resolution povided by h/w
-		 * on Tx fragmentation hang issue
-		 */
-		ndev->features &= ~NETIF_F_SG;
-	}
-
 	/* pick up primary MAC address from SI */
 	enetc_get_primary_mac_addr(&si->hw, ndev->dev_addr);
 }

@@ -38,7 +38,9 @@ static irqreturn_t enetc_msix(int irq, void *data)
 
 /* ENETC overhead: optional extension BD + 1 BD gap */
 #define ENETC_TXBDS_NEEDED(val)	((val) + 2)
-#define ENETC_TXBDS_MAX_NEEDED	ENETC_TXBDS_NEEDED(MAX_SKB_FRAGS + 1)
+/* max # of chained Tx BDs is 15, including head and extension BD */
+#define ENETC_MAX_SKB_FRAGS	13
+#define ENETC_TXBDS_MAX_NEEDED	ENETC_TXBDS_NEEDED(ENETC_MAX_SKB_FRAGS + 1)
 
 netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
 {
@@ -48,6 +50,10 @@ netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
 
 	tx_ring = priv->tx_ring[skb->queue_mapping];
 
+	if (unlikely(skb_shinfo(skb)->nr_frags > ENETC_MAX_SKB_FRAGS))
+		if (unlikely(skb_linearize(skb)))
+			goto drop_packet_err;
+
 	count = skb_shinfo(skb)->nr_frags + 1; /* fragments + head */
 	if (enetc_bd_unused(tx_ring) < ENETC_TXBDS_NEEDED(count)) {
 		netif_stop_subqueue(ndev, tx_ring->index);
@@ -55,14 +61,16 @@ netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
 	}
 
 	count = enetc_map_tx_buffs(tx_ring, skb, priv->tx_tstamp);
-	if (unlikely(!count)) {
-		dev_kfree_skb_any(skb);
-		return NETDEV_TX_OK;
-	}
+	if (unlikely(!count))
+		goto drop_packet_err;
 
 	if (enetc_bd_unused(tx_ring) < ENETC_TXBDS_MAX_NEEDED)
 		netif_stop_subqueue(ndev, tx_ring->index);
 
+	return NETDEV_TX_OK;
+
+drop_packet_err:
+	dev_kfree_skb_any(skb);
 	return NETDEV_TX_OK;
 }
 

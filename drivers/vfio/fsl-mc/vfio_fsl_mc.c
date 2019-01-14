@@ -127,11 +127,12 @@ static void vfio_fsl_mc_release(void *device_data)
 	if (!(--vdev->refcnt)) {
 		vfio_fsl_mc_regions_cleanup(vdev);
 		vfio_fsl_mc_irqs_cleanup(vdev);
-	}
 
-	if (strcmp(mc_dev->obj_desc.type, "dprc") == 0)
-		dprc_reset_container(mc_dev->mc_io, 0, mc_dev->mc_handle,
-				     mc_dev->obj_desc.id);
+		if (strcmp(mc_dev->obj_desc.type, "dprc") == 0)
+			dprc_reset_container(mc_dev->mc_io, 0,
+					     mc_dev->mc_handle,
+					     mc_dev->obj_desc.id);
+	}
 
 	mutex_unlock(&driver_lock);
 

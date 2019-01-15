@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause) */
-/* Copyright 2017-2018 NXP */
+/* Copyright 2017-2019 NXP */
 
 #include <linux/timer.h>
 #include <linux/pci.h>
@@ -27,8 +27,8 @@ struct enetc_tx_swbd {
 };
 
 #define ENETC_RX_MAXFRM_SIZE	ENETC_MAC_MAXFRM_SIZE
-#define ENETC_RXB_TRUESIZE	2048 // PAGE_SIZE >> 1
-#define ENETC_RXB_PAD		NET_SKB_PAD // TODO: extra space? IP_ALIGN?
+#define ENETC_RXB_TRUESIZE	2048 /* PAGE_SIZE >> 1 */
+#define ENETC_RXB_PAD		NET_SKB_PAD /* add extra space if needed */
 #define ENETC_RXB_DMA_SIZE	\
 	(SKB_WITH_OVERHEAD(ENETC_RXB_TRUESIZE) - ENETC_RXB_PAD)
 
@@ -43,6 +43,8 @@ struct enetc_ring_stats {
 	unsigned int bytes;
 	unsigned int rx_alloc_errs;
 };
+
+#define ENETC_BDR_DEFAULT_SIZE	1024
 
 struct enetc_bdr {
 	struct device *dev; /* for DMA mapping */
@@ -86,6 +88,7 @@ static inline int enetc_bd_unused(struct enetc_bdr *bdr)
 }
 
 /* Control BD ring */
+#define ENETC_CBDR_DEFAULT_SIZE	64
 struct enetc_cbdr {
 	void *bd_base; /* points to Rx or Tx BD ring */
 	void __iomem *pir;
@@ -134,7 +137,6 @@ enum enetc_errata {
 	ENETC_ERR_TXCSUM	= BIT(0),
 	ENETC_ERR_VLAN_ISOL	= BIT(1),
 	ENETC_ERR_UCMCSWP	= BIT(2),
-	ENETC_ERR_TXSG		= BIT(3),
 };
 
 /* PCI IEP device data */
@@ -170,15 +172,8 @@ static inline bool enetc_si_is_pf(struct enetc_si *si)
 	return !!(si->hw.port);
 }
 
-#define ENETC_MAX_TCS		8
-#define ENETC_TXQ_PER_TC	num_online_cpus()
-#define ENETC_MAX_NUM_TXQS	(ENETC_MAX_TCS * ENETC_TXQ_PER_TC)
-
-#ifdef CONFIG_ENETC_TSN
-#define ENETC_DEFAULT_NUM_TXQS 8
-#else
-#define ENETC_DEFAULT_NUM_TXQS ENETC_TXQ_PER_TC
-#endif
+#define ENETC_MAX_NUM_TXQS	8
+#define ENETC_INT_NAME_MAX	(IFNAMSIZ + 8)
 
 struct enetc_int_vector {
 	void __iomem *rbier;
@@ -186,7 +181,7 @@ struct enetc_int_vector {
 	unsigned long tx_rings_map;
 	int count_tx_rings;
 	struct napi_struct napi;
-	char name[IFNAMSIZ + 8];
+	char name[ENETC_INT_NAME_MAX];
 
 	struct enetc_bdr rx_ring ____cacheline_aligned_in_smp;
 	struct enetc_bdr tx_ring[0];
@@ -239,8 +234,6 @@ int enetc_pci_probe(struct pci_dev *pdev, const char *name, int sizeof_priv);
 void enetc_pci_remove(struct pci_dev *pdev);
 int enetc_alloc_msix(struct enetc_ndev_priv *priv);
 void enetc_free_msix(struct enetc_ndev_priv *priv);
-int enetc_setup_irqs(struct enetc_ndev_priv *priv);
-void enetc_free_irqs(struct enetc_ndev_priv *priv);
 void enetc_get_si_caps(struct enetc_si *si);
 void enetc_init_si_rings_params(struct enetc_ndev_priv *priv);
 int enetc_alloc_si_resources(struct enetc_ndev_priv *priv);
@@ -253,8 +246,6 @@ struct net_device_stats *enetc_get_stats(struct net_device *ndev);
 int enetc_ioctl(struct net_device *dev, struct ifreq *rq, int cmd);
 int enetc_set_features(struct net_device *ndev,
 		       netdev_features_t features);
-int enetc_setup_tc(struct net_device *ndev, enum tc_setup_type type,
-		   void *type_data);
 /* ethtool */
 void enetc_set_ethtool_ops(struct net_device *ndev);
 
@@ -279,6 +270,3 @@ void enetc_tsn_pf_deinit(struct net_device *netdev);
 /* PTP driver exports */
 #define ENETC_PHC_INDEX_DEFAULT	-1
 extern int enetc_phc_index;
-
-/* common PF and VF module params */
-extern unsigned int debug;

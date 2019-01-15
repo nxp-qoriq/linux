@@ -1,20 +1,17 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
-/* Copyright 2017-2018 NXP */
+/* Copyright 2017-2019 NXP */
 
 #include <linux/module.h>
 #include "enetc.h"
 
 #define ENETC_DRV_VER_MAJ 0
-#define ENETC_DRV_VER_MIN 8
+#define ENETC_DRV_VER_MIN 9
 
 #define ENETC_DRV_VER_STR __stringify(ENETC_DRV_VER_MAJ) "." \
 			  __stringify(ENETC_DRV_VER_MIN)
 static const char enetc_drv_ver[] = ENETC_DRV_VER_STR;
 #define ENETC_DRV_NAME_STR "ENETC VF driver"
 static const char enetc_drv_name[] = ENETC_DRV_NAME_STR;
-
-/* VF driver params */
-module_param(debug, uint, 0000);
 
 /* Messaging */
 static void enetc_msg_vsi_write_msg(struct enetc_hw *hw,
@@ -100,6 +97,12 @@ static int enetc_vf_set_mac_addr(struct net_device *ndev, void *addr)
 	return 0;
 }
 
+static int enetc_vf_set_features(struct net_device *ndev,
+				 netdev_features_t features)
+{
+	return enetc_set_features(ndev, features);
+}
+
 /* Probing/ Init */
 static const struct net_device_ops enetc_ndev_ops = {
 	.ndo_open		= enetc_open,
@@ -107,7 +110,7 @@ static const struct net_device_ops enetc_ndev_ops = {
 	.ndo_start_xmit		= enetc_xmit,
 	.ndo_get_stats		= enetc_get_stats,
 	.ndo_set_mac_address	= enetc_vf_set_mac_addr,
-	.ndo_setup_tc		= enetc_setup_tc,
+	.ndo_set_features	= enetc_vf_set_features,
 	.ndo_do_ioctl		= enetc_ioctl,
 };
 
@@ -122,11 +125,10 @@ static void enetc_vf_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 	priv->dev = &si->pdev->dev;
 	si->ndev = ndev;
 
-	priv->msg_enable = (NETIF_MSG_IFUP << 1) - 1; //TODO: netif_msg_init()
+	priv->msg_enable = (NETIF_MSG_IFUP << 1) - 1;
 	ndev->netdev_ops = ndev_ops;
 	enetc_set_ethtool_ops(ndev);
 	ndev->watchdog_timeo = 5 * HZ;
-	ndev->min_mtu = ETH_MIN_MTU;
 	ndev->max_mtu = ENETC_MAX_MTU;
 
 	ndev->hw_features = NETIF_F_RXCSUM | NETIF_F_HW_CSUM |
@@ -135,21 +137,15 @@ static void enetc_vf_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 	ndev->features = NETIF_F_HIGHDMA | NETIF_F_SG |
 			 NETIF_F_RXCSUM | NETIF_F_HW_CSUM |
 			 NETIF_F_HW_VLAN_CTAG_TX |
-			 NETIF_F_HW_VLAN_CTAG_RX; /* < has to stay on for now */
+			 NETIF_F_HW_VLAN_CTAG_RX;
+
+	if (si->num_rss)
+		ndev->hw_features |= NETIF_F_RXHASH;
 
 	if (si->errata & ENETC_ERR_TXCSUM) {
 		ndev->hw_features &= ~NETIF_F_HW_CSUM;
 		ndev->features &= ~NETIF_F_HW_CSUM;
 	}
-
-	if (si->errata & ENETC_ERR_TXSG) {
-		/* disable Tx SG until final resolution povided by h/w
-		 * on Tx fragmentation hang issue
-		 */
-		ndev->features &= ~NETIF_F_SG;
-	}
-
-	ndev->priv_flags |= IFF_UNICAST_FLT;
 
 	/* pick up primary MAC address from SI */
 	enetc_get_primary_mac_addr(&si->hw, ndev->dev_addr);
@@ -202,10 +198,6 @@ static int enetc_vf_probe(struct pci_dev *pdev,
 	if (err)
 		goto err_reg_netdev;
 
-	err = enetc_setup_irqs(priv);
-	if (err)
-		goto err_setup_irq;
-
 	netif_carrier_off(ndev);
 
 	netif_info(priv, probe, ndev, "%s v%s\n",
@@ -213,8 +205,6 @@ static int enetc_vf_probe(struct pci_dev *pdev,
 
 	return 0;
 
-err_setup_irq:
-	unregister_netdev(ndev);
 err_reg_netdev:
 	enetc_free_msix(priv);
 err_alloc_msix:
@@ -238,7 +228,6 @@ static void enetc_vf_remove(struct pci_dev *pdev)
 		   enetc_drv_name, enetc_drv_ver);
 	unregister_netdev(si->ndev);
 
-	enetc_free_irqs(priv);
 	enetc_free_msix(priv);
 
 	enetc_free_si_resources(priv);

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
-/* Copyright 2017-2018 NXP */
+/* Copyright 2017-2019 NXP */
 
 #include "enetc.h"
 
@@ -103,8 +103,8 @@ int enetc_set_mac_flt_entry(struct enetc_si *si, int index,
 
 	upper = *(const u32 *)mac_addr;
 	lower = *(const u16 *)(mac_addr + 4);
-	cbd.addr[0] = upper;
-	cbd.addr[1] = lower;
+	cbd.addr[0] = cpu_to_le32(upper);
+	cbd.addr[1] = cpu_to_le32(lower);
 
 	return enetc_send_cmd(si, &cbd);
 }
@@ -152,14 +152,14 @@ int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 
 #define RSSE_ALIGN	64
 static int enetc_cmd_rss_table(struct enetc_si *si, u32 *table, int count,
-			       int read)
+			       bool read)
 {
 	struct enetc_cbd cbd = {.cmd = 0};
 	dma_addr_t dma, dma_align;
 	u8 *tmp, *tmp_align;
 	int err, i;
 
-	if (count < 0x40)
+	if (count < RSSE_ALIGN)
 		/* HW only takes in a full 64 entry table */
 		return -EINVAL;
 

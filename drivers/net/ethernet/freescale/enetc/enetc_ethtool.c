@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
-/* Copyright 2017-2018 NXP */
+/* Copyright 2017-2019 NXP */
 
 #include <linux/net_tstamp.h>
 #include <linux/module.h>
@@ -52,7 +52,7 @@ static void enetc_get_regs(struct net_device *ndev, struct ethtool_regs *regs,
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	struct enetc_hw *hw = &priv->si->hw;
-	u32 *buf = (u32 *) regbuf;
+	u32 *buf = (u32 *)regbuf;
 	int i, j;
 	u32 addr;
 
@@ -196,16 +196,14 @@ static int enetc_get_sset_count(struct net_device *ndev, int sset)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 
-	switch (sset) {
-	case ETH_SS_STATS:
+	if (sset == ETH_SS_STATS)
 		return ARRAY_SIZE(enetc_si_counters) +
 			ARRAY_SIZE(tx_ring_stats) * priv->num_tx_rings +
 			ARRAY_SIZE(rx_ring_stats) * priv->num_rx_rings +
 			(enetc_si_is_pf(priv->si) ?
 			ARRAY_SIZE(enetc_port_counters) : 0);
-	default:
-		return -EOPNOTSUPP;
-	}
+
+	return -EOPNOTSUPP;
 }
 
 static void enetc_get_strings(struct net_device *ndev, u32 stringset, u8 *data)
@@ -222,13 +220,15 @@ static void enetc_get_strings(struct net_device *ndev, u32 stringset, u8 *data)
 		}
 		for (i = 0; i < priv->num_tx_rings; i++) {
 			for (j = 0; j < ARRAY_SIZE(tx_ring_stats); j++) {
-				sprintf(p, tx_ring_stats[j], i);
+				snprintf(p, ETH_GSTRING_LEN, tx_ring_stats[j],
+					 i);
 				p += ETH_GSTRING_LEN;
 			}
 		}
 		for (i = 0; i < priv->num_rx_rings; i++) {
 			for (j = 0; j < ARRAY_SIZE(rx_ring_stats); j++) {
-				sprintf(p, rx_ring_stats[j], i);
+				snprintf(p, ETH_GSTRING_LEN, rx_ring_stats[j],
+					 i);
 				p += ETH_GSTRING_LEN;
 			}
 		}
@@ -302,8 +302,8 @@ static void ether_addr_copy_swap(u8 *dst, const u8 *src)
 {
 	int i;
 
-	for (i = 0; i < 6; i++)
-		dst[i] = src[5 - i];
+	for (i = 0; i < ETH_ALEN; i++)
+		dst[i] = src[ETH_ALEN - i - 1];
 }
 
 static int enetc_set_cls_entry(struct enetc_si *si,
@@ -340,7 +340,7 @@ l4ip4:
 		rfse.dport_m = ntohs(l4ip4_m->pdst);
 		if (l4ip4_m->tos)
 			netdev_warn(si->ndev, "ToS field is not supported and was ignored\n");
-		rfse.ethtype_h = 0x0800; /* IPv4 */
+		rfse.ethtype_h = ETH_P_IP; /* IPv4 */
 		rfse.ethtype_m = 0xffff;
 		break;
 	case IP_USER_FLOW:
@@ -353,7 +353,7 @@ l4ip4:
 		rfse.dip_m[0] = l3ip4_m->ip4dst;
 		if (l3ip4_m->tos)
 			netdev_warn(si->ndev, "ToS field is not supported and was ignored\n");
-		rfse.ethtype_h = 0x0800; /* IPv4 */
+		rfse.ethtype_h = ETH_P_IP; /* IPv4 */
 		rfse.ethtype_m = 0xffff;
 		break;
 	case ETHER_FLOW:
@@ -584,7 +584,7 @@ static int enetc_get_ts_info(struct net_device *ndev,
 	return 0;
 }
 
-const struct ethtool_ops enetc_pf_ethtool_ops = {
+static const struct ethtool_ops enetc_pf_ethtool_ops = {
 	.get_regs_len = enetc_get_reglen,
 	.get_regs = enetc_get_regs,
 	.get_sset_count = enetc_get_sset_count,
@@ -602,7 +602,7 @@ const struct ethtool_ops enetc_pf_ethtool_ops = {
 	.set_link_ksettings = phy_ethtool_set_link_ksettings,
 };
 
-const struct ethtool_ops enetc_vf_ethtool_ops = {
+static const struct ethtool_ops enetc_vf_ethtool_ops = {
 	.get_regs_len = enetc_get_reglen,
 	.get_regs = enetc_get_regs,
 	.get_sset_count = enetc_get_sset_count,

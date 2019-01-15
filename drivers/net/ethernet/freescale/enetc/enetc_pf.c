@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
-/* Copyright 2017-2018 NXP */
+/* Copyright 2017-2019 NXP */
 
 #include <linux/module.h>
 #include <linux/of_mdio.h>
@@ -7,18 +7,13 @@
 #include "enetc_pf.h"
 
 #define ENETC_DRV_VER_MAJ 0
-#define ENETC_DRV_VER_MIN 8
+#define ENETC_DRV_VER_MIN 9
 
 #define ENETC_DRV_VER_STR __stringify(ENETC_DRV_VER_MAJ) "." \
 			  __stringify(ENETC_DRV_VER_MIN)
 static const char enetc_drv_ver[] = ENETC_DRV_VER_STR;
 #define ENETC_DRV_NAME_STR "ENETC PF driver"
 static const char enetc_drv_name[] = ENETC_DRV_NAME_STR;
-
-/* PF driver params */
-module_param(debug, uint, 0000);
-static uint prune;
-module_param(prune, uint, 0000);
 
 static void enetc_pf_get_primary_mac_addr(struct enetc_hw *hw, int si, u8 *addr)
 {
@@ -30,7 +25,7 @@ static void enetc_pf_get_primary_mac_addr(struct enetc_hw *hw, int si, u8 *addr)
 }
 
 static void enetc_pf_set_primary_mac_addr(struct enetc_hw *hw, int si,
-				       const u8 *addr)
+					  const u8 *addr)
 {
 	u32 upper = *(const u32 *)addr;
 	u16 lower = *(const u16 *)(addr + 4);
@@ -371,10 +366,16 @@ static int enetc_pf_set_vf_mac(struct net_device *ndev, int vf, u8 *mac)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	struct enetc_pf *pf = enetc_si_priv(priv->si);
+	struct enetc_vf_state *vf_state;
 
 	if (vf >= pf->total_vfs)
 		return -EINVAL;
 
+	if (!is_valid_ether_addr(mac))
+		return -EADDRNOTAVAIL;
+
+	vf_state = &pf->vf_state[vf];
+	vf_state->flags |= ENETC_VF_FLAG_PF_SET_MAC;
 	enetc_pf_set_primary_mac_addr(&priv->si->hw, vf + 1, mac);
 	return 0;
 }
@@ -391,7 +392,7 @@ static int enetc_pf_set_vf_vlan(struct net_device *ndev, int vf, u16 vlan,
 	if (vf >= pf->total_vfs)
 		return -EINVAL;
 
-	if (proto != htons(0x8100))
+	if (proto != htons(ETH_P_8021Q))
 		/* only C-tags supported for now */
 		return -EPROTONOSUPPORT;
 
@@ -434,15 +435,16 @@ static void enetc_port_setup_primary_mac_address(struct enetc_si *si)
 	}
 }
 
-static void enetc_port_alloc_rfs(struct enetc_si *si)
+static void enetc_port_assign_rfs_entries(struct enetc_si *si)
 {
 	struct enetc_pf *pf = enetc_si_priv(si);
 	struct enetc_hw *hw = &si->hw;
 	int num_entries, vf_entries, i;
+	u32 val;
 
 	/* split RFS entries between functions */
-	num_entries = enetc_port_rd(hw, ENETC_PRFSCAPR) & 0xf;
-	num_entries = 16 * (1 + num_entries);
+	val = enetc_port_rd(hw, ENETC_PRFSCAPR);
+	num_entries = ENETC_PRFSCAPR_GET_NUM_RFS(val);
 	vf_entries = num_entries / (pf->total_vfs + 1);
 
 	for (i = 0; i < pf->total_vfs; i++)
@@ -479,8 +481,6 @@ static void enetc_port_si_configure(struct enetc_si *si)
 
 	/* Add default one-time settings for SI0 (PF) */
 	val |= ENETC_PSICFGR0_SIVC(ENETC_VLAN_TYPE_C | ENETC_VLAN_TYPE_S);
-	if (prune)
-		val |= ENETC_PSICFGR0_SPE;
 
 	enetc_port_wr(hw, ENETC_PSICFGR0(0), val);
 
@@ -490,8 +490,6 @@ static void enetc_port_si_configure(struct enetc_si *si)
 	/* Configure the SIs for each available VF */
 	val = ENETC_PSICFGR0_SIVC(ENETC_VLAN_TYPE_C | ENETC_VLAN_TYPE_S);
 	val |= ENETC_PSICFGR0_VTE | ENETC_PSICFGR0_SIVIE;
-	if (prune)
-		val |= ENETC_PSICFGR0_SPE;
 
 	if (num_rings) {
 		num_rings /= pf->total_vfs;
@@ -500,7 +498,7 @@ static void enetc_port_si_configure(struct enetc_si *si)
 	}
 
 	for (i = 0; i < pf->total_vfs; i++)
-		enetc_port_wr(hw, ENETC_PSICFGR0(i+1), val);
+		enetc_port_wr(hw, ENETC_PSICFGR0(i + 1), val);
 
 	/* Port level VLAN settings */
 	val = ENETC_PVCLCTR_OVTPIDL(ENETC_VLAN_TYPE_C | ENETC_VLAN_TYPE_S);
@@ -536,10 +534,10 @@ static void enetc_configure_port_pmac(struct enetc_hw *hw)
 	/* Set pMAC step lock */
 	temp = enetc_port_rd(hw, ENETC_PFPMR);
 	enetc_port_wr(hw, ENETC_PFPMR,
-			temp|ENETC_PFPMR_PMACE|ENETC_PFPMR_MWLM);
+		      temp | ENETC_PFPMR_PMACE | ENETC_PFPMR_MWLM);
 
 	temp = enetc_port_rd(hw, ENETC_MMCSR);
-	enetc_port_wr(hw, ENETC_MMCSR, temp|ENETC_MMCSR_ME);
+	enetc_port_wr(hw, ENETC_MMCSR, temp | ENETC_MMCSR_ME);
 }
 
 static void enetc_configure_port(struct enetc_pf *pf)
@@ -558,7 +556,7 @@ static void enetc_configure_port(struct enetc_pf *pf)
 	enetc_set_rss_key(hw, hash_key);
 
 	/* split up RFS entries */
-	enetc_port_alloc_rfs(pf->si);
+	enetc_port_assign_rfs_entries(pf->si);
 
 	/* fix-up primary MAC addresses, if not set already */
 	enetc_port_setup_primary_mac_address(pf->si);
@@ -573,6 +571,53 @@ static void enetc_configure_port(struct enetc_pf *pf)
 	enetc_port_wr(hw, ENETC_PMR, ENETC_PMR_EN);
 }
 
+/* Messaging */
+static u16 enetc_msg_pf_set_vf_primary_mac_addr(struct enetc_pf *pf,
+						int vf_id)
+{
+	struct enetc_vf_state *vf_state = &pf->vf_state[vf_id];
+	struct enetc_msg_swbd *msg = &pf->rxmsg[vf_id];
+	struct enetc_msg_cmd_set_primary_mac *cmd;
+	struct device *dev = &pf->si->pdev->dev;
+	u16 cmd_id;
+	char *addr;
+
+	cmd = (struct enetc_msg_cmd_set_primary_mac *)msg->vaddr;
+	cmd_id = cmd->header.id;
+	if (cmd_id != ENETC_MSG_CMD_MNG_ADD)
+		return ENETC_MSG_CMD_STATUS_FAIL;
+
+	addr = cmd->mac.sa_data;
+	if (vf_state->flags & ENETC_VF_FLAG_PF_SET_MAC)
+		dev_warn(dev, "Attempt to override PF set mac addr for VF%d\n",
+			 vf_id);
+	else
+		enetc_pf_set_primary_mac_addr(&pf->si->hw, vf_id + 1, addr);
+
+	return ENETC_MSG_CMD_STATUS_OK;
+}
+
+void enetc_msg_handle_rxmsg(struct enetc_pf *pf, int vf_id, u16 *status)
+{
+	struct enetc_msg_swbd *msg = &pf->rxmsg[vf_id];
+	struct device *dev = &pf->si->pdev->dev;
+	struct enetc_msg_cmd_header *cmd_hdr;
+	u16 cmd_type;
+
+	*status = ENETC_MSG_CMD_STATUS_OK;
+	cmd_hdr = (struct enetc_msg_cmd_header *)msg->vaddr;
+	cmd_type = cmd_hdr->type;
+
+	switch (cmd_type) {
+	case ENETC_MSG_CMD_MNG_MAC:
+		*status = enetc_msg_pf_set_vf_primary_mac_addr(pf, vf_id);
+		break;
+	default:
+		dev_err(dev, "command not supported (cmd_type: 0x%x)\n",
+			cmd_type);
+	}
+}
+
 #ifdef CONFIG_PCI_IOV
 static int enetc_sriov_configure(struct pci_dev *pdev, int num_vfs)
 {
@@ -581,30 +626,39 @@ static int enetc_sriov_configure(struct pci_dev *pdev, int num_vfs)
 	int err;
 
 	if (!num_vfs) {
-		dev_info(&pdev->dev, "SR-IOV stop\n");
 		enetc_msg_psi_free(pf);
-		pci_disable_sriov(pdev);
+		kfree(pf->vf_state);
 		pf->num_vfs = 0;
+		pci_disable_sriov(pdev);
 	} else {
-		dev_info(&pdev->dev, "SR-IOV start, %d VFs\n", num_vfs);
-		err = pci_enable_sriov(pdev, num_vfs);
-		if (err) {
-			dev_err(&pdev->dev, "pci_enable_sriov err %d\n", err);
-			return err;
+		pf->num_vfs = num_vfs;
+
+		pf->vf_state = kcalloc(num_vfs, sizeof(struct enetc_vf_state),
+				       GFP_KERNEL);
+		if (!pf->vf_state) {
+			pf->num_vfs = 0;
+			return -ENOMEM;
 		}
 
-		pf->num_vfs = num_vfs;
 		err = enetc_msg_psi_init(pf);
 		if (err) {
 			dev_err(&pdev->dev, "enetc_msg_psi_init (%d)\n", err);
 			goto err_msg_psi;
 		}
+
+		err = pci_enable_sriov(pdev, num_vfs);
+		if (err) {
+			dev_err(&pdev->dev, "pci_enable_sriov err %d\n", err);
+			goto err_en_sriov;
+		}
 	}
 
 	return num_vfs;
 
+err_en_sriov:
+	enetc_msg_psi_free(pf);
 err_msg_psi:
-	pci_disable_sriov(pdev);
+	kfree(pf->vf_state);
 	pf->num_vfs = 0;
 
 	return err;
@@ -646,7 +700,6 @@ static const struct net_device_ops enetc_ndev_ops = {
 	.ndo_set_vf_vlan	= enetc_pf_set_vf_vlan,
 	.ndo_set_vf_spoofchk	= enetc_pf_set_vf_spoofchk,
 	.ndo_set_features	= enetc_pf_set_features,
-	.ndo_setup_tc		= enetc_setup_tc,
 	.ndo_do_ioctl		= enetc_ioctl,
 };
 
@@ -661,11 +714,10 @@ static void enetc_pf_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 	priv->dev = &si->pdev->dev;
 	si->ndev = ndev;
 
-	priv->msg_enable = (NETIF_MSG_WOL << 1) - 1; //TODO: netif_msg_init()
+	priv->msg_enable = (NETIF_MSG_WOL << 1) - 1;
 	ndev->netdev_ops = ndev_ops;
 	enetc_set_ethtool_ops(ndev);
 	ndev->watchdog_timeo = 5 * HZ;
-	ndev->min_mtu = ETH_MIN_MTU;
 	ndev->max_mtu = ENETC_MAX_MTU;
 
 	ndev->hw_features = NETIF_F_RXCSUM | NETIF_F_HW_CSUM |
@@ -683,13 +735,6 @@ static void enetc_pf_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 	if (si->errata & ENETC_ERR_TXCSUM) {
 		ndev->hw_features &= ~NETIF_F_HW_CSUM;
 		ndev->features &= ~NETIF_F_HW_CSUM;
-	}
-
-	if (si->errata & ENETC_ERR_TXSG) {
-		/* disable Tx SG until final resolution povided by h/w
-		 * on Tx fragmentation hang issue
-		 */
-		ndev->features &= ~NETIF_F_SG;
 	}
 
 	ndev->priv_flags |= IFF_UNICAST_FLT;
@@ -735,6 +780,16 @@ static int enetc_of_get_phy(struct enetc_ndev_priv *priv)
 	}
 
 	return 0;
+}
+
+static void enetc_of_put_phy(struct enetc_ndev_priv *priv)
+{
+	struct device_node *np = priv->dev->of_node;
+
+	if (np && of_phy_is_fixed_link(np))
+		of_phy_deregister_fixed_link(np);
+	if (priv->phy_node)
+		of_node_put(priv->phy_node);
 }
 
 static int enetc_pf_probe(struct pci_dev *pdev,
@@ -797,30 +852,25 @@ static int enetc_pf_probe(struct pci_dev *pdev,
 		goto err_alloc_msix;
 	}
 
-	err = register_netdev(ndev);
-	if (err)
-		goto err_reg_netdev;
-
-	enetc_tsn_pf_init(ndev, pdev);
-
-	err = enetc_setup_irqs(priv);
-	if (err)
-		goto err_setup_irq;
-
 	err = enetc_of_get_phy(priv);
 	if (err)
 		dev_warn(&pdev->dev, "Fallback to PHY-less operation\n");
+
+	err = register_netdev(ndev);
+	if (err)
+		goto err_reg_netdev;
 
 	netif_carrier_off(ndev);
 
 	netif_info(priv, probe, ndev, "%s v%s\n",
 		   enetc_drv_name, enetc_drv_ver);
 
+	enetc_tsn_pf_init(ndev, pdev);
+
 	return 0;
 
-err_setup_irq:
-	unregister_netdev(ndev);
 err_reg_netdev:
+	enetc_of_put_phy(priv);
 	enetc_free_msix(priv);
 err_alloc_msix:
 	enetc_free_si_resources(priv);
@@ -851,12 +901,8 @@ static void enetc_pf_remove(struct pci_dev *pdev)
 
 	unregister_netdev(si->ndev);
 
-	if (pdev->dev.of_node && of_phy_is_fixed_link(pdev->dev.of_node))
-		of_phy_deregister_fixed_link(pdev->dev.of_node);
-	if (priv->phy_node)
-		of_node_put(priv->phy_node);
+	enetc_of_put_phy(priv);
 
-	enetc_free_irqs(priv);
 	enetc_free_msix(priv);
 
 	enetc_free_si_resources(priv);

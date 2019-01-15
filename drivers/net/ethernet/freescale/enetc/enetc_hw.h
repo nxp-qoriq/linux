@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause) */
-/* Copyright 2017-2018 NXP */
+/* Copyright 2017-2019 NXP */
 
 #include <linux/bitops.h>
 
@@ -25,8 +25,7 @@
 #define ENETC_SICAR0	0x40
 #define ENETC_SICAR1	0x44
 #define ENETC_SICAR2	0x48
-/*
- * rd snoop, no alloc
+/* rd snoop, no alloc
  * wr snoop, no alloc, partial cache line update for BDs and full cache line
  * update for data
  */
@@ -44,6 +43,7 @@ static inline u32 enetc_vsi_set_msize(u32 size)
 {
 	return size < ENETC_DEFAULT_MSG_SIZE ? size >> 5 : 0;
 }
+
 #define ENETC_PSIMSGRR	0x204
 #define ENETC_PSIMSGRR_MR_MASK	GENMASK(2, 1)
 #define ENETC_PSIMSGRR_MR(n) BIT((n) + 1) /* n = VSI index */
@@ -95,7 +95,9 @@ static inline u32 enetc_vsi_set_msize(u32 size)
 #define ENETC_SIUEFDCR	0xe28
 
 #define ENETC_SIRFSCAPR	0x1200
+#define ENETC_SIRFSCAPR_GET_NUM_RFS(val) ((val) & 0x7f)
 #define ENETC_SIRSSCAPR	0x1600
+#define ENETC_SIRSSCAPR_GET_NUM_RSS(val) (BIT((val) & 0xf) * 32)
 
 /** SI BDR sub-blocks, n = 0..7 */
 enum enetc_bdr_type {TX, RX};
@@ -170,7 +172,6 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PSICFGR0(n)	(0x0940 + (n) * 0xc)  /* n = SI index */
 #define ENETC_PSICFGR0_SET_TXBDR(val)	((val) & 0xff)
 #define ENETC_PSICFGR0_SET_RXBDR(val)	(((val) & 0xff) << 16)
-#define ENETC_PSICFGR0_SPE	BIT(11)
 #define ENETC_PSICFGR0_VTE	BIT(12)
 #define ENETC_PSICFGR0_SIVIE	BIT(14)
 #define ENETC_PSICFGR0_ASE	BIT(15)
@@ -185,6 +186,7 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PRFSMR		0x1800
 #define ENETC_PRFSMR_RFSE	BIT(31)
 #define ENETC_PRFSCAPR		0x1804
+#define ENETC_PRFSCAPR_GET_NUM_RFS(val)	((((val) & 0xf) + 1) * 16)
 #define ENETC_PSIRFSCFGR(n)	(0x1814 + (n) * 4) /* n = SI index */
 #define ENETC_PFPMR		0x1900
 #define ENETC_PFPMR_PMACE	BIT(1)
@@ -299,15 +301,21 @@ struct enetc_hw {
 /* using this to read out stats on 32b systems */
 static inline u64 enetc_rd_reg64(void __iomem *reg)
 {
-	return __le64_to_cpu(*(u64 *)reg);
+	u32 low, high, tmp;
+
+	do {
+		high = ioread32(reg + 4);
+		low = ioread32(reg);
+		tmp = ioread32(reg + 4);
+	} while (high != tmp);
+
+	return le64_to_cpu((u64)high << 32 | low);
 }
 #endif
-#define enetc_wr_reg64(reg)	iowrite64((val), (reg))
 
 #define enetc_rd(hw, off)		enetc_rd_reg((hw)->reg + (off))
 #define enetc_wr(hw, off, val)		enetc_wr_reg((hw)->reg + (off), val)
 #define enetc_rd64(hw, off)		enetc_rd_reg64((hw)->reg + (off))
-#define enetc_wr64(hw, off, val)	enetc_wr_reg64((hw)->reg + (off), val)
 /* port register accessors - PF only */
 #define enetc_port_rd(hw, off)		enetc_rd_reg((hw)->port + (off))
 #define enetc_port_wr(hw, off, val)	enetc_wr_reg((hw)->port + (off), val)
@@ -338,6 +346,7 @@ union enetc_tx_bd {
 				u8 l4_csoff;
 				u8 flags;
 			}; /* default layout */
+			__le32 lstatus;
 		};
 	};
 	struct {

@@ -217,6 +217,7 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PMO_IFM_RG	BIT(2)
 #define ENETC_PM0_IFM_RLP	(BIT(5) | BIT(11))
 #define ENETC_PM0_IFM_RGAUTO	(BIT(15) | ENETC_PMO_IFM_RG | BIT(1))
+#define ENETC_PM0_IFM_XGMII	BIT(12)
 
 /* MAC counters */
 #define ENETC_PM0_REOCT		0x8100
@@ -281,6 +282,9 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_GLOBAL_BASE	0x20000
 #define ENETC_G_EIPBRR0		0x0bf8
 #define ENETC_G_EIPBRR1		0x0bfc
+#define ENETC_G_EPFBLPR(n)	(0xd00 + 4 * (n))
+#define ENETC_G_EPFBLPR1_XGMII	0x80000000
+
 
 /* PCI device info */
 struct enetc_hw {

@@ -10,7 +10,7 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 			      bool tstamp);
 static void enetc_unmap_tx_buff(struct enetc_bdr *tx_ring,
 				struct enetc_tx_swbd *tx_swbd);
-static int enetc_clean_tx_ring(struct enetc_bdr *tx_ring);
+static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget);
 
 static struct sk_buff *enetc_map_rx_buff_to_skb(struct enetc_bdr *rx_ring,
 						int i, u16 size);
@@ -106,6 +106,18 @@ static bool enetc_tx_csum(struct sk_buff *skb, union enetc_tx_bd *txbd)
 	txbd->l4_csoff = l4_flags;
 
 	return true;
+}
+
+static void enetc_free_tx_skb(struct enetc_bdr *tx_ring,
+			      struct enetc_tx_swbd *tx_swbd)
+{
+	if (tx_swbd->dma)
+		enetc_unmap_tx_buff(tx_ring, tx_swbd);
+
+	if (tx_swbd->skb) {
+		dev_kfree_skb_any(tx_swbd->skb);
+		tx_swbd->skb = NULL;
+	}
 }
 
 static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
@@ -224,7 +236,7 @@ dma_err:
 
 	do {
 		tx_swbd = &tx_ring->tx_swbd[i];
-		enetc_unmap_tx_buff(tx_ring, tx_swbd);
+		enetc_free_tx_skb(tx_ring, tx_swbd);
 		if (i == 0)
 			i = tx_ring->bd_count;
 		i--;
@@ -241,9 +253,9 @@ static int enetc_poll(struct napi_struct *napi, int budget)
 	int work_done;
 	int i;
 
-	// TODO: Add Tx ring budget (cleanup limit)
 	for (i = 0; i < v->count_tx_rings; i++)
-		enetc_clean_tx_ring(&v->tx_ring[i]);
+		if (!enetc_clean_tx_ring(&v->tx_ring[i], budget))
+			complete = false;
 
 	work_done = enetc_clean_rx_ring(&v->rx_ring, napi, budget);
 	if (work_done == budget)
@@ -267,20 +279,13 @@ static int enetc_poll(struct napi_struct *napi, int budget)
 static void enetc_unmap_tx_buff(struct enetc_bdr *tx_ring,
 				struct enetc_tx_swbd *tx_swbd)
 {
-	if (tx_swbd->dma) {
-		if (tx_swbd->is_dma_page)
-			dma_unmap_page(tx_ring->dev, tx_swbd->dma,
-				       tx_swbd->len, DMA_TO_DEVICE);
-		else
-			dma_unmap_single(tx_ring->dev, tx_swbd->dma,
-					 tx_swbd->len, DMA_TO_DEVICE);
-		tx_swbd->dma = 0;
-	}
-
-	if (tx_swbd->skb) {
-		dev_kfree_skb_any(tx_swbd->skb);
-		tx_swbd->skb = NULL;
-	}
+	if (tx_swbd->is_dma_page)
+		dma_unmap_page(tx_ring->dev, tx_swbd->dma,
+			       tx_swbd->len, DMA_TO_DEVICE);
+	else
+		dma_unmap_single(tx_ring->dev, tx_swbd->dma,
+				 tx_swbd->len, DMA_TO_DEVICE);
+	tx_swbd->dma = 0;
 }
 
 static int enetc_bd_ready_count(struct enetc_bdr *tx_ring, int ci)
@@ -315,7 +320,7 @@ static void enetc_tstamp_tx(struct sk_buff *skb, u64 tstamp)
 	}
 }
 
-static int enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
+static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget)
 {
 	struct net_device *ndev = tx_ring->ndev;
 	int tx_frm_cnt = 0, tx_byte_cnt = 0;
@@ -335,7 +340,7 @@ static int enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
 	first = true;
 	bds_to_clean = enetc_bd_ready_count(tx_ring, i);
 
-	while (bds_to_clean) {
+	while (bds_to_clean && tx_frm_cnt < ENETC_DEFAULT_TX_WORK) {
 		bool is_eof = !!tx_swbd->skb;
 
 		if (unlikely(do_tstamp)) {
@@ -348,11 +353,17 @@ static int enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
 			}
 		}
 
-		enetc_unmap_tx_buff(tx_ring, tx_swbd);
 		/* clear BD fields that may leak */
 		txbd->frm_len = 0;
 		txbd->buf_len = 0;
 		txbd->lstatus = 0;
+
+		enetc_unmap_tx_buff(tx_ring, tx_swbd);
+		if (is_eof) {
+			napi_consume_skb(tx_swbd->skb, napi_budget);
+			tx_swbd->skb = NULL;
+		}
+
 		tx_byte_cnt += tx_swbd->len;
 
 		bds_to_clean--;
@@ -389,7 +400,7 @@ static int enetc_clean_tx_ring(struct enetc_bdr *tx_ring)
 		netif_wake_subqueue(ndev, tx_ring->index);
 	}
 
-	return tx_frm_cnt;
+	return tx_frm_cnt != ENETC_DEFAULT_TX_WORK;
 }
 
 static bool enetc_new_page(struct enetc_bdr *rx_ring,
@@ -769,7 +780,7 @@ static void enetc_free_txbdr(struct enetc_bdr *txr)
 	int size, i;
 
 	for (i = 0; i < txr->bd_count; i++)
-		enetc_unmap_tx_buff(txr, &txr->tx_swbd[i]);
+		enetc_free_tx_skb(txr, &txr->tx_swbd[i]);
 
 	size = txr->bd_count * sizeof(union enetc_tx_bd);
 
@@ -880,7 +891,7 @@ static void enetc_free_tx_ring(struct enetc_bdr *tx_ring)
 	for (i = 0; i < tx_ring->bd_count; i++) {
 		struct enetc_tx_swbd *tx_swbd = &tx_ring->tx_swbd[i];
 
-		enetc_unmap_tx_buff(tx_ring, tx_swbd);
+		enetc_free_tx_skb(tx_ring, tx_swbd);
 	}
 
 	tx_ring->next_to_clean = 0;
@@ -1211,6 +1222,7 @@ static void enetc_clear_bdrs(struct enetc_ndev_priv *priv)
 static int enetc_setup_irqs(struct enetc_ndev_priv *priv)
 {
 	struct pci_dev *pdev = priv->si->pdev;
+	cpumask_t cpu_mask;
 	int i, j, err;
 
 	for (i = 0; i < priv->bdr_int_num; i++) {
@@ -1237,6 +1249,9 @@ static int enetc_setup_irqs(struct enetc_ndev_priv *priv)
 
 			enetc_wr(hw, ENETC_SIMSITRV(idx), entry);
 		}
+		cpumask_clear(&cpu_mask);
+		cpumask_set_cpu(i % num_online_cpus(), &cpu_mask);
+		irq_set_affinity_hint(irq, &cpu_mask);
 	}
 
 	return 0;

@@ -126,6 +126,7 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 	struct enetc_tx_swbd *tx_swbd;
 	struct skb_frag_struct *frag;
 	int len = skb_headlen(skb);
+	union enetc_tx_bd temp_bd;
 	union enetc_tx_bd *txbd;
 	bool do_vlan, do_tstamp;
 	int i, count = 0;
@@ -134,14 +135,16 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 	u8 flags = 0;
 
 	i = tx_ring->next_to_use;
+	txbd = ENETC_TXBD(*tx_ring, i);
+	prefetchw(txbd);
 
 	dma = dma_map_single(tx_ring->dev, skb->data, len, DMA_TO_DEVICE);
 	if (unlikely(dma_mapping_error(tx_ring->dev, dma)))
 		goto dma_err;
 
-	txbd = ENETC_TXBD(*tx_ring, i);
-	txbd->addr = cpu_to_le64(dma);
-	txbd->buf_len = cpu_to_le16(len);
+	temp_bd.addr = cpu_to_le64(dma);
+	temp_bd.buf_len = cpu_to_le16(len);
+	temp_bd.lstatus = 0;
 
 	tx_swbd = &tx_ring->tx_swbd[i];
 	tx_swbd->dma = dma;
@@ -155,15 +158,18 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 	if (do_vlan || do_tstamp)
 		flags |= ENETC_TXBD_FLAGS_EX;
 
-	if (enetc_tx_csum(skb, txbd))
+	if (enetc_tx_csum(skb, &temp_bd))
 		flags |= ENETC_TXBD_FLAGS_CSUM | ENETC_TXBD_FLAGS_L4CS;
 
 	/* first BD needs frm_len and offload flags set */
-	txbd->frm_len = cpu_to_le16(skb->len);
-	txbd->flags = flags;
+	temp_bd.frm_len = cpu_to_le16(skb->len);
+	temp_bd.flags = flags;
 
 	if (flags & ENETC_TXBD_FLAGS_EX) {
 		u8 e_flags = 0;
+		*txbd = temp_bd;
+		enetc_clear_tx_bd(&temp_bd);
+
 		/* add extension BD for VLAN and/or timestamping */
 		flags = 0;
 		tx_swbd++;
@@ -174,10 +180,11 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 			tx_swbd = tx_ring->tx_swbd;
 			txbd = ENETC_TXBD(*tx_ring, 0);
 		}
+		prefetchw(txbd);
 
 		if (do_vlan) {
-			txbd->ext.vid = cpu_to_le16(skb_vlan_tag_get(skb));
-			txbd->ext.tpid = 0; /* < C-TAG */
+			temp_bd.ext.vid = cpu_to_le16(skb_vlan_tag_get(skb));
+			temp_bd.ext.tpid = 0;
 			e_flags |= 1; /* < do VLAN */
 		}
 
@@ -186,7 +193,7 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 			e_flags |= ENETC_TXBD_E_FLAGS_TWO_STEP_PTP;
 		}
 
-		txbd->ext.e_flags = e_flags;
+		temp_bd.ext.e_flags = e_flags;
 		count++;
 	}
 
@@ -198,6 +205,9 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 		if (dma_mapping_error(tx_ring->dev, dma))
 			goto dma_err;
 
+		*txbd = temp_bd;
+		enetc_clear_tx_bd(&temp_bd);
+
 		flags = 0;
 		tx_swbd++;
 		txbd++;
@@ -207,9 +217,10 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 			tx_swbd = tx_ring->tx_swbd;
 			txbd = ENETC_TXBD(*tx_ring, 0);
 		}
+		prefetchw(txbd);
 
-		txbd->addr = cpu_to_le64(dma);
-		txbd->buf_len = cpu_to_le16(len);
+		temp_bd.addr = cpu_to_le64(dma);
+		temp_bd.buf_len = cpu_to_le16(len);
 
 		tx_swbd->dma = dma;
 		tx_swbd->len = len;
@@ -219,7 +230,8 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 
 	/* last BD needs 'F' bit set */
 	flags |= ENETC_TXBD_FLAGS_F;
-	txbd->flags = flags;
+	temp_bd.flags = flags;
+	*txbd = temp_bd;
 
 	tx_ring->tx_swbd[i].skb = skb;
 
@@ -326,7 +338,6 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget)
 	int tx_frm_cnt = 0, tx_byte_cnt = 0;
 	struct enetc_tx_swbd *tx_swbd;
 	struct enetc_ndev_priv *priv;
-	union enetc_tx_bd *txbd;
 	int i, bds_to_clean;
 	bool do_tstamp, first;
 	u64 tstamp = 0;
@@ -336,7 +347,6 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget)
 
 	i = tx_ring->next_to_clean;
 	tx_swbd = &tx_ring->tx_swbd[i];
-	txbd = ENETC_TXBD(*tx_ring, i);
 	first = true;
 	bds_to_clean = enetc_bd_ready_count(tx_ring, i);
 
@@ -345,6 +355,9 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget)
 
 		if (unlikely(do_tstamp)) {
 			if (unlikely(first)) {
+				union enetc_tx_bd *txbd;
+
+				txbd = ENETC_TXBD(*tx_ring, i);
 				enetc_get_tx_tstamp(&priv->si->hw, txbd,
 						    &tstamp);
 
@@ -352,11 +365,6 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget)
 				enetc_tstamp_tx(tx_swbd->skb, tstamp);
 			}
 		}
-
-		/* clear BD fields that may leak */
-		txbd->frm_len = 0;
-		txbd->buf_len = 0;
-		txbd->lstatus = 0;
 
 		enetc_unmap_tx_buff(tx_ring, tx_swbd);
 		if (is_eof) {
@@ -368,12 +376,10 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget)
 
 		bds_to_clean--;
 		tx_swbd++;
-		txbd++;
 		i++;
 		if (unlikely(i == tx_ring->bd_count)) {
 			i = 0;
 			tx_swbd = tx_ring->tx_swbd;
-			txbd = ENETC_TXBD(*tx_ring, 0);
 		}
 
 		/* BD iteration loop end */

@@ -369,6 +369,11 @@ union enetc_tx_bd {
 #define ENETC_TXBD_FLAGS_EX	BIT(6)
 #define ENETC_TXBD_FLAGS_F	BIT(7)
 
+static inline void enetc_clear_tx_bd(union enetc_tx_bd *txbd)
+{
+	memset(txbd, 0, sizeof(*txbd));
+}
+
 /* L3 csum flags */
 #define ENETC_TXBD_L3_IPCS	BIT(7)
 #define ENETC_TXBD_L3_IPV6	BIT(15)

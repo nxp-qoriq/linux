@@ -1003,37 +1003,12 @@ static int ocelot_get_sset_count(struct net_device *dev, int sset)
 	return ocelot->num_stats;
 }
 
-static int ocelot_get_link_ksettings(struct net_device *dev,
-				     struct ethtool_link_ksettings *link_ksettings)
-{
-	ethtool_link_ksettings_zero_link_mode(link_ksettings, supported);
-	ethtool_link_ksettings_zero_link_mode(link_ksettings, advertising);
-
-	ethtool_link_ksettings_add_link_mode(link_ksettings, supported, 10baseT_Half);
-	ethtool_link_ksettings_add_link_mode(link_ksettings, supported, 10baseT_Full);
-	ethtool_link_ksettings_add_link_mode(link_ksettings, supported, 100baseT_Half);
-	ethtool_link_ksettings_add_link_mode(link_ksettings, supported, 100baseT_Full);
-	ethtool_link_ksettings_add_link_mode(link_ksettings, supported, 1000baseT_Half);
-	ethtool_link_ksettings_add_link_mode(link_ksettings, supported, 1000baseT_Full);
-	ethtool_link_ksettings_add_link_mode(link_ksettings, supported, 2500baseT_Full);
-	ethtool_link_ksettings_add_link_mode(link_ksettings, supported, Autoneg);
-
-	ethtool_link_ksettings_add_link_mode(link_ksettings, advertising, 1000baseT_Full);
-	ethtool_link_ksettings_add_link_mode(link_ksettings, advertising, Autoneg);
-
-	// TODO !!
-	link_ksettings->base.speed = SPEED_1000;
-	link_ksettings->base.duplex = DUPLEX_FULL;
-
-	return 0;
-}
-
-
 static const struct ethtool_ops ocelot_ethtool_ops = {
 	.get_strings		= ocelot_get_strings,
 	.get_ethtool_stats	= ocelot_get_ethtool_stats,
 	.get_sset_count		= ocelot_get_sset_count,
-	.get_link_ksettings	= ocelot_get_link_ksettings,
+	.get_link_ksettings	= phy_ethtool_get_link_ksettings,
+	.set_link_ksettings	= phy_ethtool_set_link_ksettings,
 };
 
 static int ocelot_port_attr_get(struct net_device *dev,

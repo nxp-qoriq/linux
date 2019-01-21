@@ -104,7 +104,7 @@ static int enetc_mac_addr_hash_idx(const u8 *addr)
 		mask |= BIT_ULL(i * 6);
 
 	for (i = 0; i < 6; i++)
-		res |= (__sw_hweight64(fold & (mask << i)) & 0x1) << i;
+		res |= (hweight64(fold & (mask << i)) & 0x1) << i;
 
 	return res;
 }
@@ -284,7 +284,7 @@ static int enetc_vid_hash_idx(unsigned int vid)
 	int i;
 
 	for (i = 0; i < 6; i++)
-		res |= (__sw_hweight8(vid & (BIT(i) | BIT(i + 6))) & 0x1) << i;
+		res |= (hweight8(vid & (BIT(i) | BIT(i + 6))) & 0x1) << i;
 
 	return res;
 }

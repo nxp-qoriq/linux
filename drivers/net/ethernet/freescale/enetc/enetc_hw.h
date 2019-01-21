@@ -214,6 +214,7 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_SET_TX_MTU(val)	((val) << 16)
 #define ENETC_SET_MAXFRM(val)	((val) & 0xffff)
 #define ENETC_PM0_IF_MODE	0x8300
+#define ENETC_PM1_IF_MODE	0x9300
 #define ENETC_PMO_IFM_RG	BIT(2)
 #define ENETC_PM0_IFM_RLP	(BIT(5) | BIT(11))
 #define ENETC_PM0_IFM_RGAUTO	(BIT(15) | ENETC_PMO_IFM_RG | BIT(1))

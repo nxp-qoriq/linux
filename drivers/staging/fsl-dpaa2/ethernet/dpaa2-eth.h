@@ -56,13 +56,13 @@
  */
 #define DPAA2_ETH_TXCONF_PER_NAPI	256
 
-/* Buffer quota per queue. Must be large enough such that for minimum sized
- * frames taildrop kicks in before the bpool gets depleted, so we compute
- * how many 64B frames fit inside the taildrop threshold and add a margin
- * to accommodate the buffer refill delay.
+/* Buffer quota per channel.
+ * We want to keep in check number of ingress frames in flight: for small
+ * sized frames, buffer pool depletion will kick in first; for large sizes,
+ * Rx FQ taildrop threshold will ensure only a reasonable number of frames
+ * will be pending at any given time.
  */
-#define DPAA2_ETH_MAX_FRAMES_PER_QUEUE	(DPAA2_ETH_TAILDROP_THRESH / 64)
-#define DPAA2_ETH_NUM_BUFS_PER_CH	(DPAA2_ETH_MAX_FRAMES_PER_QUEUE + 256)
+#define DPAA2_ETH_NUM_BUFS_PER_CH	1024
 #define DPAA2_ETH_REFILL_THRESH(priv)	\
 	((priv)->max_bufs_per_ch - DPAA2_ETH_BUFS_PER_CMD)
 

@@ -42,7 +42,7 @@ static int enetc_get_reglen(struct net_device *ndev)
 	if (hw->port)
 		len += ARRAY_SIZE(enetc_port_regs);
 
-	len *= sizeof(u32) * 2; /* store 2 etries per reg: addr and value */
+	len *= sizeof(u32) * 2; /* store 2 entries per reg: addr and value */
 
 	return len;
 }

@@ -6,41 +6,14 @@
 #include <linux/udp.h>
 #include <linux/of_mdio.h>
 
-static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
-			      bool tstamp);
-static void enetc_unmap_tx_buff(struct enetc_bdr *tx_ring,
-				struct enetc_tx_swbd *tx_swbd);
-static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget);
-
-static struct sk_buff *enetc_map_rx_buff_to_skb(struct enetc_bdr *rx_ring,
-						int i, u16 size);
-static void enetc_add_rx_buff_to_skb(struct enetc_bdr *rx_ring, int i,
-				     u16 size, struct sk_buff *skb);
-static void enetc_process_skb(struct enetc_bdr *rx_ring, struct sk_buff *skb);
-static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
-			       struct napi_struct *napi, int work_limit);
-
-static irqreturn_t enetc_msix(int irq, void *data)
-{
-	struct enetc_int_vector	*v = data;
-	int i;
-
-	/* disable interrupts */
-	enetc_wr_reg(v->rbier, 0);
-
-	for_each_set_bit(i, &v->tx_rings_map, v->count_tx_rings)
-		enetc_wr_reg(v->tbier_base + ENETC_BDR_OFF(i), 0);
-
-	napi_schedule_irqoff(&v->napi);
-
-	return IRQ_HANDLED;
-}
-
 /* ENETC overhead: optional extension BD + 1 BD gap */
 #define ENETC_TXBDS_NEEDED(val)	((val) + 2)
 /* max # of chained Tx BDs is 15, including head and extension BD */
 #define ENETC_MAX_SKB_FRAGS	13
 #define ENETC_TXBDS_MAX_NEEDED	ENETC_TXBDS_NEEDED(ENETC_MAX_SKB_FRAGS + 1)
+
+static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
+			      bool tstamp);
 
 netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
 {
@@ -108,6 +81,18 @@ static bool enetc_tx_csum(struct sk_buff *skb, union enetc_tx_bd *txbd)
 	return true;
 }
 
+static void enetc_unmap_tx_buff(struct enetc_bdr *tx_ring,
+				struct enetc_tx_swbd *tx_swbd)
+{
+	if (tx_swbd->is_dma_page)
+		dma_unmap_page(tx_ring->dev, tx_swbd->dma,
+			       tx_swbd->len, DMA_TO_DEVICE);
+	else
+		dma_unmap_single(tx_ring->dev, tx_swbd->dma,
+				 tx_swbd->len, DMA_TO_DEVICE);
+	tx_swbd->dma = 0;
+}
+
 static void enetc_free_tx_skb(struct enetc_bdr *tx_ring,
 			      struct enetc_tx_swbd *tx_swbd)
 {
@@ -126,6 +111,7 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 	struct enetc_tx_swbd *tx_swbd;
 	struct skb_frag_struct *frag;
 	int len = skb_headlen(skb);
+	union enetc_tx_bd temp_bd;
 	union enetc_tx_bd *txbd;
 	bool do_vlan, do_tstamp;
 	int i, count = 0;
@@ -134,14 +120,16 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 	u8 flags = 0;
 
 	i = tx_ring->next_to_use;
+	txbd = ENETC_TXBD(*tx_ring, i);
+	prefetchw(txbd);
 
 	dma = dma_map_single(tx_ring->dev, skb->data, len, DMA_TO_DEVICE);
 	if (unlikely(dma_mapping_error(tx_ring->dev, dma)))
 		goto dma_err;
 
-	txbd = ENETC_TXBD(*tx_ring, i);
-	txbd->addr = cpu_to_le64(dma);
-	txbd->buf_len = cpu_to_le16(len);
+	temp_bd.addr = cpu_to_le64(dma);
+	temp_bd.buf_len = cpu_to_le16(len);
+	temp_bd.lstatus = 0;
 
 	tx_swbd = &tx_ring->tx_swbd[i];
 	tx_swbd->dma = dma;
@@ -155,15 +143,18 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 	if (do_vlan || do_tstamp)
 		flags |= ENETC_TXBD_FLAGS_EX;
 
-	if (enetc_tx_csum(skb, txbd))
+	if (enetc_tx_csum(skb, &temp_bd))
 		flags |= ENETC_TXBD_FLAGS_CSUM | ENETC_TXBD_FLAGS_L4CS;
 
 	/* first BD needs frm_len and offload flags set */
-	txbd->frm_len = cpu_to_le16(skb->len);
-	txbd->flags = flags;
+	temp_bd.frm_len = cpu_to_le16(skb->len);
+	temp_bd.flags = flags;
 
 	if (flags & ENETC_TXBD_FLAGS_EX) {
 		u8 e_flags = 0;
+		*txbd = temp_bd;
+		enetc_clear_tx_bd(&temp_bd);
+
 		/* add extension BD for VLAN and/or timestamping */
 		flags = 0;
 		tx_swbd++;
@@ -174,11 +165,12 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 			tx_swbd = tx_ring->tx_swbd;
 			txbd = ENETC_TXBD(*tx_ring, 0);
 		}
+		prefetchw(txbd);
 
 		if (do_vlan) {
-			txbd->ext.vid = cpu_to_le16(skb_vlan_tag_get(skb));
-			txbd->ext.tpid = 0; /* < C-TAG */
-			e_flags |= 1; /* < do VLAN */
+			temp_bd.ext.vid = cpu_to_le16(skb_vlan_tag_get(skb));
+			temp_bd.ext.tpid = 0; /* < C-TAG */
+			e_flags |= ENETC_TXBD_E_FLAGS_VLAN_INS;
 		}
 
 		if (do_tstamp) {
@@ -186,7 +178,7 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 			e_flags |= ENETC_TXBD_E_FLAGS_TWO_STEP_PTP;
 		}
 
-		txbd->ext.e_flags = e_flags;
+		temp_bd.ext.e_flags = e_flags;
 		count++;
 	}
 
@@ -198,6 +190,9 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 		if (dma_mapping_error(tx_ring->dev, dma))
 			goto dma_err;
 
+		*txbd = temp_bd;
+		enetc_clear_tx_bd(&temp_bd);
+
 		flags = 0;
 		tx_swbd++;
 		txbd++;
@@ -207,9 +202,10 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 			tx_swbd = tx_ring->tx_swbd;
 			txbd = ENETC_TXBD(*tx_ring, 0);
 		}
+		prefetchw(txbd);
 
-		txbd->addr = cpu_to_le64(dma);
-		txbd->buf_len = cpu_to_le16(len);
+		temp_bd.addr = cpu_to_le64(dma);
+		temp_bd.buf_len = cpu_to_le16(len);
 
 		tx_swbd->dma = dma;
 		tx_swbd->len = len;
@@ -219,7 +215,8 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 
 	/* last BD needs 'F' bit set */
 	flags |= ENETC_TXBD_FLAGS_F;
-	txbd->flags = flags;
+	temp_bd.flags = flags;
+	*txbd = temp_bd;
 
 	tx_ring->tx_swbd[i].skb = skb;
 
@@ -244,6 +241,26 @@ dma_err:
 
 	return 0;
 }
+
+static irqreturn_t enetc_msix(int irq, void *data)
+{
+	struct enetc_int_vector	*v = data;
+	int i;
+
+	/* disable interrupts */
+	enetc_wr_reg(v->rbier, 0);
+
+	for_each_set_bit(i, &v->tx_rings_map, v->count_tx_rings)
+		enetc_wr_reg(v->tbier_base + ENETC_BDR_OFF(i), 0);
+
+	napi_schedule_irqoff(&v->napi);
+
+	return IRQ_HANDLED;
+}
+
+static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget);
+static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
+			       struct napi_struct *napi, int work_limit);
 
 static int enetc_poll(struct napi_struct *napi, int budget)
 {
@@ -274,18 +291,6 @@ static int enetc_poll(struct napi_struct *napi, int budget)
 			     ENETC_TBIER_TXTIE);
 
 	return work_done;
-}
-
-static void enetc_unmap_tx_buff(struct enetc_bdr *tx_ring,
-				struct enetc_tx_swbd *tx_swbd)
-{
-	if (tx_swbd->is_dma_page)
-		dma_unmap_page(tx_ring->dev, tx_swbd->dma,
-			       tx_swbd->len, DMA_TO_DEVICE);
-	else
-		dma_unmap_single(tx_ring->dev, tx_swbd->dma,
-				 tx_swbd->len, DMA_TO_DEVICE);
-	tx_swbd->dma = 0;
 }
 
 static int enetc_bd_ready_count(struct enetc_bdr *tx_ring, int ci)
@@ -326,7 +331,6 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget)
 	int tx_frm_cnt = 0, tx_byte_cnt = 0;
 	struct enetc_tx_swbd *tx_swbd;
 	struct enetc_ndev_priv *priv;
-	union enetc_tx_bd *txbd;
 	int i, bds_to_clean;
 	bool do_tstamp, first;
 	u64 tstamp = 0;
@@ -336,7 +340,6 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget)
 
 	i = tx_ring->next_to_clean;
 	tx_swbd = &tx_ring->tx_swbd[i];
-	txbd = ENETC_TXBD(*tx_ring, i);
 	first = true;
 	bds_to_clean = enetc_bd_ready_count(tx_ring, i);
 
@@ -345,6 +348,9 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget)
 
 		if (unlikely(do_tstamp)) {
 			if (unlikely(first)) {
+				union enetc_tx_bd *txbd;
+
+				txbd = ENETC_TXBD(*tx_ring, i);
 				enetc_get_tx_tstamp(&priv->si->hw, txbd,
 						    &tstamp);
 
@@ -352,11 +358,6 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget)
 				enetc_tstamp_tx(tx_swbd->skb, tstamp);
 			}
 		}
-
-		/* clear BD fields that may leak */
-		txbd->frm_len = 0;
-		txbd->buf_len = 0;
-		txbd->lstatus = 0;
 
 		enetc_unmap_tx_buff(tx_ring, tx_swbd);
 		if (is_eof) {
@@ -368,12 +369,10 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget)
 
 		bds_to_clean--;
 		tx_swbd++;
-		txbd++;
 		i++;
 		if (unlikely(i == tx_ring->bd_count)) {
 			i = 0;
 			tx_swbd = tx_ring->tx_swbd;
-			txbd = ENETC_TXBD(*tx_ring, 0);
 		}
 
 		/* BD iteration loop end */
@@ -518,6 +517,98 @@ static void enetc_get_offloads(struct enetc_bdr *rx_ring,
 #endif
 }
 
+static void enetc_process_skb(struct enetc_bdr *rx_ring,
+			      struct sk_buff *skb)
+{
+	skb_record_rx_queue(skb, rx_ring->index);
+	skb->protocol = eth_type_trans(skb, rx_ring->ndev);
+}
+
+static bool enetc_page_reusable(struct page *page)
+{
+	return (!page_is_pfmemalloc(page) && page_ref_count(page) == 1);
+}
+
+static void enetc_reuse_page(struct enetc_bdr *rx_ring,
+			     struct enetc_rx_swbd *old)
+{
+	struct enetc_rx_swbd *new;
+
+	new = &rx_ring->rx_swbd[rx_ring->next_to_alloc];
+
+	/* next buf that may reuse a page */
+	enetc_bdr_idx_inc(rx_ring, &rx_ring->next_to_alloc);
+
+	/* copy page reference */
+	*new = *old;
+}
+
+static struct enetc_rx_swbd *enetc_get_rx_buff(struct enetc_bdr *rx_ring,
+					       int i, u16 size)
+{
+	struct enetc_rx_swbd *rx_swbd = &rx_ring->rx_swbd[i];
+
+	dma_sync_single_range_for_cpu(rx_ring->dev, rx_swbd->dma,
+				      rx_swbd->page_offset,
+				      size, DMA_FROM_DEVICE);
+	return rx_swbd;
+}
+
+static void enetc_put_rx_buff(struct enetc_bdr *rx_ring,
+			      struct enetc_rx_swbd *rx_swbd)
+{
+	if (likely(enetc_page_reusable(rx_swbd->page))) {
+		rx_swbd->page_offset ^= ENETC_RXB_TRUESIZE;
+		page_ref_inc(rx_swbd->page);
+
+		enetc_reuse_page(rx_ring, rx_swbd);
+
+		/* sync for use by the device */
+		dma_sync_single_range_for_device(rx_ring->dev, rx_swbd->dma,
+						 rx_swbd->page_offset,
+						 ENETC_RXB_DMA_SIZE,
+						 DMA_FROM_DEVICE);
+	} else {
+		dma_unmap_page(rx_ring->dev, rx_swbd->dma,
+			       PAGE_SIZE, DMA_FROM_DEVICE);
+	}
+
+	rx_swbd->page = NULL;
+}
+
+static struct sk_buff *enetc_map_rx_buff_to_skb(struct enetc_bdr *rx_ring,
+						int i, u16 size)
+{
+	struct enetc_rx_swbd *rx_swbd = enetc_get_rx_buff(rx_ring, i, size);
+	struct sk_buff *skb;
+	void *ba;
+
+	ba = page_address(rx_swbd->page) + rx_swbd->page_offset;
+	skb = build_skb(ba - ENETC_RXB_PAD, ENETC_RXB_TRUESIZE);
+	if (unlikely(!skb)) {
+		rx_ring->stats.rx_alloc_errs++;
+		return NULL;
+	}
+
+	skb_reserve(skb, ENETC_RXB_PAD);
+	__skb_put(skb, size);
+
+	enetc_put_rx_buff(rx_ring, rx_swbd);
+
+	return skb;
+}
+
+static void enetc_add_rx_buff_to_skb(struct enetc_bdr *rx_ring, int i,
+				     u16 size, struct sk_buff *skb)
+{
+	struct enetc_rx_swbd *rx_swbd = enetc_get_rx_buff(rx_ring, i, size);
+
+	skb_add_rx_frag(skb, skb_shinfo(skb)->nr_frags, rx_swbd->page,
+			rx_swbd->page_offset, size, ENETC_RXB_TRUESIZE);
+
+	enetc_put_rx_buff(rx_ring, rx_swbd);
+}
+
 #define ENETC_RXBD_BUNDLE 16 /* # of BDs to update at once */
 
 static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
@@ -620,98 +711,6 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 	rx_ring->stats.bytes += rx_byte_cnt;
 
 	return rx_frm_cnt;
-}
-
-static bool enetc_page_reusable(struct page *page)
-{
-	return (!page_is_pfmemalloc(page) && page_ref_count(page) == 1);
-}
-
-static void enetc_reuse_page(struct enetc_bdr *rx_ring,
-			     struct enetc_rx_swbd *old)
-{
-	struct enetc_rx_swbd *new;
-
-	new = &rx_ring->rx_swbd[rx_ring->next_to_alloc];
-
-	/* next buf that may reuse a page */
-	enetc_bdr_idx_inc(rx_ring, &rx_ring->next_to_alloc);
-
-	/* copy page reference */
-	*new = *old;
-}
-
-static struct enetc_rx_swbd *enetc_get_rx_buff(struct enetc_bdr *rx_ring,
-					       int i, u16 size)
-{
-	struct enetc_rx_swbd *rx_swbd = &rx_ring->rx_swbd[i];
-
-	dma_sync_single_range_for_cpu(rx_ring->dev, rx_swbd->dma,
-				      rx_swbd->page_offset,
-				      size, DMA_FROM_DEVICE);
-	return rx_swbd;
-}
-
-static void enetc_put_rx_buff(struct enetc_bdr *rx_ring,
-			      struct enetc_rx_swbd *rx_swbd)
-{
-	if (likely(enetc_page_reusable(rx_swbd->page))) {
-		rx_swbd->page_offset ^= ENETC_RXB_TRUESIZE;
-		page_ref_inc(rx_swbd->page);
-
-		enetc_reuse_page(rx_ring, rx_swbd);
-
-		/* sync for use by the device */
-		dma_sync_single_range_for_device(rx_ring->dev, rx_swbd->dma,
-						 rx_swbd->page_offset,
-						 ENETC_RXB_DMA_SIZE,
-						 DMA_FROM_DEVICE);
-	} else {
-		dma_unmap_page(rx_ring->dev, rx_swbd->dma,
-			       PAGE_SIZE, DMA_FROM_DEVICE);
-	}
-
-	rx_swbd->page = NULL;
-}
-
-static struct sk_buff *enetc_map_rx_buff_to_skb(struct enetc_bdr *rx_ring,
-						int i, u16 size)
-{
-	struct enetc_rx_swbd *rx_swbd = enetc_get_rx_buff(rx_ring, i, size);
-	struct sk_buff *skb;
-	void *ba;
-
-	ba = page_address(rx_swbd->page) + rx_swbd->page_offset;
-	skb = build_skb(ba - ENETC_RXB_PAD, ENETC_RXB_TRUESIZE);
-	if (unlikely(!skb)) {
-		rx_ring->stats.rx_alloc_errs++;
-		return NULL;
-	}
-
-	skb_reserve(skb, ENETC_RXB_PAD);
-	__skb_put(skb, size);
-
-	enetc_put_rx_buff(rx_ring, rx_swbd);
-
-	return skb;
-}
-
-static void enetc_add_rx_buff_to_skb(struct enetc_bdr *rx_ring, int i,
-				     u16 size, struct sk_buff *skb)
-{
-	struct enetc_rx_swbd *rx_swbd = enetc_get_rx_buff(rx_ring, i, size);
-
-	skb_add_rx_frag(skb, skb_shinfo(skb)->nr_frags, rx_swbd->page,
-			rx_swbd->page_offset, size, ENETC_RXB_TRUESIZE);
-
-	enetc_put_rx_buff(rx_ring, rx_swbd);
-}
-
-static void enetc_process_skb(struct enetc_bdr *rx_ring,
-			      struct sk_buff *skb)
-{
-	skb_record_rx_queue(skb, rx_ring->index);
-	skb->protocol = eth_type_trans(skb, rx_ring->ndev);
 }
 
 /* Probing and Init */

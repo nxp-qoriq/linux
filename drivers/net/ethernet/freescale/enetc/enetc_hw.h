@@ -369,6 +369,11 @@ union enetc_tx_bd {
 #define ENETC_TXBD_FLAGS_EX	BIT(6)
 #define ENETC_TXBD_FLAGS_F	BIT(7)
 
+static inline void enetc_clear_tx_bd(union enetc_tx_bd *txbd)
+{
+	memset(txbd, 0, sizeof(*txbd));
+}
+
 /* L3 csum flags */
 #define ENETC_TXBD_L3_IPCS	BIT(7)
 #define ENETC_TXBD_L3_IPV6	BIT(15)
@@ -377,6 +382,7 @@ union enetc_tx_bd {
 #define ENETC_TXBD_L3_SET_HSIZE(val)	((((val) >> 2) & 0x7f) << 8)
 
 /* Extension flags */
+#define ENETC_TXBD_E_FLAGS_VLAN_INS	BIT(0)
 #define ENETC_TXBD_E_FLAGS_TWO_STEP_PTP	BIT(2)
 
 static inline __le16 enetc_txbd_l3_csoff(int start, int hdr_sz, u16 l3_flags)

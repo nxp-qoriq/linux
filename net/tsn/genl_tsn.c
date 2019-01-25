@@ -599,7 +599,8 @@ static int cmd_cb_streamid_get(struct genl_info *info)
 		goto err;
 	}
 
-	nla_put_u32(rep_skb, TSN_STREAMID_ATTR_INDEX, sid_index);
+	if (nla_put_u32(rep_skb, TSN_STREAMID_ATTR_INDEX, sid_index))
+		return -EMSGSIZE;
 
 	if (valid == 1) {
 		nla_put_flag(rep_skb, TSN_STREAMID_ATTR_ENABLE);
@@ -611,31 +612,33 @@ static int cmd_cb_streamid_get(struct genl_info *info)
 		goto err;
 	}
 
-	nla_put_s32(rep_skb, TSN_STREAMID_ATTR_STREAM_HANDLE, sidconf.handle);
-
-	nla_put_u32(rep_skb, TSN_STREAMID_ATTR_IFOP, sidconf.ifac_oport);
-	nla_put_u32(rep_skb, TSN_STREAMID_ATTR_OFOP, sidconf.ofac_oport);
-	nla_put_u32(rep_skb, TSN_STREAMID_ATTR_IFIP, sidconf.ifac_iport);
-	nla_put_u32(rep_skb, TSN_STREAMID_ATTR_OFIP, sidconf.ofac_iport);
-
-	nla_put_u8(rep_skb, TSN_STREAMID_ATTR_TYPE, sidconf.type);
+	if (nla_put_s32(rep_skb,
+			TSN_STREAMID_ATTR_STREAM_HANDLE, sidconf.handle) ||
+	    nla_put_u32(rep_skb, TSN_STREAMID_ATTR_IFOP, sidconf.ifac_oport) ||
+	    nla_put_u32(rep_skb, TSN_STREAMID_ATTR_OFOP, sidconf.ofac_oport) ||
+	    nla_put_u32(rep_skb, TSN_STREAMID_ATTR_IFIP, sidconf.ifac_iport) ||
+	    nla_put_u32(rep_skb, TSN_STREAMID_ATTR_OFIP, sidconf.ofac_iport) ||
+	    nla_put_u8(rep_skb, TSN_STREAMID_ATTR_TYPE, sidconf.type))
+		return -EMSGSIZE;
 
 	switch (sidconf.type) {
 	case STREAMID_NULL:
-		NLA_PUT_U64(rep_skb, TSN_STREAMID_ATTR_NDMAC,
-			    sidconf.para.nid.dmac);
-		nla_put_u16(rep_skb, TSN_STREAMID_ATTR_NVID,
-			    sidconf.para.nid.vid);
-		nla_put_u8(rep_skb, TSN_STREAMID_ATTR_NTAGGED,
-			   sidconf.para.nid.tagged);
+		if (NLA_PUT_U64(rep_skb, TSN_STREAMID_ATTR_NDMAC,
+				sidconf.para.nid.dmac) ||
+		    nla_put_u16(rep_skb, TSN_STREAMID_ATTR_NVID,
+				sidconf.para.nid.vid) ||
+		    nla_put_u8(rep_skb, TSN_STREAMID_ATTR_NTAGGED,
+			       sidconf.para.nid.tagged))
+			return -EMSGSIZE;
 		break;
 	case STREAMID_SMAC_VLAN:
-		NLA_PUT_U64(rep_skb, TSN_STREAMID_ATTR_SMAC,
-			    sidconf.para.sid.smac);
-		nla_put_u16(rep_skb, TSN_STREAMID_ATTR_SVID,
-			    sidconf.para.sid.vid);
-		nla_put_u8(rep_skb, TSN_STREAMID_ATTR_STAGGED,
-			   sidconf.para.sid.tagged);
+		if (NLA_PUT_U64(rep_skb, TSN_STREAMID_ATTR_SMAC,
+				sidconf.para.sid.smac) ||
+		    nla_put_u16(rep_skb, TSN_STREAMID_ATTR_SVID,
+				sidconf.para.sid.vid) ||
+		    nla_put_u8(rep_skb, TSN_STREAMID_ATTR_STAGGED,
+			       sidconf.para.sid.tagged))
+			return -EMSGSIZE;
 		break;
 	case STREAMID_DMAC_VLAN:
 	case STREAMID_IP:
@@ -660,15 +663,18 @@ static int cmd_cb_streamid_get(struct genl_info *info)
 		}
 	}
 
-	NLA_PUT_U64(rep_skb, TSN_STREAMID_ATTR_COUNTERS_PSI,
-		    sidcounts.per_stream.input);
-	NLA_PUT_U64(rep_skb, TSN_STREAMID_ATTR_COUNTERS_PSO,
-		    sidcounts.per_stream.output);
+	if (NLA_PUT_U64(rep_skb, TSN_STREAMID_ATTR_COUNTERS_PSI,
+			sidcounts.per_stream.input) ||
+	    NLA_PUT_U64(rep_skb, TSN_STREAMID_ATTR_COUNTERS_PSO,
+			sidcounts.per_stream.output))
+		return -EMSGSIZE;
+
 	for (i = 0; i < 32; i++) {
-		NLA_PUT_U64(rep_skb, TSN_STREAMID_ATTR_COUNTERS_PSPPI,
-			    sidcounts.per_streamport[i].input);
-		NLA_PUT_U64(rep_skb, TSN_STREAMID_ATTR_COUNTERS_PSPPO,
-			    sidcounts.per_streamport[i].output);
+		if (NLA_PUT_U64(rep_skb, TSN_STREAMID_ATTR_COUNTERS_PSPPI,
+				sidcounts.per_streamport[i].input) ||
+		    NLA_PUT_U64(rep_skb, TSN_STREAMID_ATTR_COUNTERS_PSPPO,
+				sidcounts.per_streamport[i].output))
+			return -EMSGSIZE;
 	}
 
 	nla_nest_end(rep_skb, sidattr);
@@ -903,34 +909,45 @@ static int cmd_qci_sfi_get(struct genl_info *info)
 		goto err;
 	}
 
-	nla_put_u32(rep_skb, TSN_QCI_SFI_ATTR_INDEX, sfi_handle);
+	if (nla_put_u32(rep_skb, TSN_QCI_SFI_ATTR_INDEX, sfi_handle))
+		return -EMSGSIZE;
 
-	if (valid)
-		nla_put_flag(rep_skb, TSN_QCI_SFI_ATTR_ENABLE);
-	else
-		nla_put_flag(rep_skb, TSN_QCI_SFI_ATTR_DISABLE);
+	if (valid) {
+		if (nla_put_flag(rep_skb, TSN_QCI_SFI_ATTR_ENABLE))
+			return -EMSGSIZE;
+	} else {
+		if (nla_put_flag(rep_skb, TSN_QCI_SFI_ATTR_DISABLE))
+			return -EMSGSIZE;
+	}
 
-	nla_put_s32(rep_skb, TSN_QCI_SFI_ATTR_STREAM_HANDLE,
-		    sficonf.stream_handle_spec);
-	nla_put_s8(rep_skb, TSN_QCI_SFI_ATTR_PRIO_SPEC,
-		   sficonf.priority_spec);
-	nla_put_u32(rep_skb, TSN_QCI_SFI_ATTR_GATE_ID,
-		    sficonf.stream_gate_instance_id);
+	if (nla_put_s32(rep_skb, TSN_QCI_SFI_ATTR_STREAM_HANDLE,
+			sficonf.stream_handle_spec) ||
+	    nla_put_s8(rep_skb, TSN_QCI_SFI_ATTR_PRIO_SPEC,
+		       sficonf.priority_spec) ||
+	    nla_put_u32(rep_skb, TSN_QCI_SFI_ATTR_GATE_ID,
+			sficonf.stream_gate_instance_id))
+		return -EMSGSIZE;
 
 	if (sficonf.stream_filter.maximum_sdu_size)
-		nla_put_u16(rep_skb, TSN_QCI_SFI_ATTR_MAXSDU,
-			    sficonf.stream_filter.maximum_sdu_size);
+		if (nla_put_u16(rep_skb, TSN_QCI_SFI_ATTR_MAXSDU,
+				sficonf.stream_filter.maximum_sdu_size))
+			return -EMSGSIZE;
+
 	if (sficonf.stream_filter.flow_meter_instance_id >= 0)
-		nla_put_s32(rep_skb, TSN_QCI_SFI_ATTR_FLOW_ID,
-			    sficonf.stream_filter.flow_meter_instance_id);
+		if (nla_put_s32(rep_skb, TSN_QCI_SFI_ATTR_FLOW_ID,
+				sficonf.stream_filter.flow_meter_instance_id))
+			return -EMSGSIZE;
 
 	if (sficonf.block_oversize_enable)
-		nla_put_flag(rep_skb, TSN_QCI_SFI_ATTR_OVERSIZE_ENABLE);
+		if (nla_put_flag(rep_skb, TSN_QCI_SFI_ATTR_OVERSIZE_ENABLE))
+			return -EMSGSIZE;
 	if (sficonf.block_oversize)
-		nla_put_flag(rep_skb, TSN_QCI_SFI_ATTR_OVERSIZE);
+		if (nla_put_flag(rep_skb, TSN_QCI_SFI_ATTR_OVERSIZE))
+			return -EMSGSIZE;
 
-	nla_put(rep_skb, TSN_QCI_SFI_ATTR_COUNTERS,
-		sizeof(struct tsn_qci_psfp_sfi_counters), &sficount);
+	if (nla_put(rep_skb, TSN_QCI_SFI_ATTR_COUNTERS,
+		    sizeof(struct tsn_qci_psfp_sfi_counters), &sficount))
+		return -EMSGSIZE;
 
 	nla_nest_end(rep_skb, sfiattr);
 
@@ -1017,12 +1034,14 @@ static int cmd_qci_sfi_counters_get(struct genl_info *info)
 		goto err;
 	}
 
-	nla_put_u32(rep_skb, TSN_QCI_SFI_ATTR_INDEX, sfi_handle);
+	if (nla_put_u32(rep_skb, TSN_QCI_SFI_ATTR_INDEX, sfi_handle))
+		return -EMSGSIZE;
 
 	tsnops->qci_sfi_counters_get(netdev, sfi_handle, &sficount);
 
-	nla_put(rep_skb, TSN_QCI_SFI_ATTR_COUNTERS,
-		sizeof(struct tsn_qci_psfp_sfi_counters), &sficount);
+	if (nla_put(rep_skb, TSN_QCI_SFI_ATTR_COUNTERS,
+		    sizeof(struct tsn_qci_psfp_sfi_counters), &sficount))
+		return -EMSGSIZE;
 
 	nla_nest_end(rep_skb, sfiattr);
 
@@ -1314,28 +1333,37 @@ static int cmd_qci_sgi_get(struct genl_info *info)
 	if (!sgiattr)
 		return -EMSGSIZE;
 
-	nla_put_u32(rep_skb, TSN_QCI_SGI_ATTR_INDEX, sgi_handle);
+	if (nla_put_u32(rep_skb, TSN_QCI_SGI_ATTR_INDEX, sgi_handle))
+		return -EMSGSIZE;
 
 	/* Gate enable? sgiadmin.gate_enabled */
-	if (sgiadmin.gate_enabled)
-		nla_put_flag(rep_skb, TSN_QCI_SGI_ATTR_ENABLE);
-	else
-		nla_put_flag(rep_skb, TSN_QCI_SGI_ATTR_DISABLE);
+	if (sgiadmin.gate_enabled) {
+		if (nla_put_flag(rep_skb, TSN_QCI_SGI_ATTR_ENABLE))
+			return -EMSGSIZE;
+	} else {
+		if (nla_put_flag(rep_skb, TSN_QCI_SGI_ATTR_DISABLE))
+			return -EMSGSIZE;
+	}
 
 	if (sgiadmin.config_change)
-		nla_put_flag(rep_skb, TSN_QCI_SGI_ATTR_CONFCHANGE);
+		if (nla_put_flag(rep_skb, TSN_QCI_SGI_ATTR_CONFCHANGE))
+			return -EMSGSIZE;
 
 	if (sgiadmin.block_invalid_rx_enable)
-		nla_put_flag(rep_skb, TSN_QCI_SGI_ATTR_IRXEN);
+		if (nla_put_flag(rep_skb, TSN_QCI_SGI_ATTR_IRXEN))
+			return -EMSGSIZE;
 
 	if (sgiadmin.block_invalid_rx)
-		nla_put_flag(rep_skb, TSN_QCI_SGI_ATTR_IRX);
+		if (nla_put_flag(rep_skb, TSN_QCI_SGI_ATTR_IRX))
+			return -EMSGSIZE;
 
 	if (sgiadmin.block_octets_exceeded_enable)
-		nla_put_flag(rep_skb, TSN_QCI_SGI_ATTR_OEXEN);
+		if (nla_put_flag(rep_skb, TSN_QCI_SGI_ATTR_OEXEN))
+			return -EMSGSIZE;
 
 	if (sgiadmin.block_octets_exceeded)
-		nla_put_flag(rep_skb, TSN_QCI_SGI_ATTR_OEX);
+		if (nla_put_flag(rep_skb, TSN_QCI_SGI_ATTR_OEX))
+			return -EMSGSIZE;
 
 	/* Administration Down 2 */
 	adminattr = nla_nest_start(rep_skb, TSN_QCI_SGI_ATTR_ADMINENTRY);
@@ -1343,17 +1371,18 @@ static int cmd_qci_sgi_get(struct genl_info *info)
 		return -EMSGSIZE;
 
 	if (sgiadmin.admin.gate_states)
-		nla_put_flag(rep_skb, TSN_SGI_ATTR_CTRL_INITSTATE);
+		if (nla_put_flag(rep_skb, TSN_SGI_ATTR_CTRL_INITSTATE))
+			return -EMSGSIZE;
 
-	nla_put_u32(rep_skb, TSN_SGI_ATTR_CTRL_CYTIME,
-		    sgiadmin.admin.cycle_time);
-
-	nla_put_u32(rep_skb, TSN_SGI_ATTR_CTRL_CYTIMEEX,
-		    sgiadmin.admin.cycle_time_extension);
-	NLA_PUT_U64(rep_skb, TSN_SGI_ATTR_CTRL_BTIME,
-		    sgiadmin.admin.base_time);
-	nla_put_u8(rep_skb, TSN_SGI_ATTR_CTRL_INITIPV,
-		   sgiadmin.admin.init_ipv);
+	if (nla_put_u32(rep_skb, TSN_SGI_ATTR_CTRL_CYTIME,
+			sgiadmin.admin.cycle_time) ||
+	    nla_put_u32(rep_skb, TSN_SGI_ATTR_CTRL_CYTIMEEX,
+			sgiadmin.admin.cycle_time_extension) ||
+	    NLA_PUT_U64(rep_skb, TSN_SGI_ATTR_CTRL_BTIME,
+			sgiadmin.admin.base_time) ||
+	    nla_put_u8(rep_skb, TSN_SGI_ATTR_CTRL_INITIPV,
+		       sgiadmin.admin.init_ipv))
+		return -EMSGSIZE;
 
 	listcount = sgiadmin.admin.control_list_length;
 	if (!listcount)
@@ -1388,18 +1417,21 @@ static int cmd_qci_sgi_get(struct genl_info *info)
 		omax = (gcl + i)->octet_max;
 
 		if ((gcl + i)->gate_state)
-			nla_put_flag(rep_skb, TSN_SGI_ATTR_GCL_GATESTATE);
+			if (nla_put_flag(rep_skb, TSN_SGI_ATTR_GCL_GATESTATE))
+				return -EMSGSIZE;
 
-		nla_put_s8(rep_skb, TSN_SGI_ATTR_GCL_IPV, ipv);
-		nla_put_u32(rep_skb, TSN_SGI_ATTR_GCL_INTERVAL, ti);
-		nla_put_u32(rep_skb, TSN_SGI_ATTR_GCL_OCTMAX, omax);
+		if (nla_put_s8(rep_skb, TSN_SGI_ATTR_GCL_IPV, ipv) ||
+		    nla_put_u32(rep_skb, TSN_SGI_ATTR_GCL_INTERVAL, ti) ||
+		    nla_put_u32(rep_skb, TSN_SGI_ATTR_GCL_OCTMAX, omax))
+			return -EMSGSIZE;
 
 		/* End administration entry down 3 */
 		nla_nest_end(rep_skb, sglattr);
 	}
 
 	kfree(sgiadmin.admin.gcl);
-	nla_put_u8(rep_skb, TSN_SGI_ATTR_CTRL_LEN, listcount);
+	if (nla_put_u8(rep_skb, TSN_SGI_ATTR_CTRL_LEN, listcount))
+		return -EMSGSIZE;
 
 out1:
 	/* End adminastration down 2 */
@@ -1502,25 +1534,31 @@ static int cmd_qci_sgi_status_get(struct genl_info *info)
 	if (!sgiattr)
 		return -EMSGSIZE;
 
-	nla_put_u32(rep_skb, TSN_QCI_SGI_ATTR_INDEX, sgi_handle);
+	if (nla_put_u32(rep_skb, TSN_QCI_SGI_ATTR_INDEX, sgi_handle))
+		return -EMSGSIZE;
 
 	/* Gate enable? */
-	if (valid == 1)
-		nla_put_flag(rep_skb, TSN_QCI_SGI_ATTR_ENABLE);
-	else
-		nla_put_flag(rep_skb, TSN_QCI_SGI_ATTR_DISABLE);
+	if (valid == 1) {
+		if (nla_put_flag(rep_skb, TSN_QCI_SGI_ATTR_ENABLE))
+			return -EMSGSIZE;
+	} else {
+		if (nla_put_flag(rep_skb, TSN_QCI_SGI_ATTR_DISABLE))
+			return -EMSGSIZE;
+	}
 
-	nla_put_u32(rep_skb, TSN_QCI_SGI_ATTR_TICKG,
-		    sgistat.tick_granularity);
-	NLA_PUT_U64(rep_skb, TSN_QCI_SGI_ATTR_CCTIME,
-		    sgistat.config_change_time);
-	NLA_PUT_U64(rep_skb, TSN_QCI_SGI_ATTR_CUTIME,
-		    sgistat.current_time);
-	NLA_PUT_U64(rep_skb, TSN_QCI_SGI_ATTR_CCERROR,
-		    sgistat.config_change_error);
+	if (nla_put_u32(rep_skb, TSN_QCI_SGI_ATTR_TICKG,
+			sgistat.tick_granularity) ||
+	    NLA_PUT_U64(rep_skb, TSN_QCI_SGI_ATTR_CCTIME,
+			sgistat.config_change_time) ||
+	    NLA_PUT_U64(rep_skb, TSN_QCI_SGI_ATTR_CUTIME,
+			sgistat.current_time) ||
+	    NLA_PUT_U64(rep_skb, TSN_QCI_SGI_ATTR_CCERROR,
+			sgistat.config_change_error))
+		return -EMSGSIZE;
 
 	if (sgistat.config_pending)
-		nla_put_flag(rep_skb, TSN_QCI_SGI_ATTR_CPENDING);
+		if (nla_put_flag(rep_skb, TSN_QCI_SGI_ATTR_CPENDING))
+			return -EMSGSIZE;
 
 	/* operation Down 2 */
 	operattr = nla_nest_start(rep_skb, TSN_QCI_SGI_ATTR_OPERENTRY);
@@ -1528,17 +1566,18 @@ static int cmd_qci_sgi_status_get(struct genl_info *info)
 		return -EMSGSIZE;
 
 	if (sgistat.oper.gate_states)
-		nla_put_flag(rep_skb, TSN_SGI_ATTR_CTRL_INITSTATE);
+		if (nla_put_flag(rep_skb, TSN_SGI_ATTR_CTRL_INITSTATE))
+			return -EMSGSIZE;
 
-	nla_put_u32(rep_skb, TSN_SGI_ATTR_CTRL_CYTIME,
-		    sgistat.oper.cycle_time);
-
-	nla_put_u32(rep_skb, TSN_SGI_ATTR_CTRL_CYTIMEEX,
-		    sgistat.oper.cycle_time_extension);
-	NLA_PUT_U64(rep_skb, TSN_SGI_ATTR_CTRL_BTIME,
-		    sgistat.oper.base_time);
-	nla_put_u8(rep_skb, TSN_SGI_ATTR_CTRL_INITIPV,
-		   sgistat.oper.init_ipv);
+	if (nla_put_u32(rep_skb, TSN_SGI_ATTR_CTRL_CYTIME,
+			sgistat.oper.cycle_time) ||
+	    nla_put_u32(rep_skb, TSN_SGI_ATTR_CTRL_CYTIMEEX,
+			sgistat.oper.cycle_time_extension) ||
+	    NLA_PUT_U64(rep_skb, TSN_SGI_ATTR_CTRL_BTIME,
+			sgistat.oper.base_time) ||
+	    nla_put_u8(rep_skb, TSN_SGI_ATTR_CTRL_INITIPV,
+		       sgistat.oper.init_ipv))
+		return -EMSGSIZE;
 
 	/* Loop list */
 	listcount = sgistat.oper.control_list_length;
@@ -1574,18 +1613,21 @@ static int cmd_qci_sgi_status_get(struct genl_info *info)
 		omax = (gcl + i)->octet_max;
 
 		if ((gcl + i)->gate_state)
-			nla_put_flag(rep_skb, TSN_SGI_ATTR_GCL_GATESTATE);
+			if (nla_put_flag(rep_skb, TSN_SGI_ATTR_GCL_GATESTATE))
+				return -EMSGSIZE;
 
-		nla_put_s8(rep_skb, TSN_SGI_ATTR_GCL_IPV, ipv);
-		nla_put_u32(rep_skb, TSN_SGI_ATTR_GCL_INTERVAL, ti);
-		nla_put_u32(rep_skb, TSN_SGI_ATTR_GCL_OCTMAX, omax);
+		if (nla_put_s8(rep_skb, TSN_SGI_ATTR_GCL_IPV, ipv) ||
+		    nla_put_u32(rep_skb, TSN_SGI_ATTR_GCL_INTERVAL, ti) ||
+		    nla_put_u32(rep_skb, TSN_SGI_ATTR_GCL_OCTMAX, omax))
+			return -EMSGSIZE;
 
 		/* End operation entry down 3 */
 		nla_nest_end(rep_skb, sglattr);
 	}
 
 	kfree(sgistat.oper.gcl);
-	nla_put_u8(rep_skb, TSN_SGI_ATTR_CTRL_LEN, listcount);
+	if (nla_put_u8(rep_skb, TSN_SGI_ATTR_CTRL_LEN, listcount))
+		return -EMSGSIZE;
 out1:
 	/* End operation down 2 */
 	nla_nest_end(rep_skb, operattr);
@@ -1767,39 +1809,42 @@ static int cmd_qci_fmi_get(struct genl_info *info)
 	if (!fmiattr)
 		return -EMSGSIZE;
 
-	nla_put_u32(rep_skb, TSN_QCI_FMI_ATTR_INDEX, index);
-
-	nla_put_u32(rep_skb, TSN_QCI_FMI_ATTR_CIR, fmiconf.cir);
-	nla_put_u32(rep_skb, TSN_QCI_FMI_ATTR_CBS, fmiconf.cbs);
-	nla_put_u32(rep_skb, TSN_QCI_FMI_ATTR_EIR, fmiconf.eir);
-	nla_put_u32(rep_skb, TSN_QCI_FMI_ATTR_EBS, fmiconf.ebs);
+	if (nla_put_u32(rep_skb, TSN_QCI_FMI_ATTR_INDEX, index) ||
+	    nla_put_u32(rep_skb, TSN_QCI_FMI_ATTR_CIR, fmiconf.cir) ||
+	    nla_put_u32(rep_skb, TSN_QCI_FMI_ATTR_CBS, fmiconf.cbs) ||
+	    nla_put_u32(rep_skb, TSN_QCI_FMI_ATTR_EIR, fmiconf.eir) ||
+	    nla_put_u32(rep_skb, TSN_QCI_FMI_ATTR_EBS, fmiconf.ebs))
+		return -EMSGSIZE;
 
 	if (fmiconf.cf)
-		nla_put_flag(rep_skb, TSN_QCI_FMI_ATTR_CF);
+		if (nla_put_flag(rep_skb, TSN_QCI_FMI_ATTR_CF))
+			return -EMSGSIZE;
 
 	if (fmiconf.cm)
-		nla_put_flag(rep_skb, TSN_QCI_FMI_ATTR_CM);
+		if (nla_put_flag(rep_skb, TSN_QCI_FMI_ATTR_CM))
+			return -EMSGSIZE;
 
 	if (fmiconf.drop_on_yellow)
-		nla_put_flag(rep_skb, TSN_QCI_FMI_ATTR_DROPYL);
+		if (nla_put_flag(rep_skb, TSN_QCI_FMI_ATTR_DROPYL))
+			return -EMSGSIZE;
 
 	if (fmiconf.mark_red_enable)
-		nla_put_flag(rep_skb, TSN_QCI_FMI_ATTR_MAREDEN);
+		if (nla_put_flag(rep_skb, TSN_QCI_FMI_ATTR_MAREDEN))
+			return -EMSGSIZE;
 
 	if (fmiconf.mark_red)
-		nla_put_flag(rep_skb, TSN_QCI_FMI_ATTR_MAREDEN);
+		if (nla_put_flag(rep_skb, TSN_QCI_FMI_ATTR_MAREDEN))
+			return -EMSGSIZE;
 
-	nla_put(rep_skb, TSN_QCI_FMI_ATTR_COUNTERS,
-		sizeof(struct tsn_qci_psfp_fmi_counters), &counters);
+	if (nla_put(rep_skb, TSN_QCI_FMI_ATTR_COUNTERS,
+		    sizeof(struct tsn_qci_psfp_fmi_counters), &counters))
+		return -EMSGSIZE;
 
 	nla_nest_end(rep_skb, fmiattr);
 
-	return tsn_send_reply(rep_skb, info);
+	tsn_send_reply(rep_skb, info);
 
-	nlmsg_free(rep_skb);
-	tsn_simple_reply(info, TSN_CMD_REPLY,
-			 netdev->name, -TSN_ATTRERR);
-	return -1;
+	return 0;
 }
 
 static int tsn_qci_fmi_get(struct sk_buff *skb, struct genl_info *info)
@@ -1995,10 +2040,13 @@ static int cmd_qbv_get(struct genl_info *info)
 		return -EMSGSIZE;
 
 	qbvadminattr = nla_nest_start(rep_skb, TSN_QBV_ATTR_ADMINENTRY);
+	if (!qbvadminattr)
+		return -EMSGSIZE;
 
 	if (qbvconf.admin.control_list) {
 		len = qbvconf.admin.control_list_length;
-		nla_put_u32(rep_skb, TSN_QBV_ATTR_CTRL_LISTCOUNT, len);
+		if (nla_put_u32(rep_skb, TSN_QBV_ATTR_CTRL_LISTCOUNT, len))
+			return -EMSGSIZE;
 
 		for (i = 0; i < len; i++) {
 			struct nlattr *qbv_table;
@@ -2010,28 +2058,35 @@ static int cmd_qbv_get(struct genl_info *info)
 
 			qbv_table = nla_nest_start(rep_skb,
 						   TSN_QBV_ATTR_CTRL_LISTENTRY);
+			if (!qbv_table)
+				return -EMSGSIZE;
 
-			nla_put_u32(rep_skb, TSN_QBV_ATTR_ENTRY_ID, i);
-			nla_put_u8(rep_skb, TSN_QBV_ATTR_ENTRY_GC, gs);
-			nla_put_u32(rep_skb, TSN_QBV_ATTR_ENTRY_TM, tp);
+			if (nla_put_u32(rep_skb, TSN_QBV_ATTR_ENTRY_ID, i) ||
+			    nla_put_u8(rep_skb, TSN_QBV_ATTR_ENTRY_GC, gs) ||
+			    nla_put_u32(rep_skb, TSN_QBV_ATTR_ENTRY_TM, tp))
+				return -EMSGSIZE;
 			nla_nest_end(rep_skb, qbv_table);
 		}
 
 		if (qbvconf.admin.gate_states)
-			nla_put_u8(rep_skb, TSN_QBV_ATTR_CTRL_GATESTATE,
-				   qbvconf.admin.gate_states);
+			if (nla_put_u8(rep_skb, TSN_QBV_ATTR_CTRL_GATESTATE,
+				       qbvconf.admin.gate_states))
+				return -EMSGSIZE;
 
 		if (qbvconf.admin.cycle_time)
-			nla_put_u32(rep_skb, TSN_QBV_ATTR_CTRL_CYCLETIME,
-				    qbvconf.admin.cycle_time);
+			if (nla_put_u32(rep_skb, TSN_QBV_ATTR_CTRL_CYCLETIME,
+					qbvconf.admin.cycle_time))
+				return -EMSGSIZE;
 
 		if (qbvconf.admin.cycle_time_extension)
-			nla_put_u32(rep_skb, TSN_QBV_ATTR_CTRL_CYCLETIMEEXT,
-				    qbvconf.admin.cycle_time_extension);
+			if (nla_put_u32(rep_skb, TSN_QBV_ATTR_CTRL_CYCLETIMEEXT,
+					qbvconf.admin.cycle_time_extension))
+				return -EMSGSIZE;
 
 		if (qbvconf.admin.base_time)
-			NLA_PUT_U64(rep_skb, TSN_QBV_ATTR_CTRL_BASETIME,
-				    qbvconf.admin.base_time);
+			if (NLA_PUT_U64(rep_skb, TSN_QBV_ATTR_CTRL_BASETIME,
+					qbvconf.admin.base_time))
+				return -EMSGSIZE;
 
 		kfree(qbvconf.admin.control_list);
 
@@ -2041,16 +2096,21 @@ static int cmd_qbv_get(struct genl_info *info)
 
 	nla_nest_end(rep_skb, qbvadminattr);
 
-	if (qbvconf.gate_enabled)
-		nla_put_flag(rep_skb, TSN_QBV_ATTR_ENABLE);
-	else
-		nla_put_flag(rep_skb, TSN_QBV_ATTR_DISABLE);
+	if (qbvconf.gate_enabled) {
+		if (nla_put_flag(rep_skb, TSN_QBV_ATTR_ENABLE))
+			return -EMSGSIZE;
+	} else {
+		if (nla_put_flag(rep_skb, TSN_QBV_ATTR_DISABLE))
+			return -EMSGSIZE;
+	}
 
 	if (qbvconf.maxsdu)
-		nla_put_u32(rep_skb, TSN_QBV_ATTR_MAXSDU, qbvconf.maxsdu);
+		if (nla_put_u32(rep_skb, TSN_QBV_ATTR_MAXSDU, qbvconf.maxsdu))
+			return -EMSGSIZE;
 
 	if (qbvconf.config_change)
-		nla_put_flag(rep_skb, TSN_QBV_ATTR_CONFIGCHANGE);
+		if (nla_put_flag(rep_skb, TSN_QBV_ATTR_CONFIGCHANGE))
+			return -EMSGSIZE;
 
 	nla_nest_end(rep_skb, qbv);
 
@@ -2107,10 +2167,16 @@ static int cmd_qbv_status_get(struct genl_info *info)
 		return -EMSGSIZE;
 
 	qbvoperattr = nla_nest_start(rep_skb, TSN_QBV_ATTR_OPERENTRY);
+	if (!qbvoperattr)
+		return -EMSGSIZE;
 
 	if (qbvstatus.oper.control_list) {
 		len = qbvstatus.oper.control_list_length;
-		nla_put_u32(rep_skb, TSN_QBV_ATTR_CTRL_LISTCOUNT, len);
+		if (nla_put_u32(rep_skb, TSN_QBV_ATTR_CTRL_LISTCOUNT, len)) {
+			nla_nest_cancel(rep_skb, qbvoperattr);
+			return -EMSGSIZE;
+		}
+
 		for (i = 0; i < len; i++) {
 			struct nlattr *qbv_table;
 			u8 gs;
@@ -2121,28 +2187,42 @@ static int cmd_qbv_status_get(struct genl_info *info)
 
 			qbv_table = nla_nest_start(rep_skb,
 						   TSN_QBV_ATTR_CTRL_LISTENTRY);
+			if (!qbv_table)
+				return -EMSGSIZE;
 
-			nla_put_u32(rep_skb, TSN_QBV_ATTR_ENTRY_ID, i);
-			nla_put_u8(rep_skb, TSN_QBV_ATTR_ENTRY_GC, gs);
-			nla_put_u32(rep_skb, TSN_QBV_ATTR_ENTRY_TM, tp);
+			if (nla_put_u32(rep_skb, TSN_QBV_ATTR_ENTRY_ID, i) ||
+			    nla_put_u8(rep_skb, TSN_QBV_ATTR_ENTRY_GC, gs) ||
+			    nla_put_u32(rep_skb, TSN_QBV_ATTR_ENTRY_TM, tp)) {
+				nla_nest_cancel(rep_skb, qbv_table);
+				return -EMSGSIZE;
+			}
+
 			nla_nest_end(rep_skb, qbv_table);
 		}
 
-		if (qbvstatus.oper.gate_states)
-			nla_put_u8(rep_skb, TSN_QBV_ATTR_CTRL_GATESTATE,
-				   qbvstatus.oper.gate_states);
+		if (qbvstatus.oper.gate_states) {
+			if (nla_put_u8(rep_skb, TSN_QBV_ATTR_CTRL_GATESTATE,
+				       qbvstatus.oper.gate_states))
+				return -EMSGSIZE;
+		}
 
-		if (qbvstatus.oper.cycle_time)
-			nla_put_u32(rep_skb, TSN_QBV_ATTR_CTRL_CYCLETIME,
-				    qbvstatus.oper.cycle_time);
+		if (qbvstatus.oper.cycle_time) {
+			if (nla_put_u32(rep_skb, TSN_QBV_ATTR_CTRL_CYCLETIME,
+					qbvstatus.oper.cycle_time))
+				return -EMSGSIZE;
+		}
 
-		if (qbvstatus.oper.cycle_time_extension)
-			nla_put_u32(rep_skb, TSN_QBV_ATTR_CTRL_CYCLETIMEEXT,
-				    qbvstatus.oper.cycle_time_extension);
+		if (qbvstatus.oper.cycle_time_extension) {
+			if (nla_put_u32(rep_skb, TSN_QBV_ATTR_CTRL_CYCLETIMEEXT,
+					qbvstatus.oper.cycle_time_extension))
+				return -EMSGSIZE;
+		}
 
-		if (qbvstatus.oper.base_time)
-			NLA_PUT_U64(rep_skb, TSN_QBV_ATTR_CTRL_BASETIME,
-				    qbvstatus.oper.base_time);
+		if (qbvstatus.oper.base_time) {
+			if (NLA_PUT_U64(rep_skb, TSN_QBV_ATTR_CTRL_BASETIME,
+					qbvstatus.oper.base_time))
+				return -EMSGSIZE;
+		}
 
 		kfree(qbvstatus.oper.control_list);
 	} else {
@@ -2151,28 +2231,40 @@ static int cmd_qbv_status_get(struct genl_info *info)
 
 	nla_nest_end(rep_skb, qbvoperattr);
 
-	if (qbvstatus.config_change_time)
-		NLA_PUT_U64(rep_skb, TSN_QBV_ATTR_CONFIGCHANGETIME,
-			    qbvstatus.config_change_time);
+	if (qbvstatus.config_change_time) {
+		if (NLA_PUT_U64(rep_skb, TSN_QBV_ATTR_CONFIGCHANGETIME,
+				qbvstatus.config_change_time))
+			return -EMSGSIZE;
+	}
 
-	if (qbvstatus.tick_granularity)
-		nla_put_u32(rep_skb, TSN_QBV_ATTR_GRANULARITY,
-			    qbvstatus.tick_granularity);
+	if (qbvstatus.tick_granularity) {
+		if (nla_put_u32(rep_skb, TSN_QBV_ATTR_GRANULARITY,
+				qbvstatus.tick_granularity))
+			return -EMSGSIZE;
+	}
 
-	if (qbvstatus.current_time)
-		NLA_PUT_U64(rep_skb, TSN_QBV_ATTR_CURRENTTIME,
-			    qbvstatus.current_time);
+	if (qbvstatus.current_time) {
+		if (NLA_PUT_U64(rep_skb, TSN_QBV_ATTR_CURRENTTIME,
+				qbvstatus.current_time))
+			return -EMSGSIZE;
+	}
 
-	if (qbvstatus.config_pending)
-		nla_put_flag(rep_skb, TSN_QBV_ATTR_CONFIGPENDING);
+	if (qbvstatus.config_pending) {
+		if (nla_put_flag(rep_skb, TSN_QBV_ATTR_CONFIGPENDING))
+			return -EMSGSIZE;
+	}
 
-	if (qbvstatus.config_change_error)
-		NLA_PUT_U64(rep_skb, TSN_QBV_ATTR_CONFIGCHANGEERROR,
-			    qbvstatus.config_change_error);
+	if (qbvstatus.config_change_error) {
+		if (NLA_PUT_U64(rep_skb, TSN_QBV_ATTR_CONFIGCHANGEERROR,
+				qbvstatus.config_change_error))
+			return -EMSGSIZE;
+	}
 
-	if (qbvstatus.supported_list_max)
-		nla_put_u32(rep_skb, TSN_QBV_ATTR_LISTMAX,
-			    qbvstatus.supported_list_max);
+	if (qbvstatus.supported_list_max) {
+		if (nla_put_u32(rep_skb, TSN_QBV_ATTR_LISTMAX,
+				qbvstatus.supported_list_max))
+			return -EMSGSIZE;
+	}
 
 	nla_nest_end(rep_skb, qbv);
 
@@ -2340,7 +2432,8 @@ static int tsn_cbs_get(struct sk_buff *skb, struct genl_info *info)
 		return -EINVAL;
 	}
 
-	nla_put_u8(rep_skb, TSN_CBS_ATTR_BW, ret & 0XF);
+	if (nla_put_u8(rep_skb, TSN_CBS_ATTR_BW, ret & 0XF))
+		return -EMSGSIZE;
 
 	nla_nest_end(rep_skb, cbsattr);
 	return tsn_send_reply(rep_skb, info);
@@ -2456,13 +2549,21 @@ static int cmd_qbu_get_status(struct genl_info *info)
 	if (!qbuattr)
 		return -EMSGSIZE;
 
-	nla_put_u8(rep_skb, TSN_QBU_ATTR_ADMIN_STATE, pps.admin_state);
-	nla_put_u32(rep_skb, TSN_QBU_ATTR_HOLD_ADVANCE, pps.hold_advance);
-	nla_put_u32(rep_skb, TSN_QBU_ATTR_RELEASE_ADVANCE, pps.release_advance);
-	if (pps.preemption_active)
-		nla_put_flag(rep_skb, TSN_QBU_ATTR_ACTIVE);
+	if (nla_put_u8(rep_skb, TSN_QBU_ATTR_ADMIN_STATE, pps.admin_state) ||
+	    nla_put_u32(rep_skb,
+			TSN_QBU_ATTR_HOLD_ADVANCE, pps.hold_advance) ||
+	    nla_put_u32(rep_skb,
+			TSN_QBU_ATTR_RELEASE_ADVANCE, pps.release_advance))
+		return -EMSGSIZE;
 
-	nla_put_u8(rep_skb, TSN_QBU_ATTR_HOLD_REQUEST, pps.hold_request);
+	if (pps.preemption_active) {
+		if (nla_put_flag(rep_skb, TSN_QBU_ATTR_ACTIVE))
+			return -EMSGSIZE;
+	}
+
+	if (nla_put_u8(rep_skb, TSN_QBU_ATTR_HOLD_REQUEST, pps.hold_request))
+		return -EMSGSIZE;
+
 	nla_nest_end(rep_skb, qbuattr);
 
 	return tsn_send_reply(rep_skb, info);
@@ -2615,19 +2716,24 @@ static int tsn_tsd_get(struct sk_buff *skb, struct genl_info *info)
 	if (!tsdattr)
 		return -EMSGSIZE;
 
-	nla_put_u32(rep_skb, TSN_TSD_ATTR_PERIOD, tts.period);
-	nla_put_u32(rep_skb, TSN_TSD_ATTR_MAX_FRM_NUM, tts.maxFrameNum);
-	nla_put_u32(rep_skb, TSN_TSD_ATTR_CYCLE_NUM, tts.cycleNum);
-	nla_put_u32(rep_skb, TSN_TSD_ATTR_LOSS_STEPS, tts.loss_steps);
-	nla_put_u32(rep_skb, TSN_TSD_ATTR_MAX_FRM_NUM, tts.maxFrameNum);
+	if (nla_put_u32(rep_skb, TSN_TSD_ATTR_PERIOD, tts.period) ||
+	    nla_put_u32(rep_skb, TSN_TSD_ATTR_MAX_FRM_NUM, tts.maxFrameNum) ||
+	    nla_put_u32(rep_skb, TSN_TSD_ATTR_CYCLE_NUM, tts.cycleNum) ||
+	    nla_put_u32(rep_skb, TSN_TSD_ATTR_LOSS_STEPS, tts.loss_steps) ||
+	    nla_put_u32(rep_skb, TSN_TSD_ATTR_MAX_FRM_NUM, tts.maxFrameNum))
+		return -EMSGSIZE;
 
-	if (!tts.enable)
-		nla_put_flag(rep_skb, TSN_TSD_ATTR_DISABLE);
-	else
-		nla_put_flag(rep_skb, TSN_TSD_ATTR_ENABLE);
+	if (!tts.enable) {
+		if (nla_put_flag(rep_skb, TSN_TSD_ATTR_DISABLE))
+			return -EMSGSIZE;
+	} else {
+		if (nla_put_flag(rep_skb, TSN_TSD_ATTR_ENABLE))
+			return -EMSGSIZE;
+	}
 
 	if (tts.flag == 2)
-		nla_put_flag(rep_skb, TSN_TSD_ATTR_SYN_IMME);
+		if (nla_put_flag(rep_skb, TSN_TSD_ATTR_SYN_IMME))
+			return -EMSGSIZE;
 
 	nla_nest_end(rep_skb, tsdattr);
 	return tsn_send_reply(rep_skb, info);
@@ -3059,8 +3165,10 @@ void tsn_port_unregister(struct net_device *netdev)
 	struct tsn_port *p;
 
 	list_for_each_entry(p, &port_list, list) {
+		if (!p || !p->netdev)
+			continue;
 		if (p->netdev == netdev) {
-			if (p && p->tsnops->device_deinit)
+			if (p->tsnops->device_deinit)
 				p->tsnops->device_deinit(netdev);
 			list_del(&p->list);
 			kfree(p);

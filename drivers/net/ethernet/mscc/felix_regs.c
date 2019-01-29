@@ -488,7 +488,7 @@ void felix_port_adjust_link(struct net_device *dev)
 	struct ocelot_port *port = netdev_priv(dev);
 	struct ocelot *ocelot = port->ocelot;
 	u8 p = port->chip_port;
-	int speed, atop_wm, mode = 0;
+	int speed, atop_wm;
 
 	switch (dev->phydev->speed) {
 	case SPEED_10:
@@ -499,11 +499,9 @@ void felix_port_adjust_link(struct net_device *dev)
 		break;
 	case SPEED_1000:
 		speed = OCELOT_SPEED_1000;
-		mode = DEV_MAC_MODE_CFG_GIGA_MODE_ENA;
 		break;
 	case SPEED_2500:
 		speed = OCELOT_SPEED_2500;
-		mode = DEV_MAC_MODE_CFG_GIGA_MODE_ENA;
 		break;
 	default:
 		netdev_err(dev, "Unsupported PHY speed: %d\n",
@@ -517,9 +515,6 @@ void felix_port_adjust_link(struct net_device *dev)
 		return;
 	netdev_err(dev, "DBG %s:%d\n", __func__, __LINE__);
 
-	/* Only full duplex supported for now */
-	ocelot_port_writel(port, DEV_MAC_MODE_CFG_FDX_ENA |
-			   mode, DEV_MAC_MODE_CFG);
 
 	/* Set MAC IFG Gaps
 	 * FDX: TX_IFG = 5, RX_IFG1 = RX_IFG2 = 0
@@ -545,12 +540,6 @@ void felix_port_adjust_link(struct net_device *dev)
 	/* Enable MAC module */
 	ocelot_port_writel(port, DEV_MAC_ENA_CFG_RX_ENA |
 			   DEV_MAC_ENA_CFG_TX_ENA, DEV_MAC_ENA_CFG);
-
-	/* Take MAC, Port, Phy (intern) and PCS (SGMII/Serdes) clock out of
-	 * reset
-	 */
-	ocelot_port_writel(port, DEV_CLOCK_CFG_LINK_SPEED(speed),
-			   DEV_CLOCK_CFG);
 
 	/* Set SMAC of Pause frame (00:00:00:00:00:00) */
 	ocelot_port_writel(port, 0, DEV_MAC_FC_MAC_HIGH_CFG);

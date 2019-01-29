@@ -465,6 +465,17 @@ static int felix_ports_init(struct pci_dev *pdev)
 			dev_err(ocelot->dev, "failed to probe ports\n");
 			goto release_ports;
 		}
+		/* Only 1G full duplex supported for now */
+		ocelot_port_writel(ocelot->ports[port],
+				   DEV_MAC_MODE_CFG_FDX_ENA |
+				   DEV_MAC_MODE_CFG_GIGA_MODE_ENA,
+				   DEV_MAC_MODE_CFG);
+		/* Take MAC, Port, Phy (intern) and PCS (SGMII/Serdes)
+		 * clock out of reset
+		 */
+		ocelot_port_writel(ocelot->ports[port],
+				   DEV_CLOCK_CFG_LINK_SPEED(OCELOT_SPEED_1000),
+				   DEV_CLOCK_CFG);
 
 #ifdef CONFIG_MSCC_FELIX_SWITCH_TSN
 		tsn_port_register(ocelot->ports[port]->dev, (struct tsn_ops *)&switch_tsn_ops,

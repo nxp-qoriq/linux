@@ -513,8 +513,6 @@ void felix_port_adjust_link(struct net_device *dev)
 
 	if (!dev->phydev->link)
 		return;
-	netdev_err(dev, "DBG %s:%d\n", __func__, __LINE__);
-
 
 	/* Set MAC IFG Gaps
 	 * FDX: TX_IFG = 5, RX_IFG1 = RX_IFG2 = 0

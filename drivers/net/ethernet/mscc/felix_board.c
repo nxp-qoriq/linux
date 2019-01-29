@@ -346,10 +346,6 @@ static void felix_release_ports(struct ocelot_port **ports)
 		if (!phydev)
 			continue;
 
-		pr_info("%s: port:%d %s\n", __func__, i,
-			phy_is_pseudo_fixed_link(phydev) ? "fixed-link" :
-			(phydev->drv ? phydev->drv->name : "Generic PHY"));
-
 		unregister_netdev(ports[i]->dev);
 		free_netdev(ports[i]->dev);
 #ifdef CONFIG_MSCC_FELIX_SWITCH_TSN
@@ -446,9 +442,7 @@ static int felix_ports_init(struct pci_dev *pdev)
 		of_node_put(phy_node);
 		phy_node = NULL;
 
-		pr_info("%s: port:%d %s\n", __func__, port,
-			phy_is_pseudo_fixed_link(phydev) ? "fixed-link" :
-			(phydev->drv ? phydev->drv->name : "Generic PHY"));
+		phy_attached_info(phydev);
 
 		/* expected frame format */
 		if (port == FELIX_EXT_CPU_PORT_ID)

@@ -55,7 +55,6 @@
 		crypto = &crypto;
 		serial0 = &duart0;
 		serial1 = &duart1;
-		enetc_port0_sgmii_phy0 = &sgmii_phy0;
 	};
 
 	chosen {
@@ -244,12 +243,6 @@
 };
 
 &mdio0 {
-	sgmii_phy0: ethernet-phy@2 {
-		reg = <0x2>;
-		// Atheros PHY on RDB seems to cause traffic loss @ 1Gbps w EEE
-		eee-broken-1000t;
-	};
-
 	qsgmii_phy1: ethernet-phy@4 {
 		reg = <0x10>;
 	};
@@ -270,6 +263,16 @@
 &enetc_port0 {
 	phy-handle = <&sgmii_phy0>;
 	phy-connection-type = "sgmii";
+
+	mdio {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		sgmii_phy0: ethernet-phy@2 {
+			reg = <0x2>;
+			// Atheros PHY on RDB seems to cause traffic loss @ 1Gbps w EEE
+			eee-broken-1000t;
+		};
+	};
 };
 
 &enetc_port1 {

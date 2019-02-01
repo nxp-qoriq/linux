@@ -623,7 +623,10 @@ static int dpaa2_qdma_probe(struct fsl_mc_device *dpdmai_dev)
 	/* obtain a MC portal */
 	err = fsl_mc_portal_allocate(dpdmai_dev, 0, &priv->mc_io);
 	if (err) {
-		dev_err(dev, "MC portal allocation failed\n");
+		if (err == -ENXIO)
+			err = -EPROBE_DEFER;
+		else
+			dev_err(dev, "MC portal allocation failed\n");
 		goto err_mcportal;
 	}
 

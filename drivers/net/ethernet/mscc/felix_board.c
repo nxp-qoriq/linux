@@ -216,19 +216,16 @@ static rx_handler_result_t felix_frm_ext_handler(struct sk_buff **pskb)
 	struct net_device *ndev = (*pskb)->dev;
 	struct sk_buff *skb = *pskb;
 	struct ocelot_port *port;
-	void *start = skb->data;
+	char *start = skb->data;
 	struct ocelot *ocelot;
 	u64 *efh;
 	u32 p;
 
-	/* ETH_HLEN bytes were already pulled by receivig driver */
-	efh = skb_pull(skb, 2);
+	/* extraction header offset: assume eth header was consumed */
+	efh = (u64 *)(start + FELIX_XFH_LEN - ETH_HLEN);
 
 	p = felix_get_efh_srcp(efh);
 	/* TODO: use traffic class from header */
-
-	/* pull cpu extraction header */
-	skb_pull(skb, FELIX_XFH_LEN);
 
 	/* don't pass frames with unknown header format back to interface */
 	if (unlikely(p >= FELIX_MAX_NUM_PHY_PORTS)) {
@@ -242,6 +239,9 @@ static rx_handler_result_t felix_frm_ext_handler(struct sk_buff **pskb)
 		port = ocelot->ports[p];
 		ndev = port->dev;
 	}
+
+	/* pull the rest of extraction header */
+	skb_pull(skb, XFH_LONG_PREFIX_LEN - ETH_HLEN);
 
 	skb->protocol = eth_type_trans(skb, ndev);
 	/* TODO: recompute checksum */

@@ -216,6 +216,7 @@ static rx_handler_result_t felix_frm_ext_handler(struct sk_buff **pskb)
 	struct net_device *ndev = (*pskb)->dev;
 	struct sk_buff *skb = *pskb;
 	struct ocelot_port *port;
+	void *start = skb->data;
 	struct ocelot *ocelot;
 	u64 *efh;
 	u32 p;
@@ -247,7 +248,9 @@ static rx_handler_result_t felix_frm_ext_handler(struct sk_buff **pskb)
 	skb_reset_transport_header(skb);
 	skb_reset_network_header(skb);
 	skb->pkt_type = PACKET_HOST;
-	skb->ip_summed = CHECKSUM_NONE;
+
+	/* update inet csum if already computed */
+	skb_postpull_rcsum(skb, start, XFH_LONG_PREFIX_LEN);
 
 	/* frame for CPU */
 	if (p == FELIX_EXT_CPU_PORT_ID)

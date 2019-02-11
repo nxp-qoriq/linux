@@ -224,8 +224,8 @@ static rx_handler_result_t felix_frm_ext_handler(struct sk_buff **pskb)
 	/* extraction header offset: assume eth header was consumed */
 	efh = (u64 *)(start + FELIX_XFH_LEN - ETH_HLEN);
 
+	/* decode src port */
 	p = felix_get_efh_srcp(efh);
-	/* TODO: use traffic class from header */
 
 	/* don't pass frames with unknown header format back to interface */
 	if (unlikely(p >= FELIX_MAX_NUM_PHY_PORTS)) {
@@ -243,13 +243,14 @@ static rx_handler_result_t felix_frm_ext_handler(struct sk_buff **pskb)
 	/* pull the rest of extraction header */
 	skb_pull(skb, XFH_LONG_PREFIX_LEN - ETH_HLEN);
 
+	/* init with actual protocol type */
 	skb->protocol = eth_type_trans(skb, ndev);
-	/* TODO: recompute checksum */
+
 	skb_reset_transport_header(skb);
 	skb_reset_network_header(skb);
 	skb->pkt_type = PACKET_HOST;
 
-	/* update inet csum if already computed */
+	/* remove from inet csum the extraction and eth headers */
 	skb_postpull_rcsum(skb, start, XFH_LONG_PREFIX_LEN);
 
 	/* frame for CPU */

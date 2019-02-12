@@ -148,6 +148,7 @@ int felix_chip_init(struct ocelot *ocelot);
 
 /* Felix header bytes length */
 #define FELIX_XFH_LEN 16
+#define FELIX_MAX_MTU (VLAN_ETH_FRAME_LEN - XFH_LONG_PREFIX_LEN - VLAN_ETH_HLEN)
 
 static inline void felix_set_xfh_field(u64 *efh, u8 nth_bit, u8 w, u16 v)
 {
@@ -408,6 +409,9 @@ static int felix_ports_init(struct pci_dev *pdev)
 		return err;
 
 	for_each_available_child_of_node(np, portnp) {
+		struct ocelot_port *ocelot_port;
+		struct net_device *port_dev;
+
 		if (!portnp || !portnp->name ||
 		    of_node_cmp(portnp->name, "port") ||
 		    of_property_read_u32(portnp, "reg", &port))
@@ -471,26 +475,33 @@ static int felix_ports_init(struct pci_dev *pdev)
 			dev_err(ocelot->dev, "failed to probe ports\n");
 			goto release_ports;
 		}
+		ocelot_port = ocelot->ports[port];
+		port_dev = ocelot_port->dev;
+
 		/* Only 1G full duplex supported for now */
-		ocelot_port_writel(ocelot->ports[port],
+		ocelot_port_writel(ocelot_port,
 				   DEV_MAC_MODE_CFG_FDX_ENA |
 				   DEV_MAC_MODE_CFG_GIGA_MODE_ENA,
 				   DEV_MAC_MODE_CFG);
 		/* Take MAC, Port, Phy (intern) and PCS (SGMII/Serdes)
 		 * clock out of reset
 		 */
-		ocelot_port_writel(ocelot->ports[port],
+		ocelot_port_writel(ocelot_port,
 				   DEV_CLOCK_CFG_LINK_SPEED(OCELOT_SPEED_1000),
 				   DEV_CLOCK_CFG);
 
 #ifdef CONFIG_MSCC_FELIX_SWITCH_TSN
-		tsn_port_register(ocelot->ports[port]->dev, (struct tsn_ops *)&switch_tsn_ops,
+		tsn_port_register(port_dev, (struct tsn_ops *)&switch_tsn_ops,
 				(u16)pdev->bus->number + GROUP_OFFSET_SWITCH);
 #endif
 
 		/* register xmit handler for external ports */
-		if (ndev && port != FELIX_EXT_CPU_PORT_ID)
-			felix_register_xmit_handler(ocelot->ports[port], ndev);
+		if (ndev && port != FELIX_EXT_CPU_PORT_ID) {
+			felix_register_xmit_handler(ocelot_port, ndev);
+			/* set port max MTU size */
+			port_dev->max_mtu = FELIX_MAX_MTU;
+			port_dev->mtu = port_dev->max_mtu;
+		}
 	}
 	/* set port for external CPU frame extraction/injection */
 	if (ndev)

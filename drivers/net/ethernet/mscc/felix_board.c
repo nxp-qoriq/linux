@@ -451,7 +451,6 @@ static int felix_ports_init(struct pci_dev *pdev)
 
 	for_each_available_child_of_node(np, portnp) {
 		struct ocelot_port *ocelot_port;
-		struct net_device *port_dev;
 
 		if (!portnp || !portnp->name ||
 		    of_node_cmp(portnp->name, "port") ||
@@ -489,7 +488,6 @@ static int felix_ports_init(struct pci_dev *pdev)
 				continue;
 			}
 			phydev = of_phy_find_device(portnp);
-			/* TODO: check if FL phy require phy_start */
 		} else {
 			phydev = of_phy_find_device(phy_node);
 		}
@@ -501,8 +499,6 @@ static int felix_ports_init(struct pci_dev *pdev)
 
 		phy_attached_info(phydev);
 
-
-		/* TODO: probe only if its not CPU port */
 		err = ocelot_probe_port(ocelot, port, port_regs, phydev);
 		if (err) {
 			dev_err(ocelot->dev, "failed to probe ports\n");
@@ -511,15 +507,15 @@ static int felix_ports_init(struct pci_dev *pdev)
 
 		/* apply felix config */
 		ocelot_port = ocelot->ports[port];
-		port_dev = ocelot_port->dev;
 
 		felix_setup_port_mac(ocelot_port);
 		if (ndev)
 			felix_setup_port_inj(ocelot_port, ndev);
 
 #ifdef CONFIG_MSCC_FELIX_SWITCH_TSN
-		tsn_port_register(port_dev, (struct tsn_ops *)&switch_tsn_ops,
-				(u16)pdev->bus->number + GROUP_OFFSET_SWITCH);
+		tsn_port_register(ocelot_port->dev,
+				  (struct tsn_ops *)&switch_tsn_ops,
+				  (u16)pdev->bus->number + GROUP_OFFSET_SWITCH);
 #endif
 	}
 	/* set port for external CPU frame extraction/injection */

@@ -302,19 +302,19 @@ static netdev_tx_t felix_cpu_inj_handler(struct sk_buff *skb,
 	return NETDEV_TX_OK;
 }
 
-static void felix_register_xmit_handler(struct ocelot_port *port,
-					struct net_device *ndev)
+static void felix_register_rx_handler(struct ocelot *ocelot,
+				      struct net_device *ndev)
 {
-	struct ocelot *ocelot = port->ocelot;
+	int err = -EBUSY;
 
-	/* set packet injection handler */
-	port->cpu_inj_handler = &felix_cpu_inj_handler;
-	port->cpu_inj_handler_data = ndev;
-	/* register rx handler */
+	/* must obtain rtnl mutex first */
 	rtnl_lock();
 	if (!netdev_is_rx_handler_busy(ndev))
-		netdev_rx_handler_register(ndev, felix_frm_ext_handler, ocelot);
+		err = netdev_rx_handler_register(ndev,
+						 felix_frm_ext_handler, ocelot);
 	rtnl_unlock();
+	if (err)
+		dev_err(ocelot->dev, "eth busy: rx_handler not registered\n");
 }
 
 static struct regmap *felix_io_init(struct ocelot *ocelot, u8 target)
@@ -386,6 +386,36 @@ static void felix_setup_port_mac(struct ocelot_port *port)
 	ocelot_port_writel(port, DEV_CLOCK_CFG_LINK_SPEED(OCELOT_SPEED_1000),
 			   DEV_CLOCK_CFG);
 }
+
+static void felix_setup_port_inj(struct ocelot_port *port,
+				 struct net_device *ndev)
+{
+	struct ocelot *ocelot = port->ocelot;
+	struct net_device *pdev = port->dev;
+
+	if (port->chip_port == FELIX_EXT_CPU_PORT_ID) {
+		/* expected frame formats on NPI:
+		 * short prefix frame tag on tx and long prefix on rx
+		 */
+		ocelot_write_rix(ocelot, SYS_PORT_MODE_INCL_XTR_HDR(3) |
+				 SYS_PORT_MODE_INCL_INJ_HDR(1), SYS_PORT_MODE,
+				 port->chip_port);
+
+		/* register rx handler for decoding tagged frames from NPI */
+		felix_register_rx_handler(port->ocelot, ndev);
+	} else {
+		/* set frame injection handler on non-NPI ports */
+		port->cpu_inj_handler = &felix_cpu_inj_handler;
+		port->cpu_inj_handler_data = ndev;
+		/* no CPU header, only normal frames */
+		ocelot_write_rix(ocelot, 0, SYS_PORT_MODE, port->chip_port);
+	}
+
+	/* set port max MTU size */
+	pdev->max_mtu = FELIX_MAX_MTU;
+	pdev->mtu = pdev->max_mtu;
+}
+
 static int felix_ports_init(struct pci_dev *pdev)
 {
 	struct ocelot *ocelot = pci_get_drvdata(pdev);
@@ -396,7 +426,7 @@ static int felix_ports_init(struct pci_dev *pdev)
 	struct net_device *ndev = NULL;
 	struct resource *felix_res;
 	void __iomem *port_regs;
-	u32 port, frmt;
+	u32 port;
 	int err;
 
 	if (pair_eth)
@@ -471,14 +501,6 @@ static int felix_ports_init(struct pci_dev *pdev)
 
 		phy_attached_info(phydev);
 
-		/* expected frame format */
-		if (ndev && port == FELIX_EXT_CPU_PORT_ID)
-			/* short prefix frame tag on tx and long on rx */
-			frmt = SYS_PORT_MODE_INCL_XTR_HDR(3) |
-			      SYS_PORT_MODE_INCL_INJ_HDR(1);
-		else
-			frmt = 0; /* no CPU header, only normal frames */
-		ocelot_write_rix(ocelot, frmt, SYS_PORT_MODE, port);
 
 		/* TODO: probe only if its not CPU port */
 		err = ocelot_probe_port(ocelot, port, port_regs, phydev);
@@ -492,19 +514,13 @@ static int felix_ports_init(struct pci_dev *pdev)
 		port_dev = ocelot_port->dev;
 
 		felix_setup_port_mac(ocelot_port);
+		if (ndev)
+			felix_setup_port_inj(ocelot_port, ndev);
 
 #ifdef CONFIG_MSCC_FELIX_SWITCH_TSN
 		tsn_port_register(port_dev, (struct tsn_ops *)&switch_tsn_ops,
 				(u16)pdev->bus->number + GROUP_OFFSET_SWITCH);
 #endif
-
-		/* register xmit handler for external ports */
-		if (ndev && port != FELIX_EXT_CPU_PORT_ID) {
-			felix_register_xmit_handler(ocelot_port, ndev);
-			/* set port max MTU size */
-			port_dev->max_mtu = FELIX_MAX_MTU;
-			port_dev->mtu = port_dev->max_mtu;
-		}
 	}
 	/* set port for external CPU frame extraction/injection */
 	if (ndev)

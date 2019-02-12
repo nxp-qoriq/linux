@@ -381,14 +381,23 @@ static int felix_ports_init(struct pci_dev *pdev)
 	struct device_node *phy_node = NULL;
 	struct device_node *portnp = NULL;
 	struct phy_device *phydev = NULL;
+	struct net_device *ndev = NULL;
 	struct resource *felix_res;
 	void __iomem *port_regs;
-	struct net_device *ndev;
 	u32 port, frmt;
 	int err;
 
-	ocelot->num_cpu_ports = 1;
-	ocelot->cpu_port_id = FELIX_EXT_CPU_PORT_ID;
+	if (pair_eth)
+		ndev = dev_get_by_name(&init_net, pair_eth);
+
+	if (ndev) {
+		ocelot->cpu_port_id = FELIX_EXT_CPU_PORT_ID;
+		ocelot->num_cpu_ports = 1;
+	} else {
+		ocelot->cpu_port_id = FELIX_MAX_NUM_PHY_PORTS;
+		ocelot->num_cpu_ports = 0;
+	}
+
 	ocelot->num_phys_ports = FELIX_MAX_NUM_PHY_PORTS;
 	ocelot->ports = devm_kcalloc(ocelot->dev, ocelot->num_phys_ports,
 				     sizeof(struct ocelot_port *), GFP_KERNEL);
@@ -397,10 +406,6 @@ static int felix_ports_init(struct pci_dev *pdev)
 	err = ocelot_init(ocelot);
 	if (err)
 		return err;
-
-	ndev = NULL;
-	if (pair_eth)
-		ndev = dev_get_by_name(&init_net, pair_eth);
 
 	for_each_available_child_of_node(np, portnp) {
 		if (!portnp || !portnp->name ||
@@ -452,7 +457,7 @@ static int felix_ports_init(struct pci_dev *pdev)
 		phy_attached_info(phydev);
 
 		/* expected frame format */
-		if (port == FELIX_EXT_CPU_PORT_ID)
+		if (ndev && port == FELIX_EXT_CPU_PORT_ID)
 			/* short prefix frame tag on tx and long on rx */
 			frmt = SYS_PORT_MODE_INCL_XTR_HDR(3) |
 			      SYS_PORT_MODE_INCL_INJ_HDR(1);
@@ -488,9 +493,10 @@ static int felix_ports_init(struct pci_dev *pdev)
 			felix_register_xmit_handler(ocelot->ports[port], ndev);
 	}
 	/* set port for external CPU frame extraction/injection */
-	ocelot_write(ocelot, QSYS_EXT_CPU_CFG_EXT_CPUQ_MSK_M |
-		     QSYS_EXT_CPU_CFG_EXT_CPU_PORT(FELIX_EXT_CPU_PORT_ID),
-		     QSYS_EXT_CPU_CFG);
+	if (ndev)
+		ocelot_write(ocelot, QSYS_EXT_CPU_CFG_EXT_CPUQ_MSK_M |
+			     QSYS_EXT_CPU_CFG_EXT_CPU_PORT(FELIX_EXT_CPU_PORT_ID),
+			     QSYS_EXT_CPU_CFG);
 
 	return 0;
 

@@ -540,11 +540,46 @@ release_ports:
 	return err;
 }
 
+static int felix_init_switch_core(struct ocelot *ocelot)
+{
+	int timeout = FELIX_INIT_TIMEOUT;
+	int val = 1;
+
+	/* soft-reset the switch core */
+	regmap_field_write(ocelot->regfields[GCB_SOFT_RST_SWC_RST], 1);
+	do {
+		usleep_range(10, 100);;
+		regmap_field_read(ocelot->regfields[GCB_SOFT_RST_SWC_RST],
+				  &val);
+	} while (val && --timeout);
+
+	if (timeout == 0) {
+		dev_err(ocelot->dev, "timeout: switch core init\n");
+		return -ETIMEDOUT;
+	}
+	/* initialize switch mem ~40us */
+	ocelot_write(ocelot, SYS_RAM_INIT_RAM_INIT, SYS_RAM_INIT);
+	timeout = FELIX_INIT_TIMEOUT;
+	do {
+		usleep_range(40, 80);
+		val = ocelot_read(ocelot, SYS_RAM_INIT);
+	} while (val && --timeout);
+
+	if (timeout == 0) {
+		dev_err(ocelot->dev, "timeout: switch sram init\n");
+		return -ETIMEDOUT;
+	}
+
+	/* enable switch core */
+	regmap_field_write(ocelot->regfields[SYS_RESET_CFG_CORE_ENA], 1);
+
+	return 0;
+}
+
 static int felix_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 {
 	resource_size_t offset;
 	struct ocelot *ocelot;
-	int timeout, val;
 	size_t len;
 	int i, err;
 
@@ -611,37 +646,10 @@ static int felix_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (err)
 		goto err_chip_init;
 
-	/* start reset procedure */
-
-	/* soft-reset the switch core */
-	regmap_field_write(ocelot->regfields[GCB_SOFT_RST_SWC_RST], 1);
-	val = 1;
-	timeout = FELIX_INIT_TIMEOUT;
-	do {
-		usleep_range(10, 100);;
-		regmap_field_read(ocelot->regfields[GCB_SOFT_RST_SWC_RST],
-				  &val);
-	} while (val && --timeout);
-
-	if (timeout == 0) {
-		dev_err(&pdev->dev, "timeout: switch core init\n");
+	/* initialize switch core */
+	err = felix_init_switch_core(ocelot);
+	if (err)
 		goto err_sw_core_init;
-	}
-	/* initialize switch mem ~40us */
-	ocelot_write(ocelot, SYS_RAM_INIT_RAM_INIT, SYS_RAM_INIT);
-	timeout = FELIX_INIT_TIMEOUT;
-	do {
-		usleep_range(40, 80);
-		val = ocelot_read(ocelot, SYS_RAM_INIT);
-	} while (val && --timeout);
-
-	if (timeout == 0) {
-		dev_err(&pdev->dev, "timeout: switch sram init\n");
-		goto err_sw_core_init;
-	}
-
-	/* enable switch core */
-	regmap_field_write(ocelot->regfields[SYS_RESET_CFG_CORE_ENA], 1);
 
 	err = felix_ptp_init(ocelot);
 	if (err)

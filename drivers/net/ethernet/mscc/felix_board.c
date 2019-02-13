@@ -28,6 +28,8 @@ static const char felix_driver_version[] = DRV_VERSION;
 /* Switch register block BAR */
 #define FELIX_SWITCH_BAR	4
 
+#define FELIX_INIT_TIMEOUT	50000
+
 /* pair PCI device */
 char *pair_eth = "\0";
 module_param(pair_eth, charp, 0000);
@@ -542,8 +544,8 @@ static int felix_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 {
 	resource_size_t offset;
 	struct ocelot *ocelot;
+	int timeout, val;
 	size_t len;
-	int timeout;
 	int i, err;
 
 	err = pci_enable_device(pdev);
@@ -609,18 +611,40 @@ static int felix_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (err)
 		goto err_chip_init;
 
+	/* start reset procedure */
+
+	/* soft-reset the switch core */
+	regmap_field_write(ocelot->regfields[GCB_SOFT_RST_SWC_RST], 1);
+	val = 1;
+	timeout = FELIX_INIT_TIMEOUT;
+	do {
+		usleep_range(10, 100);;
+		regmap_field_read(ocelot->regfields[GCB_SOFT_RST_SWC_RST],
+				  &val);
+	} while (val && --timeout);
+
+	if (timeout == 0) {
+		dev_err(&pdev->dev, "timeout: switch core init\n");
+		goto err_sw_core_init;
+	}
+	/* initialize switch mem ~40us */
 	err = felix_ptp_init(ocelot);
 	if (err)
 		goto err_ptp_init;
 
 	ocelot_write(ocelot, SYS_RAM_INIT_RAM_INIT, SYS_RAM_INIT);
+	timeout = FELIX_INIT_TIMEOUT;
+	do {
+		usleep_range(40, 80);
+		val = ocelot_read(ocelot, SYS_RAM_INIT);
+	} while (val && --timeout);
 
-	timeout = 50000;
-	while (ocelot_read(ocelot, SYS_RAM_INIT) && --timeout)
-		udelay(1); /* busy wait for memory init */
-	if (timeout == 0)
-		dev_err(&pdev->dev, "Timeout waiting for memory to initialize\n");
+	if (timeout == 0) {
+		dev_err(&pdev->dev, "timeout: switch sram init\n");
+		goto err_sw_core_init;
+	}
 
+	/* enable switch core */
 	regmap_field_write(ocelot->regfields[SYS_RESET_CFG_CORE_ENA], 1);
 
 	err = felix_ports_init(pdev);
@@ -637,6 +661,7 @@ err_ports_init:
 	felix_ptp_remove(ocelot);
 err_ptp_init:
 err_chip_init:
+err_sw_core_init:
 	pci_iounmap(pdev, regs);
 err_iomap:
 err_resource_len:

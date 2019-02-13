@@ -109,8 +109,8 @@ static struct resource felix_switch_res[] = {
 	{
 		.start	= 0x0070000,
 		.end	= 0x00701ff,
-		.name 	= "devcpu_gcb",
-		.flags 	= IORESOURCE_MEM,
+		.name	= "devcpu_gcb",
+		.flags	= IORESOURCE_MEM,
 	},
 	{
 		.start = 0x0100000,
@@ -548,7 +548,7 @@ static int felix_init_switch_core(struct ocelot *ocelot)
 	/* soft-reset the switch core */
 	regmap_field_write(ocelot->regfields[GCB_SOFT_RST_SWC_RST], 1);
 	do {
-		usleep_range(10, 100);;
+		usleep_range(10, 100);
 		regmap_field_read(ocelot->regfields[GCB_SOFT_RST_SWC_RST],
 				  &val);
 	} while (val && --timeout);

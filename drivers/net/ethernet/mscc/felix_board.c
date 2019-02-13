@@ -21,7 +21,7 @@ static const char felix_driver_version[] = DRV_VERSION;
 
 #define FELIX_MAX_NUM_PHY_PORTS	5
 #define FELIX_EXT_CPU_PORT_ID	4
-#define PORT_RES_START		(SYS + 1)
+#define PORT_RES_START		(GCB + 1)
 
 #define PCI_DEVICE_ID_FELIX_PF5	0xEEF0
 
@@ -103,6 +103,12 @@ static struct resource felix_switch_res[] = {
 		.end = 0x001ffff,
 		.name = "sys",
 		.flags = IORESOURCE_MEM,
+	},
+	{
+		.start	= 0x0070000,
+		.end	= 0x00701ff,
+		.name 	= "devcpu_gcb",
+		.flags 	= IORESOURCE_MEM,
 	},
 	{
 		.start = 0x0100000,
@@ -589,7 +595,7 @@ static int felix_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 			felix_switch_res[i].end += offset;
 		}
 
-	for (i = ANA; i <= SYS; i++) {
+	for (i = ANA; i <= GCB; i++) {
 		struct regmap *target;
 
 		target = felix_io_init(ocelot, i);

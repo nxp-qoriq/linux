@@ -628,10 +628,6 @@ static int felix_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		goto err_sw_core_init;
 	}
 	/* initialize switch mem ~40us */
-	err = felix_ptp_init(ocelot);
-	if (err)
-		goto err_ptp_init;
-
 	ocelot_write(ocelot, SYS_RAM_INIT_RAM_INIT, SYS_RAM_INIT);
 	timeout = FELIX_INIT_TIMEOUT;
 	do {
@@ -646,6 +642,10 @@ static int felix_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	/* enable switch core */
 	regmap_field_write(ocelot->regfields[SYS_RESET_CFG_CORE_ENA], 1);
+
+	err = felix_ptp_init(ocelot);
+	if (err)
+		goto err_ptp_init;
 
 	err = felix_ports_init(pdev);
 	if (err)

@@ -100,6 +100,16 @@ static int mod_init_cpu;
  */
 static struct kmem_cache *qi_cache;
 
+static void *caam_iova_to_virt(struct iommu_domain *domain,
+			       dma_addr_t iova_addr)
+{
+	phys_addr_t phys_addr;
+
+	phys_addr = domain ? iommu_iova_to_phys(domain, iova_addr) : iova_addr;
+
+	return phys_to_virt(phys_addr);
+}
+
 int caam_qi_enqueue(struct device *qidev, struct caam_drv_req *req)
 {
 	struct qm_fd fd;
@@ -138,6 +148,7 @@ static void caam_fq_ern_cb(struct qman_portal *qm, struct qman_fq *fq,
 	const struct qm_fd *fd;
 	struct caam_drv_req *drv_req;
 	struct device *qidev = &(raw_cpu_ptr(&pcpu_qipriv)->net_dev.dev);
+	struct caam_drv_private *priv = dev_get_drvdata(qidev);
 
 	fd = &msg->ern.fd;
 
@@ -146,7 +157,7 @@ static void caam_fq_ern_cb(struct qman_portal *qm, struct qman_fq *fq,
 		return;
 	}
 
-	drv_req = (struct caam_drv_req *)phys_to_virt(qm_fd_addr_get64(fd));
+	drv_req = caam_iova_to_virt(priv->domain, qm_fd_addr_get64(fd));
 	if (!drv_req) {
 		dev_err(qidev,
 			"Can't find original request for CAAM response\n");
@@ -569,6 +580,7 @@ static enum qman_cb_dqrr_result caam_rsp_fq_dqrr_cb(struct qman_portal *p,
 	struct caam_drv_req *drv_req;
 	const struct qm_fd *fd;
 	struct device *qidev = &(raw_cpu_ptr(&pcpu_qipriv)->net_dev.dev);
+	struct caam_drv_private *priv = dev_get_drvdata(qidev);
 
 	if (caam_qi_napi_schedule(p, caam_napi))
 		return qman_cb_dqrr_stop;
@@ -589,7 +601,7 @@ static enum qman_cb_dqrr_result caam_rsp_fq_dqrr_cb(struct qman_portal *p,
 		return qman_cb_dqrr_consume;
 	}
 
-	drv_req = (struct caam_drv_req *)phys_to_virt(fd->addr);
+	drv_req = caam_iova_to_virt(priv->domain, qm_fd_addr_get64(fd));
 	if (unlikely(!drv_req)) {
 		dev_err(qidev,
 			"Can't find original request for caam response\n");

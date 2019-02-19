@@ -39,11 +39,11 @@
 #define ENETC_MDIO_DEV_ID	0xee01
 #define ENETC_DRV_NAME_STR "ENETC MDIO driver"
 
-static int enetc_mdio_probe(struct pci_dev *pdev,
-			    const struct pci_device_id *ent)
+static int enetc_pci_mdio_probe(struct pci_dev *pdev,
+				const struct pci_device_id *ent)
 {
 	const struct xgmac_mdio_cfg cfg = {
-		.bus_name = "Freescale ENETC MDIO Bus",
+		.bus_name = "Freescale PCI ENETC-RCIE MDIO Bus",
 		.regs_offset = 0x1C00,
 	};
 	int err;
@@ -76,26 +76,26 @@ err_pci_mem_reg:
 	return err;
 }
 
-void enetc_mdio_remove(struct pci_dev *pdev)
+static void enetc_pci_mdio_remove(struct pci_dev *pdev)
 {
 	xgmac_mdio_remove(dev_get_drvdata(&pdev->dev));
 	pci_release_mem_regions(pdev);
 	pci_disable_device(pdev);
 }
 
-static const struct pci_device_id enetc_mdio_id_table[] = {
+static const struct pci_device_id enetc_pci_mdio_id_table[] = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_FREESCALE, ENETC_MDIO_DEV_ID) },
 	{ 0, } /* End of table. */
 };
 MODULE_DEVICE_TABLE(pci, enetc_mdio_id_table);
 
-static struct pci_driver enetc_mdio_driver = {
+static struct pci_driver enetc_pci_mdio_driver = {
 	.name = KBUILD_MODNAME,
-	.id_table = enetc_mdio_id_table,
-	.probe = enetc_mdio_probe,
-	.remove = enetc_mdio_remove,
+	.id_table = enetc_pci_mdio_id_table,
+	.probe = enetc_pci_mdio_probe,
+	.remove = enetc_pci_mdio_remove,
 };
-module_pci_driver(enetc_mdio_driver);
+module_pci_driver(enetc_pci_mdio_driver);
 
 MODULE_DESCRIPTION(ENETC_DRV_NAME_STR);
 MODULE_LICENSE("Dual BSD/GPL");

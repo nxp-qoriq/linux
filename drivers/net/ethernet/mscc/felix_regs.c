@@ -291,6 +291,10 @@ static const u32 felix_sys_regmap[] = {
 //	REG(SYS_CM_OP,                     0x000f34),
 };
 
+static const u32 felix_gcb_regmap[] = {
+	REG(GCB_SOFT_RST,		   0x000004),
+};
+
 static const u32 *felix_regmap[] = {
 	[ANA] = felix_ana_regmap,
 	[QS] = felix_qs_regmap,
@@ -298,6 +302,7 @@ static const u32 *felix_regmap[] = {
 	[REW] = felix_rew_regmap,
 	[SYS] = felix_sys_regmap,
 	[PTP] = felix_ptp_regmap,
+	[GCB] = felix_gcb_regmap,
 };
 
 static const struct reg_field felix_regfields[] = {
@@ -372,6 +377,7 @@ static const struct reg_field felix_regfields[] = {
 		REG_FIELD(QSYS_TAS_PARAM_CFG_CTRL, 16, 16),
 	[QSYS_TAG_CONFIG_ENABLE_0] = REG_FIELD(QSYS_TAG_CONFIG, 0, 0),
 	[SYS_STAT_CFG_STAT_VIEW_0] = REG_FIELD(SYS_STAT_CFG, 0, 9),
+	[GCB_SOFT_RST_SWC_RST] = REG_FIELD(GCB_SOFT_RST, 0, 0),
 };
 
 static const struct ocelot_stat_layout felix_stats_layout[] = {

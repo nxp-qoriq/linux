@@ -74,6 +74,7 @@ enum ocelot_target {
 	QSYS,
 	REW,
 	SYS,
+	GCB,
 	HSIO,
 	TARGET_MAX,
 };
@@ -431,6 +432,7 @@ enum ocelot_reg {
 	HSIO_TEMP_SENSOR_CTRL,
 	HSIO_TEMP_SENSOR_CFG,
 	HSIO_TEMP_SENSOR_STAT,
+	GCB_SOFT_RST = GCB << TARGET_OFFSET,
 };
 
 enum ocelot_regfield {
@@ -494,6 +496,7 @@ enum ocelot_regfield {
 	QSYS_TAS_PARAM_CFG_CTRL_CONFIG_CHANGE_0,
 	QSYS_TAG_CONFIG_ENABLE_0,
 	SYS_STAT_CFG_STAT_VIEW_0,
+	GCB_SOFT_RST_SWC_RST,
 	REGFIELD_MAX
 };
 

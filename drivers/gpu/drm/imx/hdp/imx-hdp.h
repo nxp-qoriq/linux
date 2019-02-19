@@ -205,6 +205,7 @@ struct imx_hdp {
 	u8 is_edp;
 	u8 is_digpll_dp_pclock;
 	u8 no_edid;
+	int num_res;
 	u32 lane_mapping;
 	u32 edp_link_rate;
 	u32 edp_num_lanes;

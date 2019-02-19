@@ -55,6 +55,8 @@ static struct drm_display_mode edid_cea_modes[] = {
 	  .vrefresh = 30, .picture_aspect_ratio = HDMI_PICTURE_ASPECT_16_9, },
 };
 
+int edid_cea_modes_enabled[ARRAY_SIZE(edid_cea_modes)] = {0};
+
 static inline struct imx_hdp *enc_to_imx_hdp(struct drm_encoder *e)
 {
 	return container_of(e, struct imx_hdp, encoder);
@@ -662,6 +664,8 @@ imx_hdp_connector_detect(struct drm_connector *connector, bool force)
 
 static int imx_hdp_default_video_modes(struct drm_connector *connector)
 {
+	struct imx_hdp *hdp = container_of(connector, struct imx_hdp,
+					   connector);
 	struct drm_display_mode *mode;
 	int i;
 
@@ -670,6 +674,8 @@ static int imx_hdp_default_video_modes(struct drm_connector *connector)
 		if (!mode)
 			return -EINVAL;
 		drm_mode_copy(mode, &edid_cea_modes[i]);
+		if (hdp->num_res != 0 && edid_cea_modes_enabled[i] == 0)
+			continue;
 		mode->type |= DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
 		drm_mode_probed_add(connector, mode);
 	}
@@ -1072,6 +1078,66 @@ static int imx_hdp_hpd_thread(void *data)
 	return 0;
 }
 
+static int parse_enable_res(const char *resolution)
+{
+	const char *name;
+	unsigned int namelen;
+	int xres = 0, yres = 0, refresh = 0;
+	int i;
+	bool is_digi = false;
+
+	name = resolution;
+	namelen = strlen(name);
+	for (i = namelen-1; i >= 0; i--) {
+		switch (name[i]) {
+		case '@':
+			if (is_digi) {
+				refresh = simple_strtol(&name[i+1], NULL, 10);
+				is_digi = false;
+			}
+			break;
+		case 'x':
+			if (is_digi) {
+				yres = simple_strtol(&name[i+1], NULL, 10);
+				is_digi = false;
+			}
+			break;
+		case '0' ... '9':
+			is_digi = true;
+			break;
+		default:
+			DRM_WARN("Enable resolution %s failed\n", resolution);
+			break;
+		}
+	}
+	if (i < 0 && is_digi) {
+		char *ch;
+
+		xres = simple_strtol(name, &ch, 10);
+		if (*ch != 'x')
+			goto done;
+	} else
+		goto done;
+
+
+	for (i = 0; i < ARRAY_SIZE(edid_cea_modes); i++) {
+		if (edid_cea_modes[i].hdisplay == xres &&
+				edid_cea_modes[i].vdisplay == yres &&
+				edid_cea_modes[i].vrefresh == refresh) {
+			edid_cea_modes_enabled[i] = 1;
+			DRM_INFO("Resolution %dx%d@%d is enabled\n",
+							xres, yres, refresh);
+		}
+	}
+
+	return 0;
+
+done:
+	DRM_WARN("Enable resolution %s failed\n", resolution);
+
+	return 1;
+}
+
 static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 			    void *data)
 {
@@ -1088,6 +1154,8 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 	struct task_struct *hpd_thread;
 	u8 hpd;
 	int ret;
+	const char *resolution;
+	int i;
 
 	if (!pdev->dev.of_node)
 		return -ENODEV;
@@ -1138,6 +1206,32 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 	hdp->is_edp = of_property_read_bool(pdev->dev.of_node, "fsl,edp");
 
 	hdp->no_edid = of_property_read_bool(pdev->dev.of_node, "fsl,no_edid");
+
+	if (hdp->no_edid && of_property_read_bool(pdev->dev.of_node,
+								"resolution")) {
+		hdp->num_res = of_property_count_strings(pdev->dev.of_node,
+								"resolution");
+		if (hdp->num_res < 0) {
+			hdp->num_res = 0;
+		} else
+			for (i = 0; i < hdp->num_res; i++) {
+				ret = of_property_read_string_index(
+						pdev->dev.of_node,
+						"resolution", i, &resolution);
+				if (ret) {
+					dev_warn(dev, "Resolution index %d property read error:%d\n",
+							i, ret);
+					hdp->num_res = 0;
+					break;
+				}
+				ret = parse_enable_res(resolution);
+				if (ret) {
+					hdp->num_res = 0;
+					break;
+				}
+			}
+
+	}
 
 	ret = of_property_read_u32(pdev->dev.of_node,
 				       "lane_mapping",

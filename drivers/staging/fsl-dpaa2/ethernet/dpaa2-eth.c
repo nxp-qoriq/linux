@@ -1251,6 +1251,8 @@ static void disable_ch_napi(struct dpaa2_eth_priv *priv)
 	}
 }
 
+static void update_tx_fqids(struct dpaa2_eth_priv *priv);
+
 static int link_state_update(struct dpaa2_eth_priv *priv)
 {
 	struct dpni_link_state state = {0};
@@ -1269,6 +1271,7 @@ static int link_state_update(struct dpaa2_eth_priv *priv)
 
 	priv->link_state = state;
 	if (state.up) {
+		update_tx_fqids(priv);
 		netif_carrier_on(priv->net_dev);
 		netif_tx_start_all_queues(priv->net_dev);
 	} else {
@@ -1726,6 +1729,43 @@ static void set_enqueue_mode(struct dpaa2_eth_priv *priv)
 		priv->enqueue = dpaa2_eth_enqueue_qd;
 	else
 		priv->enqueue = dpaa2_eth_enqueue_fq;
+}
+
+static void update_tx_fqids(struct dpaa2_eth_priv *priv)
+{
+	struct dpaa2_eth_fq *fq;
+	struct dpni_queue queue;
+	struct dpni_queue_id qid = {0};
+	int i, err;
+
+	/* We only use Tx FQIDs for FQID-based enqueue, so check
+	 * if DPNI version supports it before updating FQIDs
+	 */
+	if (dpaa2_eth_cmp_dpni_ver(priv, DPNI_ENQUEUE_FQID_VER_MAJOR,
+				   DPNI_ENQUEUE_FQID_VER_MINOR) < 0)
+		return;
+
+	for (i = 0; i < priv->num_fqs; i++) {
+		fq = &priv->fq[i];
+		if (fq->type != DPAA2_TX_CONF_FQ)
+			continue;
+		err = dpni_get_queue(priv->mc_io, 0, priv->mc_token,
+				     DPNI_QUEUE_TX, 0, fq->flowid,
+				     &queue, &qid);
+		if (err)
+			goto out_err;
+
+		fq->tx_fqid = qid.fqid;
+		if (fq->tx_fqid == 0)
+			goto out_err;
+	}
+
+	return;
+
+out_err:
+	netdev_info(priv->net_dev,
+		    "Error reading Tx FQID, fallback to QDID-based enqueue");
+	priv->enqueue = dpaa2_eth_enqueue_qd;
 }
 
 static int dpaa2_eth_set_xdp(struct net_device *net_dev, struct bpf_prog *prog)

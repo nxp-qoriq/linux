@@ -67,10 +67,16 @@
 };
 
 &fsldpaa {
-	ethernet@0 {
+	ethernet@1 {
 		status = "disabled";
 	};
-	ethernet@1 {
+	ethernet@2 {
+		status = "disabled";
+	};
+	ethernet@3 {
+		status = "disabled";
+	};
+	ethernet@6 {
 		status = "disabled";
 	};
 	ethernet@9 {

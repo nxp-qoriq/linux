@@ -14,6 +14,7 @@
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/ptp_clock_kernel.h>
+#include <linux/net_tstamp.h>
 #include <net/tsn.h>
 #include "ocelot_ana.h"
 #include "ocelot_dev.h"
@@ -563,6 +564,7 @@ struct ocelot {
 	struct ptp_clock_info ptp_caps;
 	struct ptp_clock *clock;
 	int phc_index;
+	struct hwtstamp_config hwtstamp_config;
 };
 
 struct ocelot_port {
@@ -591,6 +593,8 @@ struct ocelot_port {
 	/* cpu frame injection handler */
 	netdev_tx_t (*cpu_inj_handler)(struct sk_buff *skb, struct ocelot_port *port);
 	void *cpu_inj_handler_data;
+	bool tx_tstamp;
+	bool rx_tstamp;
 };
 
 u32 __ocelot_read_ix(struct ocelot *ocelot, u32 reg, u32 offset);

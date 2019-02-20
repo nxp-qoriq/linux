@@ -6,7 +6,7 @@
 
 #include "ocelot.h"
 
-static int felix_ptp_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
+int felix_ptp_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
 {
 	struct ocelot *ocelot = container_of(ptp, struct ocelot, ptp_caps);
 	u32 val, tod_ns, tod_sec_lsb, tod_sec_msb;
@@ -34,6 +34,7 @@ static int felix_ptp_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(felix_ptp_gettime);
 
 static int felix_ptp_settime(struct ptp_clock_info *ptp,
 			     const struct timespec64 *ts)

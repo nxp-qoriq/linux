@@ -1,0 +1,83 @@
+Generic register bitfield-based multiplexer controller bindings
+
+Define register bitfields to be used to control multiplexers. The parent
+device tree node must be a device node to provide register r/w access.
+
+Required properties:
+- compatible : "reg-mux"
+- #mux-control-cells : <1>
+- mux-reg-masks : an array of register offset and pre-shifted bitfield mask
+                  pairs, each describing a single mux control.
+* Standard mux-controller bindings as decribed in mux-controller.txt
+
+Optional properties:
+- idle-states : if present, the state the muxes will have when idle. The
+		special state MUX_IDLE_AS_IS is the default.
+
+The multiplexer state of each multiplexer is defined as the value of the
+bitfield described by the corresponding register offset and bitfield mask pair
+in the mux-reg-masks array.
+
+Example:
+
+&i2c0 {
+	fpga@66 { // fpga connected to i2c
+		compatible = "fsl,lx2160aqds-fpga", "fsl,fpga-qixis-i2c",
+			     "simple-mfd";
+		reg = <0x66>;
+
+		mux: mux-controller { // Mux Producer
+			compatible = "reg-mux";
+			#mux-control-cells = <1>;
+			mux-reg-masks = <0x54 0xf8>, /* 0: reg 0x54, bits 7:3 */
+					<0x54 0x07>; /* 1: reg 0x54, bits 2:0 */
+		};
+	};
+};
+
+mdio-mux-1 { // Mux consumer
+	compatible = "mdio-mux";
+	mux-controls = <&mux 0>;
+	mdio-parent-bus = <&emdio1>;
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	mdio@0 {
+		reg = <0x0>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+
+	mdio@8 {
+		reg = <0x8>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+
+	..
+	..
+};
+
+mdio-mux-2 { // Mux consumer
+	compatible = "mdio-mux";
+	mux-controls = <&mux 1>;
+	mdio-parent-bus = <&emdio2>;
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	mdio@0 {
+		reg = <0x0>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+
+	mdio@1 {
+		reg = <0x1>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+
+	..
+	..
+};
+

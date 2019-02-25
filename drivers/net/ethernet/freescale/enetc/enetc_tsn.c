@@ -180,7 +180,7 @@ int enetc_qbv_set(struct net_device *ndev, struct tsn_qbv_conf *admin_conf)
 	if (admin_conf->gate_enabled && !(temp & QBV_TGE)) {
 		enetc_wr(&priv->si->hw, QBV_PTGCR_OFFSET, temp & (~QBV_TGE));
 		udelay(10);
-		enetc_wr(&priv->si->hw, QBV_PTGCR_OFFSET, temp | QBV_TGE | QBV_TGDROP_DISABLE);
+		enetc_wr(&priv->si->hw, QBV_PTGCR_OFFSET, temp | QBV_TGE);
 	} else if (!admin_conf->gate_enabled) {
 		enetc_wr(&priv->si->hw, QBV_PTGCR_OFFSET, temp & (~QBV_TGE));
 		return 0;

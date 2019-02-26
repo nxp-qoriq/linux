@@ -370,18 +370,20 @@ struct tsn_port *tsn_init_check(struct genl_info *info,
 	struct tsn_port *port;
 	bool tsn_found = false;
 
-	na = info->attrs[TSN_ATTR_IFNAME];
-	if (!na) {
+	if (!info->attrs[TSN_ATTR_IFNAME]) {
 		tsn_simple_reply(info, TSN_CMD_REPLY,
 				 "no portname", -TSN_ATTRERR);
 		return NULL;
 	}
 
+	na = info->attrs[TSN_ATTR_IFNAME];
+
 	portname = (char *)nla_data(na);
+
 	netdev = __dev_get_by_name(genl_info_net(info), portname);
 	if (!netdev) {
 		tsn_simple_reply(info, TSN_CMD_REPLY,
-				 netdev->name, -TSN_NODEVOPS);
+				 "error device", -TSN_NODEVOPS);
 		return NULL;
 	}
 

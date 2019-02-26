@@ -9,37 +9,6 @@
 #include <linux/irqflags.h>
 #include <linux/preempt.h>
 
-void DUMP_CBDR(struct enetc_cbd *cbdr)
-{
-	int i;
-	char *data;
-
-	printk("addrl: %04x", cbdr->addr[0]);
-	printk("addrh: %04x\n", cbdr->addr[1]);
-
-	data = (char *)cbdr;
-
-	for (i = 0; i < 8; i++) {
-		printk("%02x %02x %02x %02x\n",
-				*(data + i*4 + 3), *(data + i*4 + 2), *(data + i*4 + 1), *(data + i*4));
-	}
-	printk("\n");
-}
-
-void DUMP_DATA(char *data, int size)
-{
-	int i;
-
-	printk("data memory: \n");
-
-	for (i = 0; i < size / 4; i++) {
-		printk("%02x %02x %02x %02x\n",
-				*(data + i*4 + 3), *(data + i*4 + 2), *(data + i*4 + 1), *(data + i*4));
-	}
-
-	printk("\n");
-}
-
 static int alloc_cbdr(struct enetc_si *si, struct enetc_cbd **curr_cbd)
 {
 	struct enetc_cbdr *ring = &si->cbd_ring;
@@ -47,7 +16,6 @@ static int alloc_cbdr(struct enetc_si *si, struct enetc_cbd **curr_cbd)
 
 	i = ring->next_to_use;
 	*curr_cbd = ENETC_CBD(*ring, i);
-	printk("cbd: %p\n", *curr_cbd);
 
 	memset(*curr_cbd, 0, sizeof(struct enetc_cbd));
 	return i;
@@ -135,10 +103,7 @@ int enetc_qci_fmi_counters_get(struct net_device *ndev, u32 index,
 	cbdr->addr[0] = lower_32_bits(dma);
 	cbdr->addr[1] = upper_32_bits(dma);
 
-	DUMP_CBDR(cbdr);
 	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_CBDR(cbdr);
-	DUMP_DATA((char *)fmi_data, data_size);
 
 	memcpy(counters, fmi_data, sizeof(struct fmi_query_stat_resp));
 
@@ -180,7 +145,7 @@ int enetc_qbv_set(struct net_device *ndev, struct tsn_qbv_conf *admin_conf)
 	if (admin_conf->gate_enabled && !(temp & QBV_TGE)) {
 		enetc_wr(&priv->si->hw, QBV_PTGCR_OFFSET, temp & (~QBV_TGE));
 		udelay(10);
-		enetc_wr(&priv->si->hw, QBV_PTGCR_OFFSET, temp | QBV_TGE | QBV_TGDROP_DISABLE);
+		enetc_wr(&priv->si->hw, QBV_PTGCR_OFFSET, temp | QBV_TGE);
 	} else if (!admin_conf->gate_enabled) {
 		enetc_wr(&priv->si->hw, QBV_PTGCR_OFFSET, temp & (~QBV_TGE));
 		return 0;
@@ -262,12 +227,9 @@ int enetc_qbv_set(struct net_device *ndev, struct tsn_qbv_conf *admin_conf)
 	 */
 	cbdr->status_flags = 0;
 
-	DUMP_CBDR(cbdr);
 	xmit_cbdr(priv->si, curr_cbd);
 	 /* config change time could be read in the, but up layer could not get it
-	 * */
-	DUMP_CBDR(cbdr);
-	DUMP_DATA((char *)gcl_data, data_size);
+	 */
 	memset(cbdr, 0, sizeof(struct enetc_cbd));
 	dma_unmap_single(&priv->si->pdev->dev, dma, data_size, DMA_TO_DEVICE);
 	kfree(gcl_data);
@@ -296,6 +258,13 @@ int enetc_qbv_get(struct net_device *ndev, struct tsn_qbv_conf *admin_conf)
 	u16 oper_len;
 	u64 temp;
 	int i;
+
+	if (enetc_rd(&priv->si->hw, QBV_PTGCR_OFFSET) & QBV_TGE) {
+		admin_conf->gate_enabled = true;
+	} else {
+		admin_conf->gate_enabled = false;
+		return 0;
+	}
 
 	curr_cbd = alloc_cbdr(priv->si, &cbdr);
 
@@ -359,11 +328,6 @@ int enetc_qbv_get(struct net_device *ndev, struct tsn_qbv_conf *admin_conf)
 		temp_entry->time_interval = le32_to_cpu(temp_gce->period);
 	}
 
-	if (enetc_rd(&priv->si->hw, QBV_PTGCR_OFFSET) & QBV_TGE)
-		admin_conf->gate_enabled = true;
-	else
-		admin_conf->gate_enabled = false;
-
 	/* Updated by ENETC on completion of the configuration
 	 * command. A zero value indicates success.
 	 */
@@ -376,7 +340,7 @@ int enetc_qbv_get(struct net_device *ndev, struct tsn_qbv_conf *admin_conf)
 }
 
 int enetc_qbv_get_status(struct net_device *ndev,
-							struct tsn_qbv_status *status)
+			 struct tsn_qbv_status *status)
 {
 	struct enetc_cbd *cbdr;
 	struct tgs_gcl_resp *gcl_data;
@@ -401,6 +365,9 @@ int enetc_qbv_get_status(struct net_device *ndev,
 
 	oper_basic = &status->oper;
 	priv = netdev_priv(ndev);
+
+	if (!(enetc_rd(&priv->si->hw, QBV_PTGCR_OFFSET) & QBV_TGE))
+		return -EINVAL;
 
 	curr_cbd = alloc_cbdr(priv->si, &cbdr);
 
@@ -554,8 +521,7 @@ int enetc_cb_streamid_set(struct net_device *ndev, u32 index,
 	si_conf->oui[0] = 0xC2;
 
 	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_CBDR(cbdr);
-	DUMP_DATA((char *)si_data, data_size);
+
 	memset(cbdr, 0, sizeof(*cbdr));
 	kfree(si_data);
 
@@ -632,10 +598,7 @@ int enetc_cb_streamid_set(struct net_device *ndev, u32 index,
 			((((u16)(streamid->para.sid.tagged) & 0x3) << 14) | ENETC_CBDR_SID_VIDM));
 	}
 
-	DUMP_CBDR(cbdr);
 	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_CBDR(cbdr);
-	DUMP_DATA((char *)si_data, data_size);
 
 	memset(cbdr, 0, sizeof(*cbdr));
 	kfree(si_data);
@@ -645,7 +608,7 @@ int enetc_cb_streamid_set(struct net_device *ndev, u32 index,
 
 /* CBD Class 7: Stream Identity Entry Query Descriptor - Long Format */
 int enetc_cb_streamid_get(struct net_device *ndev, u32 index,
-							struct tsn_cb_streamid *streamid)
+			  struct tsn_cb_streamid *streamid)
 {
 	struct enetc_cbd *cbdr;
 	struct streamid_query_resp *si_data;
@@ -685,10 +648,7 @@ int enetc_cb_streamid_get(struct net_device *ndev, u32 index,
 	cbdr->addr[0] = lower_32_bits(dma);
 	cbdr->addr[1] = upper_32_bits(dma);
 
-	DUMP_CBDR(cbdr);
 	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_CBDR(cbdr);
-	DUMP_DATA((char *)si_data, data_size);
 
 	streamid->type = si_data->id_type;
 
@@ -728,7 +688,7 @@ int enetc_cb_streamid_get(struct net_device *ndev, u32 index,
 
 /*  CBD Class 7: Stream Identity Statistics Query Descriptor - Long Format */
 int enetc_cb_streamid_counters_get(struct net_device *ndev, u32 index,
-				struct tsn_cb_streamid_counters *counters)
+				   struct tsn_cb_streamid_counters *counters)
 {
 	return 0;
 }
@@ -809,9 +769,7 @@ int enetc_qci_sfi_set(struct net_device *ndev, u32 index, bool en,
 	if (tsn_qci_sfi->block_oversize)
 		sfi_config->multi |= 0x10;
 
-	DUMP_CBDR(cbdr);
 	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_CBDR(cbdr);
 
 	memset(cbdr, 0, sizeof(*cbdr));
 	return 0;
@@ -970,9 +928,9 @@ int enetc_qci_sgi_set(struct net_device *ndev, u32 index,
 	cbdr->cmd = 0;
 	cbdr->cls = BDCR_CMD_STREAM_GCL;
 	cbdr->status_flags = 0x80;
-	DUMP_CBDR(cbdr);
+
 	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_CBDR(cbdr);
+
 	if (!tsn_qci_sgi->gate_enabled) {
 		memset(cbdr, 0, sizeof(*cbdr));
 		return 0;
@@ -1007,9 +965,7 @@ int enetc_qci_sgi_set(struct net_device *ndev, u32 index,
 	if (tsn_qci_sgi->block_octets_exceeded_enable)
 		sgi_config->gset |= 0x20;
 
-	DUMP_CBDR(cbdr);
 	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_CBDR(cbdr);
 
 	if (tsn_qci_sgi->admin.control_list_length == 0)
 		goto exit;
@@ -1089,11 +1045,7 @@ int enetc_qci_sgi_set(struct net_device *ndev, u32 index,
 		sgcl_data->btl = cpu_to_le32(lower_32_bits(tsn_qci_sgi->admin.base_time));
 	}
 
-	DUMP_CBDR(cbdr_sgcl);
-	DUMP_DATA((char *)sgcl_data, data_size);
 	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_CBDR(cbdr_sgcl);
-	DUMP_DATA((char *)sgcl_data, data_size);
 
 	memset(cbdr_sgcl, 0, sizeof(*cbdr_sgcl));
 	kfree(sgcl_data);
@@ -1127,9 +1079,7 @@ int enetc_qci_sgi_get(struct net_device *ndev, u32 index,
 	cbdr->cls = BDCR_CMD_STREAM_GCL;
 	cbdr->status_flags = 0x80;
 
-	DUMP_CBDR(cbdr);
 	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_CBDR(cbdr);
 
 	sgi_config = &cbdr->sgi_table;
 
@@ -1188,10 +1138,7 @@ int enetc_qci_sgi_get(struct net_device *ndev, u32 index,
 	cbdr_sgcl->addr[0] = lower_32_bits(dma);
 	cbdr_sgcl->addr[1] = upper_32_bits(dma);
 
-	DUMP_CBDR(cbdr_sgcl);
 	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_CBDR(cbdr_sgcl);
-	DUMP_DATA((char *)sgcl_data, data_size);
 
 	sgce = (struct sgce *)(sgcl_data + 1);
 
@@ -1286,9 +1233,7 @@ int enetc_qci_sgi_status_get(struct net_device *ndev, u16 index,
 		goto cmd2quit;
 	}
 
-	DUMP_CBDR(cbdr_sgi);
 	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_CBDR(cbdr_sgi);
 
 	curr_cbd = alloc_cbdr(priv->si, &cbdr_sgcl);
 
@@ -1322,10 +1267,7 @@ int enetc_qci_sgi_status_get(struct net_device *ndev, u16 index,
 	cbdr_sgcl->addr[0] = lower_32_bits(dma);
 	cbdr_sgcl->addr[1] = upper_32_bits(dma);
 
-	DUMP_CBDR(cbdr_sgcl);
 	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_CBDR(cbdr_sgcl);
-	DUMP_DATA((char *)sgcl_data, data_size);
 
 	sgce = (struct sgce *)(sgcl_data + 1);
 
@@ -1413,9 +1355,9 @@ int enetc_qci_fmi_set(struct net_device *ndev, u32 index, bool enable,
 	cbdr->cmd = 0;
 	cbdr->cls = BDCR_CMD_FLOW_METER;
 	cbdr->status_flags = 0x80;
-	DUMP_CBDR(cbdr);
+
 	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_CBDR(cbdr);
+
 	if (!enable) {
 		memset(cbdr, 0, sizeof(*cbdr));
 		return 0;
@@ -1460,9 +1402,7 @@ int enetc_qci_fmi_set(struct net_device *ndev, u32 index, bool enable,
 	if (tsn_qci_fmi->cf)
 		fmi_config->conf |= 0x10;
 
-	DUMP_CBDR(cbdr);
 	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_CBDR(cbdr);
 
 	memset(cbdr, 0, sizeof(*cbdr));
 	return 0;
@@ -1549,7 +1489,6 @@ int enetc_qci_fmi_get(struct net_device *ndev, u32 index,
 	cbdr->length = dma_size;
 
 	xmit_cbdr(priv->si, curr_cbd);
-	DUMP_DATA((char *)fmi_counter_data, data_size);
 
 	memcpy(counters, fmi_counter_data, sizeof(*counters));
 

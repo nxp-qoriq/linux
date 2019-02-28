@@ -10,6 +10,7 @@
 #include <linux/phy_fixed.h>
 #include <linux/phy.h>
 #include <linux/of_mdio.h>
+#include <linux/of_net.h>
 #include <net/sock.h>
 
 #include "ocelot.h"
@@ -19,8 +20,7 @@ static const char felix_driver_string[] = "Felix Switch Driver";
 #define DRV_VERSION "0.3"
 static const char felix_driver_version[] = DRV_VERSION;
 
-#define FELIX_MAX_NUM_PHY_PORTS	5
-#define FELIX_EXT_CPU_PORT_ID	4
+#define FELIX_MAX_NUM_PHY_PORTS	6
 #define PORT_RES_START		(GCB + 1)
 
 #define PCI_DEVICE_ID_FELIX_PF5	0xEEF0
@@ -29,10 +29,6 @@ static const char felix_driver_version[] = DRV_VERSION;
 #define FELIX_SWITCH_BAR	4
 
 #define FELIX_INIT_TIMEOUT	50000
-
-/* pair PCI device */
-char *pair_eth = "\0";
-module_param(pair_eth, charp, 0000);
 
 static struct pci_device_id felix_ids[] = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_FREESCALE, PCI_DEVICE_ID_FELIX_PF5) },
@@ -319,7 +315,8 @@ static void felix_register_rx_handler(struct ocelot *ocelot,
 
 	/* must obtain rtnl mutex first */
 	rtnl_lock();
-	if (!netdev_is_rx_handler_busy(pair_ndev))
+	if (netif_device_present(pair_ndev) &&
+	    !netdev_is_rx_handler_busy(pair_ndev))
 		err = netdev_rx_handler_register(pair_ndev,
 						 felix_frm_ext_handler, ocelot);
 	rtnl_unlock();
@@ -435,26 +432,30 @@ static int felix_ports_init(struct pci_dev *pdev)
 	struct device_node *np = ocelot->dev->of_node;
 	struct net_device *pair_ndev = NULL;
 	struct device_node *phy_node = NULL;
-	struct device_node *portnp = NULL;
+	struct device_node *portnp, *ethnp;
 	struct phy_device *phydev = NULL;
 	struct resource *felix_res;
 	void __iomem *port_regs;
 	u32 port;
 	int err;
 
-	if (pair_eth)
-		pair_ndev = dev_get_by_name(&init_net, pair_eth);
+	portnp = of_find_node_with_property(np, "cpu-ethernet");
+	if (portnp) {
+		ethnp = of_parse_phandle(portnp, "cpu-ethernet", 0);
+		if (!ethnp)
+			return -EINVAL;
+		pair_ndev = of_find_net_device_by_node(ethnp);
+		if (!pair_ndev)
+			return -EPROBE_DEFER;
+		if (of_property_read_u32(portnp, "reg", &port))
+			return -EINVAL;
 
-	if (pair_ndev && !netif_device_present(pair_ndev))
-		return -EINVAL;
-
-	if (pair_ndev) {
-		ocelot->cpu_port_id = FELIX_EXT_CPU_PORT_ID;
+		ocelot->cpu_port_id = port;
 		ocelot->num_cpu_ports = 1;
-	} else {
-		ocelot->cpu_port_id = FELIX_MAX_NUM_PHY_PORTS;
-		ocelot->num_cpu_ports = 0;
 	}
+
+	if (!pair_ndev)
+		ocelot->cpu_port_id = FELIX_MAX_NUM_PHY_PORTS;
 
 	ocelot->num_phys_ports = FELIX_MAX_NUM_PHY_PORTS;
 	ocelot->ports = devm_kcalloc(ocelot->dev, ocelot->num_phys_ports,

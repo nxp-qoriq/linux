@@ -727,6 +727,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 
+				/* external ports */
 				switch_port0: port@0 {
 					reg = <0>;
 				};
@@ -739,9 +740,10 @@
 				switch_port3: port@3 {
 					reg = <3>;
 				};
-				/* external cpu ports */
+				/* internal to-cpu ports */
 				port@4 {
 					reg = <4>;
+					cpu-ethernet = <&enetc_port2>;
 					phy-connection-type = "internal";
 					fixed-link {
 						speed = <1000>;

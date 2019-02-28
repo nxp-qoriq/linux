@@ -24,6 +24,16 @@ config FSL_SLEEP_FSM
 	  The FSM is used to finish clean-ups at the last stage of system entering deep
 	  sleep, and also wakes up system when a wake up event happens.
 
+config FSL_QIXIS
+	tristate "QIXIS system controller driver"
+	depends on OF
+	select REGMAP_I2C
+	select REGMAP_MMIO
+	default n
+	help
+	  Say y here to enable QIXIS system controller api. The qixis driver
+	  provides FPGA functions to control system.
+
 if ARM || ARM64
 source "drivers/soc/fsl/Kconfig.arm"
 endif

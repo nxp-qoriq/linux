@@ -335,9 +335,7 @@ static int vfio_fsl_mc_dprc_wait_for_response(void __iomem *ioaddr)
 		u64 header;
 		struct mc_cmd_header *resp_hdr;
 
-		__iormb();
-		header = readq(ioaddr);
-		__iormb();
+		header = cpu_to_le64(readq_relaxed(ioaddr));
 
 		resp_hdr = (struct mc_cmd_header *)&header;
 		status = (enum mc_cmd_status)resp_hdr->status;
@@ -357,9 +355,12 @@ static int vfio_fsl_mc_send_command(void __iomem *ioaddr, uint64_t *cmd_data)
 {
 	int i;
 
-	/* Write at command header in the end */
-	for (i = 7; i >= 0; i--)
-		writeq(cmd_data[i], ioaddr + i * sizeof(uint64_t));
+	/* Write at command parameter into portal */
+	for (i = 7; i >= 1; i--)
+		writeq_relaxed(cmd_data[i], ioaddr + i * sizeof(uint64_t));
+
+	/* Write command header in the end */
+	writeq(cmd_data[0], ioaddr);
 
 	/* Wait for response before returning to user-space
 	 * This can be optimized in future to even prepare response

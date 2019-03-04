@@ -445,4 +445,11 @@ static inline int ahci_nr_ports(u32 cap)
 	return (cap & 0x1f) + 1;
 }
 
+#ifdef CONFIG_AHCI_QORIQ
+extern void fsl_sata_errata_379364(struct ata_link *link);
+#else
+static void fsl_sata_errata_379364(struct ata_link *link)
+{}
+#endif
+
 #endif /* _AHCI_H */

@@ -59,6 +59,10 @@ static int vfio_fsl_mc_regions_init(struct vfio_fsl_mc_device *vdev)
 		if (mc_dev->regions[i].flags & IORESOURCE_CACHEABLE)
 			vdev->regions[i].type |=
 					VFIO_FSL_MC_REGION_TYPE_CACHEABLE;
+		if (mc_dev->regions[i].flags & IORESOURCE_MEM)
+			vdev->regions[i].type |=
+					VFIO_FSL_MC_REGION_TYPE_SHAREABLE;
+
 		vdev->regions[i].flags = VFIO_REGION_INFO_FLAG_MMAP;
 		vdev->regions[i].flags |= VFIO_REGION_INFO_FLAG_READ;
 		if (!(mc_dev->regions[i].flags & IORESOURCE_READONLY))
@@ -331,9 +335,7 @@ static int vfio_fsl_mc_dprc_wait_for_response(void __iomem *ioaddr)
 		u64 header;
 		struct mc_cmd_header *resp_hdr;
 
-		__iormb();
-		header = readq(ioaddr);
-		__iormb();
+		header = cpu_to_le64(readq_relaxed(ioaddr));
 
 		resp_hdr = (struct mc_cmd_header *)&header;
 		status = (enum mc_cmd_status)resp_hdr->status;
@@ -353,9 +355,12 @@ static int vfio_fsl_mc_send_command(void __iomem *ioaddr, uint64_t *cmd_data)
 {
 	int i;
 
-	/* Write at command header in the end */
-	for (i = 7; i >= 0; i--)
-		writeq(cmd_data[i], ioaddr + i * sizeof(uint64_t));
+	/* Write at command parameter into portal */
+	for (i = 7; i >= 1; i--)
+		writeq_relaxed(cmd_data[i], ioaddr + i * sizeof(uint64_t));
+
+	/* Write command header in the end */
+	writeq(cmd_data[0], ioaddr);
 
 	/* Wait for response before returning to user-space
 	 * This can be optimized in future to even prepare response
@@ -440,9 +445,12 @@ static int vfio_fsl_mc_mmap_mmio(struct vfio_fsl_mc_region region,
 	 * cache inhibited area of the portal to avoid coherency issues
 	 * if a user migrates to another core.
 	 */
-	if (region.type & VFIO_FSL_MC_REGION_TYPE_CACHEABLE)
-		vma->vm_page_prot = pgprot_cached_ns(vma->vm_page_prot);
-	else
+	if (region.type & VFIO_FSL_MC_REGION_TYPE_CACHEABLE) {
+		if (region.type & VFIO_FSL_MC_REGION_TYPE_SHAREABLE)
+			vma->vm_page_prot = pgprot_cached(vma->vm_page_prot);
+		else
+			vma->vm_page_prot = pgprot_cached_ns(vma->vm_page_prot);
+	} else
 		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 
 	vma->vm_pgoff = (region.addr >> PAGE_SHIFT) + pgoff;

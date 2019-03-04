@@ -20,6 +20,8 @@ obj-$(CONFIG_PCI)		+= pci/
 obj-$(CONFIG_PCI_ENDPOINT)	+= pci/endpoint/
 # PCI dwc controller drivers
 obj-y				+= pci/dwc/
+# PCI mobiveil controller drivers
+obj-y				+= pci/mobiveil/
 
 obj-$(CONFIG_PARISC)		+= parisc/
 obj-$(CONFIG_RAPIDIO)		+= rapidio/

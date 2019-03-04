@@ -1,0 +1,208 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+//
+// Device Tree file for LX2160AQDS
+//
+// Copyright 2018 NXP
+
+/dts-v1/;
+
+#include "fsl-lx2160a.dtsi"
+
+/ {
+	model = "NXP Layerscape LX2160AQDS";
+	compatible = "fsl,lx2160a-qds", "fsl,lx2160a";
+
+	aliases {
+		crypto = &crypto;
+		serial0 = &uart0;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+
+	sb_3v3: regulator-sb3v3 {
+		compatible = "regulator-fixed";
+		regulator-name = "MC34717-3.3VSB";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+};
+
+&crypto {
+	status = "okay";
+};
+
+&dspi0 {
+	status = "okay";
+
+	dflash0: flash@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <1000000>;
+	};
+};
+
+&dspi1 {
+	status = "okay";
+
+	dflash1: flash@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <1000000>;
+	};
+};
+
+&dspi2 {
+	status = "okay";
+
+	dflash2: flash@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <1000000>;
+	};
+};
+
+&esdhc0 {
+	status = "okay";
+};
+
+&esdhc1 {
+	status = "okay";
+};
+
+&i2c0 {
+	status = "okay";
+
+	i2c-mux@77 {
+		compatible = "nxp,pca9547";
+		reg = <0x77>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		i2c@2 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x2>;
+
+			power-monitor@40 {
+				compatible = "ti,ina220";
+				reg = <0x40>;
+				shunt-resistor = <500>;
+			};
+
+			power-monitor@41 {
+				compatible = "ti,ina220";
+				reg = <0x41>;
+				shunt-resistor = <1000>;
+			};
+		};
+
+		i2c@3 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x3>;
+
+			temperature-sensor@4c {
+				compatible = "nxp,sa56004";
+				reg = <0x4c>;
+				vcc-supply = <&sb_3v3>;
+			};
+
+			temperature-sensor@4d {
+				compatible = "nxp,sa56004";
+				reg = <0x4d>;
+				vcc-supply = <&sb_3v3>;
+			};
+
+			rtc@51 {
+				compatible = "nxp,pcf2129";
+				reg = <0x51>;
+			};
+		};
+	};
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&uart1 {
+	status = "okay";
+};
+
+&usb0 {
+	status = "okay";
+};
+
+&usb1 {
+	status = "okay";
+};
+
+&pcs_mdio1 {
+	pcs_phy1: ethernet-phy@0 {
+		compatible = "ethernet-phy-ieee802.3-c45";
+		backplane-mode = "40gbase-kr";
+		reg = <0x0>;
+		fsl,lane-handle = <&serdes1>;
+		fsl,lane-reg = <0xF00 0xE00 0xD00 0xC00>; /* lanes H, G, F, E */
+	};
+};
+
+&pcs_mdio2 {
+	pcs_phy2: ethernet-phy@0 {
+		compatible = "ethernet-phy-ieee802.3-c45";
+		backplane-mode = "40gbase-kr";
+		reg = <0x0>;
+		fsl,lane-handle = <&serdes1>;
+		fsl,lane-reg = <0xB00 0xA00 0x900 0x800>; /* lanes D, C, B, A */
+	};
+};
+
+&pcs_mdio3 {
+	pcs_phy3: ethernet-phy@0 {
+		compatible = "ethernet-phy-ieee802.3-c45";
+		backplane-mode = "10gbase-kr";
+		reg = <0x0>;
+		fsl,lane-handle = <&serdes1>;
+		fsl,lane-reg = <0xF00 0x100>; /* lane H */
+	};
+};
+
+&pcs_mdio4 {
+	pcs_phy4: ethernet-phy@0 {
+		compatible = "ethernet-phy-ieee802.3-c45";
+		backplane-mode = "10gbase-kr";
+		reg = <0x0>;
+		fsl,lane-handle = <&serdes1>;
+		fsl,lane-reg = <0xE00 0x100>; /* lane G */
+	};
+};
+
+/* Update DPMAC connections to 40G backplane PHYs
+ * &dpmac1 {
+ *	phy-handle = <&pcs_phy1>;
+ * };
+ * 
+ * &dpmac2 {
+ *	phy-handle = <&pcs_phy2>;
+ * };
+ */
+
+/* Update DPMAC connections to 10G backplane PHYs
+ * &dpmac3 {
+ *	phy-handle = <&pcs_phy3>;
+ * };
+ * 
+ * &dpmac4 {
+ *	phy-handle = <&pcs_phy4>;
+ * };
+ */

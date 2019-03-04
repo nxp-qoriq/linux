@@ -1,25 +1,15 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2015-2016 Freescale Semiconductor, Inc.
  * Copyright 2017 NXP
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <linux/module.h>
 #include <linux/device.h>
+#include <linux/of.h>
 #include <linux/of_net.h>
 #include <linux/of_address.h>
+#include <linux/of_mdio.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <linux/clk.h>
@@ -28,102 +18,90 @@
 
 #include "pfe_mod.h"
 
+extern bool pfe_use_old_dts_phy;
 struct ls1012a_pfe_platform_data pfe_platform_data;
 
-static int pfe_get_gemac_if_proprties(struct device_node *parent, int port, int
-					if_cnt,
-					struct ls1012a_pfe_platform_data
-					*pdata)
+static int pfe_get_gemac_if_properties(struct device_node *gem,
+				       int port,
+				       struct ls1012a_pfe_platform_data	*pdata)
 {
-	struct device_node *gem = NULL, *phy = NULL;
+	struct device_node *phy_node = NULL;
 	int size;
-	int ii = 0, phy_id = 0;
+	int phy_id = 0;
 	const u32 *addr;
 	const void *mac_addr;
 
-	for (ii = 0; ii < if_cnt; ii++) {
-		gem = of_get_next_child(parent, gem);
-		if (!gem)
-			goto err;
-		addr = of_get_property(gem, "reg", &size);
-		if (addr && (be32_to_cpup(addr) == port))
-			break;
-	}
-
-	if (ii >= if_cnt) {
-		pr_err("%s:%d Failed to find interface = %d\n",
-		       __func__, __LINE__, if_cnt);
-		goto err;
-	}
+	addr = of_get_property(gem, "reg", &size);
+	port = be32_to_cpup(addr);
 
 	pdata->ls1012a_eth_pdata[port].gem_id = port;
 
 	mac_addr = of_get_mac_address(gem);
-
 	if (mac_addr) {
 		memcpy(pdata->ls1012a_eth_pdata[port].mac_addr, mac_addr,
 		       ETH_ALEN);
 	}
 
-	pdata->ls1012a_eth_pdata[port].mii_config = of_get_phy_mode(gem);
+	phy_node = of_parse_phandle(gem, "phy-handle", 0);
+	pdata->ls1012a_eth_pdata[port].phy_node = phy_node;
+	if (phy_node) {
+		pfe_use_old_dts_phy = false;
+		goto process_phynode;
+	} else if (of_phy_is_fixed_link(gem)) {
+		pfe_use_old_dts_phy = false;
+		if (of_phy_register_fixed_link(gem) < 0) {
+			pr_err("broken fixed-link specification\n");
+			goto err;
+		}
+		phy_node = of_node_get(gem);
+		pdata->ls1012a_eth_pdata[port].phy_node = phy_node;
+	} else if (of_get_property(gem, "fsl,pfe-phy-if-flags", &size)) {
+		pfe_use_old_dts_phy = true;
+		/* Use old dts properties for phy handling */
+		addr = of_get_property(gem, "fsl,pfe-phy-if-flags", &size);
+		pdata->ls1012a_eth_pdata[port].phy_flags = be32_to_cpup(addr);
 
+		addr = of_get_property(gem, "fsl,gemac-phy-id", &size);
+		if (!addr) {
+			pr_err("%s:%d Invalid gemac-phy-id....\n", __func__,
+			       __LINE__);
+		} else {
+			phy_id = be32_to_cpup(addr);
+			pdata->ls1012a_eth_pdata[port].phy_id = phy_id;
+			pdata->ls1012a_mdio_pdata[0].phy_mask &= ~(1 << phy_id);
+		}
+
+		/* If PHY is enabled, read mdio properties */
+		if (pdata->ls1012a_eth_pdata[port].phy_flags & GEMAC_NO_PHY)
+			goto done;
+
+	} else {
+		pr_info("%s: No PHY or fixed-link\n", __func__);
+		return 0;
+	}
+
+process_phynode:
+	pdata->ls1012a_eth_pdata[port].mii_config = of_get_phy_mode(gem);
 	if ((pdata->ls1012a_eth_pdata[port].mii_config) < 0)
 		pr_err("%s:%d Incorrect Phy mode....\n", __func__,
 		       __LINE__);
 
-	addr = of_get_property(gem, "fsl,gemac-bus-id", &size);
-	if (!addr)
-		pr_err("%s:%d Invalid gemac-bus-id....\n", __func__,
-		       __LINE__);
-	else
-		pdata->ls1012a_eth_pdata[port].bus_id = be32_to_cpup(addr);
-
-	addr = of_get_property(gem, "fsl,gemac-phy-id", &size);
+	addr = of_get_property(gem, "fsl,mdio-mux-val", &size);
 	if (!addr) {
-		pr_err("%s:%d Invalid gemac-phy-id....\n", __func__,
-		       __LINE__);
+		pr_err("%s: Invalid mdio-mux-val....\n", __func__);
 	} else {
 		phy_id = be32_to_cpup(addr);
-		pdata->ls1012a_eth_pdata[port].phy_id = phy_id;
-		pdata->ls1012a_mdio_pdata[0].phy_mask &= ~(1 << phy_id);
-	}
-
-	addr = of_get_property(gem, "fsl,mdio-mux-val", &size);
-	if (!addr)
-		pr_err("%s: Invalid mdio-mux-val....\n", __func__);
-	else
-		phy_id = be32_to_cpup(addr);
 		pdata->ls1012a_eth_pdata[port].mdio_muxval = phy_id;
+	}
 
 	if (pdata->ls1012a_eth_pdata[port].phy_id < 32)
 		pfe->mdio_muxval[pdata->ls1012a_eth_pdata[port].phy_id] =
 			 pdata->ls1012a_eth_pdata[port].mdio_muxval;
 
-	addr = of_get_property(gem, "fsl,pfe-phy-if-flags", &size);
-	if (!addr)
-		pr_err("%s:%d Invalid pfe-phy-if-flags....\n",
-		       __func__, __LINE__);
-	else
-		pdata->ls1012a_eth_pdata[port].phy_flags = be32_to_cpup(addr);
-
-	/* If PHY is enabled, read mdio properties */
-	if (pdata->ls1012a_eth_pdata[port].phy_flags & GEMAC_NO_PHY)
-		goto done;
-
-	phy = of_get_next_child(gem, NULL);
-
-	addr = of_get_property(phy, "reg", &size);
-
-	if (!addr)
-		pr_err("%s:%d Invalid phy enable flag....\n",
-		       __func__, __LINE__);
-	else
-		pdata->ls1012a_mdio_pdata[port].enabled = be32_to_cpup(addr);
 
 	pdata->ls1012a_mdio_pdata[port].irq[0] = PHY_POLL;
 
 done:
-
 	return 0;
 
 err:
@@ -141,7 +119,7 @@ static int pfe_platform_probe(struct platform_device *pdev)
 	struct resource res;
 	int ii, rc, interface_count = 0, size = 0;
 	const u32 *prop;
-	struct device_node  *np;
+	struct device_node *np, *gem = NULL;
 	struct clk *pfe_clk;
 
 	np = pdev->dev.of_node;
@@ -219,8 +197,13 @@ static int pfe_platform_probe(struct platform_device *pdev)
 	pfe_platform_data.ls1012a_mdio_pdata[0].phy_mask = 0xffffffff;
 
 	for (ii = 0; ii < interface_count; ii++) {
-		pfe_get_gemac_if_proprties(np, ii, interface_count,
-					   &pfe_platform_data);
+		gem = of_get_next_child(np, gem);
+		if (gem)
+			pfe_get_gemac_if_properties(gem, ii,
+						    &pfe_platform_data);
+		else
+			pr_err("Unable to find interface %d\n", ii);
+
 	}
 
 	pfe->dev = &pdev->dev;
@@ -339,8 +322,8 @@ static int pfe_platform_resume(struct device *dev)
 	for (i = 0; i < (NUM_GEMAC_SUPPORT); i++) {
 		netdev = pfe->eth.eth_priv[i]->ndev;
 
-		if (pfe->eth.eth_priv[i]->mii_bus)
-			pfe_eth_mdio_reset(pfe->eth.eth_priv[i]->mii_bus);
+		if (pfe->mdio.mdio_priv[i]->mii_bus)
+			pfe_eth_mdio_reset(pfe->mdio.mdio_priv[i]->mii_bus);
 
 		if (netif_running(netdev))
 			pfe_eth_resume(netdev);

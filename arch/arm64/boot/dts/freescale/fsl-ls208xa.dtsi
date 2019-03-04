@@ -158,54 +158,7 @@
 			#thermal-sensor-cells = <1>;
 		};
 
-		thermal-zones {
-			cpu_thermal: cpu-thermal {
-				polling-delay-passive = <1000>;
-				polling-delay = <5000>;
-
-				thermal-sensors = <&tmu 4>;
-
-				trips {
-					cpu_alert: cpu-alert {
-						temperature = <75000>;
-						hysteresis = <2000>;
-						type = "passive";
-					};
-					cpu_crit: cpu-crit {
-						temperature = <85000>;
-						hysteresis = <2000>;
-						type = "critical";
-					};
-				};
-
-				cooling-maps {
-					map0 {
-						trip = <&cpu_alert>;
-						cooling-device =
-							<&cpu0 THERMAL_NO_LIMIT
-							THERMAL_NO_LIMIT>;
-					};
-					map1 {
-						trip = <&cpu_alert>;
-						cooling-device =
-							<&cpu2 THERMAL_NO_LIMIT
-							THERMAL_NO_LIMIT>;
-					};
-					map2 {
-						trip = <&cpu_alert>;
-						cooling-device =
-							<&cpu4 THERMAL_NO_LIMIT
-							THERMAL_NO_LIMIT>;
-					};
-					map3 {
-						trip = <&cpu_alert>;
-						cooling-device =
-							<&cpu6 THERMAL_NO_LIMIT
-							THERMAL_NO_LIMIT>;
-					};
-				};
-			};
-		};
+		#include "fsl-tmu.dtsi"
 
 		serial0: serial@21c0500 {
 			compatible = "fsl,ns16550", "ns16550a";
@@ -660,7 +613,7 @@
 			interrupts = <0 34 0x4>; /* Level high type */
 			clock-names = "i2c";
 			clocks = <&clockgen 4 1>;
-			fsl-scl-gpio = <&gpio3 10 0>;
+			scl-gpios = <&gpio3 10 0>;
 		};
 
 		i2c1: i2c@2010000 {
@@ -742,6 +695,7 @@
 					<0000 0 0 2 &gic 0 0 0 110 4>,
 					<0000 0 0 3 &gic 0 0 0 111 4>,
 					<0000 0 0 4 &gic 0 0 0 112 4>;
+			status = "disabled";
 		};
 
 		pcie2: pcie@3500000 {
@@ -764,6 +718,7 @@
 					<0000 0 0 2 &gic 0 0 0 115 4>,
 					<0000 0 0 3 &gic 0 0 0 116 4>,
 					<0000 0 0 4 &gic 0 0 0 117 4>;
+			status = "disabled";
 		};
 
 		pcie3: pcie@3600000 {
@@ -786,6 +741,7 @@
 					<0000 0 0 2 &gic 0 0 0 120 4>,
 					<0000 0 0 3 &gic 0 0 0 121 4>,
 					<0000 0 0 4 &gic 0 0 0 122 4>;
+			status = "disabled";
 		};
 
 		pcie4: pcie@3700000 {
@@ -808,6 +764,7 @@
 					<0000 0 0 2 &gic 0 0 0 125 4>,
 					<0000 0 0 3 &gic 0 0 0 126 4>,
 					<0000 0 0 4 &gic 0 0 0 127 4>;
+			status = "disabled";
 		};
 
 		sata0: sata@3200000 {
@@ -837,6 +794,7 @@
 			snps,quirk-frame-length-adjustment = <0x20>;
 			snps,dis_rxdet_inp3_quirk;
 			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
+			snps,host-vbus-glitches;
 		};
 
 		usb1: usb3@3110000 {
@@ -848,11 +806,13 @@
 			snps,quirk-frame-length-adjustment = <0x20>;
 			snps,dis_rxdet_inp3_quirk;
 			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
+			snps,host-vbus-glitches;
 		};
 
 		serdes1: serdes@1ea0000 {
-				reg = <0x0 0x1ea0000 0 0x00002000>;
 				compatible = "fsl,serdes-10g";
+				reg = <0x0 0x1ea0000 0 0x00002000>;
+				little-endian;
 		};
 
 		ccn@4000000 {
@@ -889,5 +849,38 @@
 			compatible = "linaro,optee-tz";
 			method = "smc";
 		};
+	};
+};
+
+#include "fsl-tmu-map1.dtsi"
+#include "fsl-tmu-map2.dtsi"
+#include "fsl-tmu-map3.dtsi"
+&thermal_zones {
+	thermal-zone1 {
+		status = "okay";
+	};
+
+	thermal-zone2{
+		status = "okay";
+	};
+
+	thermal-zone3{
+		status = "okay";
+	};
+
+	thermal-zone4{
+		status = "okay";
+	};
+
+	thermal-zone5{
+		status = "okay";
+	};
+
+	thermal-zone6{
+		status = "okay";
+	};
+
+	thermal-zone7 {
+		status = "okay";
 	};
 };

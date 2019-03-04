@@ -32,6 +32,7 @@
 #include <linux/types.h>
 #include <linux/delay.h>
 #include <linux/iommu.h>
+#include <linux/sys_soc.h>
 
 #include "../virt-dma.h"
 
@@ -104,9 +105,6 @@ dpaa2_qdma_request_desc(struct dpaa2_qdma_chan *dpaa2_chan)
 				sizeof(struct dpaa2_fl_entry) * 3;
 
 		comp_temp->qchan = dpaa2_chan;
-		comp_temp->sg_blk_num = 0;
-		INIT_LIST_HEAD(&comp_temp->sg_src_head);
-		INIT_LIST_HEAD(&comp_temp->sg_dst_head);
 		return comp_temp;
 	}
 	comp_temp = list_first_entry(&dpaa2_chan->comp_free,
@@ -141,7 +139,8 @@ static void dpaa2_qdma_populate_fd(uint32_t format,
 /* first frame list for descriptor buffer */
 static void dpaa2_qdma_populate_first_framel(
 		struct dpaa2_fl_entry *f_list,
-		struct dpaa2_qdma_comp *dpaa2_comp)
+		struct dpaa2_qdma_comp *dpaa2_comp,
+		bool wrt_changed)
 {
 	struct dpaa2_qdma_sd_d *sdd;
 
@@ -150,7 +149,12 @@ static void dpaa2_qdma_populate_first_framel(
 	/* source and destination descriptor */
 	sdd->cmd = cpu_to_le32(QDMA_SD_CMD_RDTTYPE_COHERENT); /* source descriptor CMD */
 	sdd++;
-	sdd->cmd = cpu_to_le32(QDMA_DD_CMD_WRTTYPE_COHERENT); /* dest descriptor CMD */
+
+	/* dest descriptor CMD */
+	if (wrt_changed)
+		sdd->cmd = cpu_to_le32(LX2160_QDMA_DD_CMD_WRTTYPE_COHERENT);
+	else
+		sdd->cmd = cpu_to_le32(QDMA_DD_CMD_WRTTYPE_COHERENT);
 
 	memset(f_list, 0, sizeof(struct dpaa2_fl_entry));
 	/* first frame list to source descriptor */
@@ -194,11 +198,15 @@ static struct dma_async_tx_descriptor *dpaa2_qdma_prep_memcpy(
 		dma_addr_t src, size_t len, unsigned long flags)
 {
 	struct dpaa2_qdma_chan *dpaa2_chan = to_dpaa2_qdma_chan(chan);
+	struct dpaa2_qdma_engine *dpaa2_qdma;
 	struct dpaa2_qdma_comp *dpaa2_comp;
 	struct dpaa2_fl_entry *f_list;
+	bool	wrt_changed;
 	uint32_t format;
 
+	dpaa2_qdma = dpaa2_chan->qdma;
 	dpaa2_comp = dpaa2_qdma_request_desc(dpaa2_chan);
+	wrt_changed = dpaa2_qdma->qdma_wrtype_fixup;
 
 #ifdef LONG_FORMAT
 	format = QDMA_FD_LONG_FORMAT;
@@ -212,7 +220,7 @@ static struct dma_async_tx_descriptor *dpaa2_qdma_prep_memcpy(
 
 #ifdef LONG_FORMAT
 	/* first frame list for descriptor buffer (logn format) */
-	dpaa2_qdma_populate_first_framel(f_list, dpaa2_comp);
+	dpaa2_qdma_populate_first_framel(f_list, dpaa2_comp, wrt_changed);
 
 	f_list++;
 #endif
@@ -220,155 +228,6 @@ static struct dma_async_tx_descriptor *dpaa2_qdma_prep_memcpy(
 	dpaa2_qdma_populate_frames(f_list, dst, src, len, QDMA_FL_FMT_SBF);
 
 	return vchan_tx_prep(&dpaa2_chan->vchan, &dpaa2_comp->vdesc, flags);
-}
-
-static struct qdma_sg_blk *dpaa2_qdma_get_sg_blk(
-	struct dpaa2_qdma_comp *dpaa2_comp,
-	struct dpaa2_qdma_chan *dpaa2_chan)
-{
-	struct qdma_sg_blk *sg_blk = NULL;
-	dma_addr_t phy_sgb;
-	unsigned long flags;
-
-	spin_lock_irqsave(&dpaa2_chan->queue_lock, flags);
-	if (list_empty(&dpaa2_chan->sgb_free)) {
-		sg_blk = (struct qdma_sg_blk *)dma_pool_alloc(
-				dpaa2_chan->sg_blk_pool,
-				GFP_NOWAIT, &phy_sgb);
-		if (!sg_blk) {
-			spin_unlock_irqrestore(&dpaa2_chan->queue_lock, flags);
-			return sg_blk;
-		}
-		sg_blk->blk_virt_addr = (void *)(sg_blk + 1);
-		sg_blk->blk_bus_addr = phy_sgb + sizeof(*sg_blk);
-	} else {
-		sg_blk = list_first_entry(&dpaa2_chan->sgb_free,
-			struct qdma_sg_blk, list);
-		list_del(&sg_blk->list);
-	}
-	spin_unlock_irqrestore(&dpaa2_chan->queue_lock, flags);
-
-	return sg_blk;
-}
-
-static uint32_t dpaa2_qdma_populate_sg(struct device *dev,
-		struct dpaa2_qdma_chan *dpaa2_chan,
-		struct dpaa2_qdma_comp *dpaa2_comp,
-		struct scatterlist *dst_sg, u32 dst_nents,
-		struct scatterlist *src_sg, u32 src_nents)
-{
-	struct dpaa2_qdma_sg *src_sge;
-	struct dpaa2_qdma_sg *dst_sge;
-	struct qdma_sg_blk *sg_blk;
-	struct qdma_sg_blk *sg_blk_dst;
-	dma_addr_t src;
-	dma_addr_t dst;
-	uint32_t num;
-	uint32_t blocks;
-	uint32_t len = 0;
-	uint32_t total_len = 0;
-	int i, j = 0;
-
-	num = min(dst_nents, src_nents);
-	blocks = num / (NUM_SG_PER_BLK - 1);
-	if (num % (NUM_SG_PER_BLK - 1))
-		blocks += 1;
-	if (dpaa2_comp->sg_blk_num < blocks) {
-		len = blocks - dpaa2_comp->sg_blk_num;
-		for (i = 0; i < len; i++) {
-			/* source sg blocks */
-			sg_blk = dpaa2_qdma_get_sg_blk(dpaa2_comp, dpaa2_chan);
-			if (!sg_blk)
-				return 0;
-			list_add_tail(&sg_blk->list, &dpaa2_comp->sg_src_head);
-			/* destination sg blocks */
-			sg_blk = dpaa2_qdma_get_sg_blk(dpaa2_comp, dpaa2_chan);
-			if (!sg_blk)
-				return 0;
-			list_add_tail(&sg_blk->list, &dpaa2_comp->sg_dst_head);
-		}
-	} else {
-		len = dpaa2_comp->sg_blk_num - blocks;
-		for (i = 0; i < len; i++) {
-			spin_lock(&dpaa2_chan->queue_lock);
-			/* handle source sg blocks */
-			sg_blk = list_first_entry(&dpaa2_comp->sg_src_head,
-					struct qdma_sg_blk, list);
-			list_del(&sg_blk->list);
-			list_add_tail(&sg_blk->list, &dpaa2_chan->sgb_free);
-			/* handle destination sg blocks */
-			sg_blk = list_first_entry(&dpaa2_comp->sg_dst_head,
-					struct qdma_sg_blk, list);
-			list_del(&sg_blk->list);
-			list_add_tail(&sg_blk->list, &dpaa2_chan->sgb_free);
-			spin_unlock(&dpaa2_chan->queue_lock);
-		}
-	}
-	dpaa2_comp->sg_blk_num = blocks;
-
-	/* get the first source sg phy address */
-	sg_blk = list_first_entry(&dpaa2_comp->sg_src_head,
-				struct qdma_sg_blk, list);
-	dpaa2_comp->sge_src_bus_addr = sg_blk->blk_bus_addr;
-	/* get the first destinaiton sg phy address */
-	sg_blk_dst = list_first_entry(&dpaa2_comp->sg_dst_head,
-				struct qdma_sg_blk, list);
-	dpaa2_comp->sge_dst_bus_addr = sg_blk_dst->blk_bus_addr;
-
-	for (i = 0; i < blocks; i++) {
-		src_sge = (struct dpaa2_qdma_sg *)sg_blk->blk_virt_addr;
-		dst_sge = (struct dpaa2_qdma_sg *)sg_blk_dst->blk_virt_addr;
-
-		for (j = 0; j < (NUM_SG_PER_BLK - 1); j++) {
-			len = min(sg_dma_len(dst_sg), sg_dma_len(src_sg));
-			if (0 == len)
-				goto fetch;
-			total_len += len;
-			src = sg_dma_address(src_sg);
-			dst = sg_dma_address(dst_sg);
-
-			/* source SG */
-			src_sge->addr_lo = src;
-			src_sge->addr_hi = (src >> 32);
-			src_sge->data_len.data_len_sl0 = len;
-			src_sge->ctrl.sl = QDMA_SG_SL_LONG;
-			src_sge->ctrl.fmt = QDMA_SG_FMT_SDB;
-			/* destination SG */
-			dst_sge->addr_lo = dst;
-			dst_sge->addr_hi = (dst >> 32);
-			dst_sge->data_len.data_len_sl0 = len;
-			dst_sge->ctrl.sl = QDMA_SG_SL_LONG;
-			dst_sge->ctrl.fmt = QDMA_SG_FMT_SDB;
-fetch:
-			num--;
-			if (0 == num) {
-				src_sge->ctrl.f = QDMA_SG_F;
-				dst_sge->ctrl.f = QDMA_SG_F;
-				goto end;
-			}
-			dst_sg = sg_next(dst_sg);
-			src_sg = sg_next(src_sg);
-			src_sge++;
-			dst_sge++;
-			if (j == (NUM_SG_PER_BLK - 2)) {
-				/* for next blocks, extension */
-				sg_blk = list_next_entry(sg_blk, list);
-				sg_blk_dst = list_next_entry(sg_blk_dst, list);
-				src_sge->addr_lo = sg_blk->blk_bus_addr;
-				src_sge->addr_hi = sg_blk->blk_bus_addr >> 32;
-				src_sge->ctrl.sl = QDMA_SG_SL_LONG;
-				src_sge->ctrl.fmt = QDMA_SG_FMT_SGTE;
-				dst_sge->addr_lo = sg_blk_dst->blk_bus_addr;
-				dst_sge->addr_hi =
-					sg_blk_dst->blk_bus_addr >> 32;
-				dst_sge->ctrl.sl = QDMA_SG_SL_LONG;
-				dst_sge->ctrl.fmt = QDMA_SG_FMT_SGTE;
-			}
-		}
-	}
-
-end:
-	return total_len;
 }
 
 static enum dma_status dpaa2_qdma_tx_status(struct dma_chan *chan,
@@ -584,7 +443,7 @@ static int __cold dpaa2_qdma_dpio_setup(struct dpaa2_qdma_priv *priv)
 		ppriv->nctx.desired_cpu = 1;
 		ppriv->nctx.id = ppriv->rsp_fqid;
 		ppriv->nctx.cb = dpaa2_qdma_fqdan_cb;
-		err = dpaa2_io_service_register(NULL, &ppriv->nctx);
+		err = dpaa2_io_service_register(NULL, &ppriv->nctx, dev);
 		if (err) {
 			dev_err(dev, "Notification register failed\n");
 			goto err_service;
@@ -602,11 +461,11 @@ static int __cold dpaa2_qdma_dpio_setup(struct dpaa2_qdma_priv *priv)
 	return 0;
 
 err_store:
-	dpaa2_io_service_deregister(NULL, &ppriv->nctx);
+	dpaa2_io_service_deregister(NULL, &ppriv->nctx, dev);
 err_service:
 	ppriv--;
 	while (ppriv >= priv->ppriv) {
-		dpaa2_io_service_deregister(NULL, &ppriv->nctx);
+		dpaa2_io_service_deregister(NULL, &ppriv->nctx, dev);
 		dpaa2_io_store_destroy(ppriv->store);
 		ppriv--;
 	}
@@ -627,10 +486,11 @@ static void __cold dpaa2_dpmai_store_free(struct dpaa2_qdma_priv *priv)
 static void __cold dpaa2_dpdmai_dpio_free(struct dpaa2_qdma_priv *priv)
 {
 	struct dpaa2_qdma_priv_per_prio *ppriv = priv->ppriv;
+	struct device *dev = priv->dev;
 	int i;
 
 	for (i = 0; i < priv->num_pairs; i++) {
-		dpaa2_io_service_deregister(NULL, &ppriv->nctx);
+		dpaa2_io_service_deregister(NULL, &ppriv->nctx, dev);
 		ppriv++;
 	}
 }
@@ -687,22 +547,6 @@ static int __cold dpaa2_dpdmai_dpio_unbind(struct dpaa2_qdma_priv *priv)
 	return err;
 }
 
-static void __cold dpaa2_dpdmai_free_pool(struct dpaa2_qdma_chan *qchan,
-							struct list_head *head)
-{
-	struct qdma_sg_blk *sgb_tmp, *_sgb_tmp;
-	/* free the QDMA SG pool block */
-	list_for_each_entry_safe(sgb_tmp, _sgb_tmp, head, list) {
-		sgb_tmp->blk_virt_addr = (void *)((struct qdma_sg_blk *)
-						sgb_tmp->blk_virt_addr - 1);
-		sgb_tmp->blk_bus_addr = sgb_tmp->blk_bus_addr
-							- sizeof(*sgb_tmp);
-		dma_pool_free(qchan->sg_blk_pool, sgb_tmp->blk_virt_addr,
-						sgb_tmp->blk_bus_addr);
-	}
-
-}
-
 static void __cold dpaa2_dpdmai_free_comp(struct dpaa2_qdma_chan *qchan,
 						struct list_head *head)
 {
@@ -713,10 +557,6 @@ static void __cold dpaa2_dpdmai_free_comp(struct dpaa2_qdma_chan *qchan,
 		dma_pool_free(qchan->fd_pool,
 			comp_tmp->fd_virt_addr,
 			comp_tmp->fd_bus_addr);
-		/* free the SG source block on comp */
-		dpaa2_dpdmai_free_pool(qchan, &comp_tmp->sg_src_head);
-		/* free the SG destination block on comp */
-		dpaa2_dpdmai_free_pool(qchan, &comp_tmp->sg_dst_head);
 		list_del(&comp_tmp->list);
 		kfree(comp_tmp);
 	}
@@ -734,9 +574,7 @@ static void __cold dpaa2_dpdmai_free_channels(
 		qchan = &dpaa2_qdma->chans[i];
 		dpaa2_dpdmai_free_comp(qchan, &qchan->comp_used);
 		dpaa2_dpdmai_free_comp(qchan, &qchan->comp_free);
-		dpaa2_dpdmai_free_pool(qchan, &qchan->sgb_free);
 		dma_pool_destroy(qchan->fd_pool);
-		dma_pool_destroy(qchan->sg_blk_pool);
 	}
 }
 
@@ -757,15 +595,10 @@ static int dpaa2_dpdmai_alloc_channels(struct dpaa2_qdma_engine *dpaa2_qdma)
 					dev, FD_POOL_SIZE, 32, 0);
 		if (!dpaa2_chan->fd_pool)
 			return -1;
-		dpaa2_chan->sg_blk_pool = dma_pool_create("sg_blk_pool",
-					dev, SG_POOL_SIZE, 32, 0);
-		if (!dpaa2_chan->sg_blk_pool)
-			return -1;
 
 		spin_lock_init(&dpaa2_chan->queue_lock);
 		INIT_LIST_HEAD(&dpaa2_chan->comp_used);
 		INIT_LIST_HEAD(&dpaa2_chan->comp_free);
-		INIT_LIST_HEAD(&dpaa2_chan->sgb_free);
 	}
 	return 0;
 }
@@ -790,7 +623,10 @@ static int dpaa2_qdma_probe(struct fsl_mc_device *dpdmai_dev)
 	/* obtain a MC portal */
 	err = fsl_mc_portal_allocate(dpdmai_dev, 0, &priv->mc_io);
 	if (err) {
-		dev_err(dev, "MC portal allocation failed\n");
+		if (err == -ENXIO)
+			err = -EPROBE_DEFER;
+		else
+			dev_err(dev, "MC portal allocation failed\n");
 		goto err_mcportal;
 	}
 
@@ -838,6 +674,11 @@ static int dpaa2_qdma_probe(struct fsl_mc_device *dpdmai_dev)
 		dev_err(dev, "QDMA alloc channels faile\n");
 		goto err_reg;
 	}
+
+	if (soc_device_match(soc_fixup_tuning))
+		dpaa2_qdma->qdma_wrtype_fixup = true;
+	else
+		dpaa2_qdma->qdma_wrtype_fixup = false;
 
 	dma_cap_set(DMA_PRIVATE, dpaa2_qdma->dma_dev.cap_mask);
 	dma_cap_set(DMA_SLAVE, dpaa2_qdma->dma_dev.cap_mask);

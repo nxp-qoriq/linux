@@ -1,34 +1,6 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
 /* Copyright 2013-2016 Freescale Semiconductor Inc.
  * Copyright 2016 NXP
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- * * Redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer.
- * * Redistributions in binary form must reproduce the above copyright
- * notice, this list of conditions and the following disclaimer in the
- * documentation and/or other materials provided with the distribution.
- * * Neither the name of the above-listed copyright holders nor the
- * names of any contributors may be used to endorse or promote products
- * derived from this software without specific prior written permission.
- *
- *
- * ALTERNATIVELY, this software may be distributed under the terms of the
- * GNU General Public License ("GPL") as published by the Free Software
- * Foundation, either version 2 of that License or (at your option) any
- * later version.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <linux/kernel.h>
 #include <linux/errno.h>
@@ -884,6 +856,36 @@ int dpni_set_link_cfg(struct fsl_mc_io *mc_io,
 }
 
 /**
+ * dpni_set_link_cfg_v2() - set the link configuration.
+ * @mc_io:      Pointer to MC portal's I/O object
+ * @cmd_flags:  Command flags; one or more of 'MC_CMD_FLAG_'
+ * @token:      Token of DPNI object
+ * @cfg:        Link configuration
+ *
+ * Return:      '0' on Success; Error code otherwise.
+ */
+int dpni_set_link_cfg_v2(struct fsl_mc_io *mc_io,
+			 u32 cmd_flags,
+			 u16 token,
+			 const struct dpni_link_cfg *cfg)
+{
+	struct fsl_mc_command cmd = { 0 };
+	struct dpni_cmd_set_link_cfg_v2 *cmd_params;
+
+	/* prepare command */
+	cmd.header = mc_encode_cmd_header(DPNI_CMDID_SET_LINK_CFG_V2,
+					  cmd_flags,
+					  token);
+	cmd_params = (struct dpni_cmd_set_link_cfg_v2 *)cmd.params;
+	cmd_params->rate = cpu_to_le32(cfg->rate);
+	cmd_params->options = cpu_to_le64(cfg->options);
+	cmd_params->advertising = cpu_to_le64(cfg->advertising);
+
+	/* send command to mc*/
+	return mc_send_command(mc_io, &cmd);
+}
+
+/**
  * dpni_get_link_state() - Return the link state (either up or down)
  * @mc_io:	Pointer to MC portal's I/O object
  * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
@@ -916,6 +918,46 @@ int dpni_get_link_state(struct fsl_mc_io *mc_io,
 	state->up = dpni_get_field(rsp_params->flags, LINK_STATE);
 	state->rate = le32_to_cpu(rsp_params->rate);
 	state->options = le64_to_cpu(rsp_params->options);
+
+	return 0;
+}
+
+/**
+ * dpni_get_link_state_v2() - Return the link state (either up or down)
+ * @mc_io:      Pointer to MC portal's I/O object
+ * @cmd_flags:  Command flags; one or more of 'MC_CMD_FLAG_'
+ * @token:      Token of DPNI object
+ * @state:      Returned link state;
+ *
+ * Return:      '0' on Success; Error code otherwise.
+ */
+int dpni_get_link_state_v2(struct fsl_mc_io *mc_io,
+			   u32 cmd_flags,
+			   u16 token,
+			   struct dpni_link_state *state)
+{
+	struct fsl_mc_command cmd = { 0 };
+	struct dpni_rsp_get_link_state_v2 *rsp_params;
+	int err;
+
+	/* prepare command */
+	cmd.header = mc_encode_cmd_header(DPNI_CMDID_GET_LINK_STATE_V2,
+					  cmd_flags,
+					  token);
+
+	/* send command to mc*/
+	err = mc_send_command(mc_io, &cmd);
+	if (err)
+		return err;
+
+	/* retrieve response parameters */
+	rsp_params = (struct dpni_rsp_get_link_state_v2 *)cmd.params;
+	state->up = dpni_get_field(rsp_params->flags, LINK_STATE);
+	state->state_valid = dpni_get_field(rsp_params->flags, STATE_VALID);
+	state->rate = le32_to_cpu(rsp_params->rate);
+	state->options = le64_to_cpu(rsp_params->options);
+	state->supported = le64_to_cpu(rsp_params->supported);
+	state->advertising = le64_to_cpu(rsp_params->advertising);
 
 	return 0;
 }
@@ -1543,84 +1585,6 @@ int dpni_remove_qos_entry(struct fsl_mc_io *mc_io,
 }
 
 /**
- * dpni_add_fs_entry() - Add Flow Steering entry for a specific traffic class
- *			(to select a flow ID)
- * @mc_io:	Pointer to MC portal's I/O object
- * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
- * @token:	Token of DPNI object
- * @tc_id:	Traffic class selection (0-7)
- * @index:	Location in the QoS table where to insert the entry.
- *		Only relevant if MASKING is enabled for QoS
- *		classification on this DPNI, it is ignored for exact match.
- * @cfg:	Flow steering rule to add
- * @action:	Action to be taken as result of a classification hit
- *
- * Return:	'0' on Success; Error code otherwise.
- */
-int dpni_add_fs_entry(struct fsl_mc_io *mc_io,
-		      u32 cmd_flags,
-		      u16 token,
-		      u8 tc_id,
-		      u16 index,
-		      const struct dpni_rule_cfg *cfg,
-		      const struct dpni_fs_action_cfg *action)
-{
-	struct dpni_cmd_add_fs_entry *cmd_params;
-	struct fsl_mc_command cmd = { 0 };
-
-	/* prepare command */
-	cmd.header = mc_encode_cmd_header(DPNI_CMDID_ADD_FS_ENT,
-					  cmd_flags,
-					  token);
-	cmd_params = (struct dpni_cmd_add_fs_entry *)cmd.params;
-	cmd_params->tc_id = tc_id;
-	cmd_params->key_size = cfg->key_size;
-	cmd_params->index = cpu_to_le16(index);
-	cmd_params->key_iova = cpu_to_le64(cfg->key_iova);
-	cmd_params->mask_iova = cpu_to_le64(cfg->mask_iova);
-	cmd_params->options = cpu_to_le16(action->options);
-	cmd_params->flow_id = cpu_to_le16(action->flow_id);
-	cmd_params->flc = cpu_to_le64(action->flc);
-
-	/* send command to mc*/
-	return mc_send_command(mc_io, &cmd);
-}
-
-/**
- * dpni_remove_fs_entry() - Remove Flow Steering entry from a specific
- *			    traffic class
- * @mc_io:	Pointer to MC portal's I/O object
- * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
- * @token:	Token of DPNI object
- * @tc_id:	Traffic class selection (0-7)
- * @cfg:	Flow steering rule to remove
- *
- * Return:	'0' on Success; Error code otherwise.
- */
-int dpni_remove_fs_entry(struct fsl_mc_io *mc_io,
-			 u32 cmd_flags,
-			 u16 token,
-			 u8 tc_id,
-			 const struct dpni_rule_cfg *cfg)
-{
-	struct dpni_cmd_remove_fs_entry *cmd_params;
-	struct fsl_mc_command cmd = { 0 };
-
-	/* prepare command */
-	cmd.header = mc_encode_cmd_header(DPNI_CMDID_REMOVE_FS_ENT,
-					  cmd_flags,
-					  token);
-	cmd_params = (struct dpni_cmd_remove_fs_entry *)cmd.params;
-	cmd_params->tc_id = tc_id;
-	cmd_params->key_size = cfg->key_size;
-	cmd_params->key_iova = cpu_to_le64(cfg->key_iova);
-	cmd_params->mask_iova = cpu_to_le64(cfg->mask_iova);
-
-	/* send command to mc*/
-	return mc_send_command(mc_io, &cmd);
-}
-
-/**
  * dpni_set_congestion_notification() - Set traffic class congestion
  *					notification configuration
  * @mc_io:	Pointer to MC portal's I/O object
@@ -2068,11 +2032,11 @@ int dpni_set_rx_fs_dist(struct fsl_mc_io *mc_io,
 					  cmd_flags,
 					  token);
 	cmd_params = (struct dpni_cmd_set_rx_fs_dist *)cmd.params;
-	cmd_params->dist_size = le16_to_cpu(cfg->dist_size);
+	cmd_params->dist_size = cpu_to_le16(cfg->dist_size);
 	dpni_set_field(cmd_params->enable, RX_FS_DIST_ENABLE, cfg->enable);
 	cmd_params->tc = cfg->tc;
-	cmd_params->miss_flow_id = le16_to_cpu(cfg->fs_miss_flow_id);
-	cmd_params->key_cfg_iova = le64_to_cpu(cfg->key_cfg_iova);
+	cmd_params->miss_flow_id = cpu_to_le16(cfg->fs_miss_flow_id);
+	cmd_params->key_cfg_iova = cpu_to_le64(cfg->key_cfg_iova);
 
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
@@ -2102,10 +2066,88 @@ int dpni_set_rx_hash_dist(struct fsl_mc_io *mc_io,
 					  cmd_flags,
 					  token);
 	cmd_params = (struct dpni_cmd_set_rx_hash_dist *)cmd.params;
-	cmd_params->dist_size = le16_to_cpu(cfg->dist_size);
+	cmd_params->dist_size = cpu_to_le16(cfg->dist_size);
 	dpni_set_field(cmd_params->enable, RX_FS_DIST_ENABLE, cfg->enable);
 	cmd_params->tc = cfg->tc;
-	cmd_params->key_cfg_iova = le64_to_cpu(cfg->key_cfg_iova);
+	cmd_params->key_cfg_iova = cpu_to_le64(cfg->key_cfg_iova);
+
+	/* send command to mc*/
+	return mc_send_command(mc_io, &cmd);
+}
+
+/**
+ * dpni_add_fs_entry() - Add Flow Steering entry for a specific traffic class
+ *			(to select a flow ID)
+ * @mc_io:	Pointer to MC portal's I/O object
+ * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
+ * @token:	Token of DPNI object
+ * @tc_id:	Traffic class selection (0-7)
+ * @index:	Location in the QoS table where to insert the entry.
+ *		Only relevant if MASKING is enabled for QoS
+ *		classification on this DPNI, it is ignored for exact match.
+ * @cfg:	Flow steering rule to add
+ * @action:	Action to be taken as result of a classification hit
+ *
+ * Return:	'0' on Success; Error code otherwise.
+ */
+int dpni_add_fs_entry(struct fsl_mc_io *mc_io,
+		      u32 cmd_flags,
+		      u16 token,
+		      u8 tc_id,
+		      u16 index,
+		      const struct dpni_rule_cfg *cfg,
+		      const struct dpni_fs_action_cfg *action)
+{
+	struct dpni_cmd_add_fs_entry *cmd_params;
+	struct fsl_mc_command cmd = { 0 };
+
+	/* prepare command */
+	cmd.header = mc_encode_cmd_header(DPNI_CMDID_ADD_FS_ENT,
+					  cmd_flags,
+					  token);
+	cmd_params = (struct dpni_cmd_add_fs_entry *)cmd.params;
+	cmd_params->tc_id = tc_id;
+	cmd_params->key_size = cfg->key_size;
+	cmd_params->index = cpu_to_le16(index);
+	cmd_params->key_iova = cpu_to_le64(cfg->key_iova);
+	cmd_params->mask_iova = cpu_to_le64(cfg->mask_iova);
+	cmd_params->options = cpu_to_le16(action->options);
+	cmd_params->flow_id = cpu_to_le16(action->flow_id);
+	cmd_params->flc = cpu_to_le64(action->flc);
+
+	/* send command to mc*/
+	return mc_send_command(mc_io, &cmd);
+}
+
+/**
+ * dpni_remove_fs_entry() - Remove Flow Steering entry from a specific
+ *			    traffic class
+ * @mc_io:	Pointer to MC portal's I/O object
+ * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
+ * @token:	Token of DPNI object
+ * @tc_id:	Traffic class selection (0-7)
+ * @cfg:	Flow steering rule to remove
+ *
+ * Return:	'0' on Success; Error code otherwise.
+ */
+int dpni_remove_fs_entry(struct fsl_mc_io *mc_io,
+			 u32 cmd_flags,
+			 u16 token,
+			 u8 tc_id,
+			 const struct dpni_rule_cfg *cfg)
+{
+	struct dpni_cmd_remove_fs_entry *cmd_params;
+	struct fsl_mc_command cmd = { 0 };
+
+	/* prepare command */
+	cmd.header = mc_encode_cmd_header(DPNI_CMDID_REMOVE_FS_ENT,
+					  cmd_flags,
+					  token);
+	cmd_params = (struct dpni_cmd_remove_fs_entry *)cmd.params;
+	cmd_params->tc_id = tc_id;
+	cmd_params->key_size = cfg->key_size;
+	cmd_params->key_iova = cpu_to_le64(cfg->key_iova);
+	cmd_params->mask_iova = cpu_to_le64(cfg->mask_iova);
 
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);

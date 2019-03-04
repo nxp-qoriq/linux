@@ -231,6 +231,9 @@
 #define DWC3_GCTL_GBLHIBERNATIONEN	BIT(1)
 #define DWC3_GCTL_DSBLCLKGTNG		BIT(0)
 
+/* Global User Control Register */
+#define DWC3_GUCTL_HSTINAUTORETRY	BIT(14)
+
 /* Global User Control 1 Register */
 #define DWC3_GUCTL1_TX_IPGAP_LINECHECK_DIS	BIT(28)
 #define DWC3_GUCTL1_DEV_L1_EXIT_BY_HW	BIT(24)
@@ -323,11 +326,6 @@
 
 /* Global HWPARAMS6 Register */
 #define DWC3_GHWPARAMS6_EN_FPGA			BIT(7)
-
-/* Global Frame Length Adjustment Register */
-#define GFLADJ_30MHZ_REG_SEL           (1 << 7)
-#define GFLADJ_30MHZ(n)                        ((n) & 0x3f)
-#define GFLADJ_30MHZ_DEFAULT           0x20
 
 /* Global HWPARAMS7 Register */
 #define DWC3_GHWPARAMS7_RAM1_DEPTH(n)	((n) & 0xffff)
@@ -507,6 +505,14 @@
 #define DWC3_DEV_IMOD_COUNT_MASK	(0xffff << 16)
 #define DWC3_DEV_IMOD_INTERVAL_SHIFT	0
 #define DWC3_DEV_IMOD_INTERVAL_MASK	(0xffff << 0)
+
+/* Partial XHCI Register and Bit fields for quirk */
+#define XHCI_HCSPARAMS1		0x4
+#define XHCI_PORTSC_BASE	0x400
+#define PORT_POWER			(1 << 9)
+#define HCS_MAX_PORTS(p)	(((p) >> 24) & 0x7f)
+#define XHCI_HC_LENGTH(p)	(((p)>>00)&0x00ff)
+#define HC_LENGTH(p)		XHCI_HC_LENGTH(p)
 
 /* Structures */
 
@@ -905,6 +911,8 @@ struct dwc3_scratchpad_array {
  * @quirk_stop_transfer_in_block: prevent block transmission from being
  *				interrupted
  * @quirk_stop_ep_in_u1: replace stop commad with disable slot command
+ * @host-vbus-glitches: set to avoid vbus glitch during
+ *                      xhci reset.
  * @imod_interval: set the interrupt moderation interval in 250ns
  *                 increments or 0 to disable.
  */
@@ -1039,8 +1047,6 @@ struct dwc3 {
 	unsigned		has_lpm_erratum:1;
 	unsigned		is_utmi_l1_suspend:1;
 	unsigned		is_fpga:1;
-	unsigned                needs_fifo_resize:1;
-	unsigned                configure_gfladj:1;
 	unsigned		pending_events:1;
 	unsigned		pullups_connected:1;
 	unsigned		setup_packet_pending:1;
@@ -1070,6 +1076,7 @@ struct dwc3 {
 	unsigned                quirk_reverse_in_out:1;
 	unsigned                quirk_stop_transfer_in_block:1;
 	unsigned                quirk_stop_ep_in_u1:1;
+	unsigned		host_vbus_glitches:1;
 
 	u16			imod_interval;
 };

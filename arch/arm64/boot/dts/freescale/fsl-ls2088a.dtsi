@@ -12,7 +12,7 @@
 #include "fsl-ls208xa.dtsi"
 
 &cpu {
-	cpu0: cpu@0 {
+	cooling_map0: cpu0: cpu@0 {
 		device_type = "cpu";
 		compatible = "arm,cortex-a72";
 		reg = <0x0>;
@@ -31,7 +31,7 @@
 		next-level-cache = <&cluster0_l2>;
 	};
 
-	cpu2: cpu@100 {
+	cooling_map1: cpu2: cpu@100 {
 		device_type = "cpu";
 		compatible = "arm,cortex-a72";
 		reg = <0x100>;
@@ -50,7 +50,7 @@
 		next-level-cache = <&cluster1_l2>;
 	};
 
-	cpu4: cpu@200 {
+	cooling_map2: cpu4: cpu@200 {
 		device_type = "cpu";
 		compatible = "arm,cortex-a72";
 		reg = <0x200>;
@@ -69,7 +69,7 @@
 		next-level-cache = <&cluster2_l2>;
 	};
 
-	cpu6: cpu@300 {
+	cooling_map3: cpu6: cpu@300 {
 		device_type = "cpu";
 		compatible = "arm,cortex-a72";
 		reg = <0x300>;

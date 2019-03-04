@@ -1,19 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright 2015-2016 Freescale Semiconductor, Inc.
  * Copyright 2017 NXP
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef _PFE_ETH_H_
@@ -49,22 +37,18 @@
 #define GEMAC_NO_PHY            BIT(0)
 
 struct ls1012a_eth_platform_data {
-	/* device specific information */
-	u32 device_flags;
-	char name[16];
-
 	/* board specific information */
 	u32 mii_config;
 	u32 phy_flags;
 	u32 gem_id;
-	u32 bus_id;
 	u32 phy_id;
 	u32 mdio_muxval;
 	u8 mac_addr[ETH_ALEN];
+	struct device_node	*phy_node;
 };
 
 struct ls1012a_mdio_platform_data {
-	int enabled;
+	int id;
 	int irq[32];
 	u32 phy_mask;
 	int mdc_div;
@@ -136,17 +120,13 @@ struct  pfe_eth_priv_s {
 	unsigned int		event_status;
 	int			irq;
 	void			*EMAC_baseaddr;
-	/* This points to the EMAC base from where we access PHY */
-	void			*PHY_baseaddr;
 	void			*GPI_baseaddr;
 	/* PHY stuff */
 	struct phy_device	*phydev;
 	int			oldspeed;
 	int			oldduplex;
 	int			oldlink;
-	/* mdio info */
-	int			mdc_div;
-	struct mii_bus		*mii_bus;
+	struct device_node	*phy_node;
 	struct clk		*gemtx_clk;
 	int			wol;
 	int			pause_flag;
@@ -174,6 +154,16 @@ struct  pfe_eth_priv_s {
 
 struct pfe_eth {
 	struct pfe_eth_priv_s *eth_priv[3];
+};
+
+struct pfe_mdio_priv_s {
+	void __iomem *mdio_base;
+	int			mdc_div;
+	struct mii_bus		*mii_bus;
+};
+
+struct pfe_mdio {
+	struct pfe_mdio_priv_s *mdio_priv[3];
 };
 
 int pfe_eth_init(struct pfe *pfe);

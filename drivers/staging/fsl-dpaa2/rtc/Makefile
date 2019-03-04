@@ -1,5 +1,5 @@
 
-obj-$(CONFIG_PTP_1588_CLOCK_DPAA2) += dpaa2-rtc.o
+obj-$(CONFIG_FSL_DPAA2_PTP_CLOCK) += dpaa2-rtc.o
 
 dpaa2-rtc-objs := rtc.o dprtc.o
 

@@ -35,8 +35,7 @@
 
 #include <linux/fsl/mc.h>
 
-#include "dprtc.h"
-#include "dprtc-cmd.h"
+#include "rtc.h"
 
 #define N_EXT_TS	2
 
@@ -151,7 +150,6 @@ static int rtc_probe(struct fsl_mc_device *mc_dev)
 {
 	struct device		*dev;
 	int			err = 0;
-	int			dpaa2_phc_index;
 	u32			tmr_add = 0;
 
 	if (!mc_dev)

@@ -1,33 +1,6 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
 /* Copyright 2014-2016 Freescale Semiconductor Inc.
  * Copyright 2016-2017 NXP
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *     * Redistributions of source code must retain the above copyright
- *	 notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above copyright
- *	 notice, this list of conditions and the following disclaimer in the
- *	 documentation and/or other materials provided with the distribution.
- *     * Neither the name of Freescale Semiconductor nor the
- *	 names of its contributors may be used to endorse or promote products
- *	 derived from this software without specific prior written permission.
- *
- *
- * ALTERNATIVELY, this software may be distributed under the terms of the
- * GNU General Public License ("GPL") as published by the Free Software
- * Foundation, either version 2 of that License or (at your option) any
- * later version.
- *
- * THIS SOFTWARE IS PROVIDED BY Freescale Semiconductor ``AS IS'' AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL Freescale Semiconductor BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include <linux/init.h>
 #include <linux/module.h>
@@ -56,8 +29,6 @@
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_AUTHOR("Freescale Semiconductor, Inc");
 MODULE_DESCRIPTION("Freescale DPAA2 Ethernet Driver");
-
-const char dpaa2_eth_drv_version[] = "0.1";
 
 static void *dpaa2_iova_to_virt(struct iommu_domain *domain,
 				dma_addr_t iova_addr)
@@ -129,8 +100,7 @@ free_buf:
 }
 
 /* Build a linear skb based on a single-buffer frame descriptor */
-static struct sk_buff *build_linear_skb(struct dpaa2_eth_priv *priv,
-					struct dpaa2_eth_channel *ch,
+static struct sk_buff *build_linear_skb(struct dpaa2_eth_channel *ch,
 					const struct dpaa2_fd *fd,
 					void *fd_vaddr)
 {
@@ -276,6 +246,9 @@ static int dpaa2_eth_xdp_tx(struct dpaa2_eth_priv *priv,
 	return err;
 }
 
+/* Free buffers acquired from the buffer pool or which were meant to
+ * be released in the pool
+ */
 static void free_bufs(struct dpaa2_eth_priv *priv, u64 *buf_array, int count)
 {
 	struct device *dev = priv->net_dev->dev.parent;
@@ -283,7 +256,6 @@ static void free_bufs(struct dpaa2_eth_priv *priv, u64 *buf_array, int count)
 	int i;
 
 	for (i = 0; i < count; i++) {
-		/* Same logic as on regular Rx path */
 		vaddr = dpaa2_iova_to_virt(priv->iommu_domain, buf_array[i]);
 		dma_unmap_single(dev, buf_array[i], DPAA2_ETH_RX_BUF_SIZE,
 				 DMA_BIDIRECTIONAL);
@@ -426,7 +398,7 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 
 		dma_unmap_single(dev, addr, DPAA2_ETH_RX_BUF_SIZE,
 				 DMA_BIDIRECTIONAL);
-		skb = build_linear_skb(priv, ch, fd, vaddr);
+		skb = build_linear_skb(ch, fd, vaddr);
 	} else if (fd_format == dpaa2_fd_sg) {
 		dma_unmap_single(dev, addr, DPAA2_ETH_RX_BUF_SIZE,
 				 DMA_BIDIRECTIONAL);
@@ -447,11 +419,13 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 	/* Get the timestamp value */
 	if (priv->ts_rx_en) {
 		struct skb_shared_hwtstamps *shhwtstamps = skb_hwtstamps(skb);
-		u64 *ns = dpaa2_get_ts(vaddr, false);
+		__le64 *ts = dpaa2_get_ts(vaddr, false);
+		u64 ns;
 
-		*ns = DPAA2_PTP_NOMINAL_FREQ_PERIOD_NS * le64_to_cpup(ns);
 		memset(shhwtstamps, 0, sizeof(*shhwtstamps));
-		shhwtstamps->hwtstamp = ns_to_ktime(*ns);
+
+		ns = DPAA2_PTP_NOMINAL_FREQ_PERIOD_NS * le64_to_cpup(ts);
+		shhwtstamps->hwtstamp = ns_to_ktime(ns);
 	}
 
 	/* Check if we need to validate the L4 csum */
@@ -461,11 +435,6 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 	}
 
 	skb->protocol = eth_type_trans(skb, priv->net_dev);
-
-	/* Record Rx queue - this will be used when picking a Tx queue to
-	 * forward the frames. We're keeping flow affinity through the
-	 * network stack.
-	 */
 	skb_record_rx_queue(skb, queue_id);
 
 	percpu_stats->rx_packets++;
@@ -533,13 +502,10 @@ static void dpaa2_eth_rx_err(struct dpaa2_eth_priv *priv,
  * make sure we don't accidentally issue another volatile dequeue which would
  * overwrite (leak) frames already in the store.
  *
- * The number of frames is returned using the last 2 output arguments,
- * separately for Rx and Tx confirmations.
- *
  * Observance of NAPI budget is not our concern, leaving that to the caller.
  */
-static bool consume_frames(struct dpaa2_eth_channel *ch, int *rx_cleaned,
-			   int *tx_conf_cleaned)
+static int consume_frames(struct dpaa2_eth_channel *ch,
+			  enum dpaa2_eth_fq_type *type)
 {
 	struct dpaa2_eth_priv *priv = ch->priv;
 	struct dpaa2_eth_fq *fq = NULL;
@@ -563,35 +529,24 @@ static bool consume_frames(struct dpaa2_eth_channel *ch, int *rx_cleaned,
 		prefetch(fd);
 
 		fq = (struct dpaa2_eth_fq *)(uintptr_t)dpaa2_dq_fqd_ctx(dq);
+
 		fq->consume(priv, ch, fd, &ch->napi, fq->flowid);
 		cleaned++;
 	} while (!is_last);
 
 	if (!cleaned)
-		return false;
-
-	/* All frames brought in store by a volatile dequeue
-	 * come from the same queue
-	 */
-	if (fq->type == DPAA2_TX_CONF_FQ) {
-		*tx_conf_cleaned += cleaned;
-	} else {
-		*rx_cleaned += cleaned;
-		/* If we processed XDP_REDIRECT frames, flush them now */
-		/* FIXME: Since we don't actually do anything inside
-		 * ndo_xdp_flush, we call it here simply for compliance
-		 * reasons
-		 */
-		if (ch->flush) {
-			xdp_do_flush_map();
-			ch->flush = false;
-		}
-	}
+		return 0;
 
 	fq->stats.frames += cleaned;
 	ch->stats.frames += cleaned;
 
-	return true;
+	/* A dequeue operation only pulls frames from a single queue
+	 * into the store. Return the frame queue type as an out param.
+	 */
+	if (type)
+		*type = fq->type;
+
+	return cleaned;
 }
 
 /* Configure the egress frame annotation for timestamp update */
@@ -769,12 +724,9 @@ static int build_single_fd(struct dpaa2_eth_priv *priv,
  * back-pointed to is also freed.
  * This can be called either from dpaa2_eth_tx_conf() or on the error path of
  * dpaa2_eth_tx().
- * Optionally, return the frame annotation status word (FAS), which needs
- * to be checked if we're on the confirmation path.
  */
-static void free_tx_fd(struct dpaa2_eth_priv *priv,
-		       const struct dpaa2_fd *fd,
-		       bool in_napi)
+static void free_tx_fd(const struct dpaa2_eth_priv *priv,
+		       const struct dpaa2_fd *fd, bool in_napi)
 {
 	struct device *dev = priv->net_dev->dev.parent;
 	dma_addr_t fd_addr;
@@ -825,13 +777,13 @@ static void free_tx_fd(struct dpaa2_eth_priv *priv,
 	/* Get the timestamp value */
 	if (priv->ts_tx_en && skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP) {
 		struct skb_shared_hwtstamps shhwtstamps;
-		u64 *ns;
+		__le64 *ts = dpaa2_get_ts(buffer_start, true);
+		u64 ns;
 
 		memset(&shhwtstamps, 0, sizeof(shhwtstamps));
 
-		ns = dpaa2_get_ts(buffer_start, true);
-		*ns = DPAA2_PTP_NOMINAL_FREQ_PERIOD_NS * le64_to_cpup(ns);
-		shhwtstamps.hwtstamp = ns_to_ktime(*ns);
+		ns = DPAA2_PTP_NOMINAL_FREQ_PERIOD_NS * le64_to_cpup(ts);
+		shhwtstamps.hwtstamp = ns_to_ktime(ns);
 		skb_tstamp_tx(skb, &shhwtstamps);
 	}
 
@@ -864,7 +816,7 @@ static netdev_tx_t dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 	 */
 	if (net_dev->num_tc)
 		prio = net_dev->num_tc - prio - 1;
- 
+
 	queue_mapping %= dpaa2_eth_queue_count(priv);
 	fq = &priv->fq[queue_mapping];
 
@@ -881,7 +833,6 @@ static netdev_tx_t dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 	percpu_stats = this_cpu_ptr(priv->percpu_stats);
 	percpu_extras = this_cpu_ptr(priv->percpu_extras);
 
-	/* For non-linear skb we don't need a minimum headroom */
 	needed_headroom = dpaa2_eth_needed_headroom(priv, skb);
 	if (skb_headroom(skb) < needed_headroom) {
 		struct sk_buff *ns;
@@ -892,8 +843,10 @@ static netdev_tx_t dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 			goto err_alloc_headroom;
 		}
 		percpu_extras->tx_reallocs++;
+
 		if (skb->sk)
 			skb_set_owner_w(ns, skb->sk);
+
 		dev_kfree_skb(skb);
 		skb = ns;
 	}
@@ -924,14 +877,14 @@ static netdev_tx_t dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 		goto err_build_fd;
 	}
 
-	/* Tracing point */
-	trace_dpaa2_tx_fd(net_dev, &fd);
-
 	if (dpaa2_eth_ceetm_is_enabled(priv)) {
 		err = dpaa2_ceetm_classify(skb, net_dev->qdisc, &ch_id, &prio);
 		if (err)
 			goto err_ceetm_classify;
 	}
+
+	/* Tracing point */
+	trace_dpaa2_tx_fd(net_dev, &fd);
 
 	for (i = 0; i < DPAA2_ETH_ENQUEUE_RETRIES; i++) {
 		err = dpaa2_io_service_enqueue_qd(fq->channel->dpio,
@@ -963,7 +916,7 @@ err_alloc_headroom:
 
 /* Tx confirmation frame processing routine */
 static void dpaa2_eth_tx_conf(struct dpaa2_eth_priv *priv,
-			      struct dpaa2_eth_channel *ch,
+			      struct dpaa2_eth_channel *ch __always_unused,
 			      const struct dpaa2_fd *fd,
 			      struct napi_struct *napi __always_unused,
 			      u16 queue_id)
@@ -1090,8 +1043,8 @@ release_bufs:
 					       buf_array, i)) == -EBUSY)
 		cpu_relax();
 
-	/* If release command failed, clean up and bail out; not much
-	 * else we can do about it
+	/* If release command failed, clean up and bail out;
+	 * not much else we can do about it
 	 */
 	if (err) {
 		free_bufs(priv, buf_array, i);
@@ -1103,7 +1056,9 @@ release_bufs:
 err_map:
 	skb_free_frag(buf);
 err_alloc:
-	/* If we managed to allocate at least some buffers, release them */
+	/* If we managed to allocate at least some buffers,
+	 * release them to hardware
+	 */
 	if (i)
 		goto release_bufs;
 
@@ -1218,15 +1173,16 @@ static int pull_channel(struct dpaa2_eth_channel *ch)
 /* NAPI poll routine
  *
  * Frames are dequeued from the QMan channel associated with this NAPI context.
- * Rx and (if configured) Rx error frames count towards the NAPI budget. Tx
- * confirmation frames are limited by a threshold per NAPI poll cycle.
+ * Rx, Tx confirmation and (if configured) Rx error frames all count
+ * towards the NAPI budget.
  */
 static int dpaa2_eth_poll(struct napi_struct *napi, int budget)
 {
 	struct dpaa2_eth_channel *ch;
-	int rx_cleaned = 0, tx_conf_cleaned = 0;
-	bool store_cleaned;
 	struct dpaa2_eth_priv *priv;
+	int rx_cleaned = 0, txconf_cleaned = 0;
+	enum dpaa2_eth_fq_type type = 0;
+	int store_cleaned;
 	int err;
 
 	ch = container_of(napi, struct dpaa2_eth_channel, napi);
@@ -1240,27 +1196,37 @@ static int dpaa2_eth_poll(struct napi_struct *napi, int budget)
 		/* Refill pool if appropriate */
 		refill_pool(priv, ch, priv->bpid);
 
-		store_cleaned = consume_frames(ch, &rx_cleaned,
-					       &tx_conf_cleaned);
+		store_cleaned = consume_frames(ch, &type);
+		if (type == DPAA2_RX_FQ) {
+			rx_cleaned += store_cleaned;
+			/* If these are XDP_REDIRECT frames, flush them now */
+			/* TODO: Do we need this? */
+			if (ch->flush) {
+				xdp_do_flush_map();
+				ch->flush = false;
+			}
+		} else {
+			txconf_cleaned += store_cleaned;
+		}
 
-		/* If we've either consumed the budget with Rx frames,
-		 * or reached the Tx conf threshold, we're done.
+		/* If we either consumed the whole NAPI budget with Rx frames
+		 * or we reached the Tx confirmations threshold, we're done.
 		 */
 		if (rx_cleaned >= budget ||
-		    tx_conf_cleaned >= TX_CONF_PER_NAPI_POLL)
+		    txconf_cleaned >= DPAA2_ETH_TXCONF_PER_NAPI)
 			return budget;
 	} while (store_cleaned);
 
-	/* We didn't consume the entire budget, finish napi and
+	/* We didn't consume the entire budget, so finish napi and
 	 * re-enable data availability notifications
 	 */
-	napi_complete(napi);
+	napi_complete_done(napi, rx_cleaned);
 	do {
 		err = dpaa2_io_service_rearm(ch->dpio, &ch->nctx);
 		cpu_relax();
 	} while (err == -EBUSY);
-		WARN_ONCE(err, "CDAN notifications rearm failed on core %d",
-			  ch->nctx.desired_cpu);
+	WARN_ONCE(err, "CDAN notifications rearm failed on core %d",
+		  ch->nctx.desired_cpu);
 
 	return max(rx_cleaned, 1);
 }
@@ -1289,7 +1255,7 @@ static void disable_ch_napi(struct dpaa2_eth_priv *priv)
 
 static int link_state_update(struct dpaa2_eth_priv *priv)
 {
-	struct dpni_link_state state;
+	struct dpni_link_state state = {0};
 	int err;
 
 	err = dpni_get_link_state(priv->mc_io, 0, priv->mc_token, &state);
@@ -1374,7 +1340,7 @@ enable_err:
 static int dpaa2_eth_stop(struct net_device *net_dev)
 {
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
-	int dpni_enabled;
+	int dpni_enabled = 0;
 	int retries = 10, i;
 	int err = 0;
 
@@ -1673,10 +1639,10 @@ static int set_buffer_layout(struct dpaa2_eth_priv *priv)
 		priv->rx_buf_align = DPAA2_ETH_RX_BUF_ALIGN;
 
 	/* tx buffer */
-	buf_layout.pass_timestamp = true;
 	buf_layout.private_data_size = DPAA2_ETH_SWA_SIZE;
-	buf_layout.options = DPNI_BUF_LAYOUT_OPT_TIMESTAMP |
-			     DPNI_BUF_LAYOUT_OPT_PRIVATE_DATA_SIZE;
+	buf_layout.pass_timestamp = true;
+	buf_layout.options = DPNI_BUF_LAYOUT_OPT_PRIVATE_DATA_SIZE |
+			     DPNI_BUF_LAYOUT_OPT_TIMESTAMP;
 	err = dpni_set_buffer_layout(priv->mc_io, 0, priv->mc_token,
 				     DPNI_QUEUE_TX, &buf_layout);
 	if (err) {
@@ -1711,8 +1677,8 @@ static int set_buffer_layout(struct dpaa2_eth_priv *priv)
 	buf_layout.pass_frame_status = true;
 	buf_layout.pass_parser_result = true;
 	buf_layout.data_align = priv->rx_buf_align;
-	buf_layout.private_data_size = 0;
 	buf_layout.data_head_room = dpaa2_eth_rx_headroom(priv);
+	buf_layout.private_data_size = 0;
 	/* If XDP program is attached, reserve extra space for
 	 * potential header expansions
 	 */
@@ -1882,7 +1848,6 @@ static void dpaa2_eth_xdp_flush(struct net_device *net_dev)
 	 * so we do the actual frame enqueue in ndo_xdp_xmit
 	 */
 }
-
 static int dpaa2_eth_update_xps(struct dpaa2_eth_priv *priv)
 {
 	struct net_device *net_dev = priv->net_dev;
@@ -2136,7 +2101,7 @@ static int setup_dpio(struct dpaa2_eth_priv *priv)
 
 		/* Register the new context */
 		channel->dpio = dpaa2_io_service_select(i);
-		err = dpaa2_io_service_register(channel->dpio, nctx);
+		err = dpaa2_io_service_register(channel->dpio, nctx, dev);
 		if (err) {
 			dev_dbg(dev, "No affine DPIO for cpu %d\n", i);
 			/* If no affine DPIO for this core, there's probably
@@ -2176,7 +2141,7 @@ static int setup_dpio(struct dpaa2_eth_priv *priv)
 	return 0;
 
 err_set_cdan:
-	dpaa2_io_service_deregister(channel->dpio, nctx);
+	dpaa2_io_service_deregister(channel->dpio, nctx, dev);
 err_service_reg:
 	free_channel(priv, channel);
 err_alloc_ch:
@@ -2193,13 +2158,14 @@ err_alloc_ch:
 
 static void free_dpio(struct dpaa2_eth_priv *priv)
 {
-	int i;
+	struct device *dev = priv->net_dev->dev.parent;
 	struct dpaa2_eth_channel *ch;
+	int i;
 
 	/* deregister CDAN notifications and free channels */
 	for (i = 0; i < priv->num_channels; i++) {
 		ch = priv->channel[i];
-		dpaa2_io_service_deregister(ch->dpio, &ch->nctx);
+		dpaa2_io_service_deregister(ch->dpio, &ch->nctx, dev);
 		free_channel(priv, ch);
 	}
 }
@@ -2246,7 +2212,6 @@ static void set_fq_affinity(struct dpaa2_eth_priv *priv)
 			break;
 		case DPAA2_TX_CONF_FQ:
 			fq->target_cpu = txc_cpu;
-
 			txc_cpu = cpumask_next(txc_cpu, &priv->dpio_cpumask);
 			if (txc_cpu >= nr_cpu_ids)
 				txc_cpu = cpumask_first(&priv->dpio_cpumask);
@@ -2460,15 +2425,14 @@ static int setup_dpni(struct fsl_mc_device *ls_dev)
 	if (err)
 		goto close;
 
+	priv->cls_rule = devm_kzalloc(dev, sizeof(struct dpaa2_eth_cls_rule) *
+				      dpaa2_eth_fs_count(priv), GFP_KERNEL);
+	if (!priv->cls_rule)
+		goto close;
+
 	/* Enable congestion notifications for Tx queues */
 	err = setup_tx_congestion(priv);
 	if (err)
-		goto close;
-
-	/* allocate classification rule space */
-	priv->cls_rule = kzalloc(sizeof(*priv->cls_rule) *
-				 dpaa2_eth_fs_count(priv), GFP_KERNEL);
-	if (!priv->cls_rule)
 		goto close;
 
 	/* Enable flow control */
@@ -2477,13 +2441,11 @@ static int setup_dpni(struct fsl_mc_device *ls_dev)
 	err = dpni_set_link_cfg(priv->mc_io, 0, priv->mc_token, &cfg);
 	if (err) {
 		dev_err(dev, "dpni_set_link_cfg() failed\n");
-		goto cls_free;
+		goto close;
 	}
 
 	return 0;
 
-cls_free:
-	kfree(priv->cls_rule);
 close:
 	dpni_close(priv->mc_io, 0, priv->mc_token);
 
@@ -2501,8 +2463,6 @@ static void free_dpni(struct dpaa2_eth_priv *priv)
 			    err);
 
 	dpni_close(priv->mc_io, 0, priv->mc_token);
-
-	kfree(priv->cls_rule);
 
 	dma_unmap_single(dev, priv->cscn_dma, DPAA2_CSCN_SIZE, DMA_FROM_DEVICE);
 	kfree(priv->cscn_unaligned);
@@ -2733,8 +2693,8 @@ static int setup_rx_err_flow(struct dpaa2_eth_priv *priv,
 }
 #endif
 
-/* default hash key fields */
-static struct dpaa2_eth_dist_fields default_dist_fields[] = {
+/* Supported header fields for Rx hash distribution key */
+static const struct dpaa2_eth_dist_fields dist_fields[] = {
 	{
 		/* L2 header */
 		.rxnfc_field = RXH_L2DA,
@@ -2800,136 +2760,184 @@ static struct dpaa2_eth_dist_fields default_dist_fields[] = {
 	},
 };
 
-static int legacy_config_dist_key(struct dpaa2_eth_priv *priv,
-				  dma_addr_t key_iova)
+/* Configure the Rx hash key using the legacy API */
+static int config_legacy_hash_key(struct dpaa2_eth_priv *priv, dma_addr_t key)
 {
 	struct device *dev = priv->net_dev->dev.parent;
 	struct dpni_rx_tc_dist_cfg dist_cfg;
-	int i, err;
-
-	/* In legacy mode, we can't configure flow steering independently */
-	if (!dpaa2_eth_hash_enabled(priv))
-		return -EOPNOTSUPP;
+	int i, err = 0;
 
 	memset(&dist_cfg, 0, sizeof(dist_cfg));
 
-	dist_cfg.key_cfg_iova = key_iova;
+	dist_cfg.key_cfg_iova = key;
 	dist_cfg.dist_size = dpaa2_eth_queue_count(priv);
-	if (dpaa2_eth_fs_enabled(priv)) {
-		dist_cfg.dist_mode = DPNI_DIST_MODE_FS;
-		dist_cfg.fs_cfg.miss_action = DPNI_FS_MISS_HASH;
-	} else {
-		dist_cfg.dist_mode = DPNI_DIST_MODE_HASH;
-	}
+	dist_cfg.dist_mode = DPNI_DIST_MODE_HASH;
 
 	for (i = 0; i < dpaa2_eth_tc_count(priv); i++) {
-		err = dpni_set_rx_tc_dist(priv->mc_io, 0, priv->mc_token, i,
-					  &dist_cfg);
+		err = dpni_set_rx_tc_dist(priv->mc_io, 0, priv->mc_token,
+					  i, &dist_cfg);
 		if (err) {
 			dev_err(dev, "dpni_set_rx_tc_dist failed\n");
-			return err;
+			break;
 		}
 	}
 
-	return 0;
+	return err;
 }
 
-static int config_hash_key(struct dpaa2_eth_priv *priv, dma_addr_t key_iova)
+/* Configure the Rx hash key using the new API */
+static int config_hash_key(struct dpaa2_eth_priv *priv, dma_addr_t key)
 {
 	struct device *dev = priv->net_dev->dev.parent;
 	struct dpni_rx_dist_cfg dist_cfg;
-	int i, err;
-
-	if (!dpaa2_eth_hash_enabled(priv))
-		return -EOPNOTSUPP;
+	int i, err = 0;
 
 	memset(&dist_cfg, 0, sizeof(dist_cfg));
 
-	dist_cfg.key_cfg_iova = key_iova;
+	dist_cfg.key_cfg_iova = key;
 	dist_cfg.dist_size = dpaa2_eth_queue_count(priv);
-	dist_cfg.enable = true;
+	dist_cfg.enable = 1;
 
 	for (i = 0; i < dpaa2_eth_tc_count(priv); i++) {
 		dist_cfg.tc = i;
-
-		err = dpni_set_rx_hash_dist(priv->mc_io, 0,
-					    priv->mc_token, &dist_cfg);
+		err = dpni_set_rx_hash_dist(priv->mc_io, 0, priv->mc_token,
+					    &dist_cfg);
 		if (err) {
 			dev_err(dev, "dpni_set_rx_hash_dist failed\n");
-			return err;
+			break;
 		}
 	}
 
-	return 0;
+	return err;
 }
 
-static int config_fs_key(struct dpaa2_eth_priv *priv, dma_addr_t key_iova)
+/* Configure the Rx flow classification key */
+static int config_cls_key(struct dpaa2_eth_priv *priv, dma_addr_t key)
 {
 	struct device *dev = priv->net_dev->dev.parent;
 	struct dpni_rx_dist_cfg dist_cfg;
-	int i, err;
-
-	if (!dpaa2_eth_fs_enabled(priv))
-		return -EOPNOTSUPP;
+	int i, err = 0;
 
 	memset(&dist_cfg, 0, sizeof(dist_cfg));
 
-	dist_cfg.key_cfg_iova = key_iova;
+	dist_cfg.key_cfg_iova = key;
 	dist_cfg.dist_size = dpaa2_eth_queue_count(priv);
-	dist_cfg.enable = true;
+	dist_cfg.enable = 1;
 
 	for (i = 0; i < dpaa2_eth_tc_count(priv); i++) {
 		dist_cfg.tc = i;
-
-		err = dpni_set_rx_fs_dist(priv->mc_io, 0,
-					  priv->mc_token, &dist_cfg);
+		err = dpni_set_rx_fs_dist(priv->mc_io, 0, priv->mc_token,
+					  &dist_cfg);
 		if (err) {
 			dev_err(dev, "dpni_set_rx_fs_dist failed\n");
-			return err;
+			break;
 		}
 	}
 
+	return err;
+}
+
+/* Size of the Rx flow classification key */
+int dpaa2_eth_cls_key_size(u64 fields)
+{
+	int i, size = 0;
+
+	for (i = 0; i < ARRAY_SIZE(dist_fields); i++) {
+		if (!(fields & dist_fields[i].id))
+			continue;
+		size += dist_fields[i].size;
+	}
+
+	return size;
+}
+
+/* Offset of header field in Rx classification key */
+int dpaa2_eth_cls_fld_off(int prot, int field)
+{
+	int i, off = 0;
+
+	for (i = 0; i < ARRAY_SIZE(dist_fields); i++) {
+		if (dist_fields[i].cls_prot == prot &&
+		    dist_fields[i].cls_field == field)
+			return off;
+		off += dist_fields[i].size;
+	}
+
+	WARN_ONCE(1, "Unsupported header field used for Rx flow cls\n");
 	return 0;
 }
 
-int dpaa2_eth_set_dist_key(struct dpaa2_eth_priv *priv,
-			   enum dpaa2_eth_rx_dist type, u32 key_fields)
+/* Prune unused fields from the classification rule.
+ * Used when masking is not supported
+ */
+void dpaa2_eth_cls_trim_rule(void *key_mem, u64 fields)
 {
-	struct device *dev = priv->net_dev->dev.parent;
+	int off = 0, new_off = 0;
+	int i, size;
+
+	for (i = 0; i < ARRAY_SIZE(dist_fields); i++) {
+		size = dist_fields[i].size;
+		if (dist_fields[i].id & fields) {
+			memcpy(key_mem + new_off, key_mem + off, size);
+			new_off += size;
+		}
+		off += size;
+	}
+}
+
+/* Set Rx distribution (hash or flow classification) key
+ * flags is a combination of RXH_ bits
+ */
+static int dpaa2_eth_set_dist_key(struct net_device *net_dev,
+				  enum dpaa2_eth_rx_dist type, u64 flags)
+{
+	struct device *dev = net_dev->dev.parent;
+	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 	struct dpkg_profile_cfg cls_cfg;
-	struct dpkg_extract *key;
-	u32 hash_fields = 0;
+	u32 rx_hash_fields = 0;
 	dma_addr_t key_iova;
-	u8 *key_mem;
-	int i, err;
+	u8 *dma_mem;
+	int i;
+	int err = 0;
 
 	memset(&cls_cfg, 0, sizeof(cls_cfg));
 
-	for (i = 0; i < priv->num_dist_fields; i++) {
-		if (!(key_fields & priv->dist_fields[i].id))
+	for (i = 0; i < ARRAY_SIZE(dist_fields); i++) {
+		struct dpkg_extract *key =
+			&cls_cfg.extracts[cls_cfg.num_extracts];
+
+		/* For both Rx hashing and classification keys
+		 * we set only the selected fields.
+		 */
+		if (!(flags & dist_fields[i].id))
 			continue;
+		if (type == DPAA2_ETH_RX_DIST_HASH)
+			rx_hash_fields |= dist_fields[i].rxnfc_field;
 
-		key = &cls_cfg.extracts[cls_cfg.num_extracts];
+		if (cls_cfg.num_extracts >= DPKG_MAX_NUM_OF_EXTRACTS) {
+			dev_err(dev, "error adding key extraction rule, too many rules?\n");
+			return -E2BIG;
+		}
+
 		key->type = DPKG_EXTRACT_FROM_HDR;
-		key->extract.from_hdr.prot = priv->dist_fields[i].cls_prot;
+		key->extract.from_hdr.prot = dist_fields[i].cls_prot;
 		key->extract.from_hdr.type = DPKG_FULL_FIELD;
-		key->extract.from_hdr.field = priv->dist_fields[i].cls_field;
+		key->extract.from_hdr.field = dist_fields[i].cls_field;
 		cls_cfg.num_extracts++;
-
-		hash_fields |= priv->dist_fields[i].rxnfc_field;
 	}
 
-	key_mem = kzalloc(DPAA2_CLASSIFIER_DMA_SIZE, GFP_KERNEL);
-	if (!key_mem)
+	dma_mem = kzalloc(DPAA2_CLASSIFIER_DMA_SIZE, GFP_KERNEL);
+	if (!dma_mem)
 		return -ENOMEM;
 
-	err = dpni_prepare_key_cfg(&cls_cfg, key_mem);
+	err = dpni_prepare_key_cfg(&cls_cfg, dma_mem);
 	if (err) {
 		dev_err(dev, "dpni_prepare_key_cfg error %d\n", err);
 		goto free_key;
 	}
 
-	key_iova = dma_map_single(dev, key_mem, DPAA2_CLASSIFIER_DMA_SIZE,
+	/* Prepare for setting the rx dist */
+	key_iova = dma_map_single(dev, dma_mem, DPAA2_CLASSIFIER_DMA_SIZE,
 				  DMA_TO_DEVICE);
 	if (dma_mapping_error(dev, key_iova)) {
 		dev_err(dev, "DMA mapping failed\n");
@@ -2937,35 +2945,82 @@ int dpaa2_eth_set_dist_key(struct dpaa2_eth_priv *priv,
 		goto free_key;
 	}
 
-	switch (type) {
-	case DPAA2_ETH_RX_DIST_LEGACY:
-		err = legacy_config_dist_key(priv, key_iova);
-		break;
-	case DPAA2_ETH_RX_DIST_HASH:
-		err = config_hash_key(priv, key_iova);
-		break;
-	case DPAA2_ETH_RX_DIST_FS:
-		err = config_fs_key(priv, key_iova);
-		break;
-	default:
-		err = -EINVAL;
-		break;
+	if (type == DPAA2_ETH_RX_DIST_HASH) {
+		if (dpaa2_eth_has_legacy_dist(priv))
+			err = config_legacy_hash_key(priv, key_iova);
+		else
+			err = config_hash_key(priv, key_iova);
+	} else {
+		err = config_cls_key(priv, key_iova);
 	}
 
 	dma_unmap_single(dev, key_iova, DPAA2_CLASSIFIER_DMA_SIZE,
 			 DMA_TO_DEVICE);
-	if (err) {
-		if (err != -EOPNOTSUPP)
-			dev_err(dev, "Distribution key config failed\n");
-		goto free_key;
-	}
-
-	if (type != DPAA2_ETH_RX_DIST_FS)
-		priv->rx_hash_fields = hash_fields;
+	if (!err && type == DPAA2_ETH_RX_DIST_HASH)
+		priv->rx_hash_fields = rx_hash_fields;
 
 free_key:
-	kfree(key_mem);
+	kfree(dma_mem);
 	return err;
+}
+
+int dpaa2_eth_set_hash(struct net_device *net_dev, u64 flags)
+{
+	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
+	u64 key = 0;
+	int i;
+
+	if (!dpaa2_eth_hash_enabled(priv))
+		return -EOPNOTSUPP;
+
+	for (i = 0; i < ARRAY_SIZE(dist_fields); i++)
+		if (dist_fields[i].rxnfc_field & flags)
+			key |= dist_fields[i].id;
+
+	return dpaa2_eth_set_dist_key(net_dev, DPAA2_ETH_RX_DIST_HASH, key);
+}
+
+int dpaa2_eth_set_cls(struct net_device *net_dev, u64 flags)
+{
+	return dpaa2_eth_set_dist_key(net_dev, DPAA2_ETH_RX_DIST_CLS, flags);
+}
+
+static int dpaa2_eth_set_default_cls(struct dpaa2_eth_priv *priv)
+{
+	struct device *dev = priv->net_dev->dev.parent;
+	int err;
+
+	/* Check if we actually support Rx flow classification */
+	if (dpaa2_eth_has_legacy_dist(priv)) {
+		dev_dbg(dev, "Rx cls not supported by current MC version\n");
+		return -EOPNOTSUPP;
+	}
+
+	if (!dpaa2_eth_fs_enabled(priv)) {
+		dev_dbg(dev, "Rx cls disabled in DPNI options\n");
+		return -EOPNOTSUPP;
+	}
+
+	if (!dpaa2_eth_hash_enabled(priv)) {
+		dev_dbg(dev, "Rx cls disabled for single queue DPNIs\n");
+		return -EOPNOTSUPP;
+	}
+
+	/* If there is no support for masking in the classification table,
+	 * we don't set a default key, as it will depend on the rules
+	 * added by the user at runtime.
+	 */
+	if (!dpaa2_eth_fs_mask_enabled(priv))
+		goto out;
+
+	err = dpaa2_eth_set_cls(priv->net_dev, DPAA2_ETH_DIST_ALL);
+	if (err)
+		return err;
+
+out:
+	priv->rx_cls_enabled = 1;
+
+	return 0;
 }
 
 /* Bind the DPNI to its needed objects and resources: buffer pool, DPIOs,
@@ -2991,27 +3046,19 @@ static int bind_dpni(struct dpaa2_eth_priv *priv)
 		return err;
 	}
 
-	/* Verify classification options and disable hashing and/or
-	 * flow steering support in case of invalid configuration values
-	 */
-	priv->dist_fields = default_dist_fields;
-	priv->num_dist_fields = ARRAY_SIZE(default_dist_fields);
-	check_cls_support(priv);
-
 	/* have the interface implicitly distribute traffic based on
-	 * a static hash key. Also configure flow steering key, if supported.
-	 * Errors here are not blocking, so just let the called function
-	 * print its error message and move along.
+	 * the default hash key
 	 */
-	if (dpaa2_eth_has_legacy_dist(priv)) {
-		dpaa2_eth_set_dist_key(priv, DPAA2_ETH_RX_DIST_LEGACY,
-				       DPAA2_ETH_DIST_ALL);
-	} else {
-		dpaa2_eth_set_dist_key(priv, DPAA2_ETH_RX_DIST_HASH,
-				       DPAA2_ETH_DIST_DEFAULT_HASH);
-		dpaa2_eth_set_dist_key(priv, DPAA2_ETH_RX_DIST_FS,
-				       DPAA2_ETH_DIST_ALL);
-	}
+	err = dpaa2_eth_set_hash(net_dev, DPAA2_RXH_DEFAULT);
+	if (err && err != -EOPNOTSUPP)
+		dev_err(dev, "Failed to configure hashing\n");
+
+	/* Configure the flow classification key; it includes all
+	 * supported header fields and cannot be modified at runtime
+	 */
+	err = dpaa2_eth_set_default_cls(priv);
+	if (err && err != -EOPNOTSUPP)
+		dev_err(dev, "Failed to configure Rx classification key\n");
 
 	/* Configure handling of error frames */
 	err_cfg.errors = DPAA2_FAS_RX_ERR_MASK;
@@ -3186,10 +3233,10 @@ static int netdev_init(struct net_device *net_dev)
 		return err;
 	}
 
-	/* Set MTU upper limit; lower limit is default (68B) */
+	/* Set MTU upper limit; lower limit is 68B (default value) */
 	net_dev->max_mtu = DPAA2_ETH_MAX_MTU;
 	err = dpni_set_max_frame_length(priv->mc_io, 0, priv->mc_token,
-					(u16)DPAA2_ETH_MFL);
+					DPAA2_ETH_MFL);
 	if (err) {
 		dev_err(dev, "dpni_set_max_frame_length() failed\n");
 		return err;
@@ -3908,7 +3955,6 @@ static int dpaa2_eth_remove(struct fsl_mc_device *ls_dev)
 
 	fsl_mc_portal_free(priv->mc_io);
 
-	dev_set_drvdata(dev, NULL);
 	free_netdev(net_dev);
 
 	dev_dbg(net_dev->dev.parent, "Removed interface %s\n", net_dev->name);

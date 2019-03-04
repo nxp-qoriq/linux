@@ -161,10 +161,10 @@ static int device_reorder_to_tail(struct device *dev, void *not_used)
  * of the link.  If DL_FLAG_PM_RUNTIME is not set, DL_FLAG_RPM_ACTIVE will be
  * ignored.
  *
- * If the DL_FLAG_AUTOREMOVE is set, the link will be removed automatically
- * when the consumer device driver unbinds from it.  The combination of both
- * DL_FLAG_AUTOREMOVE and DL_FLAG_STATELESS set is invalid and will cause NULL
- * to be returned.
+ * If the DL_FLAG_AUTOREMOVE_CONSUMER is set, the link will be removed
+ * automatically when the consumer device driver unbinds from it.
+ * The combination of both DL_FLAG_AUTOREMOVE_CONSUMER and DL_FLAG_STATELESS
+ * set is invalid and will cause NULL to be returned.
  *
  * A side effect of the link creation is re-ordering of dpm_list and the
  * devices_kset list by moving the consumer device and all devices depending
@@ -181,7 +181,8 @@ struct device_link *device_link_add(struct device *consumer,
 	struct device_link *link;
 
 	if (!consumer || !supplier ||
-	    ((flags & DL_FLAG_STATELESS) && (flags & DL_FLAG_AUTOREMOVE)))
+	    ((flags & DL_FLAG_STATELESS) &&
+	     (flags & DL_FLAG_AUTOREMOVE_CONSUMER)))
 		return NULL;
 
 	device_links_write_lock();
@@ -199,8 +200,10 @@ struct device_link *device_link_add(struct device *consumer,
 	}
 
 	list_for_each_entry(link, &supplier->links.consumers, s_node)
-		if (link->consumer == consumer)
+		if (link->consumer == consumer) {
+			kref_get(&link->kref);
 			goto out;
+		}
 
 	link = kzalloc(sizeof(*link), GFP_KERNEL);
 	if (!link)
@@ -232,6 +235,7 @@ struct device_link *device_link_add(struct device *consumer,
 	link->consumer = consumer;
 	INIT_LIST_HEAD(&link->c_node);
 	link->flags = flags;
+	kref_init(&link->kref);
 
 	/* Determine the initial link state. */
 	if (flags & DL_FLAG_STATELESS) {
@@ -302,8 +306,10 @@ static void __device_link_free_srcu(struct rcu_head *rhead)
 	device_link_free(container_of(rhead, struct device_link, rcu_head));
 }
 
-static void __device_link_del(struct device_link *link)
+static void __device_link_del(struct kref *kref)
 {
+	struct device_link *link = container_of(kref, struct device_link, kref);
+
 	dev_info(link->consumer, "Dropping the link to %s\n",
 		 dev_name(link->supplier));
 
@@ -315,8 +321,10 @@ static void __device_link_del(struct device_link *link)
 	call_srcu(&device_links_srcu, &link->rcu_head, __device_link_free_srcu);
 }
 #else /* !CONFIG_SRCU */
-static void __device_link_del(struct device_link *link)
+static void __device_link_del(struct kref *kref)
 {
+	struct device_link *link = container_of(kref, struct device_link, kref);
+
 	dev_info(link->consumer, "Dropping the link to %s\n",
 		 dev_name(link->supplier));
 
@@ -334,17 +342,49 @@ static void __device_link_del(struct device_link *link)
  * @link: Device link to delete.
  *
  * The caller must ensure proper synchronization of this function with runtime
- * PM.
+ * PM.  If the link was added multiple times, it needs to be deleted as often.
+ * Care is required for hotplugged devices:  Their links are purged on removal
+ * and calling device_link_del() is then no longer allowed.
  */
 void device_link_del(struct device_link *link)
 {
 	device_links_write_lock();
 	device_pm_lock();
-	__device_link_del(link);
+	kref_put(&link->kref, __device_link_del);
 	device_pm_unlock();
 	device_links_write_unlock();
 }
 EXPORT_SYMBOL_GPL(device_link_del);
+
+/**
+ * device_link_remove - remove a link between two devices.
+ * @consumer: Consumer end of the link.
+ * @supplier: Supplier end of the link.
+ *
+ * The caller must ensure proper synchronization of this function with runtime
+ * PM.
+ */
+void device_link_remove(void *consumer, struct device *supplier)
+{
+	struct device_link *link;
+
+	if (WARN_ON(consumer == supplier))
+		return;
+
+	device_links_write_lock();
+	device_pm_lock();
+
+	list_for_each_entry(link, &supplier->links.consumers, s_node) {
+		if (link->consumer == consumer) {
+			kref_put(&link->kref, __device_link_del);
+			break;
+		}
+	}
+
+	device_pm_unlock();
+	device_links_write_unlock();
+}
+EXPORT_SYMBOL_GPL(device_link_remove);
 
 static void device_links_missing_supplier(struct device *dev)
 {
@@ -453,8 +493,8 @@ static void __device_links_no_driver(struct device *dev)
 		if (link->flags & DL_FLAG_STATELESS)
 			continue;
 
-		if (link->flags & DL_FLAG_AUTOREMOVE)
-			__device_link_del(link);
+		if (link->flags & DL_FLAG_AUTOREMOVE_CONSUMER)
+			kref_put(&link->kref, __device_link_del);
 		else if (link->status != DL_STATE_SUPPLIER_UNBIND)
 			WRITE_ONCE(link->status, DL_STATE_AVAILABLE);
 	}
@@ -489,8 +529,18 @@ void device_links_driver_cleanup(struct device *dev)
 		if (link->flags & DL_FLAG_STATELESS)
 			continue;
 
-		WARN_ON(link->flags & DL_FLAG_AUTOREMOVE);
+		WARN_ON(link->flags & DL_FLAG_AUTOREMOVE_CONSUMER);
 		WARN_ON(link->status != DL_STATE_SUPPLIER_UNBIND);
+
+		/*
+		 * autoremove the links between this @dev and its consumer
+		 * devices that are not active, i.e. where the link state
+		 * has moved to DL_STATE_SUPPLIER_UNBIND.
+		 */
+		if (link->status == DL_STATE_SUPPLIER_UNBIND &&
+		    link->flags & DL_FLAG_AUTOREMOVE_SUPPLIER)
+			kref_put(&link->kref, __device_link_del);
+
 		WRITE_ONCE(link->status, DL_STATE_DORMANT);
 	}
 
@@ -607,13 +657,13 @@ static void device_links_purge(struct device *dev)
 
 	list_for_each_entry_safe_reverse(link, ln, &dev->links.suppliers, c_node) {
 		WARN_ON(link->status == DL_STATE_ACTIVE);
-		__device_link_del(link);
+		__device_link_del(&link->kref);
 	}
 
 	list_for_each_entry_safe_reverse(link, ln, &dev->links.consumers, s_node) {
 		WARN_ON(link->status != DL_STATE_DORMANT &&
 			link->status != DL_STATE_NONE);
-		__device_link_del(link);
+		__device_link_del(&link->kref);
 	}
 
 	device_links_write_unlock();
@@ -1029,6 +1079,34 @@ static ssize_t online_store(struct device *dev, struct device_attribute *attr,
 }
 static DEVICE_ATTR_RW(online);
 
+static ssize_t suppliers_show(struct device *dev, struct device_attribute *attr,
+			      char *buf)
+{
+	struct device_link *link;
+	size_t count = 0;
+
+	list_for_each_entry(link, &dev->links.suppliers, c_node)
+		count += scnprintf(buf + count, PAGE_SIZE - count, "%s\n",
+				   dev_name(link->supplier));
+
+	return count;
+}
+static DEVICE_ATTR_RO(suppliers);
+
+static ssize_t consumers_show(struct device *dev, struct device_attribute *attr,
+			      char *buf)
+{
+	struct device_link *link;
+	size_t count = 0;
+
+	list_for_each_entry(link, &dev->links.consumers, s_node)
+		count += scnprintf(buf + count, PAGE_SIZE - count, "%s\n",
+				   dev_name(link->consumer));
+
+	return count;
+}
+static DEVICE_ATTR_RO(consumers);
+
 int device_add_groups(struct device *dev, const struct attribute_group **groups)
 {
 	return sysfs_create_groups(&dev->kobj, groups);
@@ -1200,8 +1278,20 @@ static int device_add_attrs(struct device *dev)
 			goto err_remove_dev_groups;
 	}
 
+	error = device_create_file(dev, &dev_attr_suppliers);
+	if (error)
+		goto err_remove_online;
+
+	error = device_create_file(dev, &dev_attr_consumers);
+	if (error)
+		goto err_remove_suppliers;
+
 	return 0;
 
+ err_remove_suppliers:
+	device_remove_file(dev, &dev_attr_suppliers);
+ err_remove_online:
+	device_remove_file(dev, &dev_attr_online);
  err_remove_dev_groups:
 	device_remove_groups(dev, dev->groups);
  err_remove_type_groups:
@@ -1219,6 +1309,8 @@ static void device_remove_attrs(struct device *dev)
 	struct class *class = dev->class;
 	const struct device_type *type = dev->type;
 
+	device_remove_file(dev, &dev_attr_consumers);
+	device_remove_file(dev, &dev_attr_suppliers);
 	device_remove_file(dev, &dev_attr_online);
 	device_remove_groups(dev, dev->groups);
 

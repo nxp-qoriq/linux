@@ -165,8 +165,9 @@
 	};
 
 	fpga: board-control@2,0 {
-		compatible = "fsl,ls1046aqds-fpga", "fsl,fpga-qixis";
+		compatible = "fsl,ls1046aqds-fpga", "fsl,fpga-qixis", "simple-bus";
 		reg = <0x2 0x0 0x0000100>;
+		ranges = <0 2 0 0x100>;
 	};
 };
 
@@ -183,7 +184,7 @@
 		compatible = "spansion,m25p80";
 		#address-cells = <1>;
 		#size-cells = <1>;
-		spi-max-frequency = <20000000>;
+		spi-max-frequency = <50000000>;
 		reg = <0>;
 		spi-rx-bus-width = <4>;
 		spi-tx-bus-width = <4>;

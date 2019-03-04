@@ -25,7 +25,7 @@
 		#size-cells = <0>;
 
 		/* We have 2 clusters having 4 Cortex-A53 cores each */
-		cpu0: cpu@0 {
+		cooling_map0: cpu0: cpu@0 {
 			device_type = "cpu";
 			compatible = "arm,cortex-a53";
 			reg = <0x0>;
@@ -58,7 +58,7 @@
 			cpu-idle-states = <&CPU_PH20>;
 		};
 
-		cpu4: cpu@100 {
+		cooling_map1: cpu4: cpu@100 {
 			device_type = "cpu";
 			compatible = "arm,cortex-a53";
 			reg = <0x100>;
@@ -222,43 +222,7 @@
 			#thermal-sensor-cells = <1>;
 		};
 
-		thermal-zones {
-			cpu_thermal: cpu-thermal {
-				polling-delay-passive = <1000>;
-				polling-delay = <5000>;
-				thermal-sensors = <&tmu 0>;
-
-				trips {
-					cpu_alert: cpu-alert {
-						temperature = <85000>;
-						hysteresis = <2000>;
-						type = "passive";
-					};
-
-					cpu_crit: cpu-crit {
-						temperature = <95000>;
-						hysteresis = <2000>;
-						type = "critical";
-					};
-				};
-
-				cooling-maps {
-					map0 {
-						trip = <&cpu_alert>;
-						cooling-device =
-							<&cpu0 THERMAL_NO_LIMIT
-							THERMAL_NO_LIMIT>;
-					};
-
-					map1 {
-						trip = <&cpu_alert>;
-						cooling-device =
-							<&cpu4 THERMAL_NO_LIMIT
-							THERMAL_NO_LIMIT>;
-					};
-				};
-			};
-		};
+		#include "fsl-tmu.dtsi"
 
 		duart0: serial@21c0500 {
 			compatible = "fsl,ns16550", "ns16550a";
@@ -463,7 +427,7 @@
 			reg = <0x0 0x2000000 0x0 0x10000>;
 			interrupts = <0 34 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clockgen 4 7>;
-			fsl-scl-gpio = <&gpio3 30 0>;
+			scl-gpios = <&gpio3 30 0>;
 			status = "disabled";
 		};
 
@@ -517,6 +481,7 @@
 			configure-gfladj;
 			snps,dis_rxdet_inp3_quirk;
 			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
+			snps,host-vbus-glitches;
 		};
 
 		usb1: usb3@3110000 {
@@ -527,6 +492,7 @@
 			configure-gfladj;
 			snps,dis_rxdet_inp3_quirk;
 			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
+			snps,host-vbus-glitches;
 		};
 
 		sata: sata@3200000 {
@@ -613,6 +579,7 @@
 					<0000 0 0 2 &gic 0 0 0 110 IRQ_TYPE_LEVEL_HIGH>,
 					<0000 0 0 3 &gic 0 0 0 111 IRQ_TYPE_LEVEL_HIGH>,
 					<0000 0 0 4 &gic 0 0 0 112 IRQ_TYPE_LEVEL_HIGH>;
+			status = "disabled";
 		};
 
 		pcie@3500000 {
@@ -638,6 +605,7 @@
 					<0000 0 0 2 &gic 0 0 0 115 IRQ_TYPE_LEVEL_HIGH>,
 					<0000 0 0 3 &gic 0 0 0 116 IRQ_TYPE_LEVEL_HIGH>,
 					<0000 0 0 4 &gic 0 0 0 117 IRQ_TYPE_LEVEL_HIGH>;
+			status = "disabled";
 		};
 
 		pcie@3600000 {
@@ -663,6 +631,7 @@
 					<0000 0 0 2 &gic 0 0 0 120 IRQ_TYPE_LEVEL_HIGH>,
 					<0000 0 0 3 &gic 0 0 0 121 IRQ_TYPE_LEVEL_HIGH>,
 					<0000 0 0 4 &gic 0 0 0 122 IRQ_TYPE_LEVEL_HIGH>;
+			status = "disabled";
 		};
 
 		fsl_mc: fsl-mc@80c000000 {
@@ -825,8 +794,9 @@
 		};
 
 		serdes1: serdes@1ea0000 {
-				reg = <0x0 0x1ea0000 0 0x00002000>;
 				compatible = "fsl,serdes-10g";
+				reg = <0x0 0x1ea0000 0 0x00002000>;
+				little-endian;
 		};
 	};
 
@@ -835,5 +805,17 @@
 			compatible = "linaro,optee-tz";
 			method = "smc";
 		};
+	};
+};
+
+#include "fsl-tmu-map1.dtsi"
+
+&thermal_zones {
+	thermal-zone0 {
+		status = "okay";
+	};
+
+	thermal-zone1 {
+		status = "okay";
 	};
 };

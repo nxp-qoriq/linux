@@ -336,6 +336,10 @@
 	};
 };
 
+&esdhc {
+	status = "okay";
+};
+
 &sai2 {
 	status = "okay";
 };

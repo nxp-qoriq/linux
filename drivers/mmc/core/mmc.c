@@ -1174,6 +1174,9 @@ static int mmc_select_hs400(struct mmc_card *card)
 		goto out_err;
 
 	/* Switch card to DDR */
+	if (host->ops->prepare_ddr_to_hs400)
+		host->ops->prepare_ddr_to_hs400(host);
+
 	err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
 			 EXT_CSD_BUS_WIDTH,
 			 EXT_CSD_DDR_BUS_WIDTH_8,

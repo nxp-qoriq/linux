@@ -133,10 +133,8 @@ static int __init layerscape_rcpm_init(void)
 	struct device_node *np;
 
 	np = of_find_matching_node_and_match(NULL, rcpm_matches, &match);
-	if (!np) {
-		pr_err("Can't find the RCPM node.\n");
+	if (!np)
 		return -EINVAL;
-	}
 
 	if (match->data)
 		rcpm = (struct rcpm_config *)match->data;

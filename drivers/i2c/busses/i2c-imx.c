@@ -1191,9 +1191,9 @@ static int i2c_imx_init_recovery_for_layerscape(
 	struct device_node *scfg_node;
 	void __iomem *scfg_base = NULL;
 
-	i2c_imx->gpio = of_get_named_gpio(np, "fsl-scl-gpio", 0);
+	i2c_imx->gpio = of_get_named_gpio(np, "scl-gpios", 0);
 	if (!gpio_is_valid(i2c_imx->gpio)) {
-		dev_info(&pdev->dev, "fsl-scl-gpio not found\n");
+		dev_info(&pdev->dev, "scl-gpios not found\n");
 		return 0;
 	}
 	pinmux_cfg = devm_kzalloc(&pdev->dev, sizeof(*pinmux_cfg), GFP_KERNEL);
@@ -1274,11 +1274,6 @@ static int i2c_imx_probe(struct platform_device *pdev)
 	i2c_imx->adapter.dev.of_node	= pdev->dev.of_node;
 	i2c_imx->base			= base;
 
-	/* Init optional bus recovery for layerscape */
-	ret = i2c_imx_init_recovery_for_layerscape(i2c_imx, pdev);
-	if (ret)
-		return ret;
-
 	/* Get I2C clock */
 	i2c_imx->clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(i2c_imx->clk)) {
@@ -1330,8 +1325,13 @@ static int i2c_imx_probe(struct platform_device *pdev)
 			i2c_imx, IMX_I2C_I2CR);
 	imx_i2c_write_reg(i2c_imx->hwdata->i2sr_clr_opcode, i2c_imx, IMX_I2C_I2SR);
 
+#ifdef CONFIG_ARCH_LAYERSCAPE
+	/* Init optional bus recovery for layerscape */
+	ret = i2c_imx_init_recovery_for_layerscape(i2c_imx, pdev);
+#else
 	/* Init optional bus recovery function */
 	ret = i2c_imx_init_recovery_info(i2c_imx, pdev);
+#endif
 	/* Give it another chance if pinctrl used is not ready yet */
 	if (ret == -EPROBE_DEFER)
 		goto rpm_disable;

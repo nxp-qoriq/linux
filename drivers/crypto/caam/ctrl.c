@@ -2,6 +2,7 @@
  * Controller-level driver, kernel property detection, initialization
  *
  * Copyright 2008-2012 Freescale Semiconductor, Inc.
+ * Copyright 2018 NXP
  */
 
 #include <linux/device.h>
@@ -107,7 +108,7 @@ static inline int run_descriptor_deco0(struct device *ctrldev, u32 *desc,
 	struct caam_ctrl __iomem *ctrl = ctrlpriv->ctrl;
 	struct caam_deco __iomem *deco = ctrlpriv->deco;
 	unsigned int timeout = 100000;
-	u32 deco_dbg_reg, flags;
+	u32 deco_dbg_reg, deco_state, flags;
 	int i;
 
 
@@ -150,13 +151,22 @@ static inline int run_descriptor_deco0(struct device *ctrldev, u32 *desc,
 	timeout = 10000000;
 	do {
 		deco_dbg_reg = rd_reg32(&deco->desc_dbg);
+
+		if (ctrlpriv->era < 10)
+			deco_state = (deco_dbg_reg & DESC_DBG_DECO_STAT_MASK) >>
+				     DESC_DBG_DECO_STAT_SHIFT;
+		else
+			deco_state = (rd_reg32(&deco->dbg_exec) &
+				      DESC_DER_DECO_STAT_MASK) >>
+				     DESC_DER_DECO_STAT_SHIFT;
+
 		/*
 		 * If an error occured in the descriptor, then
 		 * the DECO status field will be set to 0x0D
 		 */
-		if ((deco_dbg_reg & DESC_DBG_DECO_STAT_MASK) ==
-		    DESC_DBG_DECO_STAT_HOST_ERR)
+		if (deco_state == DECO_STAT_HOST_ERR)
 			break;
+
 		cpu_relax();
 	} while ((deco_dbg_reg & DESC_DBG_DECO_STAT_VALID) && --timeout);
 
@@ -324,9 +334,9 @@ static int caam_remove(struct platform_device *pdev)
 
 	/*
 	 * De-initialize RNG state handles initialized by this driver.
-	 * In case of DPAA 2.x, RNG is managed by MC firmware.
+	 * In case of SoCs with Management Complex, RNG is managed by MC f/w.
 	 */
-	if (!caam_dpaa2 && ctrlpriv->rng4_sh_init)
+	if (!ctrlpriv->mc_en && ctrlpriv->rng4_sh_init)
 		deinstantiate_rng(ctrldev, ctrlpriv->rng4_sh_init);
 
 	/* Shut down debug views */
@@ -451,7 +461,7 @@ static int caam_probe(struct platform_device *pdev)
 	struct caam_perfmon *perfmon;
 #endif
 	u32 scfgr, comp_params;
-	u32 cha_vid_ls;
+	u8 rng_vid;
 	int pg_size;
 	int BLOCK_OFFSET = 0;
 
@@ -572,11 +582,15 @@ static int caam_probe(struct platform_device *pdev)
 	/*
 	 * Enable DECO watchdogs and, if this is a PHYS_ADDR_T_64BIT kernel,
 	 * long pointers in master configuration register.
-	 * In case of DPAA 2.x, Management Complex firmware performs
+	 * In case of SoCs with Management Complex, MC f/w performs
 	 * the configuration.
 	 */
 	caam_dpaa2 = !!(comp_params & CTPR_MS_DPAA2);
-	if (!caam_dpaa2)
+	np = of_find_compatible_node(NULL, NULL, "fsl,qoriq-mc");
+	ctrlpriv->mc_en = !!np;
+	of_node_put(np);
+
+	if (!ctrlpriv->mc_en)
 		clrsetbits_32(&ctrl->mcr, MCFGR_AWCACHE_MASK | MCFGR_LONG_PTR,
 			      MCFGR_AWCACHE_CACH | MCFGR_AWCACHE_BUFF |
 			      MCFGR_WDENABLE | MCFGR_LARGE_BURST |
@@ -692,15 +706,19 @@ static int caam_probe(struct platform_device *pdev)
 		set_dma_ops(&caam_dma_dev->dev, get_dma_ops(dev));
 	}
 
-	cha_vid_ls = rd_reg32(&ctrl->perfmon.cha_id_ls);
+	if (ctrlpriv->era < 10)
+		rng_vid = (rd_reg32(&ctrl->perfmon.cha_id_ls) &
+			   CHA_ID_LS_RNG_MASK) >> CHA_ID_LS_RNG_SHIFT;
+	else
+		rng_vid = (rd_reg32(&ctrl->vreg.rng) & CHA_VER_VID_MASK) >>
+			   CHA_VER_VID_SHIFT;
 
 	/*
 	 * If SEC has RNG version >= 4 and RNG state handle has not been
 	 * already instantiated, do RNG instantiation
-	 * In case of DPAA 2.x, RNG is managed by MC firmware.
+	 * In case of SoCs with Management Complex, RNG is managed by MC f/w.
 	 */
-	if (!caam_dpaa2 &&
-	    (cha_vid_ls & CHA_ID_LS_RNG_MASK) >> CHA_ID_LS_RNG_SHIFT >= 4) {
+	if (!ctrlpriv->mc_en && rng_vid >= 4) {
 		ctrlpriv->rng4_sh_init =
 			rd_reg32(&ctrl->r4tst[0].rdsta);
 		/*
@@ -768,9 +786,8 @@ static int caam_probe(struct platform_device *pdev)
 	/* Report "alive" for developer to see */
 	dev_info(dev, "device ID = 0x%016llx (Era %d)\n", caam_id,
 		 ctrlpriv->era);
-	dev_info(dev, "job rings = %d, qi = %d, dpaa2 = %s\n",
-		 ctrlpriv->total_jobrs, ctrlpriv->qi_present,
-		 caam_dpaa2 ? "yes" : "no");
+	dev_info(dev, "job rings = %d, qi = %d\n",
+		 ctrlpriv->total_jobrs, ctrlpriv->qi_present);
 
 #ifdef CONFIG_DEBUG_FS
 	debugfs_create_file("rq_dequeued", S_IRUSR | S_IRGRP | S_IROTH,

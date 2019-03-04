@@ -83,11 +83,6 @@ static int dwc3_get_dr_mode(struct dwc3 *dwc)
 		mode = USB_DR_MODE_HOST;
 		break;
 	default:
-	       /* Adjust Frame Length */
-		if (dwc->configure_gfladj)
-		dwc3_writel(dwc->regs, DWC3_GFLADJ, GFLADJ_30MHZ_REG_SEL |
-				GFLADJ_30MHZ(GFLADJ_30MHZ_DEFAULT));
-
 		if (IS_ENABLED(CONFIG_USB_DWC3_HOST))
 			mode = USB_DR_MODE_HOST;
 		else if (IS_ENABLED(CONFIG_USB_DWC3_GADGET))
@@ -108,6 +103,41 @@ static int dwc3_get_dr_mode(struct dwc3 *dwc)
 static void dwc3_event_buffers_cleanup(struct dwc3 *dwc);
 static int dwc3_event_buffers_setup(struct dwc3 *dwc);
 
+/*
+ * dwc3_power_of_all_roothub_ports - Power off all Root hub ports
+ * @dwc3: Pointer to our controller context structure
+ */
+static void dwc3_power_off_all_roothub_ports(struct dwc3 *dwc)
+{
+	int i, port_num;
+	u32 reg, op_regs_base, offset;
+	void __iomem		*xhci_regs;
+
+	/* xhci regs is not mapped yet, do it temperary here */
+	if (dwc->xhci_resources[0].start) {
+		xhci_regs = ioremap(dwc->xhci_resources[0].start,
+				DWC3_XHCI_REGS_END);
+		if (IS_ERR(xhci_regs)) {
+			dev_err(dwc->dev, "Failed to ioremap xhci_regs\n");
+			return;
+		}
+
+		op_regs_base = HC_LENGTH(readl(xhci_regs));
+		reg = readl(xhci_regs + XHCI_HCSPARAMS1);
+		port_num = HCS_MAX_PORTS(reg);
+
+		for (i = 1; i <= port_num; i++) {
+			offset = op_regs_base + XHCI_PORTSC_BASE + 0x10*(i-1);
+			reg = readl(xhci_regs + offset);
+			reg &= ~PORT_POWER;
+			writel(reg, xhci_regs + offset);
+		}
+
+		iounmap(xhci_regs);
+	} else
+		dev_err(dwc->dev, "xhci base reg invalid\n");
+}
+
 static void dwc3_set_prtcap(struct dwc3 *dwc, u32 mode)
 {
 	u32 reg;
@@ -116,6 +146,15 @@ static void dwc3_set_prtcap(struct dwc3 *dwc, u32 mode)
 	reg &= ~(DWC3_GCTL_PRTCAPDIR(DWC3_GCTL_PRTCAP_OTG));
 	reg |= DWC3_GCTL_PRTCAPDIR(mode);
 	dwc3_writel(dwc->regs, DWC3_GCTL, reg);
+
+	/*
+	 * We have to power off all Root hub ports immediately after DWC3 set
+	 * to host mode to avoid VBUS glitch happen when xhci get reset later.
+	 */
+	if (dwc->host_vbus_glitches) {
+		if (mode == DWC3_GCTL_PRTCAP_HOST)
+			dwc3_power_off_all_roothub_ports(dwc);
+	}
 }
 
 static void __dwc3_set_mode(struct work_struct *work)
@@ -945,6 +984,22 @@ static int dwc3_core_init(struct dwc3 *dwc)
 		dwc3_writel(dwc->regs, DWC3_GUCTL1, reg);
 	}
 
+	if (dwc->dr_mode == USB_DR_MODE_HOST ||
+	    dwc->dr_mode == USB_DR_MODE_OTG) {
+		reg = dwc3_readl(dwc->regs, DWC3_GUCTL);
+
+		/*
+		 * Enable Auto retry Feature to make the controller operating in
+		 * Host mode on seeing transaction errors(CRC errors or internal
+		 * overrun scenerios) on IN transfers to reply to the device
+		 * with a non-terminating retry ACK (i.e, an ACK transcation
+		 * packet with Retry=1 & Nump != 0)
+		 */
+		reg |= DWC3_GUCTL_HSTINAUTORETRY;
+
+		dwc3_writel(dwc->regs, DWC3_GUCTL, reg);
+	}
+
 	return 0;
 
 err4:
@@ -1149,12 +1204,6 @@ static void dwc3_get_properties(struct dwc3 *dwc)
 	dwc->dma_coherent = device_property_read_bool(dev,
 				"dma-coherent");
 
-	dwc->needs_fifo_resize = of_property_read_bool(node, "tx-fifo-resize");
-
-	dwc->configure_gfladj =
-			of_property_read_bool(node, "configure-gfladj");
-	dwc->dr_mode = of_usb_get_dr_mode(node);
-
 	dwc->disable_scramble_quirk = device_property_read_bool(dev,
 				"snps,disable_scramble_quirk");
 	dwc->u2exit_lfps_quirk = device_property_read_bool(dev,
@@ -1202,6 +1251,9 @@ static void dwc3_get_properties(struct dwc3 *dwc)
 				    &dwc->hsphy_interface);
 	device_property_read_u32(dev, "snps,quirk-frame-length-adjustment",
 				 &dwc->fladj);
+
+	dwc->host_vbus_glitches = device_property_read_bool(dev,
+				"snps,host-vbus-glitches");
 
 	dwc->lpm_nyet_threshold = lpm_nyet_threshold;
 	dwc->tx_de_emphasis = tx_de_emphasis;
@@ -1280,7 +1332,6 @@ static int dwc3_probe(struct platform_device *pdev)
 
 	void __iomem		*regs;
 
-	struct device_node      *node = dev->of_node;
 	dwc = devm_kzalloc(dev, sizeof(*dwc), GFP_KERNEL);
 	if (!dwc)
 		return -ENOMEM;
@@ -1298,11 +1349,6 @@ static int dwc3_probe(struct platform_device *pdev)
 					DWC3_XHCI_REGS_END;
 	dwc->xhci_resources[0].flags = res->flags;
 	dwc->xhci_resources[0].name = res->name;
-
-	if (node) {
-		dwc->configure_gfladj =
-			of_property_read_bool(node, "configure-gfladj");
-	}
 
 	res->start += DWC3_GLOBALS_REGS_START;
 
@@ -1333,11 +1379,6 @@ static int dwc3_probe(struct platform_device *pdev)
 	ret = pm_runtime_get_sync(dev);
 	if (ret < 0)
 		goto err1;
-
-	/* Adjust Frame Length */
-	if (dwc->configure_gfladj)
-	dwc3_writel(dwc->regs, DWC3_GFLADJ, GFLADJ_30MHZ_REG_SEL |
-		    GFLADJ_30MHZ(GFLADJ_30MHZ_DEFAULT));
 
 	pm_runtime_forbid(dev);
 

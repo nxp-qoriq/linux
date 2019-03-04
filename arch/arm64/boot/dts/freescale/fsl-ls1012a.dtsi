@@ -28,7 +28,7 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		cpu0: cpu@0 {
+		cooling_map0: cpu0: cpu@0 {
 			device_type = "cpu";
 			compatible = "arm,cortex-a53";
 			reg = <0x0>;
@@ -286,36 +286,7 @@
 			#thermal-sensor-cells = <1>;
 		};
 
-		thermal-zones {
-			cpu_thermal: cpu-thermal {
-				polling-delay-passive = <1000>;
-				polling-delay = <5000>;
-				thermal-sensors = <&tmu 0>;
-
-				trips {
-					cpu_alert: cpu-alert {
-						temperature = <85000>;
-						hysteresis = <2000>;
-						type = "passive";
-					};
-
-					cpu_crit: cpu-crit {
-						temperature = <95000>;
-						hysteresis = <2000>;
-						type = "critical";
-					};
-				};
-
-				cooling-maps {
-					map0 {
-						trip = <&cpu_alert>;
-						cooling-device =
-							<&cpu0 THERMAL_NO_LIMIT
-							THERMAL_NO_LIMIT>;
-					};
-				};
-			};
-		};
+		#include "fsl-tmu.dtsi"
 
 		ftm0: ftm0@29d0000 {
 			compatible = "fsl,ls1012a-ftm-alarm";
@@ -333,7 +304,7 @@
 			reg = <0x0 0x2180000 0x0 0x10000>;
 			interrupts = <0 56 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clockgen 4 3>;
-			fsl-scl-gpio = <&gpio0 13 0>;
+			scl-gpios = <&gpio0 13 0>;
 			status = "disabled";
 		};
 
@@ -471,6 +442,7 @@
 			snps,quirk-frame-length-adjustment = <0x20>;
 			snps,dis_rxdet_inp3_quirk;
 			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
+			snps,host-vbus-glitches;
 		};
 
 		sata: sata@3200000 {
@@ -558,11 +530,6 @@
 		clock-names = "pfe";
 
 		status = "okay";
-		pfe_mac0: ethernet@0 {
-		};
-
-		pfe_mac1: ethernet@1 {
-		};
 	};
 
 	firmware {
@@ -570,5 +537,11 @@
 			compatible = "linaro,optee-tz";
 			method = "smc";
 		};
+	};
+};
+
+&thermal_zones {
+	thermal-zone0 {
+		status = "okay";
 	};
 };

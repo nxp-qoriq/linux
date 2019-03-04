@@ -85,6 +85,11 @@ static struct rcpm_cfg ls208xa_rcpm_cfg = {
 	.flextimer_set_bit = 0x4000,
 };
 
+static struct rcpm_cfg lx2160a_rcpm_cfg = {
+	.big_endian = LITTLE_ENDIAN,
+	.flextimer_set_bit = 0x4000,
+};
+
 static const struct of_device_id ippdexpcr_of_match[] = {
 	{ .compatible = "fsl,ls1012a-ftm-alarm", .data = &ls1012a_rcpm_cfg},
 	{ .compatible = "fsl,ls1021a-ftm-alarm", .data = &ls1021a_rcpm_cfg},
@@ -92,6 +97,7 @@ static const struct of_device_id ippdexpcr_of_match[] = {
 	{ .compatible = "fsl,ls1046a-ftm-alarm", .data = &ls1046a_rcpm_cfg},
 	{ .compatible = "fsl,ls1088a-ftm-alarm", .data = &ls1088a_rcpm_cfg},
 	{ .compatible = "fsl,ls208xa-ftm-alarm", .data = &ls208xa_rcpm_cfg},
+	{ .compatible = "fsl,lx2160a-ftm-alarm", .data = &lx2160a_rcpm_cfg},
 	{},
 };
 MODULE_DEVICE_TABLE(of, ippdexpcr_of_match);
@@ -355,6 +361,7 @@ static const struct of_device_id ftm_alarm_match[] = {
 	{ .compatible = "fsl,ls1046a-ftm-alarm", },
 	{ .compatible = "fsl,ls1088a-ftm-alarm", },
 	{ .compatible = "fsl,ls208xa-ftm-alarm", },
+	{ .compatible = "fsl,lx2160a-ftm-alarm", },
 	{ .compatible = "fsl,ftm-timer", },
 	{ },
 };

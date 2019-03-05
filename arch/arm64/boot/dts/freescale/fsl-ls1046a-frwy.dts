@@ -92,34 +92,20 @@
 		reg = <0x0 0x0 0x10000>;
 	};
 
-	cpld: board-control@2,0 {
-		compatible = "fsl,ls1046ardb-cpld";
-		reg = <0x2 0x0 0x0000100>;
-	};
 };
 
 &qspi {
-	num-cs = <2>;
+	num-cs = <1>;
 	bus-num = <0>;
 	status = "okay";
 	fsl,qspi-has-second-chip;
 
-	qflash0: s25fs512s@0 {
-		compatible = "spansion,m25p80";
+	qflash0: mt25qu512a@0 {
+		compatible = "mt25qu,m25p80";
 		#address-cells = <1>;
 		#size-cells = <1>;
 		spi-max-frequency = <50000000>;
 		reg = <0>;
-		spi-rx-bus-width = <4>;
-		spi-tx-bus-width = <4>;
-	};
-
-	qflash1: s25fs512s@1 {
-		compatible = "spansion,m25p80";
-		#address-cells = <1>;
-		#size-cells = <1>;
-		spi-max-frequency = <50000000>;
-		reg = <1>;
 		spi-rx-bus-width = <4>;
 		spi-tx-bus-width = <4>;
 	};

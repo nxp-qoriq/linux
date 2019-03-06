@@ -56,13 +56,13 @@
  */
 #define DPAA2_ETH_TXCONF_PER_NAPI	256
 
-/* Buffer quota per queue. Must be large enough such that for minimum sized
- * frames taildrop kicks in before the bpool gets depleted, so we compute
- * how many 64B frames fit inside the taildrop threshold and add a margin
- * to accommodate the buffer refill delay.
+/* Buffer quota per channel.
+ * We want to keep in check number of ingress frames in flight: for small
+ * sized frames, buffer pool depletion will kick in first; for large sizes,
+ * Rx FQ taildrop threshold will ensure only a reasonable number of frames
+ * will be pending at any given time.
  */
-#define DPAA2_ETH_MAX_FRAMES_PER_QUEUE	(DPAA2_ETH_TAILDROP_THRESH / 64)
-#define DPAA2_ETH_NUM_BUFS_PER_CH	(DPAA2_ETH_MAX_FRAMES_PER_QUEUE + 256)
+#define DPAA2_ETH_NUM_BUFS_PER_CH	1024
 #define DPAA2_ETH_REFILL_THRESH(priv)	\
 	((priv)->max_bufs_per_ch - DPAA2_ETH_BUFS_PER_CMD)
 
@@ -72,9 +72,11 @@
 /* Hardware requires alignment for ingress/egress buffer addresses */
 #define DPAA2_ETH_TX_BUF_ALIGN		64
 
-#define DPAA2_ETH_RX_BUF_SIZE		2048
-#define DPAA2_ETH_SKB_SIZE \
-	(DPAA2_ETH_RX_BUF_SIZE + SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
+#define DPAA2_ETH_RX_BUF_RAW_SIZE	PAGE_SIZE
+#define DPAA2_ETH_RX_BUF_TAILROOM \
+	SKB_DATA_ALIGN(sizeof(struct skb_shared_info))
+#define DPAA2_ETH_RX_BUF_SIZE \
+	(DPAA2_ETH_RX_BUF_RAW_SIZE - DPAA2_ETH_RX_BUF_TAILROOM)
 
 /* Hardware annotation area in RX/TX buffers */
 #define DPAA2_ETH_RX_HWA_SIZE		64
@@ -317,6 +319,7 @@ struct dpaa2_eth_priv;
 struct dpaa2_eth_fq {
 	u32 fqid;
 	u32 tx_qdbin;
+	u32 tx_fqid;
 	u16 flowid;
 	u8 tc;
 	int target_cpu;
@@ -371,6 +374,9 @@ struct dpaa2_eth_priv {
 
 	u8 num_fqs;
 	struct dpaa2_eth_fq fq[DPAA2_ETH_MAX_QUEUES];
+	int (*enqueue)(struct dpaa2_eth_priv *priv,
+		       struct dpaa2_eth_fq *fq,
+		       struct dpaa2_fd *fd, u8 prio);
 
 	u8 num_channels;
 	struct dpaa2_eth_channel *channel[DPAA2_ETH_MAX_DPCONS];
@@ -392,7 +398,6 @@ struct dpaa2_eth_priv {
 	bool ts_rx_en; /* Rx timestamping enabled */
 
 	u16 tx_qdid;
-	u16 rx_buf_align;
 	struct fsl_mc_io *mc_io;
 	/* Cores which have an affine DPIO/DPCON.
 	 * This is the cpu set on which Rx and Tx conf frames are processed
@@ -496,15 +501,6 @@ enum dpaa2_eth_rx_dist {
 #define DPAA2_ETH_DIST_L4DST		BIT(8)
 #define DPAA2_ETH_DIST_ALL		(~0U)
 
-/* Hardware only sees DPAA2_ETH_RX_BUF_SIZE, but the skb built around
- * the buffer also needs space for its shared info struct, and we need
- * to allocate enough to accommodate hardware alignment restrictions
- */
-static inline unsigned int dpaa2_eth_buf_raw_size(struct dpaa2_eth_priv *priv)
-{
-	return DPAA2_ETH_SKB_SIZE + priv->rx_buf_align;
-}
-
 static inline
 unsigned int dpaa2_eth_needed_headroom(struct dpaa2_eth_priv *priv,
 				       struct sk_buff *skb)
@@ -535,8 +531,7 @@ unsigned int dpaa2_eth_needed_headroom(struct dpaa2_eth_priv *priv,
  */
 static inline unsigned int dpaa2_eth_rx_headroom(struct dpaa2_eth_priv *priv)
 {
-	return priv->tx_data_offset + DPAA2_ETH_TX_BUF_ALIGN -
-	       DPAA2_ETH_RX_HWA_SIZE;
+	return priv->tx_data_offset - DPAA2_ETH_RX_HWA_SIZE;
 }
 
 static inline bool dpaa2_eth_is_pfc_enabled(struct dpaa2_eth_priv *priv,

@@ -389,7 +389,7 @@ static void dpaa2_eth_rx(struct dpaa2_eth_priv *priv,
 
 	if (fd_format == dpaa2_fd_single) {
 		xdp_act = dpaa2_eth_run_xdp(priv, ch, (struct dpaa2_fd *)fd,
-					    queue_id, vaddr);
+					    fq->flowid, vaddr);
 		if (xdp_act != XDP_PASS)
 			return;
 
@@ -938,7 +938,7 @@ static void dpaa2_eth_tx_conf(struct dpaa2_eth_priv *priv,
 	fq->dq_bytes += fd_len;
 
 	/* Check congestion state and wake all queues if necessary */
-	if (unlikely(__netif_subqueue_stopped(priv->net_dev, queue_id))) {
+	if (unlikely(__netif_subqueue_stopped(priv->net_dev, fq->flowid))) {
 		dma_sync_single_for_cpu(dev, priv->cscn_dma,
 					DPAA2_CSCN_SIZE, DMA_FROM_DEVICE);
 		if (!dpaa2_cscn_state_congested(priv->cscn_mem))

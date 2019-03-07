@@ -1118,11 +1118,6 @@ static void enetc_setup_txbdr(struct enetc_hw *hw, struct enetc_bdr *tx_ring)
 	if (tx_ring->ndev->features & NETIF_F_HW_VLAN_CTAG_TX)
 		tbmr |= ENETC_TBMR_VIH;
 
-	if (enetc_tsn_is_enabled()) {
-		tbmr &= ~ENETC_TBMR_PRIO_MASK;
-		tbmr |= ENETC_TBMR_PRIO_SET(idx % 8);
-	}
-
 	/* enable ring */
 	enetc_txbdr_wr(hw, idx, ENETC_TBMR, tbmr);
 
@@ -1419,6 +1414,71 @@ int enetc_close(struct net_device *ndev)
 	enetc_free_rx_resources(priv);
 	enetc_free_tx_resources(priv);
 	enetc_free_irqs(priv);
+
+	return 0;
+}
+
+int enetc_setup_tc(struct net_device *ndev, enum tc_setup_type type,
+		   void *type_data)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct tc_mqprio_qopt *mqprio = type_data;
+	struct enetc_bdr *tx_ring;
+	int i;
+	u8 num_tc;
+	u32 val;
+
+	if (type != TC_SETUP_MQPRIO)
+		return -EOPNOTSUPP;
+
+	mqprio->hw = TC_MQPRIO_HW_OFFLOAD_TCS;
+	num_tc = mqprio->num_tc;
+
+	if (!num_tc) {
+		netdev_reset_tc(ndev);
+		netif_set_real_num_tx_queues(ndev, ENETC_MAX_NUM_TXQS);
+
+		/* Reset all ring priorities to 0 */
+		for (i = 0; i < priv->num_tx_rings; i++) {
+			tx_ring = priv->tx_ring[i];
+			val = enetc_txbdr_rd(&priv->si->hw, tx_ring->index,
+					     ENETC_TBMR);
+			val &= ~ENETC_TBMR_PRIO_MASK;
+			enetc_txbdr_wr(&priv->si->hw, tx_ring->index,
+				       ENETC_TBMR, val);
+		}
+
+		return 0;
+	}
+
+	/* Check if we have enough BD rings available to accommodate all TCs */
+	if (num_tc > priv->num_tx_rings) {
+		netdev_err(ndev, "Max %d traffic classes supported\n",
+			   priv->num_tx_rings);
+		return -EINVAL;
+	}
+
+	/* For the moment, we use only one BD ring per TC.
+	 *
+	 * Configure num_tc BD rings with increasing priorities.
+	 */
+	for (i = 0; i < num_tc; i++) {
+		tx_ring = priv->tx_ring[i];
+		val = enetc_txbdr_rd(&priv->si->hw, tx_ring->index, ENETC_TBMR);
+		/* Clear the old priority and set the new one */
+		val &= ~ENETC_TBMR_PRIO_MASK;
+		val |= ENETC_TBMR_PRIO_SET(i);
+		enetc_txbdr_wr(&priv->si->hw, tx_ring->index, ENETC_TBMR, val);
+	}
+
+	/* Reset the number of netdev queues based on the TC count */
+	netif_set_real_num_tx_queues(ndev, num_tc);
+
+	netdev_set_num_tc(ndev, num_tc);
+
+	/* Each TC is associated with ENETC_TXQ_PER_TC netdev queues */
+	for (i = 0; i < num_tc; i++)
+		netdev_set_tc_queue(ndev, i, 1, i);
 
 	return 0;
 }

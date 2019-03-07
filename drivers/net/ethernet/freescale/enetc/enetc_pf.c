@@ -696,6 +696,7 @@ static int enetc_pf_set_features(struct net_device *ndev,
 static const struct net_device_ops enetc_ndev_ops = {
 	.ndo_open		= enetc_open,
 	.ndo_stop		= enetc_close,
+	.ndo_setup_tc		= enetc_setup_tc,
 	.ndo_start_xmit		= enetc_xmit,
 	.ndo_get_stats		= enetc_get_stats,
 	.ndo_set_mac_address	= enetc_pf_set_mac_addr,

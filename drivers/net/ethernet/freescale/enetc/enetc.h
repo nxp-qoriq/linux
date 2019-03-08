@@ -259,7 +259,8 @@ int enetc_set_fs_entry(struct enetc_si *si, struct enetc_cmd_rfse *rfse,
 void enetc_set_rss_key(struct enetc_hw *hw, const u8 *bytes);
 int enetc_get_rss_table(struct enetc_si *si, u32 *table, int count);
 int enetc_set_rss_table(struct enetc_si *si, const u32 *table, int count);
-
+int enetc_setup_tc(struct net_device *ndev, enum tc_setup_type type,
+		   void *type_data);
 #ifdef CONFIG_ENETC_TSN
 void enetc_tsn_pf_init(struct net_device *netdev, struct pci_dev *pdev);
 void enetc_tsn_pf_deinit(struct net_device *netdev);

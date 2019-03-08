@@ -362,6 +362,12 @@ union enetc_tx_bd {
 		u8 e_flags;
 		u8 flags;
 	} ext; /* Tx BD extension */
+	struct {
+		__le32 tstamp;
+		u8 reserved[10];
+		u8 status;
+		u8 flags;
+	} wb; /* writeback descriptor */
 };
 
 #define ENETC_TXBD_FLAGS_L4CS	BIT(0)

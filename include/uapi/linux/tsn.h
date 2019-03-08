@@ -60,6 +60,7 @@ enum {
 	TSN_CMD_CBGEN_SET,
 	TSN_CMD_CBREC_SET,
 	TSN_CMD_PCPMAP_SET,
+	TSN_CMD_DSCP_SET,
 	TSN_CMD_ECHO,			/* user->kernel request/get-response */
 	TSN_CMD_REPLY,			/* kernel->user event */
 	__TSN_CMD_MAX,
@@ -86,6 +87,7 @@ enum {
 	TSN_ATTR_CBGEN,			/* 802.1CB sequence generate */
 	TSN_ATTR_CBREC,			/* 802.1CB sequence recover */
 	TSN_ATTR_PCPMAP,		/* map queue number to PCP tag */
+	TSN_ATTR_DSCP,
 	__TSN_CMD_ATTR_MAX,
 };
 #define TSN_CMD_ATTR_MAX (__TSN_CMD_ATTR_MAX - 1)
@@ -312,6 +314,16 @@ enum {
 	TSN_PCPMAP_ATTR_ENABLE,
 	__TSN_PCPMAP_ATTR_MAX,
 	TSN_PCPMAP_ATTR_MAX = __TSN_PCPMAP_ATTR_MAX - 1,
+};
+
+enum {
+	TSN_DSCP_ATTR_UNSPEC,
+	TSN_DSCP_ATTR_DISABLE,
+	TSN_DSCP_ATTR_INDEX,
+	TSN_DSCP_ATTR_COS,
+	TSN_DSCP_ATTR_DPL,
+	__TSN_DSCP_ATTR_MAX,
+	TSN_DSCP_ATTR_MAX = __TSN_DSCP_ATTR_MAX - 1,
 };
 
 #define ptptime_t uint64_t
@@ -1057,6 +1069,14 @@ struct tsn_tsd_status {
 	uint32_t flag;
 	uint32_t cycleNum;
 	uint32_t loss_steps;
+};
+
+struct tsn_qos_switch_dscp_conf {
+	bool trust;
+	u8 cos;
+	u8 dpl;
+	bool remark;
+	u8 dscp; /* New ingress translated DSCP value */
 };
 
 #endif /* _UAPI_GENL_TSN_H */

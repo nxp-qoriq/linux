@@ -20,6 +20,8 @@
 /* Round x divided by y to nearest higher integer. x and y are integers */
 #define MSCC_DIV_ROUND_UP(x, y) (((x) + (y) - 1) / (y))
 #define SE_IX_PORT 64
+#define MSCC_QOS_DSCP_MAX 63
+#define MSCC_QOS_DP_MAX 1
 #ifndef MIN
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #endif
@@ -1054,5 +1056,58 @@ int switch_pcp_map_set(struct net_device *ndev, bool enable)
 			      port->chip_port, i);
 	}
 
+	return 0;
+}
+
+int switch_dscp_set(struct net_device *ndev,
+		    bool enable,
+		    const u8 dscp_ix,
+		    struct tsn_qos_switch_dscp_conf *c)
+{
+
+	struct ocelot_port *port = netdev_priv(ndev);
+	struct ocelot *ocelot = port->ocelot;
+	u32 val, ri = dscp_ix;
+
+	c->dscp = 0;
+	c->trust = 1;
+	c->remark = 0;
+
+	if (dscp_ix > MSCC_QOS_DSCP_MAX) {
+		netdev_info(ndev, "%s: Invalid dscp_ix %u\n",
+			    __func__, dscp_ix);
+		return -EINVAL;
+	}
+	if (c->cos > MSCC_QOS_PRIO_MAX) {
+		netdev_info(ndev, "%s: Invalid cos %d\n",
+			    __func__, c->cos);
+		return -EINVAL;
+	}
+	if (c->dpl > MSCC_QOS_DP_MAX) {
+		netdev_info(ndev, "%s: Invalid dpl %d\n",
+			    __func__, c->dpl);
+		return -EINVAL;
+	}
+	if (c->dscp > MSCC_QOS_DSCP_MAX) {
+		netdev_info(ndev, "%s: Invalid dscp %d\n",
+			    __func__, c->dscp);
+		return -EINVAL;
+	}
+
+	ocelot_rmw_gix(ocelot,
+		       (enable ? ANA_PORT_QOS_CFG_QOS_DSCP_ENA : 0) |
+		       (c->dscp ? ANA_PORT_QOS_CFG_DSCP_TRANSLATE_ENA : 0),
+		       ANA_PORT_QOS_CFG_QOS_DSCP_ENA |
+		       ANA_PORT_QOS_CFG_DSCP_TRANSLATE_ENA,
+		       ANA_PORT_QOS_CFG,
+		       port->chip_port);
+
+	val = (c->dpl ? ANA_DSCP_CFG_DP_DSCP_VAL : 0) |
+	       ANA_DSCP_CFG_QOS_DSCP_VAL(c->cos) |
+	       ANA_DSCP_CFG_DSCP_TRANSLATE_VAL(c->dscp) |
+	       (c->trust ? ANA_DSCP_CFG_DSCP_TRUST_ENA : 0) |
+	       (c->remark ? ANA_DSCP_CFG_DSCP_REWR_ENA : 0);
+
+	ocelot_write_rix(ocelot, val, ANA_DSCP_CFG, ri);
 	return 0;
 }

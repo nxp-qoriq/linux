@@ -743,13 +743,22 @@
 				/* internal to-cpu ports */
 				port@4 {
 					reg = <4>;
-					cpu-ethernet = <&enetc_port2>;
 					phy-connection-type = "internal";
 					fixed-link {
 						speed = <1000>;
 						full-duplex;
 					};
 				};
+				port@5 {
+					reg = <5>;
+					cpu-ethernet = <&enetc_port3>;
+					phy-connection-type = "internal";
+					fixed-link {
+						speed = <1000>;
+						full-duplex;
+					};
+				};
+
 			};
 			enetc_port3: pci@0,6 {
 				reg = <0x000600 0 0 0 0>;

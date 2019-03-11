@@ -323,14 +323,15 @@ struct dpaa2_eth_fq {
 	u16 flowid;
 	u8 tc;
 	int target_cpu;
+	u32 dq_frames;
+	u32 dq_bytes;
 	struct dpaa2_eth_channel *channel;
 	enum dpaa2_eth_fq_type type;
 
 	void (*consume)(struct dpaa2_eth_priv *priv,
 			struct dpaa2_eth_channel *ch,
 			const struct dpaa2_fd *fd,
-			struct napi_struct *napi,
-			u16 queue_id);
+			struct dpaa2_eth_fq *fq);
 	struct dpaa2_eth_fq_stats stats;
 };
 
@@ -479,7 +480,7 @@ static inline int dpaa2_eth_cmp_dpni_ver(struct dpaa2_eth_priv *priv,
 	((priv)->dpni_attrs.fs_entries)
 
 #define dpaa2_eth_queue_count(priv)	\
-	((priv)->dpni_attrs.num_queues)
+	((priv)->num_channels)
 
 #define dpaa2_eth_tc_count(priv)	\
 	((priv)->dpni_attrs.num_tcs)

@@ -26,6 +26,7 @@ struct enetc_tx_swbd {
 	u8 is_dma_page:1;
 	u8 check_wb:1;
 	u8 do_tstamp:1;
+	u8 qbv_en:1;
 };
 
 #define ENETC_RX_MAXFRM_SIZE	ENETC_MAC_MAXFRM_SIZE
@@ -44,6 +45,7 @@ struct enetc_ring_stats {
 	unsigned int packets;
 	unsigned int bytes;
 	unsigned int rx_alloc_errs;
+	unsigned int win_drop;
 };
 
 #define ENETC_BDR_DEFAULT_SIZE	1024
@@ -157,10 +159,11 @@ struct enetc_si {
 	int num_fs_entries;
 	int num_rss; /* number of RSS buckets */
 	unsigned short pad;
+#define ENETC_SI_F_QBV	BIT(0)
+	int hw_features;
 #ifdef CONFIG_ENETC_TSN
 	 struct enetc_cbs *ecbs;
 #endif
-
 };
 
 #define ENETC_SI_ALIGN	32
@@ -200,6 +203,7 @@ struct enetc_cls_rule {
 enum enetc_hw_features {
 	ENETC_F_RX_TSTAMP	= BIT(0),
 	ENETC_F_TX_TSTAMP	= BIT(1),
+	ENETC_F_QBV		= BIT(2),
 };
 
 struct enetc_ndev_priv {

@@ -17,6 +17,7 @@
 #define ENETC_SICTR0	0x18
 #define ENETC_SICTR1	0x1c
 #define ENETC_SIPCAPR0	0x20
+#define ENETC_SIPCAPR0_QBV	BIT(4)
 #define ENETC_SIPCAPR0_RSS	BIT(8)
 #define ENETC_SIPCAPR1	0x24
 #define ENETC_SITGTGR	0x30
@@ -375,6 +376,7 @@ union enetc_tx_bd {
 #define ENETC_TXBD_FLAGS_CSUM	BIT(3)
 #define ENETC_TXBD_FLAGS_EX	BIT(6)
 #define ENETC_TXBD_FLAGS_F	BIT(7)
+#define ENETC_TXBD_STATS_WIN	BIT(7)
 
 static inline void enetc_clear_tx_bd(union enetc_tx_bd *txbd)
 {

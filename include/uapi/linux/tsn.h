@@ -59,6 +59,7 @@ enum {
 	TSN_CMD_CT_SET,
 	TSN_CMD_CBGEN_SET,
 	TSN_CMD_CBREC_SET,
+	TSN_CMD_CBSTAT_GET,
 	TSN_CMD_PCPMAP_SET,
 	TSN_CMD_DSCP_SET,
 	TSN_CMD_ECHO,			/* user->kernel request/get-response */
@@ -86,6 +87,7 @@ enum {
 	TSN_ATTR_CT,			/* cut through */
 	TSN_ATTR_CBGEN,			/* 802.1CB sequence generate */
 	TSN_ATTR_CBREC,			/* 802.1CB sequence recover */
+	TSN_ATTR_CBSTAT,                 /* 802.1CB status */
 	TSN_ATTR_PCPMAP,		/* map queue number to PCP tag */
 	TSN_ATTR_DSCP,
 	__TSN_CMD_ATTR_MAX,
@@ -307,6 +309,21 @@ enum {
 	TSN_CBREC_ATTR_TAG_POP_EN,
 	__TSN_CBREC_ATTR_MAX,
 	TSN_CBREC_ATTR_MAX = __TSN_CBREC_ATTR_MAX - 1,
+};
+
+enum {
+	TSN_CBSTAT_ATTR_UNSPEC,
+	TSN_CBSTAT_ATTR_INDEX,
+	TSN_CBSTAT_ATTR_GEN_REC,
+	TSN_CBSTAT_ATTR_ERR,
+	TSN_CBSTAT_ATTR_SEQ_NUM,
+	TSN_CBSTAT_ATTR_SEQ_LEN,
+	TSN_CBSTAT_ATTR_SPLIT_MASK,
+	TSN_CBSTAT_ATTR_PORT_MASK,
+	TSN_CBSTAT_ATTR_HIS_LEN,
+	TSN_CBSTAT_ATTR_SEQ_HIS,
+	__TSN_CBSTAT_ATTR_MAX,
+	TSN_CBSTAT_ATTR_MAX = __TSN_CBSTAT_ATTR_MAX - 1,
 };
 
 enum {
@@ -904,6 +921,17 @@ struct tsn_seq_rec_conf {
 	uint8_t seq_len;
 	uint8_t his_len;
 	bool rtag_pop_en;
+};
+
+struct tsn_cb_status {
+	uint8_t gen_rec;
+	uint8_t err;
+	uint32_t seq_num;
+	uint8_t seq_len;
+	uint8_t split_mask;
+	uint8_t iport_mask;
+	uint8_t his_len;
+	uint32_t seq_his;
 };
 
 /* An entry for gate control list */

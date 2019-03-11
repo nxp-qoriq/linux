@@ -46,6 +46,7 @@ const struct tsn_ops switch_tsn_ops = {
 	.qbv_get			= switch_qbv_get,
 	.qbv_get_status			= switch_qbv_get_status,
 	.qbu_set			= switch_qbu_set,
+	.qbu_get                        = switch_qbu_get,
 	.cb_streamid_set		= switch_cb_streamid_set,
 	.cb_streamid_get		= switch_cb_streamid_get,
 	.cb_streamid_counters_get	= switch_cb_streamid_counters_get,
@@ -61,6 +62,7 @@ const struct tsn_ops switch_tsn_ops = {
 	.ct_set				= switch_cut_thru_set,
 	.cbgen_set			= switch_seq_gen_set,
 	.cbrec_set			= switch_seq_rec_set,
+	.cb_get				= switch_cb_get,
 	.pcpmap_set			= switch_pcp_map_set,
 	.dscp_set			= switch_dscp_set,
 };

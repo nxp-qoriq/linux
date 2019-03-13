@@ -154,6 +154,12 @@ static void dpaa2_mac_link_changed(struct net_device *netdev)
 		if (phydev->autoneg)
 			state.options |= DPMAC_LINK_OPT_AUTONEG;
 
+		if (phydev->pause && (phydev->advertising & ADVERTISED_Pause))
+			state.options |= DPMAC_LINK_OPT_PAUSE;
+		if (phydev->pause &&
+		    (phydev->advertising & ADVERTISED_Asym_Pause))
+			state.options |= DPMAC_LINK_OPT_ASYM_PAUSE;
+
 		netif_carrier_on(netdev);
 	} else {
 		netif_carrier_off(netdev);
@@ -415,6 +421,20 @@ static void configure_link(struct dpaa2_mac_priv *priv,
 
 	phydev->speed = cfg->rate;
 	phydev->duplex  = !!(cfg->options & DPMAC_LINK_OPT_HALF_DUPLEX);
+
+	if (phydev->supported & SUPPORTED_Pause) {
+		if (cfg->options & DPMAC_LINK_OPT_PAUSE)
+			phydev->advertising |= ADVERTISED_Pause;
+		else
+			phydev->advertising &= ~ADVERTISED_Pause;
+	}
+
+	if (phydev->supported & SUPPORTED_Asym_Pause) {
+		if (cfg->options & DPMAC_LINK_OPT_ASYM_PAUSE)
+			phydev->advertising |= ADVERTISED_Asym_Pause;
+		else
+			phydev->advertising &= ~ADVERTISED_Asym_Pause;
+	}
 
 	if (cfg->advertising != 0) {
 		phydev->advertising = 0;

@@ -1262,6 +1262,18 @@ static void disable_ch_napi(struct dpaa2_eth_priv *priv)
 
 static void update_tx_fqids(struct dpaa2_eth_priv *priv);
 
+static void update_pf(struct dpaa2_eth_priv *priv,
+		      struct dpni_link_state *state)
+{
+	bool pause_frames;
+
+	pause_frames = !!(state->options & DPNI_LINK_OPT_PAUSE);
+	if (priv->tx_pause_frames != pause_frames) {
+		priv->tx_pause_frames = pause_frames;
+		set_rx_taildrop(priv);
+	}
+}
+
 static int link_state_update(struct dpaa2_eth_priv *priv)
 {
 	struct dpni_link_state state = {0};
@@ -1281,6 +1293,7 @@ static int link_state_update(struct dpaa2_eth_priv *priv)
 	priv->link_state = state;
 	if (state.up) {
 		update_tx_fqids(priv);
+		update_pf(priv, &state);
 		netif_carrier_on(priv->net_dev);
 		netif_tx_start_all_queues(priv->net_dev);
 	} else {

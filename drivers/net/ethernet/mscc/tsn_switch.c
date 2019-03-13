@@ -593,6 +593,12 @@ int switch_cb_streamid_set(struct net_device *ndev, u32 index, bool enable,
 			     ANA_TABLES_MACACCESS_DEST_IDX(dst_idx) |
 			     ANA_TABLES_MACACCESS_MAC_TABLE_CMD(MACACCESS_CMD_WRITE),
 			     ANA_TABLES_MACACCESS);
+
+		ocelot_write(ocelot, ANA_TABLES_MACACCESS_VALID |
+			     ANA_TABLES_MACACCESS_ENTRYTYPE(1) |
+			     ANA_TABLES_MACACCESS_DEST_IDX(dst_idx) |
+			     ANA_TABLES_MACACCESS_MAC_TABLE_CMD(MACACCESS_CMD_LEARN),
+			     ANA_TABLES_MACACCESS);
 	} else {
 		netdev_info(ndev, "disable stream set\n");
 		mac = streamid->para.nid.dmac;
@@ -1060,7 +1066,8 @@ int switch_seq_rec_set(struct net_device *ndev, u32 index,
 		   sr_conf->seq_len, sr_conf->his_len,
 		   sr_conf->rtag_pop_en);
 
-	ocelot_rmw_rix(ocelot, 1, ANA_PORT_MODE_REDTAG_PARSE_CFG,
+	ocelot_rmw_rix(ocelot, ANA_PORT_MODE_REDTAG_PARSE_CFG,
+		       ANA_PORT_MODE_REDTAG_PARSE_CFG,
 		       ANA_PORT_MODE, port->chip_port);
 
 	ocelot_write(ocelot,

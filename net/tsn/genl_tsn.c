@@ -42,7 +42,9 @@ static const struct nla_policy tsn_cmd_policy[TSN_CMD_ATTR_MAX + 1] = {
 	[TSN_ATTR_CT]			= { .type = NLA_NESTED },
 	[TSN_ATTR_CBGEN]		= { .type = NLA_NESTED },
 	[TSN_ATTR_CBREC]		= { .type = NLA_NESTED },
+	[TSN_ATTR_CBSTAT]               = { .type = NLA_NESTED },
 	[TSN_ATTR_PCPMAP]		= { .type = NLA_NESTED },
+	[TSN_ATTR_DSCP]                 = { .type = NLA_NESTED },
 };
 
 static const struct nla_policy ct_policy[TSN_CT_ATTR_MAX + 1] = {
@@ -62,6 +64,18 @@ static const struct nla_policy cbrec_policy[TSN_CBREC_ATTR_MAX + 1] = {
 	[TSN_CBREC_ATTR_SEQ_LEN]	= { .type = NLA_U8 },
 	[TSN_CBREC_ATTR_HIS_LEN]	= { .type = NLA_U8 },
 	[TSN_CBREC_ATTR_TAG_POP_EN]	= { .type = NLA_FLAG },
+};
+
+static const struct nla_policy cbstat_policy[TSN_CBSTAT_ATTR_MAX + 1] = {
+	[TSN_CBSTAT_ATTR_INDEX]         = { .type = NLA_U32 },
+	[TSN_CBSTAT_ATTR_GEN_REC]       = { .type = NLA_U8 },
+	[TSN_CBSTAT_ATTR_ERR]		= { .type = NLA_U8 },
+	[TSN_CBSTAT_ATTR_SEQ_NUM]       = { .type = NLA_U32 },
+	[TSN_CBSTAT_ATTR_SEQ_LEN]       = { .type = NLA_U8 },
+	[TSN_CBSTAT_ATTR_SPLIT_MASK]    = { .type = NLA_U8 },
+	[TSN_CBSTAT_ATTR_PORT_MASK]	= { .type = NLA_U8 },
+	[TSN_CBSTAT_ATTR_HIS_LEN]       = { .type = NLA_U8 },
+	[TSN_CBSTAT_ATTR_SEQ_HIS]       = { .type = NLA_U32 },
 };
 
 static const struct nla_policy pcpmap_policy[TSN_PCPMAP_ATTR_MAX + 1] = {
@@ -209,6 +223,13 @@ static const struct nla_policy qci_fmi_policy[] = {
 	[TSN_QCI_FMI_ATTR_MARED]	= { .type = NLA_FLAG},
 	[TSN_QCI_FMI_ATTR_COUNTERS]	= {
 		.len = sizeof(struct tsn_qci_psfp_fmi_counters)},
+};
+
+static const struct nla_policy dscp_policy[] = {
+	[TSN_DSCP_ATTR_INDEX]		= { .type = NLA_U32},
+	[TSN_DSCP_ATTR_DISABLE]		= { .type = NLA_FLAG},
+	[TSN_DSCP_ATTR_COS]		= { .type = NLA_U32},
+	[TSN_DSCP_ATTR_DPL]		= { .type = NLA_U32},
 };
 
 static int tsn_prepare_reply(struct genl_info *info, u8 cmd,
@@ -2910,6 +2931,87 @@ static int tsn_cbrec_set(struct sk_buff *skb, struct genl_info *info)
 	return 0;
 }
 
+static int tsn_cbstatus_get(struct sk_buff *skb, struct genl_info *info)
+{
+	struct nlattr *na;
+	struct nlattr *cba[TSN_CBSTAT_ATTR_MAX + 1];
+	struct nlattr *cbattr;
+	struct net_device *netdev;
+	const struct tsn_ops *tsnops;
+	struct sk_buff *rep_skb;
+	int ret;
+	unsigned int index;
+	struct genlmsghdr *genlhdr;
+	struct tsn_cb_status cbstat;
+	struct tsn_port *port;
+
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
+
+	tsnops = port->tsnops;
+
+	/* Get status data from device */
+	genlhdr = info->genlhdr;
+
+	memset(&cbstat, 0, sizeof(struct tsn_cb_status));
+
+	if (!tsnops->cb_get) {
+		tsn_simple_reply(info, TSN_CMD_REPLY,
+				 netdev->name, -TSN_NODEVOPS);
+		return -1;
+	}
+
+	na = info->attrs[TSN_ATTR_CBSTAT];
+	ret = NLA_PARSE_NESTED(cba, TSN_CBSTAT_ATTR_MAX,
+			       na, cbstat_policy);
+	if (ret) {
+		tsn_simple_reply(info, TSN_CMD_REPLY,
+				 netdev->name, -TSN_ATTRERR);
+		return -EINVAL;
+	}
+
+	index = nla_get_u32(cba[TSN_CBSTAT_ATTR_INDEX]);
+
+	ret = tsnops->cb_get(netdev, index, &cbstat);
+	if (ret < 0) {
+		tsn_simple_reply(info, TSN_CMD_REPLY,
+				 netdev->name, -TSN_DEVRETERR);
+		return -1;
+	}
+
+	/* Form netlink reply data */
+	ret = tsn_prepare_reply(info, genlhdr->cmd,
+				&rep_skb, NLMSG_ALIGN(MAX_ATTR_SIZE));
+	if (ret < 0)
+		return ret;
+
+	if (nla_put_string(rep_skb, TSN_ATTR_IFNAME, netdev->name))
+		return -EMSGSIZE;
+
+	cbattr = nla_nest_start(rep_skb, TSN_ATTR_CBSTAT);
+	if (!cbattr)
+		return -EMSGSIZE;
+
+	if (nla_put_u8(rep_skb, TSN_CBSTAT_ATTR_GEN_REC, cbstat.gen_rec) ||
+	    nla_put_u8(rep_skb, TSN_CBSTAT_ATTR_ERR, cbstat.err) ||
+	    nla_put_u32(rep_skb, TSN_CBSTAT_ATTR_SEQ_NUM,
+			cbstat.seq_num) ||
+	    nla_put_u8(rep_skb, TSN_CBSTAT_ATTR_SEQ_LEN, cbstat.seq_len) ||
+	    nla_put_u8(rep_skb, TSN_CBSTAT_ATTR_SPLIT_MASK,
+		       cbstat.split_mask) ||
+	    nla_put_u8(rep_skb, TSN_CBSTAT_ATTR_PORT_MASK,
+		       cbstat.iport_mask) ||
+	    nla_put_u8(rep_skb, TSN_CBSTAT_ATTR_HIS_LEN, cbstat.his_len) ||
+	    nla_put_u32(rep_skb, TSN_CBSTAT_ATTR_SEQ_HIS,
+			cbstat.seq_his))
+		return -EMSGSIZE;
+
+	nla_nest_end(rep_skb, cbattr);
+
+	return tsn_send_reply(rep_skb, info);
+}
+
 static int tsn_pcpmap_set(struct sk_buff *skb, struct genl_info *info)
 {
 	struct nlattr *na;
@@ -2950,6 +3052,65 @@ static int tsn_pcpmap_set(struct sk_buff *skb, struct genl_info *info)
 
 	enable = nla_get_flag(pcpmapa[TSN_PCPMAP_ATTR_ENABLE]);
 	ret = tsnops->pcpmap_set(netdev, enable);
+	if (ret < 0) {
+		tsn_simple_reply(info, TSN_CMD_REPLY,
+				 netdev->name, -TSN_DEVRETERR);
+		return -EINVAL;
+	}
+
+	tsn_simple_reply(info, TSN_CMD_REPLY,
+			 netdev->name, TSN_SUCCESS);
+
+	return 0;
+}
+
+static int tsn_dscp_set(struct sk_buff *skb, struct genl_info *info)
+{
+	struct nlattr *na;
+	struct nlattr *dscpa[TSN_DSCP_ATTR_MAX + 1];
+	struct net_device *netdev;
+	const struct tsn_ops *tsnops;
+	int ret;
+	bool enable = 0;
+	struct tsn_port *port;
+	int dscp_ix;
+	struct tsn_qos_switch_dscp_conf dscp_conf;
+
+	port = tsn_init_check(info, &netdev);
+	if (!port)
+		return -ENODEV;
+
+	tsnops = port->tsnops;
+
+	if (!info->attrs[TSN_ATTR_DSCP]) {
+		tsn_simple_reply(info, TSN_CMD_REPLY,
+				 netdev->name, -TSN_ATTRERR);
+		return -EINVAL;
+	}
+
+	na = info->attrs[TSN_ATTR_DSCP];
+
+	if (!tsnops->dscp_set) {
+		tsn_simple_reply(info, TSN_CMD_REPLY,
+				 netdev->name, -TSN_NODEVOPS);
+		return -1;
+	}
+
+	ret = NLA_PARSE_NESTED(dscpa, TSN_DSCP_ATTR_MAX,
+			       na, dscp_policy);
+	if (ret) {
+		tsn_simple_reply(info, TSN_CMD_REPLY,
+				 netdev->name, -TSN_ATTRERR);
+		return -EINVAL;
+	}
+
+	enable = 1;
+	if (dscpa[TSN_DSCP_ATTR_DISABLE])
+		enable = 0;
+	dscp_ix = nla_get_u32(dscpa[TSN_DSCP_ATTR_INDEX]);
+	dscp_conf.cos = nla_get_u32(dscpa[TSN_DSCP_ATTR_COS]);
+	dscp_conf.dpl = nla_get_u32(dscpa[TSN_DSCP_ATTR_DPL]);
+	ret = tsnops->dscp_set(netdev, enable, dscp_ix, &dscp_conf);
 	if (ret < 0) {
 		tsn_simple_reply(info, TSN_CMD_REPLY,
 				 netdev->name, -TSN_DEVRETERR);
@@ -3108,8 +3269,22 @@ static const struct genl_ops tsnnl_ops[] = {
 		.flags		= GENL_ADMIN_PERM,
 	},
 	{
+		.cmd		= TSN_CMD_CBSTAT_GET,
+		.doit		= tsn_cbstatus_get,
+		.policy		= tsn_cmd_policy,
+		.flags		= GENL_ADMIN_PERM,
+	},
+
+
+	{
 		.cmd		= TSN_CMD_PCPMAP_SET,
 		.doit		= tsn_pcpmap_set,
+		.policy		= tsn_cmd_policy,
+		.flags		= GENL_ADMIN_PERM,
+	},
+	{
+		.cmd		= TSN_CMD_DSCP_SET,
+		.doit		= tsn_dscp_set,
 		.policy		= tsn_cmd_policy,
 		.flags		= GENL_ADMIN_PERM,
 	},

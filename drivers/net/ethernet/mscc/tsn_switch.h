@@ -28,6 +28,7 @@ int switch_qbv_get_status(struct net_device *ndev,
 int switch_cut_thru_set(struct net_device *ndev, u8 cut_thru);
 int switch_cbs_set(struct net_device *ndev, u8 tc, u8 bw);
 int switch_qbu_set(struct net_device *ndev, u8 preemptable);
+int switch_qbu_get(struct net_device *ndev, struct tsn_preempt_status *c);
 int switch_cb_streamid_get(struct net_device *ndev, u32 index,
 			   struct tsn_cb_streamid *streamid);
 int switch_cb_streamid_set(struct net_device *ndev, u32 index,
@@ -55,6 +56,9 @@ int switch_seq_gen_set(struct net_device *ndev, u32 index,
 		       struct tsn_seq_gen_conf *sg_conf);
 int switch_seq_rec_set(struct net_device *ndev, u32 index,
 		       struct tsn_seq_rec_conf *sr_conf);
+int switch_cb_get(struct net_device *ndev, u32 index,
+		  struct tsn_cb_status  *c);
 int switch_pcp_map_set(struct net_device *ndev, bool enable);
-
+int switch_dscp_set(struct net_device *ndev, bool enable, const u8 dscp_ix,
+		    struct tsn_qos_switch_dscp_conf *c);
 #endif

@@ -703,7 +703,6 @@
 			};
 			enetc_port2: pci@0,2 {
 				reg = <0x000200 0 0 0 0>;
-				phy-connection-type = "internal";
 				fixed-link {
 					speed = <1000>;
 					full-duplex;
@@ -743,7 +742,6 @@
 				/* internal to-cpu ports */
 				port@4 {
 					reg = <4>;
-					phy-connection-type = "internal";
 					fixed-link {
 						speed = <1000>;
 						full-duplex;
@@ -752,7 +750,6 @@
 				port@5 {
 					reg = <5>;
 					cpu-ethernet = <&enetc_port3>;
-					phy-connection-type = "internal";
 					fixed-link {
 						speed = <1000>;
 						full-duplex;
@@ -762,7 +759,6 @@
 			};
 			enetc_port3: pci@0,6 {
 				reg = <0x000600 0 0 0 0>;
-				phy-connection-type = "internal";
 				fixed-link {
 					speed = <1000>;
 					full-duplex;

@@ -348,7 +348,7 @@
 		mux0: mux0@0 {
 			#clock-cells = <0>;
 			reg = <0x0 4>;
-			compatible = "fsl,qoriq-core-mux-2.0";
+			compatible = "fsl,core-mux-clock";
 			clocks = <&pll0 0>, <&pll0 1>;
 			clock-names = "pll0_0", "pll0_1";
 			clock-output-names = "cmux0";
@@ -356,9 +356,9 @@
 		mux1: mux1@20 {
 			#clock-cells = <0>;
 			reg = <0x20 4>;
-			compatible = "fsl,qoriq-core-mux-2.0";
-			clocks = <&pll1 0>, <&pll1 1>;
-			clock-names = "pll1_0", "pll1_1";
+			compatible = "fsl,core-mux-clock";
+			clocks = <&pll0 0>, <&pll0 1>;
+			clock-names = "pll0_0", "pll0_1";
 			clock-output-names = "cmux1";
 		};
 	};

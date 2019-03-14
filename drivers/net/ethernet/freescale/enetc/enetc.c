@@ -346,23 +346,19 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget)
 	while (bds_to_clean && tx_frm_cnt < ENETC_DEFAULT_TX_WORK) {
 		bool is_eof = !!tx_swbd->skb;
 
-		if (unlikely(do_tstamp)) {
-			if (unlikely(first)) {
-				union enetc_tx_bd *txbd;
+		if (unlikely(do_tstamp && first)) {
+			union enetc_tx_bd *txbd;
 
-				txbd = ENETC_TXBD(*tx_ring, i);
-				enetc_get_tx_tstamp(&priv->si->hw, txbd,
-						    &tstamp);
-
-			} else if (is_eof) {
-				enetc_tstamp_tx(tx_swbd->skb, tstamp);
-			}
+			txbd = ENETC_TXBD(*tx_ring, i);
+			enetc_get_tx_tstamp(&priv->si->hw, txbd, &tstamp);
 		}
 
 		if (likely(tx_swbd->dma))
 			enetc_unmap_tx_buff(tx_ring, tx_swbd);
 
 		if (is_eof) {
+			if (unlikely(do_tstamp))
+				enetc_tstamp_tx(tx_swbd->skb, tstamp);
 			napi_consume_skb(tx_swbd->skb, napi_budget);
 			tx_swbd->skb = NULL;
 		}

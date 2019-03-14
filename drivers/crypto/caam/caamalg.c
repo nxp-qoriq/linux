@@ -3727,7 +3727,7 @@ int caam_algapi_init(struct device *ctrldev)
 		 * on LP devices.
 		 */
 		if (aes_vid == CHA_VER_VID_AES_LP &&
-		    (t_alg->caam.class1_alg_type & OP_ALG_AAI_MASK) ==
+		    (alg->class1_alg_type & OP_ALG_AAI_MASK) ==
 		    OP_ALG_AAI_XTS)
 			continue;
 

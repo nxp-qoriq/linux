@@ -139,6 +139,7 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 
 	do_vlan = skb_vlan_tag_present(skb);
 	do_tstamp = tstamp && (skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP);
+	tx_swbd->do_tstamp = do_tstamp;
 
 	if (do_vlan || do_tstamp)
 		flags |= ENETC_TXBD_FLAGS_EX;
@@ -330,35 +331,35 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget)
 	struct net_device *ndev = tx_ring->ndev;
 	int tx_frm_cnt = 0, tx_byte_cnt = 0;
 	struct enetc_tx_swbd *tx_swbd;
-	struct enetc_ndev_priv *priv;
 	int i, bds_to_clean;
-	bool do_tstamp, first;
+	bool do_tstamp;
 	u64 tstamp = 0;
-
-	priv = netdev_priv(ndev);
-	do_tstamp = priv->tx_tstamp;
 
 	i = tx_ring->next_to_clean;
 	tx_swbd = &tx_ring->tx_swbd[i];
-	first = true;
+	do_tstamp = false;
 	bds_to_clean = enetc_bd_ready_count(tx_ring, i);
 
 	while (bds_to_clean && tx_frm_cnt < ENETC_DEFAULT_TX_WORK) {
 		bool is_eof = !!tx_swbd->skb;
 
-		if (unlikely(do_tstamp && first)) {
+		if (unlikely(tx_swbd->do_tstamp)) {
+			struct enetc_ndev_priv *priv = netdev_priv(ndev);
 			union enetc_tx_bd *txbd;
 
 			txbd = ENETC_TXBD(*tx_ring, i);
 			enetc_get_tx_tstamp(&priv->si->hw, txbd, &tstamp);
+			do_tstamp = true;
 		}
 
 		if (likely(tx_swbd->dma))
 			enetc_unmap_tx_buff(tx_ring, tx_swbd);
 
 		if (is_eof) {
-			if (unlikely(do_tstamp))
+			if (unlikely(do_tstamp)) {
 				enetc_tstamp_tx(tx_swbd->skb, tstamp);
+				do_tstamp = false;
+			}
 			napi_consume_skb(tx_swbd->skb, napi_budget);
 			tx_swbd->skb = NULL;
 		}
@@ -374,10 +375,8 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget)
 		}
 
 		/* BD iteration loop end */
-		first = false;
 		if (is_eof) {
 			tx_frm_cnt++;
-			first = true;
 			/* re-arm interrupt source */
 			enetc_wr_reg(tx_ring->idr, BIT(tx_ring->index) |
 				     BIT(16 + tx_ring->index));

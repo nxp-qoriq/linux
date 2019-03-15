@@ -357,6 +357,9 @@
 			interrupts = <GIC_SPI 88 IRQ_TYPE_LEVEL_HIGH>;
 			clock-names = "i2c";
 			clocks = <&clockgen 4 1>;
+			dma-names = "tx", "rx";
+			dmas = <&edma0 1 39>,
+			       <&edma0 1 38>;
 			fsl-scl-gpio = <&gpio3 23 0>;
 			status = "disabled";
 		};

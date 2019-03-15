@@ -13,7 +13,7 @@
 #define ENETC_TXBDS_MAX_NEEDED	ENETC_TXBDS_NEEDED(ENETC_MAX_SKB_FRAGS + 1)
 
 static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
-			      bool tstamp);
+			      enum enetc_hw_features hw_features);
 
 netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
 {
@@ -33,7 +33,7 @@ netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
 		return NETDEV_TX_BUSY;
 	}
 
-	count = enetc_map_tx_buffs(tx_ring, skb, priv->tx_tstamp);
+	count = enetc_map_tx_buffs(tx_ring, skb, priv->hw_features);
 	if (unlikely(!count))
 		goto drop_packet_err;
 
@@ -106,7 +106,7 @@ static void enetc_free_tx_skb(struct enetc_bdr *tx_ring,
 }
 
 static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
-			      bool tstamp)
+			      enum enetc_hw_features hw_features)
 {
 	struct enetc_tx_swbd *tx_swbd;
 	struct skb_frag_struct *frag;
@@ -138,8 +138,10 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 	count++;
 
 	do_vlan = skb_vlan_tag_present(skb);
-	do_tstamp = tstamp && (skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP);
+	do_tstamp = (hw_features & ENETC_F_TX_TSTAMP) &&
+		    (skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP);
 	tx_swbd->do_tstamp = do_tstamp;
+	tx_swbd->check_wb = tx_swbd->do_tstamp;
 
 	if (do_vlan || do_tstamp)
 		flags |= ENETC_TXBD_FLAGS_EX;
@@ -306,13 +308,11 @@ static void enetc_get_tx_tstamp(struct enetc_hw *hw, union enetc_tx_bd *txbd,
 {
 	u32 lo, hi;
 
-	if (txbd->flags & ENETC_TXBD_FLAGS_W) {
-		lo = enetc_rd(hw, ENETC_SICTR0);
-		hi = enetc_rd(hw, ENETC_SICTR1);
-		if (lo <= txbd->wb.tstamp)
-			hi -= 1;
-		*tstamp = (u64)hi << 32 | txbd->wb.tstamp;
-	}
+	lo = enetc_rd(hw, ENETC_SICTR0);
+	hi = enetc_rd(hw, ENETC_SICTR1);
+	if (lo <= txbd->wb.tstamp)
+		hi -= 1;
+	*tstamp = (u64)hi << 32 | txbd->wb.tstamp;
 }
 
 static void enetc_tstamp_tx(struct sk_buff *skb, u64 tstamp)
@@ -343,15 +343,21 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget)
 	while (bds_to_clean && tx_frm_cnt < ENETC_DEFAULT_TX_WORK) {
 		bool is_eof = !!tx_swbd->skb;
 
-		if (unlikely(tx_swbd->do_tstamp)) {
+		if (unlikely(tx_swbd->check_wb)) {
 			struct enetc_ndev_priv *priv = netdev_priv(ndev);
 			union enetc_tx_bd *txbd;
 
 			txbd = ENETC_TXBD(*tx_ring, i);
-			enetc_get_tx_tstamp(&priv->si->hw, txbd, &tstamp);
-			do_tstamp = true;
-		}
+			if (!(txbd->flags & ENETC_TXBD_FLAGS_W))
+				goto no_wb;
 
+			if (tx_swbd->do_tstamp) {
+				enetc_get_tx_tstamp(&priv->si->hw, txbd,
+						    &tstamp);
+				do_tstamp = true;
+			}
+		}
+no_wb:
 		if (likely(tx_swbd->dma))
 			enetc_unmap_tx_buff(tx_ring, tx_swbd);
 
@@ -1544,10 +1550,10 @@ static int enetc_hwtstamp_set(struct net_device *ndev, struct ifreq *ifr)
 
 	switch (config.tx_type) {
 	case HWTSTAMP_TX_OFF:
-		priv->tx_tstamp = false;
+		priv->hw_features &= ~ENETC_F_TX_TSTAMP;
 		break;
 	case HWTSTAMP_TX_ON:
-		priv->tx_tstamp = true;
+		priv->hw_features |= ENETC_F_TX_TSTAMP;
 		break;
 	default:
 		return -ERANGE;
@@ -1555,10 +1561,10 @@ static int enetc_hwtstamp_set(struct net_device *ndev, struct ifreq *ifr)
 
 	switch (config.rx_filter) {
 	case HWTSTAMP_FILTER_NONE:
-		priv->rx_tstamp = false;
+		priv->hw_features &= ~ENETC_F_RX_TSTAMP;
 		break;
 	default:
-		priv->rx_tstamp = true;
+		priv->hw_features |= ENETC_F_RX_TSTAMP;
 		config.rx_filter = HWTSTAMP_FILTER_ALL;
 	}
 
@@ -1573,13 +1579,13 @@ static int enetc_hwtstamp_get(struct net_device *ndev, struct ifreq *ifr)
 
 	config.flags = 0;
 
-	if (priv->tx_tstamp)
+	if (priv->hw_features & ENETC_F_TX_TSTAMP)
 		config.tx_type = HWTSTAMP_TX_ON;
 	else
 		config.tx_type = HWTSTAMP_TX_OFF;
 
-	config.rx_filter = (priv->rx_tstamp ?
-			    HWTSTAMP_FILTER_ALL : HWTSTAMP_FILTER_NONE);
+	config.rx_filter = (priv->hw_features & ENETC_F_RX_TSTAMP) ?
+			    HWTSTAMP_FILTER_ALL : HWTSTAMP_FILTER_NONE;
 
 	return copy_to_user(ifr->ifr_data, &config, sizeof(config)) ?
 	       -EFAULT : 0;

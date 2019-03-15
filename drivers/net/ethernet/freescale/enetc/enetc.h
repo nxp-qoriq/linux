@@ -24,6 +24,7 @@ struct enetc_tx_swbd {
 	dma_addr_t dma;
 	u16 len;
 	u8 is_dma_page:1;
+	u8 check_wb:1;
 	u8 do_tstamp:1;
 };
 
@@ -196,6 +197,11 @@ struct enetc_cls_rule {
 
 #define ENETC_MAX_BDR_INT	2 /* fixed to max # of available cpus */
 
+enum enetc_hw_features {
+	ENETC_F_RX_TSTAMP	= BIT(0),
+	ENETC_F_TX_TSTAMP	= BIT(1),
+};
+
 struct enetc_ndev_priv {
 	struct net_device *ndev;
 	struct device *dev; /* dma-mapping device */
@@ -207,8 +213,7 @@ struct enetc_ndev_priv {
 	u16 rx_bd_count, tx_bd_count;
 
 	u16 msg_enable;
-	/* HW timestamping en flags */
-	bool tx_tstamp, rx_tstamp;
+	enum enetc_hw_features hw_features;
 
 	struct enetc_bdr *tx_ring[16];
 	struct enetc_bdr *rx_ring[16];

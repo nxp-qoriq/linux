@@ -1,6 +1,12 @@
 config CRYPTO_DEV_FSL_CAAM_COMMON
 	tristate
 
+config CRYPTO_DEV_FSL_CAAM_CRYPTO_API_DESC
+	bool
+
+config CRYPTO_DEV_FSL_CAAM_AHASH_API_DESC
+	bool
+
 config CRYPTO_DEV_FSL_CAAM
 	tristate "Freescale CAAM-Multicore platform driver backend"
 	depends on FSL_SOC || ARCH_MXC || ARCH_LAYERSCAPE
@@ -87,6 +93,7 @@ config CRYPTO_DEV_FSL_CAAM_INTC_TIME_THLD
 config CRYPTO_DEV_FSL_CAAM_CRYPTO_API
 	bool "Register algorithm implementations with the Crypto API"
 	default y
+	select CRYPTO_DEV_FSL_CAAM_CRYPTO_API_DESC
 	select CRYPTO_AEAD
 	select CRYPTO_AUTHENC
 	select CRYPTO_BLKCIPHER
@@ -99,6 +106,7 @@ config CRYPTO_DEV_FSL_CAAM_CRYPTO_API_QI
 	bool "Queue Interface as Crypto API backend"
 	depends on FSL_SDK_DPA && NET
 	default y
+	select CRYPTO_DEV_FSL_CAAM_CRYPTO_API_DESC
 	select CRYPTO_AUTHENC
 	select CRYPTO_BLKCIPHER
 	help
@@ -112,6 +120,7 @@ config CRYPTO_DEV_FSL_CAAM_CRYPTO_API_QI
 config CRYPTO_DEV_FSL_CAAM_AHASH_API
 	bool "Register hash algorithm implementations with Crypto API"
 	default y
+	select CRYPTO_DEV_FSL_CAAM_AHASH_API_DESC
 	select CRYPTO_HASH
 	help
 	  Selecting this will offload ahash for users of the
@@ -143,6 +152,8 @@ config CRYPTO_DEV_FSL_DPAA2_CAAM
 	tristate "QorIQ DPAA2 CAAM (DPSECI) driver"
 	depends on FSL_MC_DPIO
 	select CRYPTO_DEV_FSL_CAAM_COMMON
+	select CRYPTO_DEV_FSL_CAAM_CRYPTO_API_DESC
+	select CRYPTO_DEV_FSL_CAAM_AHASH_API_DESC
 	select CRYPTO_BLKCIPHER
 	select CRYPTO_AUTHENC
 	select CRYPTO_AEAD

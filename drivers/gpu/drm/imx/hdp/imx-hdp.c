@@ -1339,6 +1339,11 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 
 	encoder->bridge = bridge;
 
+#ifdef CONFIG_ARCH_LAYERSCAPE
+	/* There is no interrupt for hotplug on ls1028a platform */
+	connector->polled = DRM_CONNECTOR_POLL_CONNECT |
+		DRM_CONNECTOR_POLL_DISCONNECT;
+#endif
 	/* connector */
 	drm_connector_helper_add(connector,
 				 &imx_hdp_connector_helper_funcs);

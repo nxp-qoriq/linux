@@ -17,6 +17,16 @@ config FSL_GUTS
 	  Other guts accesses, such as reading RCW, should eventually be moved
 	  into this driver as well.
 
+config FSL_QIXIS
+	tristate "QIXIS system controller driver"
+	depends on OF
+	select REGMAP_I2C
+	select REGMAP_MMIO
+	default n
+	help
+	  Say y here to enable QIXIS system controller api. The qixis driver
+	  provides FPGA functions to control system.
+
 config FSL_SLEEP_FSM
 	bool
 	help

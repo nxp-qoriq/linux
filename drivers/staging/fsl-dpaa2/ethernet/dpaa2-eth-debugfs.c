@@ -111,9 +111,9 @@ static int dpaa2_dbg_fqs_show(struct seq_file *file, void *offset)
 	int i, err;
 
 	seq_printf(file, "non-zero FQ stats for %s:\n", priv->net_dev->name);
-	seq_printf(file, "%s%16s%16s%16s%16s%16s%16s\n",
+	seq_printf(file, "%s%16s%16s%16s%16s%16s\n",
 		   "VFQID", "CPU", "Traffic Class", "Type", "Frames",
-		   "Pending frames", "Congestion");
+		   "Pending frames");
 
 	for (i = 0; i <  priv->num_fqs; i++) {
 		fq = &priv->fq[i];
@@ -125,14 +125,13 @@ static int dpaa2_dbg_fqs_show(struct seq_file *file, void *offset)
 		if (!fq->stats.frames && !fcnt)
 			continue;
 
-		seq_printf(file, "%5d%16d%16d%16s%16llu%16u%16llu\n",
+		seq_printf(file, "%5d%16d%16d%16s%16llu%16u\n",
 			   fq->fqid,
 			   fq->target_cpu,
 			   fq->tc,
 			   fq_type_to_str(fq),
 			   fq->stats.frames,
-			   fcnt,
-			   fq->stats.congestion_entry);
+			   fcnt);
 	}
 
 	return 0;

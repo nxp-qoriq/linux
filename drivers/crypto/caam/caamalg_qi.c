@@ -3280,7 +3280,7 @@ int caam_qi_algapi_init(struct device *ctrldev)
 		t_alg = caam_alg_alloc(alg);
 		if (IS_ERR(t_alg)) {
 			err = PTR_ERR(t_alg);
-			dev_warn(priv->qidev, "%s alg allocation failed\n",
+			dev_warn(ctrldev, "%s alg allocation failed\n",
 				 alg->driver_name);
 			continue;
 		}

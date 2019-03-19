@@ -537,7 +537,9 @@ struct ocelot {
 	u16 bridge_mask;
 	u16 bridge_fwd_mask;
 
-	struct workqueue_struct *ocelot_owq;
+	struct workqueue_struct *ocelot_wq;
+	struct work_struct tx_clean_work;
+	struct list_head skbs;
 
 	int shared_queue_sz;
 
@@ -565,6 +567,14 @@ struct ocelot {
 	struct ptp_clock *clock;
 	int phc_index;
 	struct hwtstamp_config hwtstamp_config;
+	u8 tstamp_id;
+};
+
+struct ocelot_skb {
+	struct list_head head;
+	struct sk_buff *skb;
+	u8 tstamp_id;
+	u8 tx_port;
 };
 
 struct ocelot_port {

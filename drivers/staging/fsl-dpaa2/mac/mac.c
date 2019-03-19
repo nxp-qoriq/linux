@@ -422,6 +422,11 @@ static void configure_link(struct dpaa2_mac_priv *priv,
 	phydev->speed = cfg->rate;
 	phydev->duplex  = !!(cfg->options & DPMAC_LINK_OPT_HALF_DUPLEX);
 
+	if (cfg->advertising != 0) {
+		phydev->advertising = 0;
+		link_mode_dpmac2phydev(cfg->advertising, &phydev->advertising);
+	}
+
 	if (phydev->supported & SUPPORTED_Pause) {
 		if (cfg->options & DPMAC_LINK_OPT_PAUSE)
 			phydev->advertising |= ADVERTISED_Pause;
@@ -434,11 +439,6 @@ static void configure_link(struct dpaa2_mac_priv *priv,
 			phydev->advertising |= ADVERTISED_Asym_Pause;
 		else
 			phydev->advertising &= ~ADVERTISED_Asym_Pause;
-	}
-
-	if (cfg->advertising != 0) {
-		phydev->advertising = 0;
-		link_mode_dpmac2phydev(cfg->advertising, &phydev->advertising);
 	}
 
 	if (cfg->options & DPMAC_LINK_OPT_AUTONEG) {

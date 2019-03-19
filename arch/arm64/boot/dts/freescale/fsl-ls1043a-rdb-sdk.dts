@@ -197,10 +197,6 @@ pcie@3600000 {
 	dma-coherent;
 };
 
-&uqe {
-	dma-coherent;
-};
-
 &lpuart0 {
 	dma-coherent;
 };

@@ -146,6 +146,8 @@ struct fsl_edma_slave_config {
 	u32				dev_addr;
 	u32				burst;
 	u32				attr;
+	dma_addr_t			dma_dev_addr;
+	enum dma_data_direction		dma_dir;
 };
 
 struct fsl_edma_chan {
@@ -342,6 +344,53 @@ static int fsl_edma_resume(struct dma_chan *chan)
 	return 0;
 }
 
+static void fsl_edma_unprep_slave_dma(struct fsl_edma_chan *fsl_chan)
+{
+	if (fsl_chan->fsc.dma_dir != DMA_NONE)
+		dma_unmap_resource(fsl_chan->vchan.chan.device->dev,
+				   fsl_chan->fsc.dma_dev_addr,
+				   fsl_chan->fsc.burst, fsl_chan->fsc.dma_dir, 0);
+	fsl_chan->fsc.dma_dir = DMA_NONE;
+}
+
+static bool fsl_edma_prep_slave_dma(struct fsl_edma_chan *fsl_chan,
+				    enum dma_transfer_direction dir)
+{
+	struct device *dev = fsl_chan->vchan.chan.device->dev;
+	enum dma_data_direction dma_dir;
+
+	switch (dir) {
+	case DMA_MEM_TO_DEV:
+		dma_dir = DMA_FROM_DEVICE;
+		break;
+	case DMA_DEV_TO_MEM:
+		dma_dir = DMA_TO_DEVICE;
+		break;
+	case DMA_DEV_TO_DEV:
+		dma_dir = DMA_BIDIRECTIONAL;
+		break;
+	default:
+		dma_dir = DMA_NONE;
+		break;
+	}
+
+	/* Already mapped for this config? */
+	if (fsl_chan->fsc.dma_dir == dma_dir)
+		return true;
+
+	fsl_edma_unprep_slave_dma(fsl_chan);
+	fsl_chan->fsc.dma_dev_addr = dma_map_resource(dev,
+						      fsl_chan->fsc.dev_addr,
+						      fsl_chan->fsc.burst,
+						      dma_dir, 0);
+	if (dma_mapping_error(dev, fsl_chan->fsc.dma_dev_addr))
+		return false;
+
+	fsl_chan->fsc.dma_dir = dma_dir;
+
+	return true;
+}
+
 static int fsl_edma_slave_config(struct dma_chan *chan,
 				 struct dma_slave_config *cfg)
 {
@@ -361,6 +410,7 @@ static int fsl_edma_slave_config(struct dma_chan *chan,
 	} else {
 			return -EINVAL;
 	}
+	fsl_edma_unprep_slave_dma(fsl_chan);
 	return 0;
 }
 
@@ -553,6 +603,9 @@ static struct dma_async_tx_descriptor *fsl_edma_prep_dma_cyclic(
 	if (!is_slave_direction(fsl_chan->fsc.dir))
 		return NULL;
 
+	if (!fsl_edma_prep_slave_dma(fsl_chan, fsl_chan->fsc.dir))
+		return NULL;
+
 	sg_len = buf_len / period_len;
 	fsl_desc = fsl_edma_alloc_desc(fsl_chan, sg_len);
 	if (!fsl_desc)
@@ -572,11 +625,11 @@ static struct dma_async_tx_descriptor *fsl_edma_prep_dma_cyclic(
 
 		if (fsl_chan->fsc.dir == DMA_MEM_TO_DEV) {
 			src_addr = dma_buf_next;
-			dst_addr = fsl_chan->fsc.dev_addr;
+			dst_addr = fsl_chan->fsc.dma_dev_addr;
 			soff = fsl_chan->fsc.addr_width;
 			doff = 0;
 		} else {
-			src_addr = fsl_chan->fsc.dev_addr;
+			src_addr = fsl_chan->fsc.dma_dev_addr;
 			dst_addr = dma_buf_next;
 			soff = 0;
 			doff = fsl_chan->fsc.addr_width;
@@ -606,6 +659,9 @@ static struct dma_async_tx_descriptor *fsl_edma_prep_slave_sg(
 	if (!is_slave_direction(fsl_chan->fsc.dir))
 		return NULL;
 
+	if (!fsl_edma_prep_slave_dma(fsl_chan, fsl_chan->fsc.dir))
+		return NULL;
+
 	fsl_desc = fsl_edma_alloc_desc(fsl_chan, sg_len);
 	if (!fsl_desc)
 		return NULL;
@@ -618,11 +674,11 @@ static struct dma_async_tx_descriptor *fsl_edma_prep_slave_sg(
 
 		if (fsl_chan->fsc.dir == DMA_MEM_TO_DEV) {
 			src_addr = sg_dma_address(sg);
-			dst_addr = fsl_chan->fsc.dev_addr;
+			dst_addr = fsl_chan->fsc.dma_dev_addr;
 			soff = fsl_chan->fsc.addr_width;
 			doff = 0;
 		} else {
-			src_addr = fsl_chan->fsc.dev_addr;
+			src_addr = fsl_chan->fsc.dma_dev_addr;
 			dst_addr = sg_dma_address(sg);
 			soff = 0;
 			doff = fsl_chan->fsc.addr_width;
@@ -802,6 +858,7 @@ static void fsl_edma_free_chan_resources(struct dma_chan *chan)
 	fsl_edma_chan_mux(fsl_chan, 0, false);
 	fsl_chan->edesc = NULL;
 	vchan_get_all_descriptors(&fsl_chan->vchan, &head);
+	fsl_edma_unprep_slave_dma(fsl_chan);
 	spin_unlock_irqrestore(&fsl_chan->vchan.lock, flags);
 
 	vchan_dma_desc_free_list(&fsl_chan->vchan, &head);
@@ -937,6 +994,7 @@ static int fsl_edma_probe(struct platform_device *pdev)
 		fsl_chan->slave_id = 0;
 		fsl_chan->idle = true;
 		fsl_chan->vchan.desc_free = fsl_edma_free_desc;
+		fsl_chan->fsc.dma_dir = DMA_NONE;
 		vchan_init(&fsl_chan->vchan, &fsl_edma->dma_dev);
 
 		edma_writew(fsl_edma, 0x0, fsl_edma->membase + EDMA_TCD_CSR(i));

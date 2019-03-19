@@ -70,7 +70,7 @@ static int dma_noop_supported(struct device *dev, u64 mask)
 	 * memory, or by providing a ZONE_DMA32.  If neither is the case, the
 	 * architecture needs to use an IOMMU instead of the direct mapping.
 	 */
-	if (mask < DMA_BIT_MASK(32))
+	if (dev->bus_dma_mask && mask > dev->bus_dma_mask)
 		return 0;
 #endif
 	return 1;

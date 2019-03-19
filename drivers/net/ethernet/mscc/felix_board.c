@@ -203,7 +203,9 @@ FELIX_IFH_FIELD(cpuq, 20, 8)
 
 /* Felix 128bit-value frame extraction header */
 
+/* bit 85-116: rewriter val */
 /* bit 43-45: source port id */
+FELIX_EFH_FIELD(rew_val, 85, 32)
 FELIX_EFH_FIELD(srcp, 43, 4)
 
 static void felix_tx_hdr_set(struct sk_buff *skb, struct ocelot_port *port)
@@ -224,17 +226,21 @@ static rx_handler_result_t felix_frm_ext_handler(struct sk_buff **pskb)
 {
 	struct net_device *ndev = (*pskb)->dev;
 	struct sk_buff *skb = *pskb;
-	struct ocelot_port *port;
+	struct skb_shared_hwtstamps *shhwtstamps;
+	struct timespec64 ts;
+	struct ocelot_port *port = NULL;
+	struct ocelot *ocelot = NULL;
 	char *start = skb->data;
-	struct ocelot *ocelot;
-	u64 *efh;
-	u32 p;
+	u64 *efh, tstamp_in_ns;
+	u32 p, tstamp_lo, tstamp_hi;
 
 	/* extraction header offset: assume eth header was consumed */
 	efh = (u64 *)(start + FELIX_XFH_LEN - ETH_HLEN);
 
 	/* decode src port */
 	p = felix_get_efh_srcp(efh);
+
+	tstamp_lo = felix_get_efh_rew_val(efh);
 
 	/* don't pass frames with unknown header format back to interface */
 	if (unlikely(p >= FELIX_MAX_NUM_PHY_PORTS)) {
@@ -266,6 +272,21 @@ static rx_handler_result_t felix_frm_ext_handler(struct sk_buff **pskb)
 	/* frame for CPU */
 	if (ocelot && p == ocelot->cpu_port_id)
 		return RX_HANDLER_PASS;
+
+	if (port && port->rx_tstamp) {
+		felix_ptp_gettime(&ocelot->ptp_caps, &ts);
+		tstamp_in_ns = ktime_set(ts.tv_sec, ts.tv_nsec);
+
+		tstamp_hi = tstamp_in_ns >> 32;
+		if ((tstamp_in_ns & 0xffffffff) < tstamp_lo)
+			tstamp_hi = tstamp_hi - 1;
+
+		tstamp_in_ns = ((u64)tstamp_hi << 32) | tstamp_lo;
+
+		shhwtstamps = skb_hwtstamps(skb);
+		memset(shhwtstamps, 0, sizeof(struct skb_shared_hwtstamps));
+		shhwtstamps->hwtstamp = tstamp_in_ns;
+	}
 
 	netif_rx(skb);
 

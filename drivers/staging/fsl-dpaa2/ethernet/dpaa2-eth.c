@@ -873,6 +873,13 @@ static netdev_tx_t dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 	/* Tracing point */
 	trace_dpaa2_tx_fd(net_dev, &fd);
 
+	fd_len = dpaa2_fd_get_len(&fd);
+	nq = netdev_get_tx_queue(net_dev, queue_mapping);
+	netdev_tx_sent_queue(nq, fd_len);
+
+	/* Everything that happens after this enqueues might race with
+	 * the Tx confirmation callback for this frame
+	 */
 	for (i = 0; i < DPAA2_ETH_ENQUEUE_RETRIES; i++) {
 		err = priv->enqueue(priv, fq, &fd, 0);
 		if (err != -EBUSY)
@@ -883,13 +890,10 @@ static netdev_tx_t dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 		percpu_stats->tx_errors++;
 		/* Clean up everything, including freeing the skb */
 		free_tx_fd(priv, &fd, false);
+		netdev_tx_completed_queue(nq, 1, fd_len);
 	} else {
-		fd_len = dpaa2_fd_get_len(&fd);
 		percpu_stats->tx_packets++;
 		percpu_stats->tx_bytes += fd_len;
-
-		nq = netdev_get_tx_queue(net_dev, queue_mapping);
-		netdev_tx_sent_queue(nq, fd_len);
 	}
 
 	return NETDEV_TX_OK;
@@ -1258,6 +1262,18 @@ static void disable_ch_napi(struct dpaa2_eth_priv *priv)
 
 static void update_tx_fqids(struct dpaa2_eth_priv *priv);
 
+static void update_pf(struct dpaa2_eth_priv *priv,
+		      struct dpni_link_state *state)
+{
+	bool pause_frames;
+
+	pause_frames = !!(state->options & DPNI_LINK_OPT_PAUSE);
+	if (priv->tx_pause_frames != pause_frames) {
+		priv->tx_pause_frames = pause_frames;
+		set_rx_taildrop(priv);
+	}
+}
+
 static int link_state_update(struct dpaa2_eth_priv *priv)
 {
 	struct dpni_link_state state = {0};
@@ -1277,6 +1293,7 @@ static int link_state_update(struct dpaa2_eth_priv *priv)
 	priv->link_state = state;
 	if (state.up) {
 		update_tx_fqids(priv);
+		update_pf(priv, &state);
 		netif_carrier_on(priv->net_dev);
 		netif_tx_start_all_queues(priv->net_dev);
 	} else {
@@ -2511,9 +2528,15 @@ static int setup_rx_flow(struct dpaa2_eth_priv *priv,
 	queue.destination.type = DPNI_DEST_DPCON;
 	queue.destination.priority = 1;
 	queue.user_context = (u64)(uintptr_t)fq;
+	queue.flc.stash_control = 1;
+	queue.flc.value &= 0xFFFFFFFFFFFFFFC0;
+	/* 01 01 00 - data, annotation, flow context*/
+	queue.flc.value |= 0x14;
+
 	err = dpni_set_queue(priv->mc_io, 0, priv->mc_token,
 			     DPNI_QUEUE_RX, fq->tc, fq->flowid,
-			     DPNI_QUEUE_OPT_USER_CTX | DPNI_QUEUE_OPT_DEST,
+			     DPNI_QUEUE_OPT_USER_CTX | DPNI_QUEUE_OPT_DEST |
+			     DPNI_QUEUE_OPT_FLC,
 			     &queue);
 	if (err) {
 		dev_err(dev, "dpni_set_queue(RX) failed\n");

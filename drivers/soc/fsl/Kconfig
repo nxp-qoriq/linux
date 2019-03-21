@@ -22,6 +22,7 @@ config FSL_QIXIS
 	depends on OF
 	select REGMAP_I2C
 	select REGMAP_MMIO
+	select MFD_CORE
 	default n
 	help
 	  Say y here to enable QIXIS system controller api. The qixis driver

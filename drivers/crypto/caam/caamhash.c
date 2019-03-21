@@ -1071,13 +1071,16 @@ static int ahash_final_no_ctx(struct ahash_request *req)
 
 	desc = edesc->hw_desc;
 
-	state->buf_dma = dma_map_single(jrdev, buf, buflen, DMA_TO_DEVICE);
-	if (dma_mapping_error(jrdev, state->buf_dma)) {
-		dev_err(jrdev, "unable to map src\n");
-		goto unmap;
-	}
+	if (buflen) {
+		state->buf_dma = dma_map_single(jrdev, buf, buflen,
+						DMA_TO_DEVICE);
+		if (dma_mapping_error(jrdev, state->buf_dma)) {
+			dev_err(jrdev, "unable to map src\n");
+			goto unmap;
+		}
 
-	append_seq_in_ptr(desc, state->buf_dma, buflen, 0);
+		append_seq_in_ptr(desc, state->buf_dma, buflen, 0);
+	}
 
 	edesc->dst_dma = map_seq_out_ptr_result(desc, jrdev, req->result,
 						digestsize);
@@ -1735,7 +1738,7 @@ static void caam_hash_cra_exit(struct crypto_tfm *tfm)
 	caam_jr_free(ctx->jrdev);
 }
 
-static void __exit caam_algapi_hash_exit(void)
+void caam_algapi_hash_exit(void)
 {
 	struct caam_hash_alg *t_alg, *n;
 
@@ -1794,39 +1797,12 @@ caam_hash_alloc(struct caam_hash_template *template,
 	return t_alg;
 }
 
-static int __init caam_algapi_hash_init(void)
+int caam_algapi_hash_init(struct device *ctrldev)
 {
-	struct device_node *dev_node;
-	struct platform_device *pdev;
-	struct device *ctrldev;
 	int i = 0, err = 0;
-	struct caam_drv_private *priv;
+	struct caam_drv_private *priv = dev_get_drvdata(ctrldev);
 	unsigned int md_limit = SHA512_DIGEST_SIZE;
 	u32 md_inst, md_vid;
-
-	dev_node = of_find_compatible_node(NULL, NULL, "fsl,sec-v4.0");
-	if (!dev_node) {
-		dev_node = of_find_compatible_node(NULL, NULL, "fsl,sec4.0");
-		if (!dev_node)
-			return -ENODEV;
-	}
-
-	pdev = of_find_device_by_node(dev_node);
-	if (!pdev) {
-		of_node_put(dev_node);
-		return -ENODEV;
-	}
-
-	ctrldev = &pdev->dev;
-	priv = dev_get_drvdata(ctrldev);
-	of_node_put(dev_node);
-
-	/*
-	 * If priv is NULL, it's probably because the caam driver wasn't
-	 * properly initialized (e.g. RNG4 init failed). Thus, bail out here.
-	 */
-	if (!priv)
-		return -ENODEV;
 
 	/*
 	 * Register crypto algorithms the device supports.  First, identify
@@ -1903,10 +1879,3 @@ static int __init caam_algapi_hash_init(void)
 
 	return err;
 }
-
-module_init(caam_algapi_hash_init);
-module_exit(caam_algapi_hash_exit);
-
-MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("FSL CAAM support for ahash functions of crypto API");
-MODULE_AUTHOR("Freescale Semiconductor - NMG");

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
 /*
- * Copyright 2017 NXP
+ * Copyright 2017-2019 NXP
  *
  */
 
@@ -132,7 +132,6 @@ static inline int dpaa2_eth_update_tx_prio(struct dpaa2_eth_priv *priv,
 					   enum update_tx_prio type)
 {
 	struct dpaa2_ceetm_qdisc *sch = qdisc_priv(cl->parent);
-	struct dpni_congestion_notification_cfg notif_cfg = {0};
 	struct dpni_tx_schedule_cfg *sched_cfg;
 	struct dpni_taildrop td = {0};
 	u8 ch_id = 0, tc_id = 0;
@@ -144,18 +143,6 @@ static inline int dpaa2_eth_update_tx_prio(struct dpaa2_eth_priv *priv,
 
 	switch (type) {
 	case DPAA2_ETH_ADD_CQ:
-		/* Disable congestion notifications */
-		notif_cfg.threshold_entry = 0;
-		notif_cfg.threshold_exit = 0;
-		err = dpni_set_congestion_notification(priv->mc_io, 0,
-						       priv->mc_token,
-						       DPNI_QUEUE_TX, tc_id,
-						       &notif_cfg);
-		if (err) {
-			netdev_err(priv->net_dev, "Error disabling congestion notifications %d\n",
-				   err);
-			return err;
-		}
 		/* Enable taildrop */
 		td.enable = 1;
 		td.units = DPNI_CONGESTION_UNIT_FRAMES;
@@ -177,24 +164,6 @@ static inline int dpaa2_eth_update_tx_prio(struct dpaa2_eth_priv *priv,
 					0, &td);
 		if (err) {
 			netdev_err(priv->net_dev, "Error disabling Tx taildrop %d\n",
-				   err);
-			return err;
-		}
-		/* Enable congestion notifications */
-		notif_cfg.units = DPNI_CONGESTION_UNIT_BYTES;
-		notif_cfg.threshold_entry = DPAA2_ETH_TX_CONG_ENTRY_THRESH;
-		notif_cfg.threshold_exit = DPAA2_ETH_TX_CONG_EXIT_THRESH;
-		notif_cfg.message_ctx = (u64)priv;
-		notif_cfg.message_iova = priv->cscn_dma;
-		notif_cfg.notification_mode = DPNI_CONG_OPT_WRITE_MEM_ON_ENTER |
-					      DPNI_CONG_OPT_WRITE_MEM_ON_EXIT |
-					      DPNI_CONG_OPT_COHERENT_WRITE;
-		err = dpni_set_congestion_notification(priv->mc_io, 0,
-						       priv->mc_token,
-						       DPNI_QUEUE_TX, tc_id,
-						       &notif_cfg);
-		if (err) {
-			netdev_err(priv->net_dev, "Error enabling congestion notifications %d\n",
 				   err);
 			return err;
 		}

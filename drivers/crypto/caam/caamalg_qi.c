@@ -230,7 +230,7 @@ static int aead_setkey(struct crypto_aead *aead, const u8 *key,
 		memcpy(ctx->key, keys.authkey, keys.authkeylen);
 		memcpy(ctx->key + ctx->adata.keylen_pad, keys.enckey,
 		       keys.enckeylen);
-		dma_sync_single_for_device(jrdev, ctx->key_dma,
+		dma_sync_single_for_device(jrdev->parent, ctx->key_dma,
 					   ctx->adata.keylen_pad +
 					   keys.enckeylen, ctx->dir);
 		goto skip_split_key;
@@ -1183,9 +1183,24 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 	/*
 	 * Create S/G table: req->assoclen, [IV,] req->src [, req->dst].
 	 * Input is not contiguous.
+	 * HW reads 4 S/G entries at a time; make sure the reads don't go beyond
+	 * the end of the table by allocating more S/G entries. Logic:
+	 * if (src != dst && output S/G)
+	 *      pad output S/G, if needed
+	 * else if (src == dst && S/G)
+	 *      overlapping S/Gs; pad one of them
+	 * else if (input S/G) ...
+	 *      pad input S/G, if needed
 	 */
-	qm_sg_ents = 1 + !!ivsize + mapped_src_nents +
-		     (mapped_dst_nents > 1 ? mapped_dst_nents : 0);
+	qm_sg_ents = 1 + !!ivsize + mapped_src_nents;
+	if (mapped_dst_nents > 1)
+		qm_sg_ents += ALIGN(mapped_dst_nents, 4);
+	else if ((req->src == req->dst) && (mapped_src_nents > 1))
+		qm_sg_ents = max(ALIGN(qm_sg_ents, 4),
+				 1 + !!ivsize + ALIGN(mapped_src_nents, 4));
+	else
+		qm_sg_ents = ALIGN(qm_sg_ents, 4);
+
 	sg_table = &edesc->sgt[0];
 	qm_sg_bytes = qm_sg_ents * sizeof(*sg_table);
 	if (unlikely(offsetof(struct aead_edesc, sgt) + qm_sg_bytes + ivsize >
@@ -1690,7 +1705,24 @@ static struct ablkcipher_edesc *ablkcipher_edesc_alloc(struct ablkcipher_request
 	qm_sg_ents = 1 + mapped_src_nents;
 	dst_sg_idx = qm_sg_ents;
 
-	qm_sg_ents += mapped_dst_nents > 1 ? mapped_dst_nents : 0;
+	/*
+	 * HW reads 4 S/G entries at a time; make sure the reads don't go beyond
+	 * the end of the table by allocating more S/G entries. Logic:
+	 * if (src != dst && output S/G)
+	 *      pad output S/G, if needed
+	 * else if (src == dst && S/G)
+	 *      overlapping S/Gs; pad one of them
+	 * else if (input S/G) ...
+	 *      pad input S/G, if needed
+	 */
+	if (mapped_dst_nents > 1)
+		qm_sg_ents += ALIGN(mapped_dst_nents, 4);
+	else if ((req->src == req->dst) && (mapped_src_nents > 1))
+		qm_sg_ents = max(ALIGN(qm_sg_ents, 4),
+				 1 + ALIGN(mapped_src_nents, 4));
+	else
+		qm_sg_ents = ALIGN(qm_sg_ents, 4);
+
 	qm_sg_bytes = qm_sg_ents * sizeof(struct qm_sg_entry);
 	if (unlikely(offsetof(struct ablkcipher_edesc, sgt) + qm_sg_bytes +
 		     ivsize > CAAM_QI_MEMCACHE_SIZE)) {
@@ -2995,6 +3027,7 @@ static int caam_init_common(struct caam_ctx *ctx, struct caam_alg_entry *caam,
 			   bool uses_dkp)
 {
 	struct caam_drv_private *priv;
+	struct device *dev;
 	/* Digest sizes for MD5, SHA1, SHA-224, SHA-256, SHA-384, SHA-512 */
 	static const u8 digest_size[] = {
 		MD5_DIGEST_SIZE,
@@ -3017,15 +3050,18 @@ static int caam_init_common(struct caam_ctx *ctx, struct caam_alg_entry *caam,
 	}
 
 	priv = dev_get_drvdata(ctx->jrdev->parent);
-	if (priv->era >= 6 && uses_dkp)
+	if (priv->era >= 6 && uses_dkp) {
 		ctx->dir = DMA_BIDIRECTIONAL;
-	else
+		dev = ctx->jrdev->parent;
+	} else {
 		ctx->dir = DMA_TO_DEVICE;
+		dev = ctx->jrdev;
+	}
 
-	ctx->key_dma = dma_map_single(ctx->jrdev, ctx->key, sizeof(ctx->key),
+	ctx->key_dma = dma_map_single(dev, ctx->key, sizeof(ctx->key),
 				      ctx->dir);
-	if (dma_mapping_error(ctx->jrdev, ctx->key_dma)) {
-		dev_err(ctx->jrdev, "unable to map key\n");
+	if (dma_mapping_error(dev, ctx->key_dma)) {
+		dev_err(dev, "unable to map key\n");
 		caam_jr_free(ctx->jrdev);
 		return -ENOMEM;
 	}
@@ -3050,7 +3086,7 @@ static int caam_init_common(struct caam_ctx *ctx, struct caam_alg_entry *caam,
 		ctx->authsize = 0;
 	}
 
-	ctx->qidev = priv->qidev;
+	ctx->qidev = ctx->jrdev->parent;
 
 	spin_lock_init(&ctx->lock);
 	ctx->drv_ctx[ENCRYPT] = NULL;
@@ -3084,11 +3120,18 @@ static int caam_aead_init(struct crypto_aead *tfm)
 
 static void caam_exit_common(struct caam_ctx *ctx)
 {
+	struct device *dev;
+
 	caam_drv_ctx_rel(ctx->drv_ctx[ENCRYPT]);
 	caam_drv_ctx_rel(ctx->drv_ctx[DECRYPT]);
 	caam_drv_ctx_rel(ctx->drv_ctx[GIVENCRYPT]);
 
-	dma_unmap_single(ctx->jrdev, ctx->key_dma, sizeof(ctx->key), ctx->dir);
+	if (ctx->dir == DMA_BIDIRECTIONAL)
+		dev = ctx->jrdev->parent;
+	else
+		dev = ctx->jrdev;
+
+	dma_unmap_single(dev, ctx->key_dma, sizeof(ctx->key), ctx->dir);
 
 	caam_jr_free(ctx->jrdev);
 }
@@ -3104,7 +3147,7 @@ static void caam_aead_exit(struct crypto_aead *tfm)
 }
 
 static struct list_head alg_list;
-static void __exit caam_qi_algapi_exit(void)
+void caam_qi_algapi_exit(void)
 {
 	struct caam_crypto_alg *t_alg, *n;
 	int i;
@@ -3180,43 +3223,13 @@ static void caam_aead_alg_init(struct caam_aead_alg *t_alg)
 	alg->exit = caam_aead_exit;
 }
 
-static int __init caam_qi_algapi_init(void)
+int caam_qi_algapi_init(struct device *ctrldev)
 {
-	struct device_node *dev_node;
-	struct platform_device *pdev;
-	struct device *ctrldev;
-	struct caam_drv_private *priv;
+	struct caam_drv_private *priv = dev_get_drvdata(ctrldev);
 	int i = 0, err = 0;
 	u32 aes_vid, aes_inst, des_inst, md_vid, md_inst;
 	unsigned int md_limit = SHA512_DIGEST_SIZE;
 	bool registered = false;
-
-	dev_node = of_find_compatible_node(NULL, NULL, "fsl,sec-v4.0");
-	if (!dev_node) {
-		dev_node = of_find_compatible_node(NULL, NULL, "fsl,sec4.0");
-		if (!dev_node)
-			return -ENODEV;
-	}
-
-	pdev = of_find_device_by_node(dev_node);
-	of_node_put(dev_node);
-	if (!pdev)
-		return -ENODEV;
-
-	ctrldev = &pdev->dev;
-	priv = dev_get_drvdata(ctrldev);
-
-	/*
-	 * If priv is NULL, it's probably because the caam driver wasn't
-	 * properly initialized (e.g. RNG4 init failed). Thus, bail out here.
-	 */
-	if (!priv || !priv->qi_present)
-		return -ENODEV;
-
-	if (caam_dpaa2) {
-		dev_info(ctrldev, "caam/qi frontend driver not suitable for DPAA 2.x, aborting...\n");
-		return -ENODEV;
-	}
 
 	INIT_LIST_HEAD(&alg_list);
 
@@ -3272,14 +3285,14 @@ static int __init caam_qi_algapi_init(void)
 		t_alg = caam_alg_alloc(alg);
 		if (IS_ERR(t_alg)) {
 			err = PTR_ERR(t_alg);
-			dev_warn(priv->qidev, "%s alg allocation failed\n",
+			dev_warn(ctrldev, "%s alg allocation failed\n",
 				 alg->driver_name);
 			continue;
 		}
 
 		err = crypto_register_alg(&t_alg->crypto_alg);
 		if (err) {
-			dev_warn(priv->qidev, "%s alg registration failed\n",
+			dev_warn(ctrldev, "%s alg registration failed\n",
 				 t_alg->crypto_alg.cra_driver_name);
 			kfree(t_alg);
 			continue;
@@ -3336,14 +3349,7 @@ static int __init caam_qi_algapi_init(void)
 	}
 
 	if (registered)
-		dev_info(priv->qidev, "algorithms registered in /proc/crypto\n");
+		dev_info(ctrldev, "algorithms registered in /proc/crypto\n");
 
 	return err;
 }
-
-module_init(caam_qi_algapi_init);
-module_exit(caam_qi_algapi_exit);
-
-MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("Support for crypto API using CAAM-QI backend");
-MODULE_AUTHOR("Freescale Semiconductor");

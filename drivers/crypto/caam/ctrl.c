@@ -17,12 +17,8 @@
 #include "desc_constr.h"
 #include "ctrl.h"
 
-bool caam_little_end;
-EXPORT_SYMBOL(caam_little_end);
 bool caam_dpaa2;
 EXPORT_SYMBOL(caam_dpaa2);
-bool caam_imx;
-EXPORT_SYMBOL(caam_imx);
 
 #ifdef CONFIG_CAAM_QI
 #include "qi.h"
@@ -328,8 +324,8 @@ static int caam_remove(struct platform_device *pdev)
 	of_platform_depopulate(ctrldev);
 
 #ifdef CONFIG_CAAM_QI
-	if (ctrlpriv->qidev)
-		caam_qi_shutdown(ctrlpriv->qidev);
+	if (ctrlpriv->qi_init)
+		caam_qi_shutdown(ctrldev);
 #endif
 
 	/*
@@ -473,7 +469,46 @@ static int caam_probe(struct platform_device *pdev)
 	dev_set_drvdata(dev, ctrlpriv);
 	nprop = pdev->dev.of_node;
 
+	/* Get configuration properties from device tree */
+	/* First, get register page */
+	ctrl = of_iomap(nprop, 0);
+	if (!ctrl) {
+		dev_err(dev, "caam: of_iomap() failed\n");
+		return -ENOMEM;
+	}
+
+	caam_little_end = !(bool)(rd_reg32(&ctrl->perfmon.status) &
+				  (CSTA_PLEND | CSTA_ALT_PLEND));
 	caam_imx = (bool)soc_device_match(imx_soc);
+
+	comp_params = rd_reg32(&ctrl->perfmon.comp_parms_ms);
+	caam_dpaa2 = !!(comp_params & CTPR_MS_DPAA2);
+	ctrlpriv->qi_present = !!(comp_params & CTPR_MS_QI_MASK);
+
+#ifdef CONFIG_CAAM_QI
+	/* If (DPAA 1.x) QI present, check whether dependencies are available */
+	if (ctrlpriv->qi_present && !caam_dpaa2) {
+		ret = qman_is_probed();
+		if (!ret) {
+			ret = -EPROBE_DEFER;
+			goto iounmap_ctrl;
+		} else if (ret < 0) {
+			dev_err(dev, "failing probe due to qman probe error\n");
+			ret = -ENODEV;
+			goto iounmap_ctrl;
+		}
+
+		ret = qman_portals_probed();
+		if (!ret) {
+			ret = -EPROBE_DEFER;
+			goto iounmap_ctrl;
+		} else if (ret < 0) {
+			dev_err(dev, "failing probe due to qman portals probe error\n");
+			ret = -ENODEV;
+			goto iounmap_ctrl;
+		}
+	}
+#endif
 
 	/* Enable clocking */
 	clk = caam_drv_identify_clk(&pdev->dev, "ipg");
@@ -481,7 +516,7 @@ static int caam_probe(struct platform_device *pdev)
 		ret = PTR_ERR(clk);
 		dev_err(&pdev->dev,
 			"can't identify CAAM ipg clk: %d\n", ret);
-		return ret;
+		goto iounmap_ctrl;
 	}
 	ctrlpriv->caam_ipg = clk;
 
@@ -490,7 +525,7 @@ static int caam_probe(struct platform_device *pdev)
 		ret = PTR_ERR(clk);
 		dev_err(&pdev->dev,
 			"can't identify CAAM mem clk: %d\n", ret);
-		return ret;
+		goto iounmap_ctrl;
 	}
 	ctrlpriv->caam_mem = clk;
 
@@ -499,7 +534,7 @@ static int caam_probe(struct platform_device *pdev)
 		ret = PTR_ERR(clk);
 		dev_err(&pdev->dev,
 			"can't identify CAAM aclk clk: %d\n", ret);
-		return ret;
+		goto iounmap_ctrl;
 	}
 	ctrlpriv->caam_aclk = clk;
 
@@ -509,7 +544,7 @@ static int caam_probe(struct platform_device *pdev)
 			ret = PTR_ERR(clk);
 			dev_err(&pdev->dev,
 				"can't identify CAAM emi_slow clk: %d\n", ret);
-			return ret;
+			goto iounmap_ctrl;
 		}
 		ctrlpriv->caam_emi_slow = clk;
 	}
@@ -517,7 +552,7 @@ static int caam_probe(struct platform_device *pdev)
 	ret = clk_prepare_enable(ctrlpriv->caam_ipg);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "can't enable CAAM ipg clock: %d\n", ret);
-		return ret;
+		goto iounmap_ctrl;
 	}
 
 	ret = clk_prepare_enable(ctrlpriv->caam_mem);
@@ -542,25 +577,10 @@ static int caam_probe(struct platform_device *pdev)
 		}
 	}
 
-	/* Get configuration properties from device tree */
-	/* First, get register page */
-	ctrl = of_iomap(nprop, 0);
-	if (ctrl == NULL) {
-		dev_err(dev, "caam: of_iomap() failed\n");
-		ret = -ENOMEM;
-		goto disable_caam_emi_slow;
-	}
-
-	caam_little_end = !(bool)(rd_reg32(&ctrl->perfmon.status) &
-				  (CSTA_PLEND | CSTA_ALT_PLEND));
-
-	/* Finding the page size for using the CTPR_MS register */
-	comp_params = rd_reg32(&ctrl->perfmon.comp_parms_ms);
-	pg_size = (comp_params & CTPR_MS_PG_SZ_MASK) >> CTPR_MS_PG_SZ_SHIFT;
-
 	/* Allocating the BLOCK_OFFSET based on the supported page size on
 	 * the platform
 	 */
+	pg_size = (comp_params & CTPR_MS_PG_SZ_MASK) >> CTPR_MS_PG_SZ_SHIFT;
 	if (pg_size == 0)
 		BLOCK_OFFSET = PG_SIZE_4K;
 	else
@@ -585,7 +605,6 @@ static int caam_probe(struct platform_device *pdev)
 	 * In case of SoCs with Management Complex, MC f/w performs
 	 * the configuration.
 	 */
-	caam_dpaa2 = !!(comp_params & CTPR_MS_DPAA2);
 	np = of_find_compatible_node(NULL, NULL, "fsl,qoriq-mc");
 	ctrlpriv->mc_en = !!np;
 	of_node_put(np);
@@ -635,16 +654,11 @@ static int caam_probe(struct platform_device *pdev)
 	}
 	if (ret) {
 		dev_err(dev, "dma_set_mask_and_coherent failed (%d)\n", ret);
-		goto iounmap_ctrl;
+		goto disable_caam_emi_slow;
 	}
 
 	ctrlpriv->era = caam_get_era();
-
-	ret = of_platform_populate(nprop, caam_match, NULL, dev);
-	if (ret) {
-		dev_err(dev, "JR platform devices creation error\n");
-		goto iounmap_ctrl;
-	}
+	ctrlpriv->domain = iommu_get_domain_for_dev(dev);
 
 #ifdef CONFIG_DEBUG_FS
 	/*
@@ -658,21 +672,7 @@ static int caam_probe(struct platform_device *pdev)
 	ctrlpriv->ctl = debugfs_create_dir("ctl", ctrlpriv->dfs_root);
 #endif
 
-	ring = 0;
-	for_each_available_child_of_node(nprop, np)
-		if (of_device_is_compatible(np, "fsl,sec-v4.0-job-ring") ||
-		    of_device_is_compatible(np, "fsl,sec4.0-job-ring")) {
-			ctrlpriv->jr[ring] = (struct caam_job_ring __iomem __force *)
-					     ((__force uint8_t *)ctrl +
-					     (ring + JR_BLOCK_NUMBER) *
-					      BLOCK_OFFSET
-					     );
-			ctrlpriv->total_jobrs++;
-			ring++;
-		}
-
 	/* Check to see if (DPAA 1.x) QI present. If so, enable */
-	ctrlpriv->qi_present = !!(comp_params & CTPR_MS_QI_MASK);
 	if (ctrlpriv->qi_present && !caam_dpaa2) {
 		ctrlpriv->qi = (struct caam_queue_if __iomem __force *)
 			       ((__force uint8_t *)ctrl +
@@ -688,6 +688,25 @@ static int caam_probe(struct platform_device *pdev)
 			dev_err(dev, "caam qi i/f init failed: %d\n", ret);
 #endif
 	}
+
+	ret = of_platform_populate(nprop, caam_match, NULL, dev);
+	if (ret) {
+		dev_err(dev, "JR platform devices creation error\n");
+		goto shutdown_qi;
+	}
+
+	ring = 0;
+	for_each_available_child_of_node(nprop, np)
+		if (of_device_is_compatible(np, "fsl,sec-v4.0-job-ring") ||
+		    of_device_is_compatible(np, "fsl,sec4.0-job-ring")) {
+			ctrlpriv->jr[ring] = (struct caam_job_ring __iomem __force *)
+					     ((__force uint8_t *)ctrl +
+					     (ring + JR_BLOCK_NUMBER) *
+					      BLOCK_OFFSET
+					     );
+			ctrlpriv->total_jobrs++;
+			ring++;
+		}
 
 	/* If no QI and no rings specified, quit and go home */
 	if ((!ctrlpriv->qi_present) && (!ctrlpriv->total_jobrs)) {
@@ -854,8 +873,11 @@ caam_remove:
 	caam_remove(pdev);
 	return ret;
 
-iounmap_ctrl:
-	iounmap(ctrl);
+shutdown_qi:
+#ifdef CONFIG_CAAM_QI
+	if (ctrlpriv->qi_init)
+		caam_qi_shutdown(dev);
+#endif
 disable_caam_emi_slow:
 	if (ctrlpriv->caam_emi_slow)
 		clk_disable_unprepare(ctrlpriv->caam_emi_slow);
@@ -865,6 +887,8 @@ disable_caam_mem:
 	clk_disable_unprepare(ctrlpriv->caam_mem);
 disable_caam_ipg:
 	clk_disable_unprepare(ctrlpriv->caam_ipg);
+iounmap_ctrl:
+	iounmap(ctrl);
 	return ret;
 }
 

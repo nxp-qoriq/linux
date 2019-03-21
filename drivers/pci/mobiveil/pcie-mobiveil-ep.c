@@ -2,7 +2,7 @@
 /**
  * Mobiveil PCIe Endpoint controller driver
  *
- * Copyright (C) 2018 NXP Semiconductor.
+ * Copyright 2018 NXP
  * Author: Xiaowei Bao <xiaowei.bao@nxp.com>
  */
 

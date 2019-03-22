@@ -227,8 +227,6 @@ static void caam_jr_dequeue(unsigned long devarg)
 
 		head = ACCESS_ONCE(jrp->head);
 
-		spin_lock(&jrp->outlock);
-
 		sw_idx = tail = jrp->tail;
 		hw_idx = jrp->out_ring_read_index;
 
@@ -251,7 +249,7 @@ static void caam_jr_dequeue(unsigned long devarg)
 		/* mark completed, avoid matching on a recycled desc addr */
 		jrp->entinfo[sw_idx].desc_addr_dma = 0;
 
-		/* Stash callback params for use outside of lock */
+		/* Stash callback params */
 		usercall = jrp->entinfo[sw_idx].callbk;
 		userarg = jrp->entinfo[sw_idx].cbkarg;
 		userdesc = jrp->entinfo[sw_idx].desc_addr_virt;
@@ -283,8 +281,6 @@ static void caam_jr_dequeue(unsigned long devarg)
 
 			jrp->tail = tail;
 		}
-
-		spin_unlock(&jrp->outlock);
 
 		/* Finally, execute user's callback */
 		usercall(dev, userdesc, userstatus, userarg);
@@ -532,7 +528,6 @@ static int caam_jr_init(struct device *dev)
 	jrp->inpring_avail = JOBR_DEPTH;
 
 	spin_lock_init(&jrp->inplock);
-	spin_lock_init(&jrp->outlock);
 
 	/* Select interrupt coalescing parameters */
 	clrsetbits_32(&jrp->rregs->rconfig_lo, 0, JOBR_INTC |

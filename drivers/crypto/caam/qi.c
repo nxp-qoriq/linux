@@ -724,7 +724,7 @@ int caam_qi_init(struct platform_device *caam_pdev)
 	struct device *ctrldev = &caam_pdev->dev, *qidev;
 	struct caam_drv_private *ctrlpriv;
 	const cpumask_t *cpus = qman_affine_cpus();
-	struct cpumask old_cpumask = current->cpus_allowed;
+	struct cpumask old_cpumask = current->cpus_mask;;
 
 	/*
 	 * QMAN requires CGRs to be removed from same CPU+portal from where it

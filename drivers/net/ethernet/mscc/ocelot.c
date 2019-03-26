@@ -724,6 +724,7 @@ static int ocelot_fdb_add(struct ndmsg *ndm, struct nlattr *tb[],
 {
 	struct ocelot_port *port = netdev_priv(dev);
 	struct ocelot *ocelot = port->ocelot;
+	int swp = port->chip_port;
 
 	if (!vid) {
 		if (!port->vlan_aware)
@@ -739,8 +740,9 @@ static int ocelot_fdb_add(struct ndmsg *ndm, struct nlattr *tb[],
 			return -EINVAL;
 	}
 
-	return ocelot_mact_learn(ocelot, port->chip_port, addr, vid,
-				 ENTRYTYPE_NORMAL);
+	return ocelot_mact_learn(ocelot,
+				 ocelot->cpu_port_id == swp ? PGID_CPU : swp,
+				 addr, vid, ENTRYTYPE_NORMAL);
 }
 
 static int ocelot_fdb_del(struct ndmsg *ndm, struct nlattr *tb[],

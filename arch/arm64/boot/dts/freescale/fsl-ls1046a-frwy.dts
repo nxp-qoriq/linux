@@ -25,6 +25,15 @@
 	chosen {
 		stdout-path = "serial0:115200n8";
 	};
+
+	sb_3v3: regulator-sb3v3 {
+		compatible = "regulator-fixed";
+		regulator-name = "LT8642SEV-3.3V";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
 };
 
 &duart0 {
@@ -44,36 +53,48 @@
 };
 
 &i2c0 {
+
 	status = "okay";
 
-	ina220@40 {
-		compatible = "ti,ina220";
-		reg = <0x40>;
-		shunt-resistor = <1000>;
-	};
+	i2c-mux@77 {
+		compatible = "nxp,pca9546";
+		reg = <0x77>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		i2c-mux-never-disable;
 
-	temp-sensor@4c {
-		compatible = "adi,adt7461";
-		reg = <0x4c>;
-	};
+		i2c@0 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0>;
 
-	eeprom@56 {
-		compatible = "atmel,24c512";
-		reg = <0x52>;
-	};
+			power-monitor@40 {
+				compatible = "ti,ina220";
+				reg = <0x40>;
+				shunt-resistor = <1000>;
+			};
 
-	eeprom@57 {
-		compatible = "atmel,24c512";
-		reg = <0x53>;
-	};
-};
+			temperature-sensor@4c {
+				compatible = "nxp,sa56004";
+				reg = <0x4c>;
+				vcc-supply = <&sb_3v3>;
+			};
 
-&i2c3 {
-	status = "okay";
+			rtc@51 {
+				compatible = "nxp,pcf2129";
+				reg = <0x51>;
+			};
 
-	rtc@51 {
-		compatible = "nxp,pcf2129";
-		reg = <0x51>;
+			eeprom@52 {
+				compatible = "atmel,24c512";
+				reg = <0x52>;
+			};
+
+			eeprom@53 {
+				compatible = "atmel,24c512";
+				reg = <0x53>;
+			};
+		};
 	};
 };
 

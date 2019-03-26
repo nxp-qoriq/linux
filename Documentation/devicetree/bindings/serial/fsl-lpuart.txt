@@ -12,6 +12,9 @@ Required properties:
 - interrupts : Should contain uart interrupt
 - clocks : phandle + clock specifier pairs, one for each entry in clock-names
 - clock-names : should contain: "ipg" - the uart clock
+- little-endian: For lpuart compatible with fsl,ls1021a-lpuart" should contain
+                 the boolean property "little-endian" only when IP is LE, not
+                 required when IP is big-endian
 
 Optional properties:
 - dmas: A list of two dma specifiers, one for each entry in dma-names.

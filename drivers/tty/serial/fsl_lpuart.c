@@ -2,6 +2,7 @@
  *  Freescale lpuart serial port driver
  *
  *  Copyright 2012-2014 Freescale Semiconductor, Inc.
+ *  Copyright 2019 NXP
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -2177,7 +2178,10 @@ static int lpuart_probe(struct platform_device *pdev)
 		return ret;
 	}
 	sport->port.irq = ret;
-	sport->port.iotype = sdata->iotype;
+	if (of_property_read_bool(pdev->dev.of_node, "little-endian"))
+		sport->port.iotype = UPIO_MEM32;
+	else
+		sport->port.iotype = sdata->iotype;
 	if (lpuart_is_32(sport))
 		sport->port.ops = &lpuart32_pops;
 	else

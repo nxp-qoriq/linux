@@ -30,8 +30,6 @@
 				 SUPPORTED_1000baseT_Full | \
 				 SUPPORTED_2500baseX_Full | \
 				 SUPPORTED_100baseT_Full | \
-				 SUPPORTED_Pause | \
-				 SUPPORTED_Asym_Pause | \
 				 PHY_DEFAULT_FEATURES)
 
 #define MDIO_PMA_CTRL1_AQ_SPEED10	0
@@ -43,11 +41,6 @@
 
 #define MDIO_AN_VENDOR_PROV_CTRL       0xc400
 #define MDIO_AN_RECV_LP_STATUS         0xe820
-
-#define MDIO_AN_LPA_PAUSE		0x20
-#define MDIO_AN_LPA_ASYM_PAUSE		0x10
-#define MDIO_AN_ADV_PAUSE		0x20
-#define MDIO_AN_ADV_ASYM_PAUSE		0x10
 
 static int aquantia_write_reg(struct phy_device *phydev, int devad,
 			      u32 regnum, u16 val)
@@ -184,25 +177,6 @@ static int aquantia_config_advert(struct phy_device *phydev)
 		changed = 1;
 	}
 
-	/* advertise flow control */
-	oldadv = aquantia_read_reg(phydev, MDIO_MMD_AN, MDIO_AN_ADVERTISE);
-	if (oldadv < 0)
-		return oldadv;
-
-	adv = oldadv & ~(MDIO_AN_ADV_PAUSE | MDIO_AN_ADV_ASYM_PAUSE);
-	if (advertise & ADVERTISED_Pause)
-		adv |= MDIO_AN_ADV_PAUSE;
-	if (advertise & ADVERTISED_Asym_Pause)
-		adv |= MDIO_AN_ADV_ASYM_PAUSE;
-
-	if (adv != oldadv) {
-		err = aquantia_write_reg(phydev, MDIO_MMD_AN,
-					 MDIO_AN_ADVERTISE, adv);
-		if (err < 0)
-			return err;
-		changed = 1;
-	}
-
 	return changed;
 }
 
@@ -297,18 +271,6 @@ static int aquantia_read_advert(struct phy_device *phydev)
 		phydev->advertising |= ADVERTISED_2500baseX_Full;
 	else
 		phydev->advertising &= ~ADVERTISED_2500baseX_Full;
-
-	/* flow control advertisement */
-	adv = aquantia_read_reg(phydev, MDIO_MMD_AN, MDIO_AN_ADVERTISE);
-	if (adv & MDIO_AN_ADV_PAUSE)
-		phydev->advertising |= ADVERTISED_Pause;
-	else
-		phydev->advertising &= ~ADVERTISED_Pause;
-	if (adv & MDIO_AN_ADV_ASYM_PAUSE)
-		phydev->advertising |= ADVERTISED_Asym_Pause;
-	else
-		phydev->advertising &= ~ADVERTISED_Asym_Pause;
-
 	return 0;
 }
 
@@ -397,10 +359,6 @@ static int aquantia_read_status(struct phy_device *phydev)
 	}
 
 	phydev->duplex = DUPLEX_FULL;
-
-	reg = aquantia_read_reg(phydev, MDIO_MMD_AN, MDIO_AN_LPA);
-	phydev->pause = reg & MDIO_AN_LPA_PAUSE ? 1 : 0;
-	phydev->asym_pause = reg & MDIO_AN_LPA_ASYM_PAUSE ? 1 : 0;
 
 	aquantia_read_advert(phydev);
 	aquantia_read_lp_advert(phydev);

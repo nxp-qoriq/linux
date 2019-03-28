@@ -106,6 +106,44 @@
 			system-clock-frequency = <25000000>;
 		};
 	};
+	mdio-mux {
+		compatible = "mdio-mux-multiplexer";
+		mux-controls = <&mux 0>;
+		mdio-parent-bus = <&mdio0>;
+		#address-cells=<1>;
+		#size-cells = <0>;
+
+		/* on-board RGMII PHY */
+		mdio_qds: mdio@00 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x00>;
+		};
+		/* slot 1 - up to 4x, SoC lanes 0, 1, optionally 3, 4 */
+		mdio_slot1: mdio@4 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x4>;
+		};
+		/* slot 2 or SFP cage - 1x, SoC lane 1 */
+		mdio_slot3: mdio_slot2: mdio@5 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x5>;
+		};
+		/* slot 3 - 1x or 2x, SoC lane 2 and optionally 3 */
+		mdio_slot4: mdio@6 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x6>;
+		};
+		/* slot 4  - 1x, SoC lane 3 */
+		mdio_slot15: mdio@7 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x7>;
+		};
+	};
 };
 
 &esdhc {
@@ -281,45 +319,14 @@
 	fpga@66 {
 		#address-cells = <1>;
 		#size-cells = <0>;
-		compatible = "fsl,lx2160aqds-fpga", "fsl,fpga-qixis-i2c";
+		compatible = "fsl,ls1028aqds-fpga", "fsl,fpga-qixis-i2c",
+			     "simple-mfd";
 		reg = <0x66>;
-		mdio-mux@54 {
-			#address-cells=<1>;
-			#size-cells = <0>;
-			compatible = "mdio-mux-regmap", "mdio-mux";
-			mdio-parent-bus = <&mdio0>;
-			reg = <0x54>; 		/* BRDCFG4 */
-			mux-mask = <0xf0>;	/* EMI1A */
-			/* on-board RGMII PHY */
-			mdio_qds: mdio@00 {
-				#address-cells = <1>;
-				#size-cells = <0>;
-				reg = <0x00>;
-			};
-			/* slot 1 - up to 4x, SoC lanes 0, 1, optionally 3, 4 */
-			mdio_slot1: mdio@40 {
-				#address-cells = <1>;
-				#size-cells = <0>;
-				reg = <0x40>;
-			};
-			/* slot 2 or SFP cage - 1x, SoC lane 1 */
-			mdio_slot3: mdio_slot2: mdio@50 {
-				#address-cells = <1>;
-				#size-cells = <0>;
-				reg = <0x50>;
-			};
-			/* slot 3 - 1x or 2x, SoC lane 2 and optionally 3 */
-			mdio_slot4: mdio@60 {
-				#address-cells = <1>;
-				#size-cells = <0>;
-				reg = <0x60>;
-			};
-			/* slot 4  - 1x, SoC lane 3 */
-			mdio_slot15: mdio@70 {
-				#address-cells = <1>;
-				#size-cells = <0>;
-				reg = <0x70>;
-			};
+
+		mux: mux-controller {
+			compatible = "reg-mux";
+			#mux-control-cells = <1>;
+			mux-reg-masks = <0x54 0xf0>; /* 0: reg 0x54, bits 7:4 */
 		};
 	};
 };
@@ -372,17 +379,11 @@
 };
 
 &enetc_port0 {
-	fixed-link {
-		speed = <1000>;
-		full-duplex;
-	};
+	phy-handle = <&slot1_phy1>;
 };
 
 &enetc_port1 {
-	fixed-link {
-		speed = <1000>;
-		full-duplex;
-	};
+	phy-handle = <&qds_phy1>;
 };
 
 /* l2switch ports */

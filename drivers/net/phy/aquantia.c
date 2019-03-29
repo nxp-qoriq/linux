@@ -473,6 +473,18 @@ static int aquantia_read_status(struct phy_device *phydev)
 	return 0;
 }
 
+static int aqr107_suspend(struct phy_device *phydev)
+{
+	return phy_set_bits_mmd(phydev, MDIO_MMD_VEND1, MDIO_CTRL1,
+				MDIO_CTRL1_LPOWER);
+}
+
+static int aqr107_resume(struct phy_device *phydev)
+{
+	return phy_clear_bits_mmd(phydev, MDIO_MMD_VEND1, MDIO_CTRL1,
+				  MDIO_CTRL1_LPOWER);
+}
+
 static struct phy_driver aquantia_driver[] = {
 {
 	.phy_id		= PHY_ID_AQ1202,
@@ -533,6 +545,8 @@ static struct phy_driver aquantia_driver[] = {
 	.config_intr	= aquantia_config_intr,
 	.ack_interrupt	= aquantia_ack_interrupt,
 	.read_status	= aquantia_read_status,
+	.suspend	= aqr107_suspend,
+	.resume		= aqr107_resume,
 },
 {
 	.phy_id		= PHY_ID_AQR405,

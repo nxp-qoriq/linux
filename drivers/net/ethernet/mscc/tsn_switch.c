@@ -95,8 +95,9 @@ int switch_qbv_set(struct net_device *ndev, struct tsn_qbv_conf *shaper_config)
 		return -EINVAL;
 	}
 
-	if ((admin_basic->cycle_time < SWITCH_TAS_CT_MIN) ||
-	    (admin_basic->cycle_time > SWITCH_TAS_CT_MAX)) {
+	if (((admin_basic->cycle_time < SWITCH_TAS_CT_MIN) ||
+	    (admin_basic->cycle_time > SWITCH_TAS_CT_MAX)) &&
+	    shaper_config->gate_enabled) {
 		netdev_info(ndev, "Invalid admin_cycle_time %u ns\n",
 			    admin_basic->cycle_time);
 		return -EINVAL;

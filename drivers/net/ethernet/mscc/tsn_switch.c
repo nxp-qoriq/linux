@@ -75,8 +75,9 @@ int switch_qbv_set(struct net_device *ndev, struct tsn_qbv_conf *shaper_config)
 	int  i, count;
 	struct tsn_qbv_basic *admin_basic = &shaper_config->admin;
 	struct tsn_qbv_entry *control_list = admin_basic->control_list;
-	u32 base_time_nsec = admin_basic->base_time & 0xffffffff;
-	u64 base_time_sec = admin_basic->base_time >> 32;
+	u32 base_time_nsec = admin_basic->base_time -
+		admin_basic->base_time / 1000000000 * 1000000000;
+	u64 base_time_sec = admin_basic->base_time / 1000000000;
 	u64 cur_time;
 	u32 val;
 
@@ -95,8 +96,9 @@ int switch_qbv_set(struct net_device *ndev, struct tsn_qbv_conf *shaper_config)
 		return -EINVAL;
 	}
 
-	if ((admin_basic->cycle_time < SWITCH_TAS_CT_MIN) ||
-	    (admin_basic->cycle_time > SWITCH_TAS_CT_MAX)) {
+	if (((admin_basic->cycle_time < SWITCH_TAS_CT_MIN) ||
+	    (admin_basic->cycle_time > SWITCH_TAS_CT_MAX)) &&
+	    shaper_config->gate_enabled) {
 		netdev_info(ndev, "Invalid admin_cycle_time %u ns\n",
 			    admin_basic->cycle_time);
 		return -EINVAL;
@@ -743,8 +745,9 @@ int switch_qci_sgi_set(struct net_device *ndev, u32 index,
 	u32 list_length = sgi_conf->admin.control_list_length;
 	u32 cycle_time = sgi_conf->admin.cycle_time;
 	u32 cycle_time_ex = sgi_conf->admin.cycle_time_extension;
-	u32 l_basetime = sgi_conf->admin.base_time & 0x00000000ffffffff;
-	u64 h_basetime = (sgi_conf->admin.base_time & 0xffffffff00000000) >> 32;
+	u32 l_basetime = sgi_conf->admin.base_time -
+		sgi_conf->admin.base_time / 1000000000 * 1000000000;
+	u64 h_basetime = sgi_conf->admin.base_time / 1000000000;
 	u64 cur_time;
 
 	/*configure SGID*/

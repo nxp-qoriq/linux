@@ -534,7 +534,8 @@ static inline bool is_fsl_mc_bus_dpdmai(const struct fsl_mc_device *mc_dev)
 #define DPRC_CMDID_GET_CONT_ID                  DPRC_CMD(0x830)
 #define DPRC_CMDID_GET_OBJ_COUNT                DPRC_CMD(0x159)
 #define DPRC_CMDID_GET_OBJ                      DPRC_CMD(0x15A)
-#define DPRC_CMDID_GET_OBJ_REG                  DPRC_CMD_V2(0x15E)
+#define DPRC_CMDID_GET_OBJ_REG                  DPRC_CMD(0x15E)
+#define DPRC_CMDID_GET_OBJ_REG_V2               DPRC_CMD_V2(0x15E)
 #define DPRC_CMDID_SET_OBJ_IRQ                  DPRC_CMD(0x15F)
 
 struct dprc_cmd_open {
@@ -637,8 +638,7 @@ struct dprc_rsp_get_obj_region {
 	/* response word 0 */
 	__le64 pad0;
 	/* response word 1 */
-	__le32 base_offset;
-	__le32 pad1;
+	__le64 base_offset;
 	/* response word 2 */
 	__le32 size;
 	u8 type;

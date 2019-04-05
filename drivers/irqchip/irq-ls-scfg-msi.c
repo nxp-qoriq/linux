@@ -21,6 +21,7 @@
 #include <linux/of_pci.h>
 #include <linux/of_platform.h>
 #include <linux/spinlock.h>
+#include <linux/dma-iommu.h>
 
 #define MSI_IRQS_PER_MSIR	32
 #define MSI_MSIR_OFFSET		4
@@ -67,11 +68,12 @@ static struct irq_chip ls_scfg_msi_irq_chip = {
 static struct msi_domain_info ls_scfg_msi_domain_info = {
 	.flags	= (MSI_FLAG_USE_DEF_DOM_OPS |
 		   MSI_FLAG_USE_DEF_CHIP_OPS |
+		   MSI_FLAG_MULTI_PCI_MSI |
 		   MSI_FLAG_PCI_MSIX),
 	.chip	= &ls_scfg_msi_irq_chip,
 };
 
-static int msi_affinity_flag = 1;
+static int msi_affinity_flag;
 
 static int __init early_parse_ls_scfg_msi(char *p)
 {
@@ -94,6 +96,8 @@ static void ls_scfg_msi_compose_msg(struct irq_data *data, struct msi_msg *msg)
 
 	if (msi_affinity_flag)
 		msg->data |= cpumask_first(data->common->affinity);
+
+	iommu_dma_map_msi_msg(data->irq, msg);
 }
 
 static int ls_scfg_msi_set_affinity(struct irq_data *irq_data,
@@ -135,24 +139,24 @@ static int ls_scfg_msi_domain_irq_alloc(struct irq_domain *domain,
 					void *args)
 {
 	struct ls_scfg_msi *msi_data = domain->host_data;
-	int pos, err = 0;
-
-	WARN_ON(nr_irqs != 1);
+	int pos, i;
 
 	spin_lock(&msi_data->lock);
-	pos = find_first_zero_bit(msi_data->used, msi_data->irqs_num);
-	if (pos < msi_data->irqs_num)
-		__set_bit(pos, msi_data->used);
-	else
-		err = -ENOSPC;
+
+	pos = bitmap_find_free_region(msi_data->used,
+				      msi_data->cfg->msir_irqs * msi_data->msir_num,
+				      order_base_2(nr_irqs));
+
 	spin_unlock(&msi_data->lock);
 
-	if (err)
-		return err;
+	if (pos < 0)
+		return pos;
 
-	irq_domain_set_info(domain, virq, pos,
-			    &ls_scfg_msi_parent_chip, msi_data,
-			    handle_simple_irq, NULL, NULL);
+	for (i = 0; i < nr_irqs; i++) {
+		irq_domain_set_info(domain, virq + i, pos + i,
+		&ls_scfg_msi_parent_chip, msi_data,
+		handle_simple_irq, NULL, NULL);
+	}
 
 	return 0;
 }
@@ -171,7 +175,8 @@ static void ls_scfg_msi_domain_irq_free(struct irq_domain *domain,
 	}
 
 	spin_lock(&msi_data->lock);
-	__clear_bit(pos, msi_data->used);
+
+	bitmap_release_region(msi_data->used, pos, order_base_2(nr_irqs));
 	spin_unlock(&msi_data->lock);
 }
 
@@ -234,6 +239,7 @@ static int ls_scfg_msi_setup_hwirq(struct ls_scfg_msi *msi_data, int index)
 {
 	struct ls_scfg_msir *msir;
 	int virq, i, hwirq;
+	u32 cpu_num;
 
 	virq = platform_get_irq(msi_data->pdev, index);
 	if (virq <= 0)
@@ -263,9 +269,11 @@ static int ls_scfg_msi_setup_hwirq(struct ls_scfg_msi *msi_data, int index)
 		/* Associate MSIR interrupt to the cpu */
 		irq_set_affinity(msir->gic_irq, get_cpu_mask(index));
 		msir->srs = 0; /* This value is determined by the CPU */
-	} else
+	} else {
 		msir->srs = index;
-
+		cpu_num = num_possible_cpus();
+		irq_set_affinity(msir->gic_irq, get_cpu_mask(index % cpu_num));
+	}
 	/* Release the hwirqs corresponding to this MSIR */
 	if (!msi_affinity_flag || msir->index == 0) {
 		for (i = 0; i < msi_data->cfg->msir_irqs; i++) {

@@ -501,7 +501,8 @@ int switch_cb_streamid_get(struct net_device *ndev, u32 index,
 
 	/*READ command MACACCESS.VALID(11 bit) must be 0 */
 	ocelot_write(ocelot,
-		     ANA_TABLES_MACACCESS_MAC_TABLE_CMD(MACACCESS_CMD_READ) ,
+		     ANA_TABLES_MACACCESS_MAC_TABLE_CMD(
+			    MACACCESS_CMD_READ),
 		     ANA_TABLES_MACACCESS);
 
 	val = ocelot_read(ocelot, ANA_TABLES_MACACCESS);
@@ -564,7 +565,7 @@ int switch_cb_streamid_set(struct net_device *ndev, u32 index, bool enable,
 	if (streamid->type != 1)
 		return -EINVAL;
 
-	if (enable == TRUE) {
+	if (enable) {
 		netdev_dbg(ndev, "index=%d mac=0x%llx vid=0x%x sfid=%d dst=%d\n",
 			   index, streamid->para.nid.dmac,
 			   streamid->para.nid.vid,
@@ -593,13 +594,15 @@ int switch_cb_streamid_set(struct net_device *ndev, u32 index, bool enable,
 		ocelot_write(ocelot, ANA_TABLES_MACACCESS_VALID |
 			     ANA_TABLES_MACACCESS_ENTRYTYPE(1) |
 			     ANA_TABLES_MACACCESS_DEST_IDX(dst_idx) |
-			     ANA_TABLES_MACACCESS_MAC_TABLE_CMD(MACACCESS_CMD_WRITE),
+			     ANA_TABLES_MACACCESS_MAC_TABLE_CMD(
+				    MACACCESS_CMD_WRITE),
 			     ANA_TABLES_MACACCESS);
 
 		ocelot_write(ocelot, ANA_TABLES_MACACCESS_VALID |
 			     ANA_TABLES_MACACCESS_ENTRYTYPE(1) |
 			     ANA_TABLES_MACACCESS_DEST_IDX(dst_idx) |
-			     ANA_TABLES_MACACCESS_MAC_TABLE_CMD(MACACCESS_CMD_LEARN),
+			     ANA_TABLES_MACACCESS_MAC_TABLE_CMD(
+				    MACACCESS_CMD_LEARN),
 			     ANA_TABLES_MACACCESS);
 	} else {
 		netdev_info(ndev, "disable stream set\n");
@@ -613,7 +616,8 @@ int switch_cb_streamid_set(struct net_device *ndev, u32 index, bool enable,
 			     ANA_TABLES_MACHDATA);
 
 		ocelot_write(ocelot,
-			     ANA_TABLES_MACACCESS_MAC_TABLE_CMD(MACACCESS_CMD_FORGET),
+			     ANA_TABLES_MACACCESS_MAC_TABLE_CMD(
+				    MACACCESS_CMD_FORGET),
 			     ANA_TABLES_MACACCESS);
 	}
 
@@ -1051,7 +1055,8 @@ int switch_seq_gen_set(struct net_device *ndev, u32 index,
 	ocelot_write(ocelot,
 		     ANA_TABLES_STREAMACCESS_GEN_REC_SEQ_NUM(seq_num) |
 		     ANA_TABLES_STREAMACCESS_SEQ_GEN_REC_ENA |
-		     ANA_TABLES_STREAMACCESS_STREAM_TBL_CMD(SFIDACCESS_CMD_WRITE),
+		     ANA_TABLES_STREAMACCESS_STREAM_TBL_CMD(
+			    SFIDACCESS_CMD_WRITE),
 		     ANA_TABLES_STREAMACCESS);
 
 	return 0;
@@ -1086,7 +1091,8 @@ int switch_seq_rec_set(struct net_device *ndev, u32 index,
 	ocelot_write(ocelot,
 		     ANA_TABLES_STREAMACCESS_SEQ_GEN_REC_ENA |
 		     ANA_TABLES_STREAMACCESS_GEN_REC_TYPE |
-		     ANA_TABLES_STREAMACCESS_STREAM_TBL_CMD(SFIDACCESS_CMD_WRITE),
+		     ANA_TABLES_STREAMACCESS_STREAM_TBL_CMD(
+			    SFIDACCESS_CMD_WRITE),
 		     ANA_TABLES_STREAMACCESS);
 
 	return 0;
@@ -1103,7 +1109,8 @@ int switch_cb_get(struct net_device *ndev, u32 index, struct tsn_cb_status *c)
 		     ANA_TABLES_STREAMTIDX);
 
 	ocelot_write(ocelot,
-		     ANA_TABLES_STREAMACCESS_STREAM_TBL_CMD(SFIDACCESS_CMD_READ),
+		     ANA_TABLES_STREAMACCESS_STREAM_TBL_CMD(
+			    SFIDACCESS_CMD_READ),
 		     ANA_TABLES_STREAMACCESS);
 
 	val = ocelot_read(ocelot, ANA_TABLES_STREAMACCESS);

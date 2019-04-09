@@ -3274,8 +3274,6 @@ static const struct genl_ops tsnnl_ops[] = {
 		.policy		= tsn_cmd_policy,
 		.flags		= GENL_ADMIN_PERM,
 	},
-
-
 	{
 		.cmd		= TSN_CMD_PCPMAP_SET,
 		.doit		= tsn_pcpmap_set,

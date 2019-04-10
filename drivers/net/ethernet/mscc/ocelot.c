@@ -3,6 +3,7 @@
  * Microsemi Ocelot Switch driver
  *
  * Copyright (c) 2017 Microsemi Corporation
+ * Copyright 2019 NXP
  */
 #include <linux/etherdevice.h>
 #include <linux/ethtool.h>

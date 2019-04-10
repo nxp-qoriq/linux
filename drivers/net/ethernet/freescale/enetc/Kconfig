@@ -49,6 +49,7 @@ config ENETC_TSN
 	bool "TSN Support for NXP ENETC driver"
 	default n
 	depends on TSN
+	select NET_SCH_MQPRIO
 	---help---
 	  This driver supports TSN on Freescale ENETC driver.
 endif

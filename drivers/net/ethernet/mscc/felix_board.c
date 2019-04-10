@@ -106,10 +106,10 @@ static struct resource felix_switch_res[] = {
 		.flags = IORESOURCE_MEM,
 	},
 	{
-		.start	= 0x0070000,
-		.end	= 0x00701ff,
-		.name	= "devcpu_gcb",
-		.flags	= IORESOURCE_MEM,
+		.start = 0x0070000,
+		.end = 0x00701ff,
+		.name = "devcpu_gcb",
+		.flags = IORESOURCE_MEM,
 	},
 	{
 		.start = 0x0100000,
@@ -224,7 +224,8 @@ static void felix_tx_hdr_set(struct sk_buff *skb, struct ocelot_port *port)
 
 	if (skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP &&
 	    port->tx_tstamp) {
-		u8 id = (port->ocelot->tstamp_id ++) % 4;
+		u8 id = (port->ocelot->tstamp_id++) % 4;
+
 		felix_set_ifh_rew_op(ifh, 0x3 | id << 3);
 	}
 }
@@ -482,6 +483,7 @@ static void felix_get_hwtimestamp(struct ocelot *ocelot, struct timespec64 *ts)
 {
 	/* Read current PTP time to get seconds */
 	u32 val = ocelot_read_rix(ocelot, PTP_PIN_CFG, TOD_ACC_PIN);
+
 	val &= ~(PTP_PIN_CFG_SYNC | PTP_PIN_CFG_ACTION_MASK | PTP_PIN_CFG_DOM);
 	val |= PTP_PIN_CFG_ACTION(PTP_PIN_ACTION_SAVE);
 	ocelot_write_rix(ocelot, val, PTP_PIN_CFG, TOD_ACC_PIN);
@@ -520,12 +522,11 @@ static void felix_tx_clean_work(struct work_struct *work)
 		if (!(val & SYS_PTP_STATUS_PTP_MESS_VLD)) {
 			/* Exit if tstamp had been handled or timeout */
 			if (ktime_after(ktime_get(), timeout) ||
-			    tstamp_handled) {
+			    tstamp_handled)
 				return;
-			} else {
-				udelay(1);
-				continue;
-			}
+
+			udelay(1);
+			continue;
 		}
 
 		tstamp_handled = true;

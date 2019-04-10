@@ -1080,45 +1080,32 @@ static int imx_hdp_hpd_thread(void *data)
 
 static int parse_enable_res(const char *resolution)
 {
-	const char *name;
-	unsigned int namelen;
+	char *name;
 	int xres = 0, yres = 0, refresh = 0;
-	int i;
-	bool is_digi = false;
+	char *next, *next_check;
+	int i, err;
 
-	name = resolution;
-	namelen = strlen(name);
-	for (i = namelen-1; i >= 0; i--) {
-		switch (name[i]) {
-		case '@':
-			if (is_digi) {
-				refresh = simple_strtol(&name[i+1], NULL, 10);
-				is_digi = false;
-			}
-			break;
-		case 'x':
-			if (is_digi) {
-				yres = simple_strtol(&name[i+1], NULL, 10);
-				is_digi = false;
-			}
-			break;
-		case '0' ... '9':
-			is_digi = true;
-			break;
-		default:
-			DRM_WARN("Enable resolution %s failed\n", resolution);
-			break;
-		}
-	}
-	if (i < 0 && is_digi) {
-		char *ch;
+	name = kmalloc(strlen(resolution) + 1, GFP_KERNEL);
+	strncpy(name, resolution, strlen(resolution) + 1);
 
-		xres = simple_strtol(name, &ch, 10);
-		if (*ch != 'x')
+	next = strsep(&name, "x");
+	if (next != NULL) {
+		err = kstrtol(next, 10, (long *)&xres);
+		if (err)
 			goto done;
 	} else
 		goto done;
 
+	next_check = strsep(&name, "@");
+	if (next_check != NULL) {
+		err = kstrtol(next_check, 10, (long *)&yres);
+		if (err)
+			goto done;
+		err = kstrtol(name, 10, (long *)&refresh);
+		if (err)
+			goto done;
+	} else
+		goto done;
 
 	for (i = 0; i < ARRAY_SIZE(edid_cea_modes); i++) {
 		if (edid_cea_modes[i].hdisplay == xres &&
@@ -1130,11 +1117,13 @@ static int parse_enable_res(const char *resolution)
 		}
 	}
 
+	kfree(name);
 	return 0;
 
 done:
 	DRM_WARN("Enable resolution %s failed\n", resolution);
 
+	kfree(name);
 	return 1;
 }
 

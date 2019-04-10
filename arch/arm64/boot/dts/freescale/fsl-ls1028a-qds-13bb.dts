@@ -1,0 +1,82 @@
+/*
+ * Device Tree Include file for NXP Layerscape-1088A family SoC.
+ *
+ * Copyright 2018 NXP
+ *
+ * Harninder Rai <harninder.rai@nxp.com>
+ *
+ * This file is dual-licensed: you can use it either under the terms
+ * of the GPLv2 or the X11 license, at your option. Note that this dual
+ * licensing only applies to this file, and not this project as a
+ * whole.
+ *
+ *  a) This library is free software; you can redistribute it and/or
+ *     modify it under the terms of the GNU General Public License as
+ *     published by the Free Software Foundation; either version 2 of the
+ *     License, or (at your option) any later version.
+ *
+ *     This library is distributed in the hope that it will be useful,
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *     GNU General Public License for more details.
+ *
+ * Or, alternatively,
+ *
+ *  b) Permission is hereby granted, free of charge, to any person
+ *     obtaining a copy of this software and associated documentation
+ *     files (the "Software"), to deal in the Software without
+ *     restriction, including without limitation the rights to use,
+ *     copy, modify, merge, publish, distribute, sublicense, and/or
+ *     sell copies of the Software, and to permit persons to whom the
+ *     Software is furnished to do so, subject to the following
+ *     conditions:
+ *
+ *     The above copyright notice and this permission notice shall be
+ *     included in all copies or substantial portions of the Software.
+ *
+ *     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ *     EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ *     OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ *     NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ *     HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ *     WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ *     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ *     OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+/dts-v1/;
+#include "fsl-ls1028a-qds.dts"
+
+&mdio_slot1 {
+	/* AQR112 PHY - USXGMII (up to 2.5G) */
+	slot1_phy1_replace: mdio_phy0@02 {
+		compatible = "ethernet-phy-id03a1.b662";
+		reg = <2>;
+	};
+};
+
+&mdio_slot2 {
+	/* AQR412 PHY - QSXGMII (4*2.5G) */
+	slot2_phy1_replace: emdio1_phy@1 {
+		compatible = "ethernet-phy-id03a1.b712";
+		reg = <0>;
+	};
+	slot2_phy2_replace: emdio1_phy@2 {
+		compatible = "ethernet-phy-id03a1.b712";
+		reg = <1>;
+	};
+	slot2_phy3_replace: emdio1_phy@3 {
+		compatible = "ethernet-phy-id03a1.b712";
+		reg = <2>;
+	};
+	slot2_phy4_replace: emdio1_phy@4 {
+		compatible = "ethernet-phy-id03a1.b712";
+		reg = <3>;
+	};
+};
+
+&enetc_port0 {
+	phy-handle = <&slot1_phy1_replace>;
+};
+
+/* l2switch ports don't use the PHYs yet, due to a probing order issue */

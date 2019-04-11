@@ -139,6 +139,26 @@
 			clocks = <&sysclk>;
 		};
 
+		usb0:usb@3100000 {
+			compatible= "snps,dwc3";
+			reg= <0x0 0x3100000 0x0 0x10000>;
+			interrupts= <0 80 0x4>;
+			dr_mode= "host";
+			snps,dis_rxdet_inp3_quirk;
+			snps,quirk-frame-length-adjustment = <0x20>;
+			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
+		};
+
+		usb1:usb@3110000 {
+			compatible= "snps,dwc3";
+			reg= <0x0 0x3110000 0x0 0x10000>;
+			interrupts= <0 81 0x4>;
+			dr_mode= "host";
+			snps,dis_rxdet_inp3_quirk;
+			snps,quirk-frame-length-adjustment = <0x20>;
+			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
+		};
+
 		i2c0: i2c@2000000 {
 			compatible = "fsl,vf610-i2c";
 			#address-cells = <1>;

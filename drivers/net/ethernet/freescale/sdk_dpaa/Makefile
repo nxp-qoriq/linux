@@ -30,11 +30,13 @@ fsl_mac-objs += mac.o mac-api.o
 ifeq ($(CONFIG_FSL_DPAA_ADVANCED_DRIVERS),y)
 obj-$(CONFIG_FSL_SDK_DPAA_ETH) += fsl_advanced.o
 obj-$(CONFIG_FSL_SDK_DPAA_ETH) += fsl_proxy.o
+obj-$(CONFIG_FSL_SDK_DPAA_ETH) += fsl_dpa_shared.o
 
 fsl_advanced-objs += dpaa_eth_base.o
 # suport for multiple drivers per kernel module comes in kernel 3.14
 # so we are forced to generate several modules for the advanced drivers
 fsl_proxy-objs += dpaa_eth_proxy.o
+fsl_dpa_shared-objs += dpaa_eth_shared.o
 
 ifeq ($(CONFIG_FSL_DPAA_OFFLINE_PORTS),y)
 obj-$(CONFIG_FSL_SDK_DPAA_ETH) += fsl_oh.o

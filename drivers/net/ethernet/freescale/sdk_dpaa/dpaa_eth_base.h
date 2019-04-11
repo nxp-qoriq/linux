@@ -45,5 +45,6 @@ struct dpa_bp * __cold __must_check /* __attribute__((nonnull)) */
 dpa_bp_probe(struct platform_device *_of_dev, size_t *count);
 int dpa_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 		size_t count);
+int dpa_bp_shared_port_seed(struct dpa_bp *bp);
 
 #endif /* __DPAA_ETH_BASE_H */

@@ -192,7 +192,7 @@ dpaa2_eth_set_link_ksettings(struct net_device *net_dev,
 		cfg.options &= ~DPNI_LINK_OPT_HALF_DUPLEX;
 
 	if (dpaa2_eth_cmp_dpni_ver(priv, DPNI_LINK_AUTONEG_VER_MAJOR,
-				   DPNI_LINK_AUTONEG_VER_MINOR)) {
+				   DPNI_LINK_AUTONEG_VER_MINOR) < 0) {
 		err = dpni_set_link_cfg(priv->mc_io, 0, priv->mc_token, &cfg);
 	} else {
 		link_mode_ethtool2dpni(link_settings->link_modes.advertising,

@@ -490,8 +490,6 @@ static int ocelot_port_open(struct net_device *dev)
 		netdev_err(dev, "Could not attach to PHY\n");
 		return err;
 	}
-	netif_carrier_on(dev);
-	ocelot->port_adjust_link(dev);
 
 	dev->phydev = port->phy;
 
@@ -504,7 +502,7 @@ static int ocelot_port_stop(struct net_device *dev)
 {
 	struct ocelot_port *port = netdev_priv(dev);
 
-	netif_carrier_off(dev);
+	phy_stop(port->phy);
 	phy_disconnect(port->phy);
 
 	dev->phydev = NULL;

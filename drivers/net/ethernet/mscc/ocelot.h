@@ -39,7 +39,8 @@
 
 #define OCELOT_BUFFER_CELL_SZ 60
 
-#define OCELOT_STATS_CHECK_DELAY (2 * HZ)
+/* 2 secs for stats update on a (up to) 2.5G link */
+#define OCELOT_STATS_CHECK_DELAY (msecs_to_jiffies(2000))
 
 #define IFH_LEN 4
 

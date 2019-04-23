@@ -69,29 +69,5 @@ fsldpaa: fsl,dpaa {
 		fsl,fman-mac = <&enet6>;
 		dma-coherent;
 	};
-	ethernet@6 {
-		compatible = "fsl,im-ethernet";
-		fsl,fman-mac = <&enet2>;
-		dma-coherent;
-		fpmevt-sel = <0>;
-	};
-	ethernet@7 {
-		compatible = "fsl,im-ethernet";
-		fsl,fman-mac = <&enet3>;
-		dma-coherent;
-		fpmevt-sel = <1>;
-	};
-	ethernet@10 {
-		compatible = "fsl,im-ethernet";
-		fsl,fman-mac = <&enet4>;
-		dma-coherent;
-		fpmevt-sel = <2>;
-	};
-	ethernet@11 {
-		compatible = "fsl,im-ethernet";
-		fsl,fman-mac = <&enet5>;
-		dma-coherent;
-		fpmevt-sel = <3>;
-	};
 };
 

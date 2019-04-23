@@ -41,17 +41,22 @@
 	ethernet@3 {
 		status = "disabled";
 	};
+	ethernet@4 {
+		status = "disabled";
+	};
+	ethernet@5 {
+		status = "disabled";
+	};
 	ethernet@6 {
 		status = "disabled";
 	};
 	ethernet@7 {
 		status = "disabled";
 	};
-	ethernet@8 {
-		status = "disabled";
-	};
 	ethernet@9 {
-		status = "disabled";
+		compatible = "fsl,dpa-ethernet";
+		fsl,fman-mac = <&enet7>;
+		dma-coherent;
 	};
 };
 

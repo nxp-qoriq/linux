@@ -596,6 +596,10 @@ static int dpa_shared_netdev_init(struct device_node *dpa_node,
 	net_dev->mem_start = priv->mac_dev->res->start;
 	net_dev->mem_end = priv->mac_dev->res->end;
 
+	/* Configure the maximum MTU according to the FMan's MAXFRM */
+	net_dev->min_mtu = ETH_MIN_MTU;
+	net_dev->max_mtu = dpa_get_max_mtu();
+
 	mac_addr = priv->mac_dev->addr;
 
 	net_dev->hw_features |= (NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM |

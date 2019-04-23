@@ -35,6 +35,7 @@
 
 #include <linux/netdevice.h>
 #include <linux/fsl_qman.h>	/* struct qman_fq */
+#include <linux/if_vlan.h>	/* VLAN_ETH_HLEN */
 
 #include "fm_ext.h"
 #include "dpaa_eth_trace.h"

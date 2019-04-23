@@ -118,27 +118,27 @@
 #include "fsl-ls1046-post.dtsi"
 
 &fman0 {
-	ethernet@e8000 {
+	ethernet@f0000 {
 		phy-handle = <&sgmii_phy1>;
-		phy-connection-type = "sgmii";
+		phy-connection-type = "sgmii-2500";
 	};
 
-	ethernet@ea000 {
+	ethernet@f2000 {
 		phy-handle = <&sgmii_phy2>;
-		phy-connection-type = "sgmii";
+		phy-connection-type = "sgmii-2500";
 	};
 
 	mdio@fd000 {
-		sgmii_phy1: ethernet-phy@1 {
-			compatible = "ethernet-phy-ieee802.3-c45";
-			interrupts = <0 2 4>;
-			reg = <0x1>;
-		};
-
-		sgmii_phy2: ethernet-phy@f {
+		sgmii_phy1: ethernet-phy@f {
 			compatible = "ethernet-phy-ieee802.3-c45";
 			interrupts = <0 2 4>;
 			reg = <0xf>;
+		};
+
+		sgmii_phy2: ethernet-phy@1 {
+			compatible = "ethernet-phy-ieee802.3-c45";
+			interrupts = <0 2 4>;
+			reg = <0x1>;
 		};
 	};
 };

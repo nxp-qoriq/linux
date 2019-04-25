@@ -49,7 +49,7 @@ int qbman_init_private_mem(struct device *dev, int idx, dma_addr_t *addr,
 			idx, ret);
 		return -ENODEV;
 	}
-	mem_node = of_parse_phandle(dev->of_node, "memory-region", 0);
+	mem_node = of_parse_phandle(dev->of_node, "memory-region", idx);
 	if (mem_node) {
 		ret = of_property_read_u64(mem_node, "size", &size64);
 		if (ret) {

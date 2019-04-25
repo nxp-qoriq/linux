@@ -193,11 +193,22 @@ static void malidp_atomic_commit_hw_done(struct drm_atomic_state *state)
 	struct drm_pending_vblank_event *event;
 	struct drm_device *drm = state->dev;
 	struct malidp_drm *malidp = drm->dev_private;
+	int loop = 5;
 
 	if (malidp->crtc.enabled) {
 		/* only set config_valid if the CRTC is enabled */
-		if (malidp_set_and_wait_config_valid(drm))
+		if (malidp_set_and_wait_config_valid(drm)) {
+			/*
+			 * make a loop around the second CVAL setting and
+			 * try 5 times before giving up.
+			 */
+			while (loop--) {
+				if (!malidp_set_and_wait_config_valid(drm))
+					break;
+			}
 			DRM_DEBUG_DRIVER("timed out waiting for updated configuration\n");
+		}
+
 	}
 
 	event = malidp->crtc.state->event;

@@ -1,0 +1,12 @@
+# drivers/mxc/Kconfig
+
+if ARCH_LAYERSCAPE
+
+menu "MXC support drivers"
+
+# drivers common to MXC and LS1028A go here:
+source "drivers/mxc/hdp/Kconfig"
+
+endmenu
+
+endif

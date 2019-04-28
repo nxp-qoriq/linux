@@ -63,11 +63,6 @@
 				reg = <0x4c>;
 			};
 
-			rtc@51 {
-				compatible = "nxp,pcf2129";
-				reg = <0x51>;
-			};
-
 			eeprom@52 {
 				compatible = "atmel,24c512";
 				reg = <0x52>;
@@ -78,8 +73,19 @@
 				reg = <0x53>;
 			};
 		};
+
+		i2c@2 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <2>;
+			rtc@51 {
+				compatible = "nxp,pcf2129";
+				reg = <0x51>;
+			};
+		};
 	};
 };
+
 
 &ifc {
 	#address-cells = <2>;

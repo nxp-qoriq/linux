@@ -1,0 +1,81 @@
+/******************************************************************************
+ *
+ * Copyright (C) 2016-2017 Cadence Design Systems, Inc.
+ * All rights reserved worldwide.
+ *
+ * Copyright 2018-2019 NXP
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ ******************************************************************************
+ *
+ * ss28fdsoi_hdmitx_table.h
+ *
+ ******************************************************************************
+ */
+
+#ifndef SS28FDSOI_HDMITX_TABLE_H_
+#define SS28FDSOI_HDMITX_TABLE_H_
+
+#include <linux/io.h>
+
+#define	SS28FDSOI_HDMITX_CLOCK_CONTROL_TABLE_ROWS	19
+#define	SS28FDSOI_HDMITX_CLOCK_CONTROL_TABLE_COLS	23
+
+#define	SS28FDSOI_HDMITX_PLL_TUNING_TABLE_ROWS		36
+#define	SS28FDSOI_HDMITX_PLL_TUNING_TABLE_COLS		19
+
+typedef enum {
+	//PIXEL_CLK_FREQ_MHZ_MIN,
+	PIXEL_CLK_FREQ_KHZ_MIN,
+	//PIXEL_CLK_FREQ_MHZ_MAX,
+	PIXEL_CLK_FREQ_KHZ_MAX,
+	FEEDBACK_FACTOR,
+	DATA_RANGE_MBPS_MIN,
+	DATA_RANGE_MBPS_MAX,
+	CMNDA_PLL0_IP_DIV,
+	CMN_REF_CLK_DIG_DIV,
+	REF_CLK_DIVIDER_SCALER,
+	PLL_FB_DIV_TOTAL,
+	CMNDA_PLL0_FB_DIV_LOW,
+	CMNDA_PLL0_FB_DIV_HIGH,
+	//VCO_FREQ_MHZ_MIN,
+	//VCO_FREQ_MHZ_MAX,
+	VCO_FREQ_KHZ_MIN,
+	VCO_FREQ_KHZ_MAX,
+	VCO_RING_SELECT,
+	CMNDA_HS_CLK_0_SEL,
+	CMNDA_HS_CLK_1_SEL,
+	HSCLK_DIV_AT_XCVR,
+	HSCLK_DIV_TX_SUB_RATE,
+	TX_CLK_KHZ_MIN,
+	TX_CLK_KHZ_MAX,
+	CMNDA_PLL0_HS_SYM_DIV_SEL,
+	CMNDA_PLL0_CLK_FREQ_KHZ_MIN,
+	CMNDA_PLL0_CLK_FREQ_KHZ_MAX
+} CLK_CTRL_PARAM;
+
+typedef enum {
+	VCO_FREQ_BIN,
+	/* PLL_VCO_FREQ_MHZ_MIN, */
+	/* PLL_VCO_FREQ_MHZ_MAX, */
+	PLL_VCO_FREQ_KHZ_MIN,
+	PLL_VCO_FREQ_KHZ_MAX,
+	VOLTAGE_TO_CURRENT_COARSE,
+	VOLTAGE_TO_CURRENT,
+	NDAC_CTRL,
+	PMOS_CTRL,
+	PTAT_NDAC_CTRL,
+	/*PLL_FEEDBACK_DIV_TOTAL,  float to int */
+	PLL_FEEDBACK_DIV_TOTAL,
+	CHARGE_PUMP_GAIN
+} PLL_TUNE_PARAM;
+
+extern const u32
+ss28fdsoi_hdmitx_clock_control_table[SS28FDSOI_HDMITX_CLOCK_CONTROL_TABLE_ROWS]
+	[SS28FDSOI_HDMITX_CLOCK_CONTROL_TABLE_COLS];
+extern const u32
+ss28fdsoi_hdmitx_pll_tuning_table[SS28FDSOI_HDMITX_PLL_TUNING_TABLE_ROWS]
+	[SS28FDSOI_HDMITX_PLL_TUNING_TABLE_COLS];
+
+#endif

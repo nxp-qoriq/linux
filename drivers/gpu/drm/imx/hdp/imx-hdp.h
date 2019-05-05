@@ -15,7 +15,9 @@
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_edid.h>
 #include <drm/drm_encoder_slave.h>
+#ifndef CONFIG_ARCH_LAYERSCAPE
 #include <soc/imx8/sc/sci.h>
+#endif
 
 #include <drm/drm_dp_helper.h>
 #include "../../../../mxc/hdp/all.h"
@@ -24,6 +26,7 @@
 #undef DEBUG_FW_LOAD
 #define PLL_1188MHZ (1188000000)
 #define PLL_800MHZ (800000000)
+#define PLL_675MHZ (675000000)
 
 #define HDP_TX_SS_LIS_BASE   0x0000
 #define HDP_TX_SS_CSR_BASE   0x1000
@@ -52,6 +55,15 @@
 
 #define VIC_MODE_96_50Hz 96
 #define VIC_MODE_97_60Hz 97
+
+#ifdef CONFIG_ARCH_LAYERSCAPE
+#define EDP_PHY_RESET	0x230
+#define CSR_PLLDIG_PLLDV 0x28
+#define CSR_PLLDIG_PLLFM 0x2c
+#define CSR_PLLDIG_PLLFD 0x30
+#define CSR_PLLDIG_PLLCAL1 0x38
+#define CSR_PLLDIG_PLLCAL2 0x3c
+#endif
 
 /**
  * imx_hdp_call - Calls a struct imx hdp_operations operation on
@@ -86,7 +98,11 @@ struct hdp_ops {
 			 int format, int color_depth, int max_link);
 	int (*get_edid_block)(void *data, u8 *buf, u32 block, size_t len);
 	int (*get_hpd_state)(state_struct *state, u8 *hpd);
+#ifndef CONFIG_ARCH_LAYERSCAPE
 	void (*phy_reset)(sc_ipc_t ipcHndl, struct hdp_mem *mem, u8 reset);
+#else
+	void (*phy_reset)(uint32_t ipcHndl, struct hdp_mem *mem, u8 reset);
+#endif
 	int (*pixel_link_validate)(state_struct *state);
 	int (*pixel_link_invalidate)(state_struct *state);
 	int (*pixel_link_sync_ctrl_enable)(state_struct *state);
@@ -194,6 +210,10 @@ struct imx_hdp {
 	u8 is_edp;
 	u8 is_digpll_dp_pclock;
 	u8 no_edid;
+#ifdef CONFIG_ARCH_LAYERSCAPE
+	u8 is_hpd_irq;
+	int num_res;
+#endif
 	u32 lane_mapping;
 	u32 edp_link_rate;
 	u32 edp_num_lanes;
@@ -209,7 +229,11 @@ struct imx_hdp {
 	struct drm_dp_link dp_link;
 	S_LINK_STAT lkstat;
 	ENUM_AFE_LINK_RATE link_rate;
+#ifndef CONFIG_ARCH_LAYERSCAPE
 	sc_ipc_t ipcHndl;
+#else
+	uint32_t ipcHndl;
+#endif
 	u32 mu_id;
 	u32 dual_mode;
 	struct hdp_ops *ops;

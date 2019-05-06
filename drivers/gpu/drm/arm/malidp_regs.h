@@ -198,6 +198,14 @@
 #define MALIDP500_DC_IRQ_BASE		0x00f00
 #define MALIDP500_CONFIG_VALID		0x00f00
 #define MALIDP500_CONFIG_ID		0x00fd4
+#ifdef CONFIG_ARCH_LAYERSCAPE
+#define MALIDP500_RQOS_QUALITY          0x00500
+/* Increasing QoS level signal */
+#define GREEN_ARQOS_CONFIG              (0xd << 28)
+/* Close to underflow QoS level signal */
+#define RED_ARQOS_CONFIG                (0xd << 12)
+#define CONFIG_VALID                    0x3
+#endif
 
 /* register offsets and bits specific to DP550/DP650 */
 #define MALIDP550_ADDR_SPACE_SIZE	0x10000

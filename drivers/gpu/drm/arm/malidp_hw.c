@@ -270,6 +270,19 @@ static void malidp500_modeset(struct malidp_hw_device *hwdev, struct videomode *
 		malidp_hw_setbits(hwdev, MALIDP_DISP_FUNC_ILACED, MALIDP_DE_DISPLAY_FUNC);
 	else
 		malidp_hw_clearbits(hwdev, MALIDP_DISP_FUNC_ILACED, MALIDP_DE_DISPLAY_FUNC);
+
+#ifdef CONFIG_ARCH_LAYERSCAPE
+	/* Setting QoS for 4k resolution to avoid flicker issue */
+	if (mode->hactive == 3840
+			&& mode->vactive == 2160)
+		malidp_hw_setbits(hwdev, GREEN_ARQOS_CONFIG
+				| RED_ARQOS_CONFIG, MALIDP500_RQOS_QUALITY);
+	else
+		malidp_hw_clearbits(hwdev, GREEN_ARQOS_CONFIG
+				| RED_ARQOS_CONFIG, MALIDP500_RQOS_QUALITY);
+
+	malidp_hw_setbits(hwdev, CONFIG_VALID, MALIDP500_CONFIG_VALID);
+#endif
 }
 
 static int malidp500_rotmem_required(struct malidp_hw_device *hwdev, u16 w, u16 h, u32 fmt)

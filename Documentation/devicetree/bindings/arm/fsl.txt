@@ -183,6 +183,10 @@ LS1046A ARMv8 based RDB Board
 Required root node properties:
     - compatible = "fsl,ls1046a-rdb", "fsl,ls1046a";
 
+LS1046A ARMv8 based FRWY Board
+Required root node properties:
+    - compatible = "fsl,ls1046a-frwy", "fsl,ls1046a";
+
 LS1088A SoC
 Required root node properties:
     - compatible = "fsl,ls1088a";

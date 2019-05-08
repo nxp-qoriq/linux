@@ -2,7 +2,7 @@
 /*
  * Device Tree file for NXP LS1028A RDB Board.
  *
- * Copyright 2018 NXP
+ * Copyright 2018-2019 NXP
  *
  * Harninder Rai <harninder.rai@nxp.com>
  *
@@ -148,6 +148,22 @@
 		/* The following setting enables 1-1-8 (CMD-ADDR-DATA) mode */
 		spi-rx-bus-width = <8>; /* 8 SPI Rx lines */
 		spi-tx-bus-width = <1>; /* 1 SPI Tx line */
+	};
+};
+
+&can0 {
+	status = "okay";
+
+	can-transceiver {
+		max-bitrate = <5000000>;
+	};
+};
+
+&can1 {
+	status = "okay";
+
+	can-transceiver {
+		max-bitrate = <5000000>;
 	};
 };
 

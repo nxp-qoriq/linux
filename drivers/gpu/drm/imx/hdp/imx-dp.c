@@ -284,6 +284,7 @@ void dp_mode_set(state_struct *state,
 	u8 num_lanes = 4;
 	u8 ssc = 0;
 	u8 scrambler = 1;
+	u8 edp_enable = 0;
 	/* Max voltage swing */
 	u8 max_vswing = 3;
 	u8 force_max_vswing = 0;
@@ -342,6 +343,8 @@ void dp_mode_set(state_struct *state,
 		default:
 			sym_rate = RATE_1_6;
 		}
+
+		edp_enable = 1;
 	} else {
 		link_rate = max_link_rate;
 
@@ -361,7 +364,8 @@ void dp_mode_set(state_struct *state,
 
 	ret = CDN_API_DPTX_SetHostCap_blocking(state,
 		link_rate,
-		(num_lanes & 0x7) | ((ssc & 1) << 3) | ((scrambler & 1) << 4),
+		(num_lanes & 0x7) | ((ssc & 1) << 3) | ((scrambler & 1) << 4 |
+		((edp_enable) & 1) << 5),
 		(max_vswing & 0x3) | ((force_max_vswing & 1) << 4),
 		(max_preemph & 0x3) | ((force_max_preemph & 1) << 4),
 		supp_test_patterns,

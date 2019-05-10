@@ -178,7 +178,7 @@
 #define FLEXCAN_TX_MB_RESERVED_OFF_TIMESTAMP	0
 #define FLEXCAN_TX_MB_OFF_TIMESTAMP		1
 #define FLEXCAN_RX_MB_OFF_TIMESTAMP_FIRST	(FLEXCAN_TX_MB_OFF_TIMESTAMP + 1)
-#define FLEXCAN_IFLAG_MB(x)		BIT(x)
+#define FLEXCAN_IFLAG_MB(x)		BIT((x) & 0x3f)
 #define FLEXCAN_IFLAG_RX_FIFO_OVERFLOW	BIT(7)
 #define FLEXCAN_IFLAG_RX_FIFO_WARN	BIT(6)
 #define FLEXCAN_IFLAG_RX_FIFO_AVAILABLE	BIT(5)
@@ -320,8 +320,7 @@ struct flexcan_priv {
 	u8 mb_count;
 	u8 mb_size;
 	u32 reg_ctrl_default;
-	u32 reg_imask1_default;
-	u32 reg_imask2_default;
+	u64 reg_imask_default;
 
 	struct clk *clk_ipg;
 	struct clk *clk_per;
@@ -889,13 +888,16 @@ static unsigned int flexcan_mailbox_read(struct can_rx_offload *offload,
 static inline u64 flexcan_read_reg_iflag_rx(struct flexcan_priv *priv)
 {
 	struct flexcan_regs __iomem *regs = priv->regs;
-	u32 iflag1, iflag2;
+	u64 iflag;
 
-	iflag2 = priv->read(&regs->iflag2) & priv->reg_imask2_default;
-	iflag1 = priv->read(&regs->iflag1) & priv->reg_imask1_default &
-		~FLEXCAN_IFLAG_MB(priv->tx_mb_idx);
+	iflag = ((u64)priv->read(&regs->iflag2) << 32) |
+		 priv->read(&regs->iflag1);
 
-	return (u64)iflag2 << 32 | iflag1;
+	iflag &= priv->reg_imask_default;
+
+	iflag &= ~FLEXCAN_IFLAG_MB(priv->tx_mb_idx);
+
+	return iflag;
 }
 
 static irqreturn_t flexcan_irq(int irq, void *dev_id)
@@ -905,7 +907,8 @@ static irqreturn_t flexcan_irq(int irq, void *dev_id)
 	struct flexcan_priv *priv = netdev_priv(dev);
 	struct flexcan_regs __iomem *regs = priv->regs;
 	irqreturn_t handled = IRQ_NONE;
-	u32 reg_iflag1, reg_esr;
+	u64 reg_iflag;
+	u32 reg_esr;
 	enum can_state last_state = priv->can.state;
 
 	reg_iflag1 = priv->read(&regs->iflag1);
@@ -938,8 +941,11 @@ static irqreturn_t flexcan_irq(int irq, void *dev_id)
 		}
 	}
 
+	reg_iflag = ((u64)priv->read(&regs->iflag2) << 32) |
+		     priv->read(&regs->iflag1);
+
 	/* transmission complete interrupt */
-	if (reg_iflag1 & FLEXCAN_IFLAG_MB(priv->tx_mb_idx)) {
+	if (reg_iflag & FLEXCAN_IFLAG_MB(priv->tx_mb_idx)) {
 		handled = IRQ_HANDLED;
 		stats->tx_bytes += can_get_echo_skb(dev, 0);
 		stats->tx_packets++;
@@ -949,6 +955,9 @@ static irqreturn_t flexcan_irq(int irq, void *dev_id)
 		priv->write(FLEXCAN_MB_CODE_TX_INACTIVE,
 			    &priv->tx_mb->can_ctrl);
 		priv->write(FLEXCAN_IFLAG_MB(priv->tx_mb_idx), &regs->iflag1);
+		reg_iflag = FLEXCAN_IFLAG_MB(priv->tx_mb_idx);
+		priv->write(reg_iflag >> 32, &regs->iflag2);
+		priv->write((u32)reg_iflag, &regs->iflag1);
 		netif_wake_queue(dev);
 	}
 
@@ -1300,8 +1309,8 @@ static int flexcan_chip_start(struct net_device *dev)
 	/* enable interrupts atomically */
 	disable_irq(dev->irq);
 	priv->write(priv->reg_ctrl_default, &regs->ctrl);
-	priv->write(priv->reg_imask1_default, &regs->imask1);
-	priv->write(priv->reg_imask2_default, &regs->imask2);
+	priv->write(priv->reg_imask_default >> 32, &regs->imask2);
+	priv->write((u32)priv->reg_imask_default, &regs->imask1);
 	enable_irq(dev->irq);
 
 	/* print chip status */
@@ -1384,8 +1393,7 @@ static int flexcan_open(struct net_device *dev)
 	priv->tx_mb_idx = priv->mb_count - 1;
 	priv->tx_mb = flexcan_get_mb(priv, priv->tx_mb_idx);
 
-	priv->reg_imask1_default = FLEXCAN_IFLAG_MB(priv->tx_mb_idx);
-	priv->reg_imask2_default = 0;
+	priv->reg_imask_default = FLEXCAN_IFLAG_MB(priv->tx_mb_idx);
 
 	priv->offload.mailbox_read = flexcan_mailbox_read;
 
@@ -1396,12 +1404,11 @@ static int flexcan_open(struct net_device *dev)
 		priv->offload.mb_last = priv->mb_count - 2;
 
 		imask = GENMASK_ULL(priv->offload.mb_last, priv->offload.mb_first);
-		priv->reg_imask1_default |= imask;
-		priv->reg_imask2_default |= imask >> 32;
+		priv->reg_imask_default |= imask;
 
 		err = can_rx_offload_add_timestamp(dev, &priv->offload);
 	} else {
-		priv->reg_imask1_default |= FLEXCAN_IFLAG_RX_FIFO_OVERFLOW |
+		priv->reg_imask_default |= FLEXCAN_IFLAG_RX_FIFO_OVERFLOW |
 			FLEXCAN_IFLAG_RX_FIFO_AVAILABLE;
 		err = can_rx_offload_add_fifo(dev, &priv->offload, FLEXCAN_NAPI_WEIGHT);
 	}

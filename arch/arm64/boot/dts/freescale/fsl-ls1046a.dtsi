@@ -170,6 +170,13 @@
 			interrupts = <GIC_SPI 43 IRQ_TYPE_LEVEL_HIGH>;
 		};
 
+		modem_tti: modem_tti@0 {
+			compatible = "modem_tti";
+			reg = <0x0 0x0 0x0 0x0>;
+			interrupts = <GIC_SPI 131 IRQ_TYPE_EDGE_RISING>,
+					<GIC_SPI 132 IRQ_TYPE_EDGE_RISING>;
+		};
+
 		qspi: quadspi@1550000 {
 			compatible = "fsl,ls1021a-qspi";
 			#address-cells = <1>;

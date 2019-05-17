@@ -62,12 +62,9 @@
  * Rx FQ taildrop threshold will ensure only a reasonable number of frames
  * will be pending at any given time.
  */
-#define DPAA2_ETH_NUM_BUFS_PER_CH	1024
-#define DPAA2_ETH_REFILL_THRESH(priv)	\
-	((priv)->max_bufs_per_ch - DPAA2_ETH_BUFS_PER_CMD)
-
-/* Global buffer quota in case flow control is enabled */
-#define DPAA2_ETH_NUM_BUFS_FC		256
+#define DPAA2_ETH_NUM_BUFS		1024
+#define DPAA2_ETH_REFILL_THRESH \
+	(DPAA2_ETH_NUM_BUFS - DPAA2_ETH_BUFS_PER_CMD)
 
 /* Hardware requires alignment for ingress/egress buffer addresses */
 #define DPAA2_ETH_TX_BUF_ALIGN		64
@@ -367,8 +364,6 @@ struct dpaa2_eth_priv {
 
 	u8 num_channels;
 	struct dpaa2_eth_channel *channel[DPAA2_ETH_MAX_DPCONS];
-	int max_bufs_per_ch;
-	int refill_thresh;
 
 	bool has_xdp_prog;
 

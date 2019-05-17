@@ -1067,8 +1067,7 @@ static int seed_pool(struct dpaa2_eth_priv *priv, u16 bpid)
 	 */
 	preempt_disable();
 	for (j = 0; j < priv->num_channels; j++) {
-		priv->channel[j]->buf_count = 0;
-		for (i = 0; i < priv->max_bufs_per_ch;
+		for (i = 0; i < DPAA2_ETH_NUM_BUFS;
 		     i += DPAA2_ETH_BUFS_PER_CMD) {
 			new_count = add_bufs(priv, priv->channel[j], bpid);
 			priv->channel[j]->buf_count += new_count;
@@ -1106,10 +1105,13 @@ static void drain_bufs(struct dpaa2_eth_priv *priv, int count)
 
 static void drain_pool(struct dpaa2_eth_priv *priv)
 {
-	preempt_disable();
+	int i;
+
 	drain_bufs(priv, DPAA2_ETH_BUFS_PER_CMD);
 	drain_bufs(priv, 1);
-	preempt_enable();
+
+	for (i = 0; i < priv->num_channels; i++)
+		priv->channel[i]->buf_count = 0;
 }
 
 /* Function is called from softirq context only, so we don't need to guard
@@ -1121,7 +1123,7 @@ static int refill_pool(struct dpaa2_eth_priv *priv,
 {
 	int new_count;
 
-	if (likely(ch->buf_count >= priv->refill_thresh))
+	if (likely(ch->buf_count >= DPAA2_ETH_REFILL_THRESH))
 		return 0;
 
 	do {
@@ -1131,9 +1133,9 @@ static int refill_pool(struct dpaa2_eth_priv *priv,
 			break;
 		}
 		ch->buf_count += new_count;
-	} while (ch->buf_count < priv->max_bufs_per_ch);
+	} while (ch->buf_count < DPAA2_ETH_NUM_BUFS);
 
-	if (unlikely(ch->buf_count < priv->max_bufs_per_ch))
+	if (unlikely(ch->buf_count < DPAA2_ETH_NUM_BUFS))
 		return -ENOMEM;
 
 	return 0;
@@ -1334,8 +1336,6 @@ static int dpaa2_eth_open(struct net_device *net_dev)
 			   priv->dpbp_dev->obj_desc.id, priv->bpid);
 	}
 
-	priv->refill_thresh = DPAA2_ETH_REFILL_THRESH(priv);
-
 	err = dpni_enable(priv->mc_io, 0, priv->mc_token);
 	if (err < 0) {
 		netdev_err(net_dev, "dpni_enable() failed\n");
@@ -1355,7 +1355,6 @@ static int dpaa2_eth_open(struct net_device *net_dev)
 
 link_state_err:
 enable_err:
-	priv->refill_thresh = 0;
 	drain_pool(priv);
 	return err;
 }
@@ -1387,8 +1386,6 @@ static int dpaa2_eth_stop(struct net_device *net_dev)
 		 */
 		err = -ETIMEDOUT;
 	}
-
-	priv->refill_thresh = 0;
 
 	/* Wait for all running napi poll routines to finish, so that no
 	 * new refill operations are started
@@ -2392,9 +2389,6 @@ static int setup_dpbp(struct dpaa2_eth_priv *priv)
 	}
 	priv->bpid = dpbp_attrs.bpid;
 
-	/* By default we start with flow control enabled */
-	priv->max_bufs_per_ch = DPAA2_ETH_NUM_BUFS_FC / priv->num_channels;
-
 	return 0;
 
 err_get_attr:
@@ -2619,8 +2613,6 @@ int set_rx_taildrop(struct dpaa2_eth_priv *priv)
 	case DPAA2_ETH_TD_NONE:
 		memset(&td_queue, 0, sizeof(struct dpni_taildrop));
 		memset(&td_group, 0, sizeof(struct dpni_taildrop));
-		priv->max_bufs_per_ch = DPAA2_ETH_NUM_BUFS_FC /
-					priv->num_channels;
 		break;
 	case DPAA2_ETH_TD_QUEUE:
 		memset(&td_group, 0, sizeof(struct dpni_taildrop));
@@ -2628,7 +2620,6 @@ int set_rx_taildrop(struct dpaa2_eth_priv *priv)
 		td_queue.units = DPNI_CONGESTION_UNIT_BYTES;
 		td_queue.threshold = DPAA2_ETH_TAILDROP_THRESH /
 				     dpaa2_eth_tc_count(priv);
-		priv->max_bufs_per_ch = DPAA2_ETH_NUM_BUFS_PER_CH;
 		break;
 	case DPAA2_ETH_TD_GROUP:
 		memset(&td_queue, 0, sizeof(struct dpni_taildrop));
@@ -2636,8 +2627,6 @@ int set_rx_taildrop(struct dpaa2_eth_priv *priv)
 		td_group.units = DPNI_CONGESTION_UNIT_FRAMES;
 		td_group.threshold = NAPI_POLL_WEIGHT *
 				     dpaa2_eth_queue_count(priv);
-		priv->max_bufs_per_ch = NAPI_POLL_WEIGHT *
-					dpaa2_eth_tc_count(priv);
 		break;
 	default:
 		break;
@@ -2650,8 +2639,6 @@ int set_rx_taildrop(struct dpaa2_eth_priv *priv)
 	err = set_group_taildrop(priv, &td_group);
 	if (err)
 		return err;
-
-	priv->refill_thresh = DPAA2_ETH_REFILL_THRESH(priv);
 
 	return 0;
 }

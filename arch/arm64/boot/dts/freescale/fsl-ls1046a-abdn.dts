@@ -12,7 +12,7 @@
 #include "fsl-ls1046a.dtsi"
 
 / {
-	model = "LS1046A RDB Board";
+	model = "LS1046A ABDN Board";
 	compatible = "fsl,ls1046a-rdb", "fsl,ls1046a";
 
 	aliases {

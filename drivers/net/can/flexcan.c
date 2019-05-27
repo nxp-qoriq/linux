@@ -1024,9 +1024,9 @@ static irqreturn_t flexcan_irq(int irq, void *dev_id)
 
 static void flexcan_set_bittiming(struct net_device *dev)
 {
-	const struct flexcan_priv *priv = netdev_priv(dev);
-	const struct can_bittiming *bt = &priv->can.bittiming;
-	const struct can_bittiming *data_bt = &priv->can.data_bittiming;
+	struct flexcan_priv *priv = netdev_priv(dev);
+	struct can_bittiming *bt = &priv->can.bittiming;
+	struct can_bittiming *data_bt = &priv->can.data_bittiming;
 	struct flexcan_regs __iomem *regs = priv->regs;
 	u32 reg_ctrl, reg_mcr, reg_cbt, reg_fdcbt, reg_fdctrl;
 
@@ -1056,6 +1056,17 @@ static void flexcan_set_bittiming(struct net_device *dev)
 			     FLEXCAN_CBT_EPSEG1(0x1f) |
 			     FLEXCAN_CBT_EPSEG2(0x1f));
 
+		/* CBT[EPSEG1] is 5 bit long and CBT[EPROPSEG] is 6 bit long.
+		 * The can_calc_bittiming tries to divide the tseg1 equally
+		 * between phase_seg1 and prop_seg, which may not fit in CBT
+		 * register. Therefore, if phase_seg1 is more than possible
+		 * value, increase prop_seg and decrease phase_seg1
+		 */
+		if (bt->phase_seg1 > 0x20) {
+			bt->prop_seg += (bt->phase_seg1 - 0x20);
+			bt->phase_seg1 = 0x20;
+		}
+
 		reg_cbt |= FLEXCAN_CBT_EPRESDIV(bt->brp - 1) |
 			   FLEXCAN_CBT_ERJW(bt->sjw - 1) |
 			   FLEXCAN_CBT_EPROPSEG(bt->prop_seg - 1) |
@@ -1067,6 +1078,17 @@ static void flexcan_set_bittiming(struct net_device *dev)
 			       FLEXCAN_CBT_EPROPSEG(0x1f) |
 			       FLEXCAN_FDCBT_FPSEG1(0x07) |
 			       FLEXCAN_FDCBT_FPSEG2(0x07));
+
+		/* FDCBT[FPSEG1] is 3 bit long and FDCBT[FPROPSEG] is 5 bit long.
+		 * The can_calc_bittiming tries to divide the tseg1 equally
+		 * between phase_seg1 and prop_seg, which may not fit in FDCBT
+		 * register. Therefore, if phase_seg1 is more than possible
+		 * value, increase prop_seg and decrease phase_seg1
+		 */
+		if (data_bt->phase_seg1 > 0x8) {
+			data_bt->prop_seg += (data_bt->phase_seg1 - 0x8);
+			data_bt->phase_seg1 = 0x8;
+		}
 
 		reg_fdcbt |= FLEXCAN_FDCBT_FPRESDIV(data_bt->brp - 1) |
 			     FLEXCAN_FDCBT_FRJW(data_bt->sjw - 1) |

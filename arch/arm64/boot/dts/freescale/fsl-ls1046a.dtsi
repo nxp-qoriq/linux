@@ -804,12 +804,6 @@
 			num-lanes = <2>;
 			status = "disabled";
 		};
-
-		serdes1: serdes@1ea0000 {
-			reg = <0x0 0x1ea0000 0 0x00002000>;
-			compatible = "fsl,serdes-10g";
-		};
-
 	};
 
 	reserved-memory {

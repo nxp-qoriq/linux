@@ -362,46 +362,6 @@
 			#size-cells = <0>;
 		};
 
-		pcs_mdio1: mdio@0x8c07000 {
-			compatible = "fsl,fman-memac-mdio";
-			reg = <0x0 0x8c07000 0x0 0x1000>;
-			device_type = "mdio";
-			little-endian;
-
-			#address-cells = <1>;
-			#size-cells = <0>;
-		};
-
-		pcs_mdio2: mdio@0x8c0b000 {
-			compatible = "fsl,fman-memac-mdio";
-			reg = <0x0 0x8c0b000 0x0 0x1000>;
-			device_type = "mdio";
-			little-endian;
-
-			#address-cells = <1>;
-			#size-cells = <0>;
-		};
-
-		pcs_mdio3: mdio@0x8c0f000 {
-			compatible = "fsl,fman-memac-mdio";
-			reg = <0x0 0x8c0f000 0x0 0x1000>;
-			device_type = "mdio";
-			little-endian;
-
-			#address-cells = <1>;
-			#size-cells = <0>;
-		};
-
-		pcs_mdio4: mdio@0x8c13000 {
-			compatible = "fsl,fman-memac-mdio";
-			reg = <0x0 0x8c13000 0x0 0x1000>;
-			device_type = "mdio";
-			little-endian;
-
-			#address-cells = <1>;
-			#size-cells = <0>;
-		};
-
 		ifc: ifc@2240000 {
 			compatible = "fsl,ifc", "simple-bus";
 			reg = <0x0 0x2240000 0x0 0x20000>;
@@ -791,12 +751,6 @@
 				     <0 207 4>,
 				     <0 208 4>,
 				     <0 209 4>;
-		};
-
-		serdes1: serdes@1ea0000 {
-				compatible = "fsl,serdes-10g";
-				reg = <0x0 0x1ea0000 0 0x00002000>;
-				little-endian;
 		};
 	};
 

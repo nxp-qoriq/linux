@@ -51,27 +51,6 @@
 #define ECC_DIS_ARMV8_CH2	0x80000000
 #define ECC_DIS_LS1088A		0x40000000
 
-/* errata for lx2160 */
-#define RCWSR29_BASE			0x1E00170
-#define SERDES2_BASE			0x1EB0000
-#define DEVICE_CONFIG_REG_BASE		0x1E00000
-#define SERDES2_LNAX_RX_CR(x)		(0x840 + (0x100 * (x)))
-#define SERDES2_LNAX_RX_CBR(x)		(0x8C0 + (0x100 * (x)))
-#define SYS_VER_REG			0xA4
-#define LN_RX_RST			0x80000010
-#define LN_RX_RST_DONE			0x3
-#define LN_RX_MASK			0xf
-#define LX2160A_VER1			0x1
-
-#define SERDES2_LNAA 0
-#define SERDES2_LNAB 1
-#define SERDES2_LNAC 2
-#define SERDES2_LNAD 3
-#define SERDES2_LNAE 4
-#define SERDES2_LNAF 5
-#define SERDES2_LNAG 6
-#define SERDES2_LNAH 7
-
 enum ahci_qoriq_type {
 	AHCI_LS1021A,
 	AHCI_LS1043A,
@@ -79,7 +58,6 @@ enum ahci_qoriq_type {
 	AHCI_LS1046A,
 	AHCI_LS1088A,
 	AHCI_LS2088A,
-	AHCI_LX2160A,
 };
 
 struct ahci_qoriq_priv {
@@ -96,7 +74,6 @@ static const struct of_device_id ahci_qoriq_of_match[] = {
 	{ .compatible = "fsl,ls1046a-ahci", .data = (void *)AHCI_LS1046A},
 	{ .compatible = "fsl,ls1088a-ahci", .data = (void *)AHCI_LS1088A},
 	{ .compatible = "fsl,ls2088a-ahci", .data = (void *)AHCI_LS2088A},
-	{ .compatible = "fsl,lx2160a-ahci", .data = (void *)AHCI_LX2160A},
 	{},
 };
 MODULE_DEVICE_TABLE(of, ahci_qoriq_of_match);
@@ -181,138 +158,6 @@ static struct scsi_host_template ahci_qoriq_sht = {
 	AHCI_SHT(DRV_NAME),
 };
 
-void fsl_sata_errata_379364(struct ata_link *link)
-{
-	struct ata_port *ap = link->ap;
-	struct ahci_host_priv *hpriv = ap->host->private_data;
-	struct ahci_qoriq_priv *qoriq_priv = hpriv->plat_data;
-	bool lx2160a_workaround = (qoriq_priv->type == AHCI_LX2160A);
-
-	int val = 0;
-	void __iomem *rcw_base = NULL;
-	void __iomem *serdes_base = NULL;
-	void __iomem *dev_con_base = NULL;
-
-	if (!lx2160a_workaround)
-		return;
-	else {
-		dev_con_base = ioremap(DEVICE_CONFIG_REG_BASE, PAGE_SIZE);
-		if (!dev_con_base) {
-			ata_link_err(link, "device config ioremap failed\n");
-			return;
-		}
-
-		val = (readl(dev_con_base + SYS_VER_REG) & GENMASK(7, 4)) >> 4;
-		if (val != LX2160A_VER1)
-			goto dev_unmap;
-
-		/*
-		 * Add few msec delay.
-		 * Check for corresponding serdes lane RST_DONE .
-		 * apply lane reset.
-		 */
-
-		serdes_base = ioremap(SERDES2_BASE, PAGE_SIZE);
-		if (!serdes_base) {
-			ata_link_err(link, "serdes ioremap failed\n");
-			goto dev_unmap;
-		}
-
-		rcw_base = ioremap(RCWSR29_BASE, PAGE_SIZE);
-		if (!rcw_base) {
-			ata_link_err(link, "rcw ioremap failed\n");
-			goto serdes_unmap;
-		}
-
-		ata_msleep(link->ap, 1);
-
-		val = (readl(rcw_base) & GENMASK(25, 21)) >> 21;
-
-		switch (val) {
-		case 1:
-			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAC)) &
-				LN_RX_MASK) != LN_RX_RST_DONE)
-				writel(LN_RX_RST, serdes_base +
-					SERDES2_LNAX_RX_CR(SERDES2_LNAC));
-			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAD)) &
-				LN_RX_MASK) != LN_RX_RST_DONE)
-				writel(LN_RX_RST, serdes_base +
-					SERDES2_LNAX_RX_CR(SERDES2_LNAD));
-			break;
-
-		case 4:
-			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAG)) &
-				LN_RX_MASK) != LN_RX_RST_DONE)
-				writel(LN_RX_RST, serdes_base +
-					SERDES2_LNAX_RX_CR(SERDES2_LNAG));
-			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAH)) &
-				LN_RX_MASK) != LN_RX_RST_DONE)
-				writel(LN_RX_RST, serdes_base +
-					SERDES2_LNAX_RX_CR(SERDES2_LNAH));
-			break;
-
-		case 5:
-			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAE)) &
-				LN_RX_MASK) != LN_RX_RST_DONE)
-				writel(LN_RX_RST, serdes_base +
-					SERDES2_LNAX_RX_CR(SERDES2_LNAE));
-			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAF)) &
-				LN_RX_MASK) != LN_RX_RST_DONE)
-				writel(LN_RX_RST, serdes_base +
-					SERDES2_LNAX_RX_CR(SERDES2_LNAF));
-			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAG)) &
-				LN_RX_MASK) != LN_RX_RST_DONE)
-				writel(LN_RX_RST, serdes_base +
-					SERDES2_LNAX_RX_CR(SERDES2_LNAG));
-			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAH)) &
-				LN_RX_MASK) != LN_RX_RST_DONE)
-				writel(LN_RX_RST, serdes_base +
-					SERDES2_LNAX_RX_CR(SERDES2_LNAH));
-			break;
-
-		case 8:
-			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAC)) &
-				LN_RX_MASK) != LN_RX_RST_DONE)
-				writel(LN_RX_RST, serdes_base +
-					SERDES2_LNAX_RX_CR(SERDES2_LNAC));
-			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAD)) &
-				LN_RX_MASK) != LN_RX_RST_DONE)
-				writel(LN_RX_RST, serdes_base +
-					SERDES2_LNAX_RX_CR(SERDES2_LNAD));
-			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAE)) &
-				LN_RX_MASK) != LN_RX_RST_DONE)
-				writel(LN_RX_RST, serdes_base +
-					SERDES2_LNAX_RX_CR(SERDES2_LNAE));
-			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAF)) &
-				LN_RX_MASK) != LN_RX_RST_DONE)
-				writel(LN_RX_RST, serdes_base +
-					SERDES2_LNAX_RX_CR(SERDES2_LNAF));
-			break;
-
-		case 12:
-			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAG)) &
-				LN_RX_MASK) != LN_RX_RST_DONE)
-				writel(LN_RX_RST, serdes_base +
-					SERDES2_LNAX_RX_CR(SERDES2_LNAG));
-			if ((readl(serdes_base + SERDES2_LNAX_RX_CBR(SERDES2_LNAH)) &
-				LN_RX_MASK) != LN_RX_RST_DONE)
-				writel(LN_RX_RST, serdes_base +
-					SERDES2_LNAX_RX_CR(SERDES2_LNAH));
-			break;
-
-		default:
-			break;
-		}
-	}
-
-	iounmap(rcw_base);
-serdes_unmap:
-	iounmap(serdes_base);
-dev_unmap:
-	iounmap(dev_con_base);
-}
-
-
 static int ahci_qoriq_phy_init(struct ahci_host_priv *hpriv)
 {
 	struct ahci_qoriq_priv *qpriv = hpriv->plat_data;
@@ -348,7 +193,6 @@ static int ahci_qoriq_phy_init(struct ahci_host_priv *hpriv)
 		break;
 
 	case AHCI_LS2080A:
-	case AHCI_LX2160A:
 		writel(AHCI_PORT_PHY_1_CFG, reg_base + PORT_PHY1);
 		writel(AHCI_PORT_PHY2_CFG, reg_base + PORT_PHY2);
 		writel(AHCI_PORT_PHY3_CFG, reg_base + PORT_PHY3);

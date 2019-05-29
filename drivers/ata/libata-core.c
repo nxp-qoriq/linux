@@ -76,7 +76,6 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/libata.h>
 
-#include "ahci.h"
 #include "libata.h"
 #include "libata-transport.h"
 
@@ -4106,8 +4105,6 @@ int sata_link_hardreset(struct ata_link *link, const unsigned long *timing,
 	 * 10.4.2 says at least 1 ms.
 	 */
 	ata_msleep(link->ap, 1);
-
-	fsl_sata_errata_379364(link);
 
 	/* bring link back */
 	rc = sata_link_resume(link, timing, deadline);

@@ -301,6 +301,7 @@
 			compatible = "fsl,qoriq-gpio";
 			reg = <0x0 0x2300000 0x0 0x10000>;
 			interrupts = <0 36 IRQ_TYPE_LEVEL_HIGH>;
+			little-endian;
 			gpio-controller;
 			#gpio-cells = <2>;
 			interrupt-controller;
@@ -311,6 +312,7 @@
 			compatible = "fsl,qoriq-gpio";
 			reg = <0x0 0x2310000 0x0 0x10000>;
 			interrupts = <0 36 IRQ_TYPE_LEVEL_HIGH>;
+			little-endian;
 			gpio-controller;
 			#gpio-cells = <2>;
 			interrupt-controller;
@@ -321,6 +323,7 @@
 			compatible = "fsl,qoriq-gpio";
 			reg = <0x0 0x2320000 0x0 0x10000>;
 			interrupts = <0 37 IRQ_TYPE_LEVEL_HIGH>;
+			little-endian;
 			gpio-controller;
 			#gpio-cells = <2>;
 			interrupt-controller;
@@ -331,6 +334,7 @@
 			compatible = "fsl,qoriq-gpio";
 			reg = <0x0 0x2330000 0x0 0x10000>;
 			interrupts = <0 37 IRQ_TYPE_LEVEL_HIGH>;
+			little-endian;
 			gpio-controller;
 			#gpio-cells = <2>;
 			interrupt-controller;

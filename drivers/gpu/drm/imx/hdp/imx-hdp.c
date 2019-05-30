@@ -15,7 +15,6 @@
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/of_device.h>
-#include <drm/drm_probe_helper.h>
 
 #include "imx-hdp.h"
 #include "imx-hdmi.h"
@@ -756,8 +755,8 @@ static void imx_hdp_mode_setup(struct imx_hdp *hdp,
 }
 
 static void imx_hdp_bridge_mode_set(struct drm_bridge *bridge,
-				    const struct drm_display_mode *orig_mode,
-				    const struct drm_display_mode *mode)
+				    struct drm_display_mode *orig_mode,
+				    struct drm_display_mode *mode)
 {
 	struct imx_hdp *hdp = bridge->driver_private;
 
@@ -859,7 +858,7 @@ static int imx_hdp_connector_get_modes(struct drm_connector *connector)
 				 edid->header[2], edid->header[3],
 				 edid->header[4], edid->header[5],
 				 edid->header[6], edid->header[7]);
-                        drm_connector_update_edid_property(connector,
+                        drm_mode_connector_update_edid_property(connector,
 								edid);
 			num_modes = drm_add_edid_modes(connector, edid);
 			if (num_modes == 0) {
@@ -1615,7 +1614,7 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 			   &imx_hdp_connector_funcs,
 			   DRM_MODE_CONNECTOR_HDMIA);
 
-	drm_connector_attach_encoder(connector, encoder);
+	drm_mode_connector_attach_encoder(connector, encoder);
 
 	dev_set_drvdata(dev, hdp);
 

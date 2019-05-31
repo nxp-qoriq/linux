@@ -179,6 +179,7 @@ static int mscc_ocelot_probe(struct platform_device *pdev)
 		{ QSYS, "qsys" },
 		{ ANA, "ana" },
 		{ QS, "qs" },
+		{ S2, "s2" },
 		{ HSIO, "hsio" },
 	};
 

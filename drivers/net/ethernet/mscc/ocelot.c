@@ -21,6 +21,7 @@
 #include <net/switchdev.h>
 
 #include "ocelot.h"
+#include "ocelot_ace.h"
 
 /* MAC table entry types.
  * ENTRYTYPE_NORMAL is subject to aging.
@@ -127,6 +128,13 @@ static void ocelot_mact_init(struct ocelot *ocelot)
 
 	/* Clear the MAC table */
 	ocelot_write(ocelot, MACACCESS_CMD_INIT, ANA_TABLES_MACACCESS);
+}
+
+static void ocelot_vcap_enable(struct ocelot *ocelot, struct ocelot_port *port)
+{
+	ocelot_write_gix(ocelot, ANA_PORT_VCAP_S2_CFG_S2_ENA |
+			 ANA_PORT_VCAP_S2_CFG_S2_IP6_CFG(0xa),
+			 ANA_PORT_VCAP_S2_CFG, port->chip_port);
 }
 
 static inline int ocelot_vlant_wait_for_completion(struct ocelot *ocelot)
@@ -1694,6 +1702,9 @@ int ocelot_probe_port(struct ocelot *ocelot, u8 port,
 	/* Basic L2 initialization */
 	ocelot_vlan_port_apply(ocelot, ocelot_port);
 
+	/* Enable vcap lookups */
+	ocelot_vcap_enable(ocelot, ocelot_port);
+
 	return 0;
 
 err_register_netdev:
@@ -1734,6 +1745,7 @@ int ocelot_init(struct ocelot *ocelot)
 	INIT_LIST_HEAD(&ocelot->multicast);
 	ocelot_mact_init(ocelot);
 	ocelot_vlan_init(ocelot);
+	ocelot_ace_init(ocelot);
 
 	for (port = 0; port < ocelot->num_phys_ports; port++) {
 		/* Clear all counters (5 groups) */
@@ -1847,6 +1859,7 @@ void ocelot_deinit(struct ocelot *ocelot)
 	cancel_delayed_work(&ocelot->stats_work);
 	destroy_workqueue(ocelot->stats_queue);
 	mutex_destroy(&ocelot->stats_lock);
+	ocelot_ace_deinit();
 }
 EXPORT_SYMBOL(ocelot_deinit);
 

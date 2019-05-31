@@ -306,7 +306,7 @@ struct dpaa2_eth_priv;
 struct dpaa2_eth_fq {
 	u32 fqid;
 	u32 tx_qdbin;
-	u32 tx_fqid;
+	u32 tx_fqid[DPAA2_ETH_MAX_TCS];
 	u16 flowid;
 	u8 tc;
 	int target_cpu;

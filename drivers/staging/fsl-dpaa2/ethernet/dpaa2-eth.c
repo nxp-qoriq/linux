@@ -1738,11 +1738,10 @@ static inline int dpaa2_eth_enqueue_qd(struct dpaa2_eth_priv *priv,
 
 static inline int dpaa2_eth_enqueue_fq(struct dpaa2_eth_priv *priv,
 				       struct dpaa2_eth_fq *fq,
-				       struct dpaa2_fd *fd,
-				       u8 prio __always_unused)
+				       struct dpaa2_fd *fd, u8 prio)
 {
 	return dpaa2_io_service_enqueue_fq(fq->channel->dpio,
-					   fq->tx_fqid, fd);
+					   fq->tx_fqid[prio], fd);
 }
 
 static void set_enqueue_mode(struct dpaa2_eth_priv *priv)
@@ -1759,7 +1758,7 @@ static void update_tx_fqids(struct dpaa2_eth_priv *priv)
 	struct dpaa2_eth_fq *fq;
 	struct dpni_queue queue;
 	struct dpni_queue_id qid = {0};
-	int i, err;
+	int i, j, err;
 
 	/* We only use Tx FQIDs for FQID-based enqueue, so check
 	 * if DPNI version supports it before updating FQIDs
@@ -1772,15 +1771,17 @@ static void update_tx_fqids(struct dpaa2_eth_priv *priv)
 		fq = &priv->fq[i];
 		if (fq->type != DPAA2_TX_CONF_FQ)
 			continue;
-		err = dpni_get_queue(priv->mc_io, 0, priv->mc_token,
-				     DPNI_QUEUE_TX, 0, fq->flowid,
-				     &queue, &qid);
-		if (err)
-			goto out_err;
+		for (j = 0; j < dpaa2_eth_tc_count(priv); j++) {
+			err = dpni_get_queue(priv->mc_io, 0, priv->mc_token,
+					     DPNI_QUEUE_TX, j, fq->flowid,
+					     &queue, &qid);
+			if (err)
+				goto out_err;
 
-		fq->tx_fqid = qid.fqid;
-		if (fq->tx_fqid == 0)
-			goto out_err;
+			fq->tx_fqid[j] = qid.fqid;
+			if (fq->tx_fqid[j] == 0)
+				goto out_err;
+		}
 	}
 
 	return;
@@ -2653,17 +2654,21 @@ static int setup_tx_flow(struct dpaa2_eth_priv *priv,
 	struct device *dev = priv->net_dev->dev.parent;
 	struct dpni_queue queue;
 	struct dpni_queue_id qid;
-	int err;
+	int i, err;
 
-	err = dpni_get_queue(priv->mc_io, 0, priv->mc_token,
-			     DPNI_QUEUE_TX, 0, fq->flowid, &queue, &qid);
-	if (err) {
-		dev_err(dev, "dpni_get_queue(TX) failed\n");
-		return err;
+	for (i = 0; i < dpaa2_eth_tc_count(priv); i++) {
+		err = dpni_get_queue(priv->mc_io, 0, priv->mc_token,
+				     DPNI_QUEUE_TX, i, fq->flowid,
+				     &queue, &qid);
+		if (err) {
+			dev_err(dev, "dpni_get_queue(TX) failed\n");
+			return err;
+		}
+		fq->tx_fqid[i] = qid.fqid;
 	}
 
+	/* All Tx queues belonging to the same flowid have the same qdbin */
 	fq->tx_qdbin = qid.qdbin;
-	fq->tx_fqid = qid.fqid;
 
 	err = dpni_get_queue(priv->mc_io, 0, priv->mc_token,
 			     DPNI_QUEUE_TX_CONFIRM, 0, fq->flowid,

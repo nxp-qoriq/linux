@@ -1189,9 +1189,9 @@ static int nxp_fspi_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, fspi);
 
 	/* find the resources */
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "FSPI");
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "fspi_base");
 	if (!res) {
-		dev_err(dev, "FSPI get resource IORESOURCE_MEM failed\n");
+		dev_err(dev, "fspi_base get resource IORESOURCE_MEM failed\n");
 		return -ENODEV;
 	}
 
@@ -1200,10 +1200,10 @@ static int nxp_fspi_probe(struct platform_device *pdev)
 		return PTR_ERR(fspi->iobase);
 
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
-					   "FSPI-memory");
+					   "fspi_mmap");
 	if (!res) {
 		dev_err(dev,
-			"FSPI-memory get resource IORESOURCE_MEM failed\n");
+			"fspi_mmap get resource IORESOURCE_MEM failed\n");
 		return -ENODEV;
 	}
 

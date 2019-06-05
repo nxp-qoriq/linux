@@ -911,8 +911,6 @@ static irqreturn_t flexcan_irq(int irq, void *dev_id)
 	u32 reg_esr;
 	enum can_state last_state = priv->can.state;
 
-	reg_iflag1 = priv->read(&regs->iflag1);
-
 	/* reception interrupt */
 	if (priv->devtype_data->quirks & FLEXCAN_QUIRK_USE_OFF_TIMESTAMP) {
 		u64 reg_iflag;
@@ -926,6 +924,9 @@ static irqreturn_t flexcan_irq(int irq, void *dev_id)
 				break;
 		}
 	} else {
+		u32 reg_iflag1;
+
+		reg_iflag1 = priv->read(&regs->iflag1);
 		if (reg_iflag1 & FLEXCAN_IFLAG_RX_FIFO_AVAILABLE) {
 			handled = IRQ_HANDLED;
 			can_rx_offload_irq_offload_fifo(&priv->offload);
@@ -1249,7 +1250,7 @@ static int flexcan_chip_start(struct net_device *dev)
 		for (i = priv->offload.mb_first; i <= priv->offload.mb_last; i++)
 			mb = flexcan_get_mb(priv, i);
 			priv->write(FLEXCAN_MB_CODE_RX_EMPTY,
-				    &mb->can_ctrl););
+				    &mb->can_ctrl);
 	}
 
 	/* Errata ERR005829: mark first TX mailbox as INACTIVE */

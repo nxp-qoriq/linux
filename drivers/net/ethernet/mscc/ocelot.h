@@ -505,6 +505,8 @@ struct ocelot {
 	u64 *stats;
 	struct delayed_work stats_work;
 	struct workqueue_struct *stats_queue;
+
+	void (*port_pcs_init)(struct ocelot_port *port);
 };
 
 struct ocelot_port {

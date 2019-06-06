@@ -474,6 +474,26 @@ static void ocelot_pll5_init(struct ocelot *ocelot)
 		     HSIO_PLL5G_CFG2_AMPC_SEL(0x10), HSIO_PLL5G_CFG2);
 }
 
+static void ocelot_port_pcs_init(struct ocelot_port *port)
+{
+	/* Disable HDX fast control */
+	ocelot_port_writel(port, DEV_PORT_MISC_HDX_FAST_DIS, DEV_PORT_MISC);
+
+	/* SGMII only for now */
+	ocelot_port_writel(port, PCS1G_MODE_CFG_SGMII_MODE_ENA,
+			   PCS1G_MODE_CFG);
+	ocelot_port_writel(port, PCS1G_SD_CFG_SD_SEL, PCS1G_SD_CFG);
+
+	/* Enable PCS */
+	ocelot_port_writel(port, PCS1G_CFG_PCS_ENA, PCS1G_CFG);
+
+	/* No aneg on SGMII */
+	ocelot_port_writel(port, 0, PCS1G_ANEG_CFG);
+
+	/* No loopback */
+	ocelot_port_writel(port, 0, PCS1G_LB_CFG);
+}
+
 int ocelot_chip_init(struct ocelot *ocelot)
 {
 	int ret;
@@ -482,6 +502,7 @@ int ocelot_chip_init(struct ocelot *ocelot)
 	ocelot->stats_layout = ocelot_stats_layout;
 	ocelot->num_stats = ARRAY_SIZE(ocelot_stats_layout);
 	ocelot->shared_queue_sz = 224 * 1024;
+	ocelot->port_pcs_init = ocelot_port_pcs_init;
 
 	ret = ocelot_regfields_init(ocelot, ocelot_regfields);
 	if (ret)

@@ -102,12 +102,6 @@ config MDIO_BUS_MUX_MULTIPLEXER
 config MDIO_CAVIUM
 	tristate
 
-config MDIO_FSL_BACKPLANE
-	tristate "Support for backplane on Freescale XFI interface"
-	depends on OF_MDIO
-	help
-	  This module provides a driver for Freescale XFI's backplane.
-
 config MDIO_GPIO
 	tristate "GPIO lib-based bitbanged MDIO buses"
 	depends on MDIO_BITBANG && GPIOLIB

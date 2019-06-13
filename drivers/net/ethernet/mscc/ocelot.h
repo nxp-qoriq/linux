@@ -61,12 +61,16 @@ struct frame_info {
 #define REG_MASK GENMASK(TARGET_OFFSET - 1, 0)
 #define REG(reg, offset) [reg & REG_MASK] = offset
 
+#define REG_RESERVED_ADDR	0xffffffff
+#define REG_RESERVED(reg)	REG(reg, REG_RESERVED_ADDR)
+
 enum ocelot_target {
 	ANA = 1,
 	QS,
 	QSYS,
 	REW,
 	SYS,
+	GCB,
 	HSIO,
 	TARGET_MAX,
 };
@@ -406,6 +410,7 @@ enum ocelot_reg {
 	HSIO_TEMP_SENSOR_CTRL,
 	HSIO_TEMP_SENSOR_CFG,
 	HSIO_TEMP_SENSOR_STAT,
+	GCB_SOFT_RST = GCB << TARGET_OFFSET,
 };
 
 enum ocelot_regfield {
@@ -453,6 +458,7 @@ enum ocelot_regfield {
 	SYS_RESET_CFG_CORE_ENA,
 	SYS_RESET_CFG_MEM_ENA,
 	SYS_RESET_CFG_MEM_INIT,
+	GCB_SOFT_RST_SWC_RST,
 	REGFIELD_MAX
 };
 
@@ -563,6 +569,7 @@ struct regmap *ocelot_io_init(struct ocelot *ocelot, struct resource *res);
 int ocelot_init(struct ocelot *ocelot);
 void ocelot_deinit(struct ocelot *ocelot);
 int ocelot_chip_init(struct ocelot *ocelot);
+int felix_chip_init(struct ocelot *ocelot);
 int ocelot_probe_port(struct ocelot *ocelot, u8 port,
 		      void __iomem *regs,
 		      struct phy_device *phy);

@@ -27,4 +27,12 @@ config MSCC_OCELOT_SWITCH_OCELOT
 	  This driver supports the Ocelot network switch device as present on
 	  the Ocelot SoCs.
 
+config MSCC_FELIX_SWITCH
+	tristate "Felix switch driver"
+	depends on MSCC_OCELOT_SWITCH
+	depends on PCI
+	help
+	  This driver supports the Felix network switch device, connected as a
+	  PCI device.
+
 endif # NET_VENDOR_MICROSEMI

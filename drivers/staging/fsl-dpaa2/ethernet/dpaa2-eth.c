@@ -723,6 +723,7 @@ static int build_single_fd(struct dpaa2_eth_priv *priv,
  * dpaa2_eth_tx().
  */
 static void free_tx_fd(const struct dpaa2_eth_priv *priv,
+		       struct dpaa2_eth_fq *fq,
 		       const struct dpaa2_fd *fd, bool in_napi)
 {
 	struct device *dev = priv->net_dev->dev.parent;
@@ -731,6 +732,7 @@ static void free_tx_fd(const struct dpaa2_eth_priv *priv,
 	unsigned char *buffer_start;
 	struct dpaa2_eth_swa *swa;
 	u8 fd_format = dpaa2_fd_get_format(fd);
+	u32 fd_len = dpaa2_fd_get_len(fd);
 
 	fd_addr = dpaa2_fd_get_addr(fd);
 	buffer_start = dpaa2_iova_to_virt(priv->iommu_domain, fd_addr);
@@ -764,6 +766,11 @@ static void free_tx_fd(const struct dpaa2_eth_priv *priv,
 	} else {
 		netdev_dbg(priv->net_dev, "Invalid FD format\n");
 		return;
+	}
+
+	if (swa->type != DPAA2_ETH_SWA_XDP && in_napi) {
+		fq->dq_frames++;
+		fq->dq_bytes += fd_len;
 	}
 
 	if (swa->type == DPAA2_ETH_SWA_XDP) {
@@ -889,7 +896,7 @@ static netdev_tx_t dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 	if (unlikely(err < 0)) {
 		percpu_stats->tx_errors++;
 		/* Clean up everything, including freeing the skb */
-		free_tx_fd(priv, &fd, false);
+		free_tx_fd(priv, fq, &fd, false);
 		netdev_tx_completed_queue(nq, 1, fd_len);
 	} else {
 		percpu_stats->tx_packets++;
@@ -899,7 +906,7 @@ static netdev_tx_t dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 	return NETDEV_TX_OK;
 
 err_ceetm_classify:
-	free_tx_fd(priv, &fd, false);
+	free_tx_fd(priv, fq, &fd, false);
 err_build_fd:
 err_alloc_headroom:
 	dev_kfree_skb(skb);
@@ -925,12 +932,9 @@ static void dpaa2_eth_tx_conf(struct dpaa2_eth_priv *priv,
 	percpu_extras->tx_conf_frames++;
 	percpu_extras->tx_conf_bytes += fd_len;
 
-	fq->dq_frames++;
-	fq->dq_bytes += fd_len;
-
 	/* Check frame errors in the FD field */
 	fd_errors = dpaa2_fd_get_ctrl(fd) & DPAA2_FD_TX_ERR_MASK;
-	free_tx_fd(priv, fd, true);
+	free_tx_fd(priv, fq, fd, true);
 
 	if (likely(!fd_errors))
 		return;
@@ -1229,7 +1233,7 @@ static int dpaa2_eth_poll(struct napi_struct *napi, int budget)
 	work_done = max(rx_cleaned, 1);
 
 out:
-	if (txc_fq) {
+	if (txc_fq && txc_fq->dq_frames) {
 		nq = netdev_get_tx_queue(priv->net_dev, txc_fq->flowid);
 		netdev_tx_completed_queue(nq, txc_fq->dq_frames,
 					  txc_fq->dq_bytes);

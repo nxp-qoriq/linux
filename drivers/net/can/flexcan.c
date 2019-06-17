@@ -955,7 +955,6 @@ static irqreturn_t flexcan_irq(int irq, void *dev_id)
 		/* after sending a RTR frame MB is in RX mode */
 		priv->write(FLEXCAN_MB_CODE_TX_INACTIVE,
 			    &priv->tx_mb->can_ctrl);
-		priv->write(FLEXCAN_IFLAG_MB(priv->tx_mb_idx), &regs->iflag1);
 		reg_iflag = FLEXCAN_IFLAG_MB(priv->tx_mb_idx);
 		priv->write(reg_iflag >> 32, &regs->iflag2);
 		priv->write((u32)reg_iflag, &regs->iflag1);
@@ -1262,17 +1261,18 @@ static int flexcan_chip_start(struct net_device *dev)
 	}
 
 	/* clear and invalidate all mailboxes first */
-	for (i = priv->tx_mb_idx; i <= priv->mb_count ; i++) {
+	for (i = priv->tx_mb_idx; i < priv->mb_count ; i++) {
 		mb = flexcan_get_mb(priv, i);
 		priv->write(FLEXCAN_MB_CODE_RX_INACTIVE,
 			    &mb->can_ctrl);
 	}
 
 	if (priv->devtype_data->quirks & FLEXCAN_QUIRK_USE_OFF_TIMESTAMP) {
-		for (i = priv->offload.mb_first; i <= priv->offload.mb_last; i++)
+		for (i = priv->offload.mb_first; i <= priv->offload.mb_last; i++) {
 			mb = flexcan_get_mb(priv, i);
 			priv->write(FLEXCAN_MB_CODE_RX_EMPTY,
 				    &mb->can_ctrl);
+		}
 	}
 
 	/* Errata ERR005829: mark first TX mailbox as INACTIVE */
@@ -1413,7 +1413,6 @@ static int flexcan_open(struct net_device *dev)
 		priv->tx_mb_reserved =
 			flexcan_get_mb(priv, FLEXCAN_TX_MB_RESERVED_OFF_FIFO);
 	}
-	priv->tx_mb_idx = priv->mb_count - 1;
 	priv->tx_mb = flexcan_get_mb(priv, priv->tx_mb_idx);
 
 	priv->reg_imask_default = FLEXCAN_IFLAG_MB(priv->tx_mb_idx);

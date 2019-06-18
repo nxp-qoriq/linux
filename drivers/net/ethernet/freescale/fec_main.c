@@ -320,6 +320,24 @@ MODULE_PARM_DESC(macaddr, "FEC Ethernet MAC address");
 
 static int mii_cnt;
 
+#ifdef CONFIG_AVB_SUPPORT
+static inline void read16(void *dst, void *src)
+{
+#ifdef CONFIG_ARM64
+	asm volatile (	"ldp x10, x11, [%1]\n\t"
+			"stp x10, x11, [%0]\n\t"
+			: :  "r" (dst), "r" (src) : "x10", "x11", "memory");
+#elif CONFIG_ARM
+       asm volatile (  "ldmia %1, {r5-r8}\n\t"
+                       "stmia %0, {r5-r8}\n\t"
+                        : :  "r" (dst), "r" (src) : "r5", "r6", "r7", "r8", "memory");
+#else
+	((u64 *)dst)[0] = ((u64 *)src)[0];
+	((u64 *)dst)[1] = ((u64 *)src)[1];
+#endif
+}
+#endif /*CONFIG_AVB_SUPPORT*/
+
 static struct bufdesc *fec_enet_get_nextdesc(struct bufdesc *bdp,
 					     struct bufdesc_prop *bd)
 {
@@ -1831,6 +1849,7 @@ fec_enet_tx_queue_avb(struct net_device *ndev, u16 queue_id)
 {
 	struct	fec_enet_private *fep = netdev_priv(ndev);
 	struct bufdesc *bdp;
+	struct bufdesc_ex local_ebdp;
 	struct avb_tx_desc *desc;
 	unsigned short status;
 	struct fec_enet_priv_tx_q *txq;
@@ -1839,6 +1858,7 @@ fec_enet_tx_queue_avb(struct net_device *ndev, u16 queue_id)
 	int rc = 0;
 	unsigned int total_tx_packets = 0;
 	unsigned int total_tx_bytes = 0;
+	u16 tx_tstamp_latency = fep->tx_tstamp_latency;
 
 	txq = fep->tx_queue[queue_id];
 	nq = netdev_get_tx_queue(ndev, queue_id);
@@ -1851,7 +1871,12 @@ fec_enet_tx_queue_avb(struct net_device *ndev, u16 queue_id)
 	while (bdp != READ_ONCE(txq->bd.cur)) {
 		/* Order the load of cur_tx and cbd_sc */
 		rmb();
-		status = fec16_to_cpu(READ_ONCE(bdp->cbd_sc));
+
+		/* Read the first 16 bytes of the descriptor at once to avoid
+		 * multiple reads of non cacheable memory from RAM */
+		read16(&local_ebdp, bdp);
+
+		status = fec16_to_cpu(local_ebdp.desc.cbd_sc);
 		if (status & BD_ENET_TX_READY)
 			break;
 
@@ -1862,7 +1887,7 @@ fec_enet_tx_queue_avb(struct net_device *ndev, u16 queue_id)
 			if ((desc->common.flags & AVB_TX_FLAG_HW_TS)) {
 				struct bufdesc_ex *ebdp = (struct bufdesc_ex *)bdp;
 
-				desc->common.ts = ebdp->ts + fep->tx_tstamp_latency;
+				desc->common.ts = ebdp->ts + tx_tstamp_latency;
 
 				/* upper layer will retrieve the timestamp and free the descriptor */
 				rc |= fep->avb->tx_ts(fep->avb_data, &desc->common);
@@ -1875,8 +1900,8 @@ fec_enet_tx_queue_avb(struct net_device *ndev, u16 queue_id)
 		} else {
 			/* Backup hardware descriptor fields in software descriptor */
 			desc->sc = status;
-			desc->datlen = fec16_to_cpu(bdp->cbd_datlen);
-			desc->bufaddr = fec32_to_cpu(bdp->cbd_bufaddr);
+			desc->datlen = fec16_to_cpu(local_ebdp.desc.cbd_datlen);
+			desc->bufaddr = fec32_to_cpu(local_ebdp.desc.cbd_bufaddr);
 			desc->common.ts = fec32_to_cpu(((struct bufdesc_ex *)bdp)->ts);
 
 			if (fep->avb->tx_cleanup(fep->avb_data, desc) < 0)
@@ -2348,6 +2373,7 @@ fec_enet_rx_queue_avb(struct net_device *ndev, u16 queue_id)
 	__u8 *data, *new_data;
 	int index = 0;
 	struct	bufdesc_ex *ebdp = NULL;
+	struct	bufdesc_ex local_ebdp;
 	struct avb_rx_desc *desc;
 	unsigned int rc = 0;
 	unsigned int net_data_offset;
@@ -2369,6 +2395,10 @@ fec_enet_rx_queue_avb(struct net_device *ndev, u16 queue_id)
 	while (!((status = fec16_to_cpu(bdp->cbd_sc)) & BD_ENET_RX_EMPTY) && (count++ < 20)) {
 
 		writel(FEC_ENET_RXF, fep->hwp + FEC_IEVENT);
+
+		/* Read the first 16 bytes of the descriptor at once to avoid
+		 * multiple reads of non cacheable memory from RAM */
+		read16(&local_ebdp, bdp);
 
 		/* Check for errors. */
 		status ^= BD_ENET_RX_LAST;
@@ -2404,14 +2434,14 @@ fec_enet_rx_queue_avb(struct net_device *ndev, u16 queue_id)
 
 		/* Process the incoming frame. */
 		total_rx_packets++;
-		pkt_len = fec16_to_cpu(bdp->cbd_datlen);
+		pkt_len = fec16_to_cpu(local_ebdp.desc.cbd_datlen);
 		total_rx_bytes += pkt_len;
 		index = fec_enet_get_bd_index(bdp, &rxq->bd);
 		data = (__u8 *)rxq->rx_skb_info[index].skb;
 
 		/* FIXME, skip unmap of audio data */
-		dma_sync_single_for_cpu(&fep->pdev->dev, fec32_to_cpu(bdp->cbd_bufaddr),
-				pkt_len, DMA_FROM_DEVICE);
+		dma_sync_single_for_cpu(&fep->pdev->dev, fec32_to_cpu(local_ebdp.desc.cbd_bufaddr),
+				L1_CACHE_ALIGN(pkt_len), DMA_FROM_DEVICE);
 
 		desc = (struct avb_rx_desc *)data;
 
@@ -2427,13 +2457,13 @@ fec_enet_rx_queue_avb(struct net_device *ndev, u16 queue_id)
 			swap_buffer(data, pkt_len);
 
 		desc->common.len = pkt_len;
-		desc->sc = fec16_to_cpu(bdp->cbd_sc);
+		desc->sc = fec16_to_cpu(local_ebdp.desc.cbd_sc);
 
 		/* Extract the enhanced buffer descriptor */
 		ebdp = (struct bufdesc_ex *)bdp;
 
 		desc->common.ts = ebdp->ts - rx_tstamp_latency;
-		desc->common.private = fec32_to_cpu(ebdp->cbd_esc);
+		desc->common.private = fec32_to_cpu(local_ebdp.cbd_esc);
 
 		rc |= fep->avb->rx(fep->avb_data, desc);
 

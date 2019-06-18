@@ -28,14 +28,6 @@ config FSL_DPAA2_ETH_USE_ERR_QUEUE
 	  This may impact performance, recommended for debugging
 	  purposes only.
 
-# QBMAN_DEBUG requires some additional DPIO APIs
-config FSL_DPAA2_ETH_DEBUGFS
-	depends on DEBUG_FS
-	bool "Enable debugfs support"
-	default y
-	---help---
-	  Enable advanced statistics through debugfs interface.
-
 config FSL_DPAA2_ETH_DCB
         bool "Data Center Bridging (DCB) Support"
         default n

@@ -402,7 +402,7 @@ struct dpaa2_eth_priv {
 	u64 rx_cls_fields;
 	struct dpaa2_eth_cls_rule *cls_rule;
 	u8 rx_cls_enabled;
-#ifdef CONFIG_FSL_DPAA2_ETH_DEBUGFS
+#ifdef CONFIG_DEBUG_FS
 	struct dpaa2_debugfs dbg;
 #endif
 	struct dpni_tx_shaping_cfg shaping_cfg;

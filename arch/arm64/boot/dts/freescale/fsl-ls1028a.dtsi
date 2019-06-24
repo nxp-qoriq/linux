@@ -641,10 +641,10 @@
 				     <GIC_SPI 254 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "qdma-error", "qdma-queue0",
 				"qdma-queue1", "qdma-queue2", "qdma-queue3";
-			dma-channels = <8>;
+			channels = <8>;
 			block-number = <1>;
 			block-offset = <0x10000>;
-			fsl,dma-queues = <2>;
+			queues = <2>;
 			status-sizes = <64>;
 			queue-sizes = <64 64>;
 		};

@@ -30,7 +30,7 @@ struct fec_platform_data {
 #define FEC_ENET_RX_FRSIZE	2048
 #define FEC_ENET_RX_FRPPG	(PAGE_SIZE / FEC_ENET_RX_FRSIZE)
 #ifdef CONFIG_AVB_SUPPORT
-#define FEC_RX_RING_SIZE	256
+#define FEC_RX_RING_SIZE	32
 #define FEC_ENET_AVB_RX_FRSIZE	1522
 #else
 #define FEC_RX_RING_SIZE	(FEC_ENET_RX_FRPPG * FEC_ENET_RX_PAGES)
@@ -39,7 +39,7 @@ struct fec_platform_data {
 #define FEC_ENET_TX_FRPPG	(PAGE_SIZE / FEC_ENET_TX_FRSIZE)
 
 #ifdef CONFIG_AVB_SUPPORT
-#define FEC_TX_RING_SIZE	128	/* Must be power of two */
+#define FEC_TX_RING_SIZE	32	/* Must be power of two */
 #define FEC_TX_RING_MOD_MASK	127	/*   for this to work */
 #else
 #define FEC_TX_RING_SIZE	512	/* Must be power of two */

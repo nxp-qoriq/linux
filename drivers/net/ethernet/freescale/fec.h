@@ -524,6 +524,9 @@ struct bufdesc_prop {
 
 struct fec_enet_priv_tx_q {
 	struct bufdesc_prop bd;
+	struct bufdesc	*dirty_tx;
+	struct  sk_buff *tx_skbuff[FEC_TX_RING_SIZE];
+
 	unsigned int tx_bounce_size;
 
 #ifdef CONFIG_AVB_SUPPORT
@@ -532,12 +535,9 @@ struct fec_enet_priv_tx_q {
 #else
 	unsigned char *tx_bounce[FEC_TX_RING_SIZE];
 #endif
-	struct  sk_buff *tx_skbuff[FEC_TX_RING_SIZE];
-
 	unsigned short tx_stop_threshold;
 	unsigned short tx_wake_threshold;
 
-	struct bufdesc	*dirty_tx;
 	char *tso_hdrs;
 	dma_addr_t tso_hdrs_dma;
 

@@ -448,6 +448,8 @@ int fec_enet_start_xmit_avb(void *data, struct avb_tx_desc *desc)
 	struct bufdesc *bdp;
 	unsigned short status;
 	unsigned int index;
+	struct bufdesc_ex *ebdp;
+	unsigned long cbd_esc;
 	unsigned short queue_id = desc->queue_id;
 	struct fec_enet_priv_tx_q *txq = fep->tx_queue[queue_id];
 
@@ -475,25 +477,22 @@ int fec_enet_start_xmit_avb(void *data, struct avb_tx_desc *desc)
 	bdp->cbd_datlen = cpu_to_fec16(desc->common.len);
 	bdp->cbd_bufaddr = cpu_to_fec32(desc->dma_addr);
 
-	if (fep->bufdesc_ex) {
-		struct bufdesc_ex *ebdp = (struct bufdesc_ex *)bdp;
-		unsigned long cbd_esc;
+	ebdp = (struct bufdesc_ex *)bdp;
 
-		ebdp->cbd_bdu = cpu_to_fec32(0);
+	ebdp->cbd_bdu = cpu_to_fec32(0);
 
-		if (desc->common.flags & AVB_TX_FLAG_HW_TS)
-			cbd_esc = BD_ENET_TX_TS | desc->esc;
-		else
-			cbd_esc = desc->esc;
+	if (desc->common.flags & AVB_TX_FLAG_HW_TS)
+		cbd_esc = BD_ENET_TX_TS | desc->esc;
+	else
+		cbd_esc = desc->esc;
 
-		if (desc->common.flags & AVB_TX_FLAG_HW_CSUM)
-			cbd_esc |= BD_ENET_TX_PINS | BD_ENET_TX_IINS;
+	if (desc->common.flags & AVB_TX_FLAG_HW_CSUM)
+		cbd_esc |= BD_ENET_TX_PINS | BD_ENET_TX_IINS;
 
-		if (fep->quirks & FEC_QUIRK_HAS_AVB)
-			cbd_esc |= FEC_TX_BD_FTYPE(txq->bd.qid);
+	if (fep->quirks & FEC_QUIRK_HAS_AVB)
+		cbd_esc |= FEC_TX_BD_FTYPE(txq->bd.qid);
 
-		ebdp->cbd_esc = cpu_to_fec32(cbd_esc);
-	}
+	ebdp->cbd_esc = cpu_to_fec32(cbd_esc);
 
 	wmb();
 
@@ -603,19 +602,16 @@ static int fec_enet_start_xmit_best_effort(struct fec_enet_priv_tx_q *txq,
 	}
 
 
-	if (fep->bufdesc_ex) {
+	desc->esc = 0;
 
-		desc->esc = 0;
-
-		if (unlikely(skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP &&
-			fep->hwts_tx_en)) {
-			skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
-			desc->esc |= BD_ENET_TX_TS;
-		}
-
-		if (skb->ip_summed == CHECKSUM_PARTIAL)
-			desc->esc |= BD_ENET_TX_PINS | BD_ENET_TX_IINS;
+	if (unlikely(skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP &&
+		fep->hwts_tx_en)) {
+		skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
+		desc->esc |= BD_ENET_TX_TS;
 	}
+
+	if (skb->ip_summed == CHECKSUM_PARTIAL)
+		desc->esc |= BD_ENET_TX_PINS | BD_ENET_TX_IINS;
 
 	skb_tx_timestamp(skb);
 
@@ -1642,7 +1638,7 @@ fec_enet_hwtstamp(struct fec_enet_private *fep, unsigned ts,
 static int
 fec_enet_tx_queue_avb(struct net_device *ndev, u16 queue_id)
 {
-	struct	fec_enet_private *fep;
+	struct	fec_enet_private *fep = netdev_priv(ndev);
 	struct bufdesc *bdp;
 	struct avb_tx_desc *desc;
 	unsigned short status;
@@ -1650,8 +1646,8 @@ fec_enet_tx_queue_avb(struct net_device *ndev, u16 queue_id)
 	struct netdev_queue *nq;
 	int index = 0;
 	int rc = 0;
-
-	fep = netdev_priv(ndev);
+	unsigned int total_tx_packets = 0;
+	unsigned int total_tx_bytes = 0;
 
 	txq = fep->tx_queue[queue_id];
 	nq = netdev_get_tx_queue(ndev, queue_id);
@@ -1672,7 +1668,7 @@ fec_enet_tx_queue_avb(struct net_device *ndev, u16 queue_id)
 		desc = (struct avb_tx_desc *)txq->tx_skbuff[index];
 
 		if (!(desc->common.flags & AVB_TX_FLAG_SKB)) {
-			if ((desc->common.flags & AVB_TX_FLAG_HW_TS) && fep->bufdesc_ex) {
+			if (desc->common.flags & AVB_TX_FLAG_HW_TS) {
 				/* In case of bridge support the egress timestamp is taken
 				 * from the switch MAC but the descriptor will be still freed
 				 * by the upper layer software dealing with the bridge
@@ -1688,6 +1684,9 @@ fec_enet_tx_queue_avb(struct net_device *ndev, u16 queue_id)
 			}
 			else	/* No timestamping required, the descriptor can be freed rigth away */
 				fep->avb->free(fep->avb_data, &desc->common);
+
+			total_tx_packets++;
+			total_tx_bytes += desc->datlen;
 		} else {
 			/* Backup hardware descriptor fields in software descriptor */
 			desc->sc = status;
@@ -1713,6 +1712,10 @@ fec_enet_tx_queue_avb(struct net_device *ndev, u16 queue_id)
 			__napi_schedule(&fep->napi);
 		}
 	}
+
+	/* Update stats*/
+	ndev->stats.tx_packets += total_tx_packets;
+	ndev->stats.tx_bytes += total_tx_bytes;
 
 	return rc;
 }
@@ -1776,8 +1779,7 @@ fec_enet_tx_best_effort(struct net_device *ndev)
 			dma_unmap_single(&fep->pdev->dev, desc->bufaddr,
 					 desc->datlen, DMA_TO_DEVICE);
 
-		if (unlikely(skb_shinfo(skb)->tx_flags & SKBTX_IN_PROGRESS) &&
-			fep->bufdesc_ex) {
+		if (unlikely(skb_shinfo(skb)->tx_flags & SKBTX_IN_PROGRESS)) {
 			struct skb_shared_hwtstamps shhwtstamps;
 
 			desc->common.ts += fep->tx_tstamp_latency;
@@ -2026,7 +2028,7 @@ fec_enet_rx_best_effort(struct net_device *ndev, int budget)
 
 			/* If this is a VLAN packet remove the VLAN Tag */
 			vlan_packet_rcvd = false;
-			if (fep->bufdesc_ex && (desc->common.private & BD_ENET_RX_VLAN)) {
+			if (desc->common.private & BD_ENET_RX_VLAN) {
 				/* Push and remove the vlan tag */
 				struct vlan_hdr *vlan_header =
 						(struct vlan_hdr *) (data + ETH_HLEN);
@@ -2041,9 +2043,7 @@ fec_enet_rx_best_effort(struct net_device *ndev, int budget)
 
 			skb->protocol = eth_type_trans(skb, ndev);
 
-
-			if (fep->bufdesc_ex &&
-			    (fep->csum_flags & FLAG_RX_CSUM_ENABLED)) {
+			if (fep->csum_flags & FLAG_RX_CSUM_ENABLED) {
 				if (!(desc->common.private & FLAG_RX_CSUM_ERROR)) {
 					/* don't check it */
 					skb->ip_summed = CHECKSUM_UNNECESSARY;
@@ -2083,6 +2083,11 @@ fec_enet_rx_queue_avb(struct net_device *ndev, u16 queue_id)
 	unsigned int rc = 0;
 	unsigned int net_data_offset;
 	unsigned int count = 0;
+	unsigned int total_rx_packets = 0;
+	unsigned int total_rx_bytes = 0;
+	u16 rx_tstamp_latency = fep->rx_tstamp_latency;
+	bool need_swap = fep->quirks & FEC_QUIRK_SWAP_FRAME;
+	bool has_racc  = fep->quirks & FEC_QUIRK_HAS_RACC;
 
 	rxq = fep->rx_queue[queue_id];
 
@@ -2098,9 +2103,9 @@ fec_enet_rx_queue_avb(struct net_device *ndev, u16 queue_id)
 
 		/* Check for errors. */
 		status ^= BD_ENET_RX_LAST;
-		if (status & (BD_ENET_RX_LG | BD_ENET_RX_SH | BD_ENET_RX_NO |
+		if (unlikely(status & (BD_ENET_RX_LG | BD_ENET_RX_SH | BD_ENET_RX_NO |
 			   BD_ENET_RX_CR | BD_ENET_RX_OV | BD_ENET_RX_LAST |
-			   BD_ENET_RX_CL)) {
+			   BD_ENET_RX_CL))) {
 			ndev->stats.rx_errors++;
 			if (status & BD_ENET_RX_OV) {
 				/* FIFO overrun */
@@ -2123,16 +2128,15 @@ fec_enet_rx_queue_avb(struct net_device *ndev, u16 queue_id)
 		}
 
 		new_data = fep->avb->alloc(fep->avb_data);
-		if (!new_data) {
+		if (unlikely(!new_data)) {
 			ndev->stats.rx_dropped++;
 			goto rx_processing_done;
 		}
 
 		/* Process the incoming frame. */
-		ndev->stats.rx_packets++;
+		total_rx_packets++;
 		pkt_len = fec16_to_cpu(bdp->cbd_datlen);
-
-		ndev->stats.rx_bytes += pkt_len;
+		total_rx_bytes += pkt_len;
 		index = fec_enet_get_bd_index(bdp, &rxq->bd);
 		data = (__u8 *)rxq->rx_skbuff[index];
 
@@ -2145,25 +2149,22 @@ fec_enet_rx_queue_avb(struct net_device *ndev, u16 queue_id)
 		net_data_offset = desc->common.offset;
 
 #if !defined(CONFIG_M5272)
-		if (fep->quirks & FEC_QUIRK_HAS_RACC)
+		if (has_racc)
 			net_data_offset -= 2;
 #endif
 		prefetch(data + net_data_offset);
 
-		if (fep->quirks & FEC_QUIRK_SWAP_FRAME)
+		if (need_swap)
 			swap_buffer(data, pkt_len);
 
-		desc = (struct avb_rx_desc *)data;
 		desc->common.len = pkt_len;
 		desc->sc = fec16_to_cpu(bdp->cbd_sc);
 
 		/* Extract the enhanced buffer descriptor */
-		if (fep->bufdesc_ex) {
-			ebdp = (struct bufdesc_ex *)bdp;
+		ebdp = (struct bufdesc_ex *)bdp;
 
-			desc->common.ts = ebdp->ts - fep->rx_tstamp_latency;
-			desc->common.private = fec32_to_cpu(ebdp->cbd_esc);
-		}
+		desc->common.ts = ebdp->ts - rx_tstamp_latency;
+		desc->common.private = fec32_to_cpu(ebdp->cbd_esc);
 
 		rc |= fep->avb->rx(fep->avb_data, desc);
 
@@ -2187,7 +2188,7 @@ fec_enet_rx_queue_avb(struct net_device *ndev, u16 queue_id)
 #endif
 
 #if !defined(CONFIG_M5272)
-		if (fep->quirks & FEC_QUIRK_HAS_RACC)
+		if (has_racc)
 			desc->common.offset += 2;
 #endif
 		rxq->rx_skbuff[index] = (void *)data;
@@ -2199,13 +2200,11 @@ rx_processing_done:
 		status |= BD_ENET_RX_EMPTY;
 		bdp->cbd_sc = cpu_to_fec16(status);
 
-		if (fep->bufdesc_ex) {
-			struct bufdesc_ex *ebdp = (struct bufdesc_ex *)bdp;
+		ebdp = (struct bufdesc_ex *)bdp;
 
-			ebdp->cbd_esc = cpu_to_fec32(0);
-			ebdp->cbd_prot = cpu_to_fec32(0);
-			ebdp->cbd_bdu = cpu_to_fec32(0);
-		}
+		ebdp->cbd_esc = cpu_to_fec32(0);
+		ebdp->cbd_prot = cpu_to_fec32(0);
+		ebdp->cbd_bdu = cpu_to_fec32(0);
 
 		/* Update BD pointer to next entry */
 
@@ -2219,6 +2218,10 @@ rx_processing_done:
 	writel(0, rxq->bd.reg_desc_active);
 
 	rxq->bd.cur = bdp;
+
+	/*Update stats*/
+	ndev->stats.rx_packets += total_rx_packets;
+	ndev->stats.rx_bytes += total_rx_bytes;
 
 	return rc;
 }
@@ -5129,6 +5132,13 @@ fec_probe(struct platform_device *pdev)
 	}
 
 	fep->bufdesc_ex = fep->quirks & FEC_QUIRK_HAS_BUFDESC_EX;
+#ifdef CONFIG_AVB_SUPPORT
+	if (!fep->bufdesc_ex) {
+		dev_err(&pdev->dev,
+			"Error: AVB Support requires extended buffer descriptor\n");
+		goto failed_clk;
+	}
+#endif
 	fep->clk_ptp = devm_clk_get(&pdev->dev, "ptp");
 	if (IS_ERR(fep->clk_ptp)) {
 		fep->clk_ptp = NULL;

@@ -65,6 +65,7 @@
 		serial4 = &lpuart4;
 		serial5 = &lpuart5;
 		sysclk = &sysclk;
+		rtc1 = &ftm_alarm0;
 	};
 
 	cpus {
@@ -516,17 +517,6 @@
 			status = "disabled";
 		};
 
-		ftm0: ftm0@29d0000 {
-			compatible = "fsl,ls1021a-ftm-alarm";
-			reg = <0x0 0x29d0000 0x0 0x10000>,
-			      <0x0 0x1ee2144 0x0 0x4>,
-			      <0x0 0x0157051c 0x0 0x4>;
-			reg-names = "ftm", "pmctrl", "scrachpad";
-			interrupts = <GIC_SPI 118 IRQ_TYPE_LEVEL_HIGH>;
-			big-endian;
-			status = "okay";
-		};
-
 		wdog0: watchdog@2ad0000 {
 			compatible = "fsl,imx21-wdt";
 			reg = <0x0 0x2ad0000 0x0 0x10000>;
@@ -830,6 +820,20 @@
 			clock-names = "ipg", "per";
 			big-endian;
 			status = "disabled";
+		};
+
+		rcpm: rcpm@1ee2140 {
+			compatible = "fsl,ls1021a-rcpm", "fsl,qoriq-rcpm-2.1+";
+			reg = <0x0 0x1ee2140 0x0 0x8>;
+			#fsl,rcpm-wakeup-cells = <2>;
+		};
+
+		ftm_alarm0: timer0@29d0000 {
+			compatible = "fsl,ls1021a-ftm-alarm";
+			reg = <0x0 0x29d0000 0x0 0x10000>;
+			fsl,rcpm-wakeup = <&rcpm 0x0 0x20000000>;
+			interrupts = <GIC_SPI 118 IRQ_TYPE_LEVEL_HIGH>;
+			big-endian;
 		};
 	};
 };

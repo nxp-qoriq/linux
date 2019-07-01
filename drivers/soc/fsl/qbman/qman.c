@@ -1213,11 +1213,7 @@ loop:
 		 * entries well before the ring has been fully consumed, so
 		 * we're being *really* paranoid here.
 		 */
-		u64 now, then = jiffies;
-
-		do {
-			now = jiffies;
-		} while ((then + 10000) > now);
+		mdelay(1);
 		qm_mr_pvb_update(p);
 		msg = qm_mr_current(p);
 		if (!msg)

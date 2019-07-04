@@ -526,6 +526,10 @@ static int ocelot_port_xmit(struct sk_buff *skb, struct net_device *dev)
 	u8 grp = 0; /* Send everything on CPU group 0 */
 	unsigned int i, count, last;
 
+	/* bypass original handler */
+	if (port->cpu_inj_handler)
+		return port->cpu_inj_handler(skb, dev);
+
 	val = ocelot_read(ocelot, QS_INJ_STATUS);
 	if (!(val & QS_INJ_STATUS_FIFO_RDY(BIT(grp))) ||
 	    (val & QS_INJ_STATUS_WMARK_REACHED(BIT(grp))))

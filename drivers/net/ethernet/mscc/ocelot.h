@@ -13,6 +13,7 @@
 #include <linux/if_vlan.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
+#include <linux/ptp_clock_kernel.h>
 
 #include "ocelot_ana.h"
 #include "ocelot_dev.h"
@@ -494,6 +495,13 @@ struct ocelot_multicast {
 
 struct ocelot_port;
 
+enum ocelot_ptp_pins {
+	ALT_PPS_PIN	= 1,
+	EXT_CLK_PIN,
+	ALT_LDST_PIN,
+	TOD_ACC_PIN
+};
+
 struct ocelot_stat_layout {
 	u32 offset;
 	char name[ETH_GSTRING_LEN];
@@ -537,6 +545,10 @@ struct ocelot {
 	struct workqueue_struct *stats_queue;
 
 	void (*port_pcs_init)(struct ocelot_port *port);
+
+	struct ptp_clock_info ptp_caps;
+	struct ptp_clock *clock;
+	int phc_index;
 };
 
 struct ocelot_port {
@@ -602,6 +614,14 @@ int felix_chip_init(struct ocelot *ocelot);
 int ocelot_probe_port(struct ocelot *ocelot, u8 port,
 		      void __iomem *regs,
 		      struct phy_device *phy);
+
+#ifdef CONFIG_MSCC_FELIX_SWITCH_PTP_CLOCK
+int felix_ptp_init(struct ocelot *ocelot);
+void felix_ptp_remove(struct ocelot *ocelot);
+#else
+static inline int felix_ptp_init(struct ocelot *ocelot) { return 0; }
+static inline void felix_ptp_remove(struct ocelot *ocelot) { }
+#endif
 
 extern struct notifier_block ocelot_netdevice_nb;
 

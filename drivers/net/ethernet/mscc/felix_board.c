@@ -605,6 +605,10 @@ static int felix_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (err)
 		goto err_sw_core_init;
 
+	err = felix_ptp_init(ocelot);
+	if (err)
+		goto err_ptp_init;
+
 	err = felix_ports_init(pdev);
 	if (err)
 		goto err_ports_init;
@@ -617,6 +621,7 @@ static int felix_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	return 0;
 
 err_ports_init:
+err_ptp_init:
 err_chip_init:
 err_sw_core_init:
 	pci_iounmap(pdev, regs);
@@ -642,6 +647,7 @@ static void felix_pci_remove(struct pci_dev *pdev)
 	unregister_netdevice_notifier(&ocelot_netdevice_nb);
 
 	felix_release_ports(ocelot);
+	felix_ptp_remove(ocelot);
 
 	pci_iounmap(pdev, regs);
 	pci_disable_device(pdev);

@@ -35,4 +35,15 @@ config MSCC_FELIX_SWITCH
 	  This driver supports the Felix network switch device, connected as a
 	  PCI device.
 
+config MSCC_FELIX_SWITCH_PTP_CLOCK
+	bool "Felix switch PTP clock driver"
+	depends on MSCC_FELIX_SWITCH
+	imply PTP_1588_CLOCK
+	default y
+	help
+	  This driver supports the PTP clock on Felix network switch
+	  device. This clock is only useful if your PTP programs are
+	  getting hardware time stamps on the PTP Ethernet packets
+	  using the SO_TIMESTAMPING API.
+
 endif # NET_VENDOR_MICROSEMI

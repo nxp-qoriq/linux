@@ -17,6 +17,7 @@
 #include "ocelot_ana.h"
 #include "ocelot_dev.h"
 #include "ocelot_hsio.h"
+#include "ocelot_ptp.h"
 #include "ocelot_qsys.h"
 #include "ocelot_rew.h"
 #include "ocelot_sys.h"
@@ -69,6 +70,7 @@ struct frame_info {
 
 enum ocelot_target {
 	ANA = 1,
+	PTP,
 	QS,
 	QSYS,
 	REW,
@@ -178,6 +180,24 @@ enum ocelot_reg {
 	ANA_POL_FLOWC,
 	ANA_POL_HYST,
 	ANA_POL_MISC_CFG,
+	PTP_MISC_CFG = PTP << TARGET_OFFSET,
+	PTP_CLK_ADJ_CFG,
+	PTP_CLK_ADJ_FRQ,
+	PTP_PIN_INTR,
+	PTP_PIN_INTR_ENA,
+	PTP_INTR_IDENT,
+	PTP_SYS_CLK_CFG,
+	PTP_CUR_NSF,
+	PTP_CUR_NSEC,
+	PTP_CUR_SEC_LSB,
+	PTP_CUR_SEC_MSB,
+	PTP_PIN_CFG,
+	PTP_TOD_SEC_MSB,
+	PTP_TOD_SEC_LSB,
+	PTP_TOD_NSEC,
+	PTP_NSF,
+	PTP_PIN_WF_HIGH_PERIOD,
+	PTP_PIN_WF_LOW_PERIOD,
 	QS_XTR_GRP_CFG = QS << TARGET_OFFSET,
 	QS_XTR_RD,
 	QS_XTR_FRM_PRUNING,

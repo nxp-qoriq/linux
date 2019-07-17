@@ -45,6 +45,13 @@ static struct {
 			.name = "ana",
 		}
 	},
+	{	.id = PTP,
+		{
+			.start = 0x0090000,
+			.end = 0x00900cb,
+			.name = "ptp",
+		}
+	},
 	{	.id = QS,
 		{
 			.start = 0x0080000,

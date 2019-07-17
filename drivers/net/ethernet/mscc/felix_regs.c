@@ -108,6 +108,27 @@ static const u32 felix_ana_regmap[] = {
 	REG_RESERVED(ANA_POL_MISC_CFG),
 };
 
+static const u32 felix_ptp_regmap[] = {
+	REG(PTP_MISC_CFG,                  0x0000a0),
+	REG(PTP_CLK_ADJ_CFG,               0x0000a4),
+	REG(PTP_CLK_ADJ_FRQ,               0x0000a8),
+	REG(PTP_PIN_INTR,                  0x0000ac),
+	REG(PTP_PIN_INTR_ENA,              0x0000b0),
+	REG(PTP_INTR_IDENT,                0x0000b4),
+	REG(PTP_SYS_CLK_CFG,               0x0000b8),
+	REG(PTP_CUR_NSF,                   0x0000bc),
+	REG(PTP_CUR_NSEC,                  0x0000c0),
+	REG(PTP_CUR_SEC_LSB,               0x0000c4),
+	REG(PTP_CUR_SEC_MSB,               0x0000c8),
+	REG(PTP_PIN_CFG,                   0x000000),
+	REG(PTP_TOD_SEC_MSB,               0x000004),
+	REG(PTP_TOD_SEC_LSB,               0x000008),
+	REG(PTP_TOD_NSEC,                  0x00000c),
+	REG(PTP_NSF,                       0x000010),
+	REG(PTP_PIN_WF_HIGH_PERIOD,        0x000014),
+	REG(PTP_PIN_WF_LOW_PERIOD,         0x000018),
+};
+
 static const u32 felix_qs_regmap[] = {
 	REG(QS_XTR_GRP_CFG,                0x000000),
 	REG(QS_XTR_RD,                     0x000008),
@@ -286,6 +307,7 @@ static const u32 felix_gcb_regmap[] = {
 
 static const u32 *felix_regmap[] = {
 	[ANA] = felix_ana_regmap,
+	[PTP] = felix_ptp_regmap,
 	[QS] = felix_qs_regmap,
 	[QSYS] = felix_qsys_regmap,
 	[REW] = felix_rew_regmap,

@@ -618,9 +618,12 @@ int ocelot_probe_port(struct ocelot *ocelot, u8 port,
 #ifdef CONFIG_MSCC_FELIX_SWITCH_PTP_CLOCK
 int felix_ptp_init(struct ocelot *ocelot);
 void felix_ptp_remove(struct ocelot *ocelot);
+int felix_ptp_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts);
 #else
 static inline int felix_ptp_init(struct ocelot *ocelot) { return 0; }
 static inline void felix_ptp_remove(struct ocelot *ocelot) { }
+static inline int felix_ptp_gettime(struct ptp_clock_info *ptp,
+				    struct timespec64 *ts) { return 0; }
 #endif
 
 extern struct notifier_block ocelot_netdevice_nb;

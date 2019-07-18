@@ -14,6 +14,7 @@
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/ptp_clock_kernel.h>
+#include <linux/net_tstamp.h>
 
 #include "ocelot_ana.h"
 #include "ocelot_dev.h"
@@ -543,12 +544,23 @@ struct ocelot {
 	u64 *stats;
 	struct delayed_work stats_work;
 	struct workqueue_struct *stats_queue;
+	struct workqueue_struct *ocelot_wq;
+	struct work_struct irq_handle_work;
+
+	struct list_head skbs;
 
 	void (*port_pcs_init)(struct ocelot_port *port);
 
 	struct ptp_clock_info ptp_caps;
 	struct ptp_clock *clock;
 	int phc_index;
+};
+
+struct ocelot_skb {
+	struct list_head head;
+	struct sk_buff *skb;
+	u8 tstamp_id;
+	u8 tx_port;
 };
 
 struct ocelot_port {
@@ -576,6 +588,10 @@ struct ocelot_port {
 	netdev_tx_t (*cpu_inj_handler)(struct sk_buff *skb,
 				       struct net_device *dev);
 	void *cpu_inj_handler_data;
+	struct hwtstamp_config hwtstamp_config;
+	bool tx_tstamp;
+	bool rx_tstamp;
+	u8 tstamp_id;
 };
 
 u32 __ocelot_read_ix(struct ocelot *ocelot, u32 reg, u32 offset);

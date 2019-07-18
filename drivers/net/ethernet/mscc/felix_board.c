@@ -139,11 +139,13 @@ static inline u32 felix_get_efh_##name(u64 *efh) \
 /* Felix 128bit-value frame injection header:
  *
  * bit 127: bypass the analyzer processing
+ * bit 117-125: Rewriter operation command
  * bit 56-61: destination port mask
  * bit 28-29: pop_cnt: 3 disables all rewriting of the frame
  * bit 20-27: cpu extraction queue mask
  */
 FELIX_IFH_FIELD(bypass, 127, 1)
+FELIX_IFH_FIELD(rew_op, 117, 9)
 FELIX_IFH_FIELD(dstp, 56, 6)
 FELIX_IFH_FIELD(srcp, 43, 4)
 FELIX_IFH_FIELD(popcnt, 28, 2)
@@ -151,9 +153,12 @@ FELIX_IFH_FIELD(cpuq, 20, 8)
 
 #define FELIX_IFH_INJ_POP_CNT_DISABLE 3
 
-/* Felix 128bit-value frame extraction header */
-
-/* bit 43-45: source port id */
+/* Felix 128bit-value frame extraction header:
+ *
+ * bit 85-116: rewriter val
+ * bit 43-45: source port id
+ */
+FELIX_EFH_FIELD(rew_val, 85, 32)
 FELIX_EFH_FIELD(srcp, 43, 4)
 
 static void felix_tx_hdr_set(struct sk_buff *skb, struct ocelot_port *port)
@@ -166,20 +171,45 @@ static void felix_tx_hdr_set(struct sk_buff *skb, struct ocelot_port *port)
 	felix_set_ifh_bypass(ifh, 1);
 	felix_set_ifh_dstp(ifh, BIT(port->chip_port));
 	felix_set_ifh_srcp(ifh, ocelot->cpu_port_id);
-	felix_set_ifh_popcnt(ifh, FELIX_IFH_INJ_POP_CNT_DISABLE);
+	felix_set_ifh_popcnt(ifh, 0);
 	felix_set_ifh_cpuq(ifh, 0x0);
+
+	if (skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP && port->tx_tstamp) {
+		u8 id = (port->tstamp_id++) % 4;
+		/* REW_OP[2:0] = 0x3 for two-step PTP timestamp
+		 * REW_OP[8:3] for timestamp ID
+		 */
+		felix_set_ifh_rew_op(ifh, 0x3 | id << 3);
+	}
 }
 
 static netdev_tx_t felix_cpu_inj_handler(struct sk_buff *skb,
 					 struct net_device *ndev)
 {
 	struct ocelot_port *port = netdev_priv(ndev);
+	bool do_tstamp = skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP &&
+			 port->tx_tstamp;
 	struct net_device *pair_ndev;
 
 	pair_ndev = port->cpu_inj_handler_data;
 
 	if (!netif_running(pair_ndev))
 		return NETDEV_TX_BUSY;
+
+	if (do_tstamp) {
+		struct ocelot_skb *oskb =
+			devm_kzalloc(port->ocelot->dev,
+				     sizeof(struct ocelot_skb),
+				     GFP_KERNEL);
+		oskb->skb = skb_clone(skb, GFP_ATOMIC);
+		if (skb->sk)
+			skb_set_owner_w(oskb->skb, skb->sk);
+		oskb->tstamp_id = port->tstamp_id % 4;
+		oskb->tx_port = port->chip_port;
+		list_add_tail(&oskb->head, &port->ocelot->skbs);
+
+		skb_shinfo(oskb->skb)->tx_flags |= SKBTX_IN_PROGRESS;
+	}
 
 	if (unlikely(skb_headroom(skb) < FELIX_XFH_LEN)) {
 		struct sk_buff *skb_orig = skb;
@@ -213,19 +243,23 @@ static netdev_tx_t felix_cpu_inj_handler(struct sk_buff *skb,
 
 static rx_handler_result_t felix_frm_ext_handler(struct sk_buff **pskb)
 {
+	struct skb_shared_hwtstamps *shhwtstamps;
 	struct net_device *ndev = (*pskb)->dev;
+	struct ocelot_port *port = NULL;
 	struct sk_buff *skb = *pskb;
-	struct ocelot_port *port;
 	char *start = skb->data;
 	struct ocelot *ocelot;
-	u64 *efh;
-	u32 p;
+	struct timespec64 ts;
+	u32 p, ts_lo, ts_hi;
+	u64 *efh, ts_ns;
 
 	/* extraction header offset: assume eth header was consumed */
 	efh = (u64 *)(start - ETH_HLEN + XFH_LONG_PREFIX_LEN - FELIX_XFH_LEN);
 
 	/* decode src port */
 	p = felix_get_efh_srcp(efh);
+
+	ts_lo = felix_get_efh_rew_val(efh);
 
        /* don't pass frames with unknown header format back to interface */
 	if (unlikely(p >= FELIX_MAX_NUM_PHY_PORTS)) {
@@ -260,6 +294,21 @@ static rx_handler_result_t felix_frm_ext_handler(struct sk_buff **pskb)
 
 	if (ocelot->bridge_mask & BIT(p))
 		skb->offload_fwd_mark = 1;
+
+	if (port && port->rx_tstamp) {
+		felix_ptp_gettime(&ocelot->ptp_caps, &ts);
+		ts_ns = ktime_set(ts.tv_sec, ts.tv_nsec);
+
+		ts_hi = ts_ns >> 32;
+		if ((ts_ns & 0xffffffff) < ts_lo)
+			ts_hi = ts_hi - 1;
+
+		ts_ns = ((u64)ts_hi << 32) | ts_lo;
+
+		shhwtstamps = skb_hwtstamps(skb);
+		memset(shhwtstamps, 0, sizeof(struct skb_shared_hwtstamps));
+		shhwtstamps->hwtstamp = ts_ns;
+	}
 
 	netif_rx(skb);
 
@@ -361,6 +410,101 @@ struct net_device *felix_port_get_pair_ndev(struct device_node *np, u32 *port)
 		return NULL;
 
 	return of_find_net_device_by_node(ethnp);
+}
+
+static void felix_get_hwtimestamp(struct ocelot *ocelot, struct timespec64 *ts)
+{
+	/* Read current PTP time to get seconds */
+	u32 val = ocelot_read_rix(ocelot, PTP_PIN_CFG, TOD_ACC_PIN);
+
+	val &= ~(PTP_PIN_CFG_SYNC | PTP_PIN_CFG_ACTION_MASK | PTP_PIN_CFG_DOM);
+	val |= PTP_PIN_CFG_ACTION(PTP_PIN_ACTION_SAVE);
+	ocelot_write_rix(ocelot, val, PTP_PIN_CFG, TOD_ACC_PIN);
+	ts->tv_sec = ocelot_read_rix(ocelot, PTP_TOD_SEC_LSB, TOD_ACC_PIN);
+
+	/* Read packet HW timestamp from FIFO */
+	val = ocelot_read(ocelot, SYS_PTP_TXSTAMP);
+	ts->tv_nsec = SYS_PTP_TXSTAMP_PTP_TXSTAMP(val);
+
+	/* Sec has incremented since the ts was registered */
+	if ((ts->tv_sec & 0x1) != !!(val & SYS_PTP_TXSTAMP_PTP_TXSTAMP_SEC))
+		ts->tv_sec--;
+}
+
+static bool felix_tx_tstamp_avail(struct ocelot *ocelot)
+{
+	return (!list_empty(&ocelot->skbs)) &&
+	       (ocelot_read(ocelot, SYS_PTP_STATUS) &
+		SYS_PTP_STATUS_PTP_MESS_VLD);
+}
+
+static void felix_tx_clean(struct ocelot *ocelot)
+{
+	do {
+		struct list_head *pos, *tmp;
+		struct ocelot_skb *entry;
+		struct sk_buff *skb = NULL;
+		struct timespec64 ts;
+		struct skb_shared_hwtstamps shhwtstamps;
+		u32 val, id, port;
+
+		val = ocelot_read(ocelot, SYS_PTP_STATUS);
+
+		id = SYS_PTP_STATUS_PTP_MESS_ID_X(val);
+		port = SYS_PTP_STATUS_PTP_MESS_TXPORT_X(val);
+
+		list_for_each_safe(pos, tmp, &ocelot->skbs) {
+			entry = list_entry(pos, struct ocelot_skb, head);
+			if (entry->tstamp_id != id ||
+			    entry->tx_port != port)
+				continue;
+			skb = entry->skb;
+
+			list_del(pos);
+			devm_kfree(ocelot->dev, entry);
+		}
+
+		if (likely(skb)) {
+			felix_get_hwtimestamp(ocelot, &ts);
+			memset(&shhwtstamps, 0, sizeof(shhwtstamps));
+			shhwtstamps.hwtstamp = ktime_set(ts.tv_sec, ts.tv_nsec);
+			skb_tstamp_tx(skb, &shhwtstamps);
+
+			dev_kfree_skb_any(skb);
+		}
+
+		/* Next tstamp */
+		ocelot_write(ocelot, SYS_PTP_NXT_PTP_NXT, SYS_PTP_NXT);
+
+	} while (ocelot_read(ocelot, SYS_PTP_STATUS) &
+		 SYS_PTP_STATUS_PTP_MESS_VLD);
+}
+
+static void felix_irq_handle_work(struct work_struct *work)
+{
+	struct ocelot *ocelot = container_of(work, struct ocelot,
+					     irq_handle_work);
+	struct pci_dev *pdev = container_of(ocelot->dev, struct pci_dev, dev);
+
+	/* TODO: TSN preemption handling
+	 * The INTB interrupt is also for preemption event. So there will be
+	 * interrupt storm if preemption is triggered without cleaning
+	 * interrupt status in ISR.
+	 */
+	if (felix_tx_tstamp_avail(ocelot))
+		felix_tx_clean(ocelot);
+
+	enable_irq(pdev->irq);
+}
+
+static irqreturn_t felix_isr(int irq, void *data)
+{
+	struct ocelot *ocelot = (struct ocelot *)data;
+
+	disable_irq_nosync(irq);
+	queue_work(ocelot->ocelot_wq, &ocelot->irq_handle_work);
+
+	return IRQ_HANDLED;
 }
 
 static int felix_ports_init(struct pci_dev *pdev)
@@ -567,6 +711,20 @@ static int felix_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	pci_set_drvdata(pdev, ocelot);
 	ocelot->dev = &pdev->dev;
 
+	err = request_irq(pdev->irq, &felix_isr, 0, "felix-intb", ocelot);
+	if (err)
+		goto err_alloc_irq;
+
+	ocelot->ocelot_wq = alloc_workqueue("ocelot_wq", 0, 0);
+	if (!ocelot->ocelot_wq) {
+		err = -ENOMEM;
+		goto err_alloc_wq;
+	}
+
+	INIT_WORK(&ocelot->irq_handle_work, felix_irq_handle_work);
+
+	INIT_LIST_HEAD(&ocelot->skbs);
+
 	len = pci_resource_len(pdev, FELIX_SWITCH_BAR);
 	if (!len) {
 		err = -EINVAL;
@@ -627,6 +785,10 @@ err_sw_core_init:
 	pci_iounmap(pdev, regs);
 err_iomap:
 err_resource_len:
+	destroy_workqueue(ocelot->ocelot_wq);
+err_alloc_wq:
+	free_irq(pdev->irq, ocelot);
+err_alloc_irq:
 err_alloc_ocelot:
 err_dma:
 	pci_disable_device(pdev);
@@ -642,6 +804,7 @@ static void felix_pci_remove(struct pci_dev *pdev)
 
 	/* stop workqueue thread */
 	ocelot_deinit(ocelot);
+	free_irq(pdev->irq, ocelot);
 	unregister_switchdev_blocking_notifier(&ocelot_switchdev_blocking_nb);
 	unregister_switchdev_notifier(&ocelot_switchdev_nb);
 	unregister_netdevice_notifier(&ocelot_netdevice_nb);
@@ -650,6 +813,7 @@ static void felix_pci_remove(struct pci_dev *pdev)
 	felix_ptp_remove(ocelot);
 
 	pci_iounmap(pdev, regs);
+	destroy_workqueue(ocelot->ocelot_wq);
 	pci_disable_device(pdev);
 }
 

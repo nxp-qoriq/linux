@@ -898,6 +898,63 @@ static int ocelot_set_features(struct net_device *dev,
 	return 0;
 }
 
+static int ocelot_hwstamp_get(struct ocelot_port *port, struct ifreq *ifr)
+{
+	return copy_to_user(ifr->ifr_data, &port->hwtstamp_config,
+			    sizeof(port->hwtstamp_config)) ? -EFAULT : 0;
+}
+
+static int ocelot_hwstamp_set(struct ocelot_port *port, struct ifreq *ifr)
+{
+	struct hwtstamp_config cfg;
+
+	if (copy_from_user(&cfg, ifr->ifr_data, sizeof(cfg)))
+		return -EFAULT;
+
+	/* reserved for future extensions */
+	if (cfg.flags)
+		return -EINVAL;
+
+	switch (cfg.tx_type) {
+	case HWTSTAMP_TX_ON:
+		port->tx_tstamp = true;
+		break;
+	case HWTSTAMP_TX_OFF:
+		port->tx_tstamp = false;
+		break;
+	default:
+		return -ERANGE;
+	}
+
+	switch (cfg.rx_filter) {
+	case HWTSTAMP_FILTER_NONE:
+		port->rx_tstamp = false;
+		break;
+	default:
+		port->rx_tstamp = true;
+		cfg.rx_filter = HWTSTAMP_FILTER_ALL;
+		break;
+	}
+
+	/* Commit back the result & save it */
+	memcpy(&port->hwtstamp_config, &cfg, sizeof(cfg));
+	return copy_to_user(ifr->ifr_data, &cfg, sizeof(cfg)) ? -EFAULT : 0;
+}
+
+static int ocelot_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
+{
+	struct ocelot_port *port = netdev_priv(dev);
+
+	switch (cmd) {
+	case SIOCSHWTSTAMP:
+		return ocelot_hwstamp_set(port, ifr);
+	case SIOCGHWTSTAMP:
+		return ocelot_hwstamp_get(port, ifr);
+	default:
+		return -EOPNOTSUPP;
+	}
+}
+
 static const struct net_device_ops ocelot_port_netdev_ops = {
 	.ndo_open			= ocelot_port_open,
 	.ndo_stop			= ocelot_port_stop,
@@ -912,6 +969,7 @@ static const struct net_device_ops ocelot_port_netdev_ops = {
 	.ndo_vlan_rx_add_vid		= ocelot_vlan_rx_add_vid,
 	.ndo_vlan_rx_kill_vid		= ocelot_vlan_rx_kill_vid,
 	.ndo_set_features		= ocelot_set_features,
+	.ndo_do_ioctl			= ocelot_ioctl,
 };
 
 static void ocelot_get_strings(struct net_device *netdev, u32 sset, u8 *data)

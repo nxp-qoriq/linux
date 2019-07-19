@@ -1045,12 +1045,34 @@ static int ocelot_get_sset_count(struct net_device *dev, int sset)
 	return ocelot->num_stats;
 }
 
+static int ocelot_get_ts_info(struct net_device *dev,
+			      struct ethtool_ts_info *info)
+{
+	struct ocelot_port *port = netdev_priv(dev);
+	struct ocelot *ocelot = port->ocelot;
+
+	if (ocelot->clock)
+		info->phc_index = ocelot->phc_index;
+	else
+		info->phc_index = -1;
+
+	info->so_timestamping = SOF_TIMESTAMPING_TX_HARDWARE |
+				SOF_TIMESTAMPING_RX_HARDWARE |
+				SOF_TIMESTAMPING_RAW_HARDWARE;
+	info->tx_types = (1 << HWTSTAMP_TX_OFF) |
+			 (1 << HWTSTAMP_TX_ON);
+	info->rx_filters = (1 << HWTSTAMP_FILTER_NONE) |
+			   (1 << HWTSTAMP_FILTER_ALL);
+	return 0;
+}
+
 static const struct ethtool_ops ocelot_ethtool_ops = {
 	.get_strings		= ocelot_get_strings,
 	.get_ethtool_stats	= ocelot_get_ethtool_stats,
 	.get_sset_count		= ocelot_get_sset_count,
 	.get_link_ksettings	= phy_ethtool_get_link_ksettings,
 	.set_link_ksettings	= phy_ethtool_set_link_ksettings,
+	.get_ts_info		= ocelot_get_ts_info,
 };
 
 static int ocelot_port_attr_get(struct net_device *dev,

@@ -574,7 +574,7 @@ static void is2_entry_set(struct ocelot *ocelot, int ix,
 
 static void is2_entry_get(struct ocelot_ace_rule *rule, int ix)
 {
-	struct ocelot *op = rule->port->ocelot;
+	struct ocelot *op = rule->ocelot;
 	struct vcap_data data;
 	int row = (ix / 2);
 	u32 cnt;
@@ -653,11 +653,11 @@ int ocelot_ace_rule_offload_add(struct ocelot_ace_rule *rule)
 	/* Move down the rules to make place for the new rule */
 	for (i = acl_block->count - 1; i > index; i--) {
 		ace = ocelot_ace_rule_get_rule_index(acl_block, i);
-		is2_entry_set(rule->port->ocelot, i, ace);
+		is2_entry_set(rule->ocelot, i, ace);
 	}
 
 	/* Now insert the new rule */
-	is2_entry_set(rule->port->ocelot, index, rule);
+	is2_entry_set(rule->ocelot, index, rule);
 	return 0;
 }
 
@@ -693,11 +693,11 @@ int ocelot_ace_rule_offload_del(struct ocelot_ace_rule *rule)
 	/* Move up all the blocks over the deleted rule */
 	for (i = index; i < acl_block->count; i++) {
 		ace = ocelot_ace_rule_get_rule_index(acl_block, i);
-		is2_entry_set(rule->port->ocelot, i, ace);
+		is2_entry_set(rule->ocelot, i, ace);
 	}
 
 	/* Now delete the last rule, because it is duplicated */
-	is2_entry_set(rule->port->ocelot, acl_block->count, &del_ace);
+	is2_entry_set(rule->ocelot, acl_block->count, &del_ace);
 
 	return 0;
 }
@@ -713,7 +713,7 @@ int ocelot_ace_rule_stats_update(struct ocelot_ace_rule *rule)
 	/* After we get the result we need to clear the counters */
 	tmp = ocelot_ace_rule_get_rule_index(acl_block, index);
 	tmp->stats.pkts = 0;
-	is2_entry_set(rule->port->ocelot, index, tmp);
+	is2_entry_set(rule->ocelot, index, tmp);
 
 	return 0;
 }

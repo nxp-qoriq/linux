@@ -350,7 +350,7 @@ static void is2_entry_set(struct ocelot *ocelot, int ix,
 	data.type = IS2_ACTION_TYPE_NORMAL;
 
 	VCAP_KEY_ANY_SET(PAG);
-	VCAP_KEY_SET(IGR_PORT_MASK, 0, ~BIT(ace->chip_port));
+	VCAP_KEY_SET(IGR_PORT_MASK, 0, ~ace->ingress_port);
 	VCAP_KEY_BIT_SET(FIRST, OCELOT_VCAP_BIT_1);
 	VCAP_KEY_BIT_SET(HOST_MATCH, OCELOT_VCAP_BIT_ANY);
 	VCAP_KEY_BIT_SET(L2_MC, ace->dmac_mc);

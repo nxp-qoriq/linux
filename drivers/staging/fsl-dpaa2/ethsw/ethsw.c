@@ -960,6 +960,7 @@ static void ethsw_switchdev_event_work(struct work_struct *work)
 	struct net_device *dev = switchdev_work->dev;
 	struct switchdev_notifier_fdb_info *fdb_info;
 	struct ethsw_port_priv *port_priv;
+	int err;
 
 	rtnl_lock();
 	port_priv = netdev_priv(dev);
@@ -968,9 +969,16 @@ static void ethsw_switchdev_event_work(struct work_struct *work)
 	switch (switchdev_work->event) {
 	case SWITCHDEV_FDB_ADD_TO_DEVICE:
 		if (is_unicast_ether_addr(fdb_info->addr))
-			ethsw_port_fdb_add_uc(netdev_priv(dev), fdb_info->addr);
+			err = ethsw_port_fdb_add_uc(netdev_priv(dev),
+						    fdb_info->addr);
 		else
-			ethsw_port_fdb_add_mc(netdev_priv(dev), fdb_info->addr);
+			err = ethsw_port_fdb_add_mc(netdev_priv(dev),
+						    fdb_info->addr);
+		if (err)
+			break;
+		fdb_info->offloaded = true;
+		call_switchdev_notifiers(SWITCHDEV_FDB_OFFLOADED, dev,
+					 &fdb_info->info, NULL);
 		break;
 	case SWITCHDEV_FDB_DEL_TO_DEVICE:
 		if (is_unicast_ether_addr(fdb_info->addr))

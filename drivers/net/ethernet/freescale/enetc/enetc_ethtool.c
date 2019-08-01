@@ -190,6 +190,7 @@ static const char rx_ring_stats[][ETH_GSTRING_LEN] = {
 
 static const char tx_ring_stats[][ETH_GSTRING_LEN] = {
 	"Tx ring %2d frames",
+	"Tx window drop %2d frames",
 };
 
 static int enetc_get_sset_count(struct net_device *ndev, int sset)
@@ -255,8 +256,10 @@ static void enetc_get_ethtool_stats(struct net_device *ndev,
 	for (i = 0; i < ARRAY_SIZE(enetc_si_counters); i++)
 		data[o++] = enetc_rd64(hw, enetc_si_counters[i].reg);
 
-	for (i = 0; i < priv->num_tx_rings; i++)
+	for (i = 0; i < priv->num_tx_rings; i++) {
 		data[o++] = priv->tx_ring[i]->stats.packets;
+		data[o++] = priv->tx_ring[i]->stats.win_drop;
+	}
 
 	for (i = 0; i < priv->num_rx_rings; i++) {
 		data[o++] = priv->rx_ring[i]->stats.packets;

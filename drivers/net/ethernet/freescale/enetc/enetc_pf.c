@@ -523,10 +523,14 @@ static void enetc_configure_port_mac(struct enetc_hw *hw)
 		      ENETC_PM0_CMD_TXP	| ENETC_PM0_PROMISC |
 		      ENETC_PM0_TX_EN | ENETC_PM0_RX_EN);
 	/* set auto-speed for RGMII */
-	if (enetc_port_rd(hw, ENETC_PM0_IF_MODE) & ENETC_PMO_IFM_RG)
+	if (enetc_port_rd(hw, ENETC_PM0_IF_MODE) & ENETC_PMO_IFM_RG) {
 		enetc_port_wr(hw, ENETC_PM0_IF_MODE, ENETC_PM0_IFM_RGAUTO);
-	if (enetc_global_rd(hw, ENETC_G_EPFBLPR(1)) == ENETC_G_EPFBLPR1_XGMII)
+		enetc_port_wr(hw, ENETC_PM1_IF_MODE, ENETC_PM0_IFM_RGAUTO);
+	}
+	if (enetc_global_rd(hw, ENETC_G_EPFBLPR(1)) == ENETC_G_EPFBLPR1_XGMII) {
 		enetc_port_wr(hw, ENETC_PM0_IF_MODE, ENETC_PM0_IFM_XGMII);
+		enetc_port_wr(hw, ENETC_PM1_IF_MODE, ENETC_PM0_IFM_XGMII);
+	}
 }
 
 static void enetc_configure_port_pmac(struct enetc_hw *hw)
@@ -742,6 +746,9 @@ static void enetc_pf_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 
 	ndev->priv_flags |= IFF_UNICAST_FLT;
 
+	if (enetc_tsn_is_enabled() && (si->hw_features & ENETC_SI_F_QBV))
+		priv->active_offloads |= ENETC_F_QBV;
+
 	/* pick up primary MAC address from SI */
 	enetc_get_primary_mac_addr(&si->hw, ndev->dev_addr);
 }
@@ -882,6 +889,8 @@ static int enetc_pf_probe(struct pci_dev *pdev,
 	netif_info(priv, probe, ndev, "%s v%s\n",
 		   enetc_drv_name, enetc_drv_ver);
 
+	enetc_tsn_pf_init(ndev, pdev);
+
 	return 0;
 
 err_reg_netdev:
@@ -911,6 +920,8 @@ static void enetc_pf_remove(struct pci_dev *pdev)
 	priv = netdev_priv(si->ndev);
 	netif_info(priv, drv, si->ndev, "%s v%s remove\n",
 		   enetc_drv_name, enetc_drv_ver);
+
+	enetc_tsn_pf_deinit(si->ndev);
 
 	unregister_netdev(si->ndev);
 

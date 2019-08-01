@@ -313,6 +313,7 @@ static const struct of_device_id ftm_rtc_match[] = {
 	{ .compatible = "fsl,ls1088a-ftm-alarm", },
 	{ .compatible = "fsl,ls208xa-ftm-alarm", },
 	{ .compatible = "fsl,ls1028a-ftm-alarm", },
+	{ .compatible = "fsl,lx2160a-ftm-alarm", },
 	{ },
 };
 

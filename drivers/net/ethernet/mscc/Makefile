@@ -10,3 +10,5 @@ mscc_felix-$(CONFIG_MSCC_FELIX_SWITCH) := felix_regs.o felix_board.o
 ifeq ($(CONFIG_MSCC_FELIX_SWITCH_PTP_CLOCK),y)
 	mscc_felix-$(CONFIG_MSCC_FELIX_SWITCH) += felix_ptp.o
 endif
+
+obj-$(CONFIG_MSCC_FELIX_SWITCH_TSN) += felix_tsn.o

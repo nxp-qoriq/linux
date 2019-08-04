@@ -15,6 +15,7 @@
 #include <net/switchdev.h>
 #include <net/sock.h>
 #include "ocelot.h"
+#include "felix_tsn.h"
 
 #define FELIX_DRV_VER_MAJ 1
 #define FELIX_DRV_VER_MIN 0
@@ -33,6 +34,34 @@ static struct pci_device_id felix_ids[] = {
 	{ 0, }
 };
 MODULE_DEVICE_TABLE(pci, felix_ids);
+
+#ifdef CONFIG_MSCC_FELIX_SWITCH_TSN
+const struct tsn_ops switch_tsn_ops = {
+	.device_init			= felix_tsn_init,
+	.qbv_set			= felix_qbv_set,
+	.qbv_get			= felix_qbv_get,
+	.qbv_get_status			= felix_qbv_get_status,
+	.qbu_set			= felix_qbu_set,
+	.qbu_get                        = felix_qbu_get,
+	.cb_streamid_set		= felix_cb_streamid_set,
+	.cb_streamid_get		= felix_cb_streamid_get,
+	.qci_sfi_set			= felix_qci_sfi_set,
+	.qci_sfi_get			= felix_qci_sfi_get,
+	.qci_sfi_counters_get		= felix_qci_sfi_counters_get,
+	.qci_sgi_set			= felix_qci_sgi_set,
+	.qci_sgi_get			= felix_qci_sgi_get,
+	.qci_sgi_status_get		= felix_qci_sgi_status_get,
+	.qci_fmi_set			= felix_qci_fmi_set,
+	.qci_fmi_get			= felix_qci_fmi_get,
+	.cbs_set			= felix_cbs_set,
+	.cbs_get			= felix_cbs_get,
+	.ct_set				= felix_cut_thru_set,
+	.cbgen_set			= felix_seq_gen_set,
+	.cbrec_set			= felix_seq_rec_set,
+	.cb_get				= felix_cb_get,
+	.dscp_set			= felix_dscp_set,
+};
+#endif
 
 static struct {
 	enum ocelot_target id;
@@ -345,6 +374,9 @@ static void felix_release_ports(struct ocelot *ocelot)
 			continue;
 
 		phydev = ocelot_port->phy;
+#ifdef CONFIG_MSCC_FELIX_SWITCH_TSN
+		tsn_port_unregister(ocelot_port->dev);
+#endif
 		unregister_netdev(ocelot_port->dev);
 		free_netdev(ocelot_port->dev);
 
@@ -612,6 +644,12 @@ static int felix_ports_init(struct pci_dev *pdev)
 
 		if (pair_ndev)
 			felix_setup_port_inj(ocelot_port, pair_ndev);
+
+#ifdef CONFIG_MSCC_FELIX_SWITCH_TSN
+		tsn_port_register(ocelot_port->dev,
+				  (struct tsn_ops *)&switch_tsn_ops,
+				  (u16)pdev->bus->number + GROUP_OFFSET_SWITCH);
+#endif
 	}
 
 	/* set port for external CPU frame extraction/injection */

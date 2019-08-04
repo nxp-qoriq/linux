@@ -46,4 +46,11 @@ config MSCC_FELIX_SWITCH_PTP_CLOCK
 	  getting hardware time stamps on the PTP Ethernet packets
 	  using the SO_TIMESTAMPING API.
 
+config MSCC_FELIX_SWITCH_TSN
+	tristate "TSN on FELIX switch driver"
+	depends on MSCC_FELIX_SWITCH
+	depends on TSN
+	help
+	  This driver supports TSN on felix switch.
+
 endif # NET_VENDOR_MICROSEMI

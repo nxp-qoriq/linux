@@ -623,7 +623,7 @@ static void ocelot_set_rx_mode(struct net_device *dev)
 	 * forwarded to the CPU port.
 	 */
 	val = GENMASK(ocelot->num_phys_ports - 1, 0);
-	for (i = ocelot->num_phys_ports + 1; i < PGID_CPU; i++)
+	for (i = ocelot->num_phys_ports + 1; i < PGID_MCRED; i++)
 		ocelot_write_rix(ocelot, val, ANA_PGID_PGID, i);
 
 	/* Handle the device multicast addresses. First remove all the

@@ -512,19 +512,34 @@ static void felix_tx_clean(struct ocelot *ocelot)
 		 SYS_PTP_STATUS_PTP_MESS_VLD);
 }
 
+static void felix_preempt_irq_clean(struct ocelot *ocelot)
+{
+	struct ocelot_port *ocelot_port;
+	int port;
+	u32 val;
+
+	val = DEV_GMII_MM_STATISTICS_MM_STATUS_PRMPT_ACTIVE_STICKY;
+	for (port = 0; port < FELIX_MAX_NUM_PHY_PORTS; port++) {
+		ocelot_port = ocelot->ports[port];
+		ocelot_port_rmwl(ocelot_port, val, val,
+				 DEV_GMII_MM_STATISTICS_MM_STATUS);
+	}
+}
+
 static void felix_irq_handle_work(struct work_struct *work)
 {
 	struct ocelot *ocelot = container_of(work, struct ocelot,
 					     irq_handle_work);
 	struct pci_dev *pdev = container_of(ocelot->dev, struct pci_dev, dev);
 
-	/* TODO: TSN preemption handling
-	 * The INTB interrupt is also for preemption event. So there will be
-	 * interrupt storm if preemption is triggered without cleaning
-	 * interrupt status in ISR.
+	/* The INTB interrupt is used both for 1588 interrupt and
+	 * preemption status change interrupt on each port. So check
+	 * which interrupt it is, and clean it.
 	 */
 	if (felix_tx_tstamp_avail(ocelot))
 		felix_tx_clean(ocelot);
+	else
+		felix_preempt_irq_clean(ocelot);
 
 	enable_irq(pdev->irq);
 }

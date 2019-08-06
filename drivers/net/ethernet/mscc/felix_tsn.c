@@ -902,9 +902,15 @@ int felix_qci_sfi_set(struct net_device *ndev, u32 index, bool enable,
 	struct ocelot *ocelot = port->ocelot;
 	int igr_prio = sfi->priority_spec;
 	u16 sgid  = sfi->stream_gate_instance_id;
-	u16 pol_idx = sfi->stream_filter.flow_meter_instance_id;
+	u16 pol_idx;
+	int fmid = sfi->stream_filter.flow_meter_instance_id;
 	u16 max_sdu_len = sfi->stream_filter.maximum_sdu_size;
 	int sfid = index;
+
+	if (fmid == -1)
+		pol_idx = capa.psfp_fmi_max;
+	else
+		pol_idx = (u16)fmid;
 
 	if (sfid >= capa.num_psfp_sfid) {
 		netdev_info(ndev, "Invalid index %u, maximum:%u\n",
@@ -925,7 +931,7 @@ int felix_qci_sfi_set(struct net_device *ndev, u32 index, bool enable,
 
 	ocelot_write(ocelot, ANA_TABLES_SFIDTIDX_SGID_VALID |
 		     ANA_TABLES_SFIDTIDX_SGID(sgid) |
-		     ANA_TABLES_SFIDTIDX_POL_ENA |
+		     ((fmid != -1) ? ANA_TABLES_SFIDTIDX_POL_ENA : 0) |
 		     ANA_TABLES_SFIDTIDX_POL_IDX(pol_idx) |
 		     ANA_TABLES_SFIDTIDX_SFID_INDEX(sfid),
 		     ANA_TABLES_SFIDTIDX);

@@ -610,7 +610,6 @@
 			#size-cells = <2>;
 			device_type = "pci";
 			dma-coherent;
-			num-lanes = <4>;
 			bus-range = <0x0 0xff>;
 			msi-parent = <&its>;
 			iommu-map = <0 &smmu 0 1>;	/* This is fixed-up by u-boot */
@@ -633,7 +632,6 @@
 			#size-cells = <2>;
 			device_type = "pci";
 			dma-coherent;
-			num-lanes = <4>;
 			bus-range = <0x0 0xff>;
 			msi-parent = <&its>;
 			iommu-map = <0 &smmu 0 1>;	/* This is fixed-up by u-boot */
@@ -656,7 +654,6 @@
 			#size-cells = <2>;
 			device_type = "pci";
 			dma-coherent;
-			num-lanes = <8>;
 			bus-range = <0x0 0xff>;
 			msi-parent = <&its>;
 			iommu-map = <0 &smmu 0 1>;	/* This is fixed-up by u-boot */
@@ -679,7 +676,6 @@
 			#size-cells = <2>;
 			device_type = "pci";
 			dma-coherent;
-			num-lanes = <4>;
 			bus-range = <0x0 0xff>;
 			msi-parent = <&its>;
 			iommu-map = <0 &smmu 0 1>;	/* This is fixed-up by u-boot */

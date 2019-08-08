@@ -6,7 +6,6 @@ Required properties:
 - reg-names: Must be "config" for the PCIe configuration space.
     (The old way of getting the configuration address space from "ranges"
     is deprecated and should be avoided.)
-- num-lanes: number of lanes to use
 RC mode:
 - #address-cells: set to <3>
 - #size-cells: set to <2>

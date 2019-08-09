@@ -34,7 +34,3 @@ config FSL_SLEEP_FSM
 	  This driver configures a hardware FSM (Finite State Machine) for deep sleep.
 	  The FSM is used to finish clean-ups at the last stage of system entering deep
 	  sleep, and also wakes up system when a wake up event happens.
-
-if ARM || ARM64
-source "drivers/soc/fsl/Kconfig.arm"
-endif

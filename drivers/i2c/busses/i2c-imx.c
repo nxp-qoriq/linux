@@ -53,6 +53,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
+#include <linux/acpi.h>
 #include <linux/gpio.h>
 #include <linux/of_address.h>
 #include <linux/of.h>
@@ -321,6 +322,12 @@ static const struct of_device_id i2c_imx_dt_ids[] = {
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, i2c_imx_dt_ids);
+
+static const struct acpi_device_id i2c_imx_acpi_ids[] = {
+	{"NXP0001", .driver_data = (kernel_ulong_t)&vf610_i2c_hwdata},
+	{ }
+};
+MODULE_DEVICE_TABLE(acpi, i2c_imx_acpi_ids);
 
 static inline int is_imx1_i2c(struct imx_i2c_struct *i2c_imx)
 {
@@ -1239,6 +1246,9 @@ static int i2c_imx_probe(struct platform_device *pdev)
 {
 	const struct of_device_id *of_id = of_match_device(i2c_imx_dt_ids,
 							   &pdev->dev);
+	const struct acpi_device_id *acpi_id =
+					acpi_match_device(i2c_imx_acpi_ids,
+							  &pdev->dev);
 	struct imx_i2c_struct *i2c_imx;
 	struct resource *res;
 	struct imxi2c_platform_data *pdata = dev_get_platdata(&pdev->dev);
@@ -1266,6 +1276,9 @@ static int i2c_imx_probe(struct platform_device *pdev)
 
 	if (of_id)
 		i2c_imx->hwdata = of_id->data;
+	else if (acpi_id)
+		i2c_imx->hwdata = (struct imx_i2c_hwdata *)
+				acpi_id->driver_data;
 	else
 		i2c_imx->hwdata = (struct imx_i2c_hwdata *)
 				platform_get_device_id(pdev)->driver_data;
@@ -1278,6 +1291,7 @@ static int i2c_imx_probe(struct platform_device *pdev)
 	i2c_imx->adapter.nr		= pdev->id;
 	i2c_imx->adapter.dev.of_node	= pdev->dev.of_node;
 	i2c_imx->base			= base;
+	ACPI_COMPANION_SET(&i2c_imx->adapter.dev, ACPI_COMPANION(&pdev->dev));
 
 	/* Get I2C clock */
 	i2c_imx->clk = devm_clk_get(&pdev->dev, NULL);
@@ -1446,6 +1460,7 @@ static struct platform_driver i2c_imx_driver = {
 		.name = DRIVER_NAME,
 		.pm = I2C_IMX_PM_OPS,
 		.of_match_table = i2c_imx_dt_ids,
+		.acpi_match_table = ACPI_PTR(i2c_imx_acpi_ids),
 	},
 	.id_table = imx_i2c_devtype,
 };

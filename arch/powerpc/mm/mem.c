@@ -38,8 +38,10 @@
 #include <linux/vmalloc.h>
 #include <linux/memremap.h>
 
+#ifdef CONFIG_FSL_USDPAA
 /* See hook_usdpaa_tlb1() */
 #include <linux/fsl_usdpaa.h>
+#endif
 
 #include <asm/pgalloc.h>
 #include <asm/prom.h>

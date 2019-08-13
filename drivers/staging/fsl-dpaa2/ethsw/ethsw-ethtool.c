@@ -3,7 +3,7 @@
  * DPAA2 Ethernet Switch ethtool support
  *
  * Copyright 2014-2016 Freescale Semiconductor Inc.
- * Copyright 2017-2018 NXP
+ * Copyright 2017-2019 NXP
  *
  */
 
@@ -65,7 +65,7 @@ ethsw_get_link_ksettings(struct net_device *netdev,
 				     port_priv->idx,
 				     &state);
 	if (err) {
-		netdev_err(netdev, "ERROR %d getting link state", err);
+		netdev_err(netdev, "ERROR %d getting link state\n", err);
 		goto out;
 	}
 

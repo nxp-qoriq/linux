@@ -36,13 +36,11 @@ static enum drm_mode_status malidp_crtc_mode_valid(struct drm_crtc *crtc,
 
 	if (req_rate) {
 		rate = clk_round_rate(hwdev->pxlclk, req_rate);
-#ifndef CONFIG_ARCH_LAYERSCAPE
 		if (rate != req_rate) {
 			DRM_DEBUG_DRIVER("pxlclk doesn't support %ld Hz\n",
 					 req_rate);
 			return MODE_NOCLOCK;
 		}
-#endif
 	}
 
 	return MODE_OK;

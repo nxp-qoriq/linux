@@ -699,7 +699,11 @@ loaddev:
 		return -EOPNOTSUPP;
 	}
 
-	tsnops->cb_streamid_set(netdev, sid_index, enable, &sidconf);
+	ret = tsnops->cb_streamid_set(netdev, sid_index, enable, &sidconf);
+	if (ret < 0) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, ret);
+		return ret;
+	}
 
 	/* simple reply here. To be continue */
 	if (tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, 0))
@@ -1077,7 +1081,11 @@ loaddrive:
 		return -EINVAL;
 	}
 
-	tsnops->qci_sfi_set(netdev, sfi_handle, enable, &sficonf);
+	ret = tsnops->qci_sfi_set(netdev, sfi_handle, enable, &sficonf);
+	if (ret < 0) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, ret);
+		return ret;
+	}
 
 	ret = tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, 0);
 
@@ -1143,14 +1151,19 @@ static int cmd_qci_sfi_get(struct genl_info *info)
 		goto exit;
 	} else {
 		valid = tsnops->qci_sfi_get(netdev, sfi_handle, &sficonf);
-
 		if (valid < 0) {
 			tsn_simple_reply(info, TSN_CMD_REPLY,
 					 netdev->name, valid);
 			return valid;
 		}
 
-		tsnops->qci_sfi_counters_get(netdev, sfi_handle, &sficount);
+		valid = tsnops->qci_sfi_counters_get(netdev, sfi_handle,
+						     &sficount);
+		if (valid < 0) {
+			tsn_simple_reply(info, TSN_CMD_REPLY,
+					 netdev->name, valid);
+			return valid;
+		}
 	}
 
 	ret = tsn_prepare_reply(info, genlhdr->cmd,
@@ -1297,7 +1310,11 @@ static int cmd_qci_sfi_counters_get(struct genl_info *info)
 	if (nla_put_u32(rep_skb, TSN_QCI_SFI_ATTR_INDEX, sfi_handle))
 		return -EMSGSIZE;
 
-	tsnops->qci_sfi_counters_get(netdev, sfi_handle, &sficount);
+	ret = tsnops->qci_sfi_counters_get(netdev, sfi_handle, &sficount);
+	if (ret < 0) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, ret);
+		return ret;
+	}
 
 	if (nla_put(rep_skb, TSN_QCI_SFI_ATTR_COUNTERS,
 		    sizeof(struct tsn_qci_psfp_sfi_counters), &sficount))
@@ -1986,7 +2003,11 @@ loaddev:
 		return -EINVAL;
 	}
 
-	tsnops->qci_fmi_set(netdev, index, enable, &fmiconf);
+	ret = tsnops->qci_fmi_set(netdev, index, enable, &fmiconf);
+	if (ret < 0) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, ret);
+		return ret;
+	}
 
 	ret = tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, 0);
 
@@ -2051,7 +2072,11 @@ static int cmd_qci_fmi_get(struct genl_info *info)
 		return -EINVAL;
 	}
 
-	tsnops->qci_fmi_get(netdev, index, &fmiconf, &counters);
+	ret = tsnops->qci_fmi_get(netdev, index, &fmiconf, &counters);
+	if (ret < 0) {
+		tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, ret);
+		return ret;
+	}
 
 	genlhdr = info->genlhdr;
 
@@ -2691,8 +2716,8 @@ static int tsn_cbs_get(struct sk_buff *skb, struct genl_info *info)
 	if (ret < 0) {
 		pr_err("tsn: cbs_get return error\n");
 		tsn_simple_reply(info, TSN_CMD_REPLY,
-				 netdev->name, -EINVAL);
-		return -EINVAL;
+				 netdev->name, ret);
+		return ret;
 	}
 
 	if (nla_put_u8(rep_skb, TSN_CBS_ATTR_BW, ret & 0XF))

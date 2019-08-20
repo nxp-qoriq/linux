@@ -20,7 +20,12 @@ netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	struct enetc_bdr *tx_ring;
+	unsigned long flags;
+	/* pointer to per-cpu ENETC lock for register access issue WA */
+	spinlock_t *lock;
 	int count;
+
+	lock = this_cpu_ptr(&enetc_gregs);
 
 	tx_ring = priv->tx_ring[skb->queue_mapping];
 
@@ -34,7 +39,12 @@ netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
 		return NETDEV_TX_BUSY;
 	}
 
+	spin_lock_irqsave(lock, flags);
+
 	count = enetc_map_tx_buffs(tx_ring, skb, priv->active_offloads);
+
+	spin_unlock_irqrestore(lock, flags);
+
 	if (unlikely(!count))
 		goto drop_packet_err;
 
@@ -229,7 +239,7 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 	tx_ring->next_to_use = i;
 
 	/* let H/W know BD ring has been updated */
-	enetc_wr_reg(tx_ring->tpir, i); /* includes wmb() */
+	enetc_wr_reg_hot(tx_ring->tpir, i); /* includes wmb() */
 
 	return count;
 
@@ -272,6 +282,9 @@ static int enetc_poll(struct napi_struct *napi, int budget)
 	struct enetc_int_vector
 		*v = container_of(napi, struct enetc_int_vector, napi);
 	bool complete = true;
+	unsigned long flags;
+	/* pointer to per-cpu ENETC lock for register access issue WA */
+	spinlock_t *lock;
 	int work_done;
 	int i;
 
@@ -288,19 +301,24 @@ static int enetc_poll(struct napi_struct *napi, int budget)
 
 	napi_complete_done(napi, work_done);
 
+	lock = this_cpu_ptr(&enetc_gregs);
+	spin_lock_irqsave(lock, flags);
+
 	/* enable interrupts */
-	enetc_wr_reg(v->rbier, ENETC_RBIER_RXTIE);
+	enetc_wr_reg_hot(v->rbier, ENETC_RBIER_RXTIE);
 
 	for_each_set_bit(i, &v->tx_rings_map, v->count_tx_rings)
-		enetc_wr_reg(v->tbier_base + ENETC_BDR_OFF(i),
-			     ENETC_TBIER_TXTIE);
+		enetc_wr_reg_hot(v->tbier_base + ENETC_BDR_OFF(i),
+				 ENETC_TBIER_TXTIE);
+
+	spin_unlock_irqrestore(lock, flags);
 
 	return work_done;
 }
 
 static int enetc_bd_ready_count(struct enetc_bdr *tx_ring, int ci)
 {
-	int pi = enetc_rd_reg(tx_ring->tcir) & ENETC_TBCIR_IDX_MASK;
+	int pi = enetc_rd_reg_hot(tx_ring->tcir) & ENETC_TBCIR_IDX_MASK;
 
 	return pi >= ci ? pi - ci : tx_ring->bd_count - ci + pi;
 }
@@ -337,6 +355,13 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget)
 	int i, bds_to_clean;
 	bool do_tstamp;
 	u64 tstamp = 0;
+
+	unsigned long flags;
+	/* pointer to per-cpu ENETC lock for register access issue WA */
+	spinlock_t *lock;
+
+	lock = this_cpu_ptr(&enetc_gregs);
+	spin_lock_irqsave(lock, flags);
 
 	i = tx_ring->next_to_clean;
 	tx_swbd = &tx_ring->tx_swbd[i];
@@ -390,13 +415,15 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget)
 		if (is_eof) {
 			tx_frm_cnt++;
 			/* re-arm interrupt source */
-			enetc_wr_reg(tx_ring->idr, BIT(tx_ring->index) |
-				     BIT(16 + tx_ring->index));
+			enetc_wr_reg_hot(tx_ring->idr, BIT(tx_ring->index) |
+					 BIT(16 + tx_ring->index));
 		}
 
 		if (unlikely(!bds_to_clean))
 			bds_to_clean = enetc_bd_ready_count(tx_ring, i);
 	}
+
+	spin_unlock_irqrestore(lock, flags);
 
 	tx_ring->next_to_clean = i;
 	tx_ring->stats.packets += tx_frm_cnt;
@@ -475,7 +502,7 @@ static int enetc_refill_rx_ring(struct enetc_bdr *rx_ring, const int buff_cnt)
 		rx_ring->next_to_alloc = i; /* keep track from page reuse */
 		rx_ring->next_to_use = i;
 		/* update ENETC's consumer index */
-		enetc_wr_reg(rx_ring->rcir, i);
+		enetc_wr_reg_hot(rx_ring->rcir, i);
 	}
 
 	return j;
@@ -632,6 +659,12 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 	int rx_frm_cnt = 0, rx_byte_cnt = 0;
 	int cleaned_cnt, i;
 
+	unsigned long flags;
+	/* pointer to per-cpu ENETC lock for register access issue WA */
+	spinlock_t *lock;
+
+	lock = this_cpu_ptr(&enetc_gregs);
+
 	cleaned_cnt = enetc_bd_unused(rx_ring);
 	/* next descriptor to process */
 	i = rx_ring->next_to_clean;
@@ -642,6 +675,8 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 		u32 bd_status;
 		u16 size;
 
+		spin_lock_irqsave(lock, flags);
+
 		if (cleaned_cnt >= ENETC_RXBD_BUNDLE) {
 			int count = enetc_refill_rx_ring(rx_ring, cleaned_cnt);
 
@@ -650,15 +685,19 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 
 		rxbd = ENETC_RXBD(*rx_ring, i);
 		bd_status = le32_to_cpu(rxbd->r.lstatus);
-		if (!bd_status)
+		if (!bd_status) {
+			spin_unlock_irqrestore(lock, flags);
 			break;
+		}
 
-		enetc_wr_reg(rx_ring->idr, BIT(rx_ring->index));
+		enetc_wr_reg_hot(rx_ring->idr, BIT(rx_ring->index));
 		dma_rmb(); /* for reading other rxbd fields */
 		size = le16_to_cpu(rxbd->r.buf_len);
 		skb = enetc_map_rx_buff_to_skb(rx_ring, i, size);
-		if (!skb)
+		if (!skb) {
+			spin_unlock_irqrestore(lock, flags);
 			break;
+		}
 
 		enetc_get_offloads(rx_ring, rxbd, skb);
 
@@ -714,6 +753,8 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 		rx_byte_cnt += skb->len;
 
 		enetc_process_skb(rx_ring, skb);
+
+		spin_unlock_irqrestore(lock, flags);
 
 		napi_gro_receive(napi, skb);
 
@@ -1818,3 +1859,6 @@ void enetc_pci_remove(struct pci_dev *pdev)
 	pci_release_mem_regions(pdev);
 	pci_disable_device(pdev);
 }
+
+DEFINE_PER_CPU(spinlock_t, enetc_gregs);
+EXPORT_PER_CPU_SYMBOL(enetc_gregs);

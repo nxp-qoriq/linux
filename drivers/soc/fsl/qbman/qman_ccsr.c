@@ -376,6 +376,16 @@ static int qm_set_memory(enum qm_memory memory, u64 ba, u32 size)
 		return -ENOMEM;
 	}
 	memset(ptr, 0, size);
+
+#ifdef CONFIG_PPC
+	/*
+	 * PPC doesn't appear to flush the cache on memunmap() but the
+	 * cache must be flushed since QMan does non coherent accesses
+	 * to this memory
+	 */
+	flush_dcache_range((unsigned long) ptr, (unsigned long) ptr+size);
+#endif
+
 	memunmap(ptr);
 
 	qm_ccsr_out(offset, upper_32_bits(ba));

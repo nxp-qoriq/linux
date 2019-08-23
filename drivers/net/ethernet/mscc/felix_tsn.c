@@ -756,6 +756,13 @@ int felix_cb_streamid_set(struct net_device *ndev, u32 index, bool enable,
 		return 0;
 	}
 
+	ocelot_write(ocelot,
+		     ANA_TABLES_STREAMDATA_SFID_VALID |
+		     ANA_TABLES_STREAMDATA_SFID(sfid) |
+		     ANA_TABLES_STREAMDATA_SSID_VALID |
+		     ANA_TABLES_STREAMDATA_SSID(ssid),
+		     ANA_TABLES_STREAMDATA);
+
 	reg = ocelot_read(ocelot, ANA_TABLES_MACACCESS);
 	dst_idx = ANA_TABLES_MACACCESS_DEST_IDX_X(reg);
 	ocelot_write(ocelot, ANA_TABLES_MACACCESS_VALID |

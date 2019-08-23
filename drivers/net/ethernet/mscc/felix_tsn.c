@@ -661,6 +661,7 @@ int felix_cb_streamid_set(struct net_device *ndev, u32 index, bool enable,
 {
 	struct ocelot_port *port = netdev_priv(ndev);
 	struct ocelot *ocelot = port->ocelot;
+	struct regmap_field *rf;
 	u16 vid;
 	u64 mac;
 	u32 macl, mach;
@@ -669,6 +670,34 @@ int felix_cb_streamid_set(struct net_device *ndev, u32 index, bool enable,
 	u32 reg;
 	int sfid, ssid;
 	u32 m_index, bucket;
+
+	if (!enable) {
+		if (index >= MSCC_STREAM_HANDLE_NUM) {
+			netdev_info(ndev,
+				    "Invalid index %u, maximum:%u\n",
+				    index, MSCC_STREAM_HANDLE_NUM - 1);
+			return -EINVAL;
+		}
+		m_index = streamhandle_map[index] / 4;
+		bucket =  streamhandle_map[index] % 4;
+		rf = ocelot->regfields[ANA_TABLES_MACTINDX_BUCKET];
+		regmap_field_write(rf, bucket);
+		rf = ocelot->regfields[ANA_TABLES_MACTINDX_M_INDEX];
+		regmap_field_write(rf, m_index);
+
+		/*READ command MACACCESS.VALID(11 bit) must be 0 */
+		ocelot_write(ocelot,
+			     ANA_TABLES_MACACCESS_MAC_TABLE_CMD(MACACCESS_CMD_READ),
+			     ANA_TABLES_MACACCESS);
+
+		ocelot_write(ocelot,
+			     ANA_TABLES_MACACCESS_MAC_TABLE_CMD(MACACCESS_CMD_FORGET),
+			     ANA_TABLES_MACACCESS);
+
+		streamhandle_map[index] = 0;
+
+		return 0;
+	}
 
 	if (streamid->type != 1) {
 		netdev_info(ndev, "Invalid stream type\n");
@@ -691,23 +720,6 @@ int felix_cb_streamid_set(struct net_device *ndev, u32 index, bool enable,
 	vid = streamid->para.nid.vid;
 
 	idx = lookup_mactable(ocelot, vid, mac);
-
-	if (!enable) {
-		netdev_info(ndev, "Disable stream set\n");
-		ocelot_write(ocelot, macl, ANA_TABLES_MACLDATA);
-		ocelot_write(ocelot, ANA_TABLES_MACHDATA_VID(vid) |
-			     ANA_TABLES_MACHDATA_MACHDATA(mach),
-			     ANA_TABLES_MACHDATA);
-
-		ocelot_write(ocelot,
-			     ANA_TABLES_MACACCESS_MAC_TABLE_CMD(MACACCESS_CMD_FORGET),
-			     ANA_TABLES_MACACCESS);
-
-		if (idx >= 0)
-			streamhandle_map[streamid->handle] = 0;
-
-		return 0;
-	}
 
 	if (idx < 0) {
 		ocelot_write(ocelot, macl, ANA_TABLES_MACLDATA);

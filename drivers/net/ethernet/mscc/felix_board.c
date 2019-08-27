@@ -640,8 +640,6 @@ static int felix_ports_init(struct pci_dev *pdev)
 
 		of_node_put(phy_node);
 
-		if (!phydev)
-			continue;
 
 		phy_mode = of_get_phy_mode(portnp);
 		if (phy_mode < 0)
@@ -656,6 +654,7 @@ static int felix_ports_init(struct pci_dev *pdev)
 		/* Felix configs */
 		ocelot_port = ocelot->ports[port];
 		ocelot_port->phy_mode = phy_mode;
+		ocelot_port->portnp = portnp;
 
 		if (pair_ndev)
 			felix_setup_port_inj(ocelot_port, pair_ndev);

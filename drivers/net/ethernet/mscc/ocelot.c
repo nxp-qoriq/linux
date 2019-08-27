@@ -19,6 +19,7 @@
 #include <net/netevent.h>
 #include <net/rtnetlink.h>
 #include <net/switchdev.h>
+#include <linux/of_mdio.h>
 
 #include "ocelot.h"
 #include "ocelot_ace.h"
@@ -468,6 +469,20 @@ static int ocelot_port_open(struct net_device *dev)
 	struct ocelot_port *port = netdev_priv(dev);
 	struct ocelot *ocelot = port->ocelot;
 	int err;
+
+	if (!port->phy)	{
+		struct phy_device *phydev = NULL;
+		struct device_node *phy_node;
+
+		phy_node = of_parse_phandle(port->portnp, "phy-handle", 0);
+		if (phy_node) {
+			phydev = of_phy_find_device(phy_node);
+			of_node_put(phy_node);
+		}
+		if (!phydev)
+			return -ENXIO;
+		port->phy = phydev;
+	}
 
 	/* Enable receiving frames on the port, and activate auto-learning of
 	 * MAC addresses.

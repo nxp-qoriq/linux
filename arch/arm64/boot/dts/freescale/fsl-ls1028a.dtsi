@@ -788,11 +788,10 @@
 
 	display1: hdp@f200000 {
 		compatible = "fsl,ls1028a-dp";
-		reg = <0x0 0xf1f0000 0x0 0xffff>,
-		    <0x0 0xf200000 0x0 0xfffff>;
+		reg = <0x0 0xf200000 0x0 0xfffff>;
 		interrupts = <0 221 IRQ_TYPE_LEVEL_HIGH>;
-		clocks = <&sysclk>, <&hdpclk>, <&dpclk>,
-			 <&dpclk>, <&dpclk>, <&pclk>, <&dpclk>;
+		clocks = <&sysclk>, <&hdpclk>, <&hdpclk>,
+			 <&hdpclk>, <&hdpclk>, <&hdpclk>, <&hdpclk>;
 		clock-names = "clk_ipg", "clk_core", "clk_pxl",
 			      "clk_pxl_mux", "clk_pxl_link", "clk_apb",
 			      "clk_vif";

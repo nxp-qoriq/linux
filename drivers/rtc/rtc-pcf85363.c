@@ -18,6 +18,7 @@
 #include <linux/of_device.h>
 #include <linux/regmap.h>
 
+#include "rtc-core.h"
 /*
  * Date/Time registers
  */
@@ -401,8 +402,6 @@ static int pcf85363_probe(struct i2c_client *client,
 		return PTR_ERR(pcf85363->rtc);
 
 	pcf85363->rtc->ops = &rtc_ops;
-	pcf85363->rtc->range_min = RTC_TIMESTAMP_BEGIN_2000;
-	pcf85363->rtc->range_max = RTC_TIMESTAMP_END_2099;
 
 	if (client->irq > 0) {
 		regmap_write(pcf85363->regmap, CTRL_FLAGS, 0);
@@ -422,7 +421,8 @@ static int pcf85363_probe(struct i2c_client *client,
 
 	for (i = 0; i < config->num_nvram; i++) {
 		nvmem_cfg[i].priv = pcf85363;
-		rtc_nvmem_register(pcf85363->rtc, &nvmem_cfg[i]);
+		pcf85363->rtc->nvmem_config = &nvmem_cfg[i];
+		rtc_nvmem_register(pcf85363->rtc);
 	}
 
 	return ret;

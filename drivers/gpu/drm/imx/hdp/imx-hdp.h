@@ -124,6 +124,7 @@ struct hdp_ops {
 struct hdp_devtype {
 	struct hdp_ops *ops;
 	struct hdp_rw_func *rw;
+	u32 connector_type;
 };
 
 struct hdp_video {

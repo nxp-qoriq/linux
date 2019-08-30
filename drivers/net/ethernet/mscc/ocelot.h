@@ -11,6 +11,7 @@
 #include <linux/bitops.h>
 #include <linux/etherdevice.h>
 #include <linux/if_vlan.h>
+#include <linux/phy.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/ptp_clock_kernel.h>
@@ -606,6 +607,7 @@ struct ocelot_port {
 	u8 vlan_aware;
 
 	u64 *stats;
+	phy_interface_t phy_mode;
 
 	/* cpu frame injection handler */
 	netdev_tx_t (*cpu_inj_handler)(struct sk_buff *skb,

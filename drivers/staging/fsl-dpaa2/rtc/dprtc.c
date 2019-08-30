@@ -1,34 +1,9 @@
-/* Copyright 2013-2016 Freescale Semiconductor Inc.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- * * Redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer.
- * * Redistributions in binary form must reproduce the above copyright
- * notice, this list of conditions and the following disclaimer in the
- * documentation and/or other materials provided with the distribution.
- * * Neither the name of the above-listed copyright holders nor the
- * names of any contributors may be used to endorse or promote products
- * derived from this software without specific prior written permission.
- *
- *
- * ALTERNATIVELY, this software may be distributed under the terms of the
- * GNU General Public License ("GPL") as published by the Free Software
- * Foundation, either version 2 of that License or (at your option) any
- * later version.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright 2013-2016 Freescale Semiconductor Inc.
+ * Copyright 2016-2018 NXP
  */
+
 #include <linux/fsl/mc.h>
 
 #include "dprtc.h"
@@ -52,30 +27,27 @@
  * Return:	'0' on Success; Error code otherwise.
  */
 int dprtc_open(struct fsl_mc_io *mc_io,
-	       uint32_t cmd_flags,
+	       u32 cmd_flags,
 	       int dprtc_id,
-	       uint16_t *token)
+	       u16 *token)
 {
 	struct dprtc_cmd_open *cmd_params;
 	struct fsl_mc_command cmd = { 0 };
 	int err;
 
-	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_OPEN,
 					  cmd_flags,
 					  0);
 	cmd_params = (struct dprtc_cmd_open *)cmd.params;
 	cmd_params->dprtc_id = cpu_to_le32(dprtc_id);
 
-	/* send command to mc*/
 	err = mc_send_command(mc_io, &cmd);
 	if (err)
 		return err;
 
-	/* retrieve response parameters */
 	*token = mc_cmd_hdr_read_token(&cmd);
 
-	return err;
+	return 0;
 }
 
 /**
@@ -90,165 +62,14 @@ int dprtc_open(struct fsl_mc_io *mc_io,
  * Return:	'0' on Success; Error code otherwise.
  */
 int dprtc_close(struct fsl_mc_io *mc_io,
-		uint32_t cmd_flags,
-		uint16_t token)
+		u32 cmd_flags,
+		u16 token)
 {
 	struct fsl_mc_command cmd = { 0 };
 
-	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_CLOSE, cmd_flags,
 					  token);
 
-	/* send command to mc*/
-	return mc_send_command(mc_io, &cmd);
-}
-
-/**
- * dprtc_create() - Create the DPRTC object.
- * @mc_io:	Pointer to MC portal's I/O object
- * @dprc_token:	Parent container token; '0' for default container
- * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
- * @cfg:	Configuration structure
- * @obj_id:	Returned object id
- *
- * Create the DPRTC object, allocate required resources and
- * perform required initialization.
- *
- * The function accepts an authentication token of a parent
- * container that this object should be assigned to. The token
- * can be '0' so the object will be assigned to the default container.
- * The newly created object can be opened with the returned
- * object id and using the container's associated tokens and MC portals.
- *
- * Return:	'0' on Success; Error code otherwise.
- */
-int dprtc_create(struct fsl_mc_io *mc_io,
-		 uint16_t dprc_token,
-		 uint32_t cmd_flags,
-		 const struct dprtc_cfg *cfg,
-		 uint32_t *obj_id)
-{
-	struct fsl_mc_command cmd = { 0 };
-	int err;
-
-	(void)(cfg); /* unused */
-
-	/* prepare command */
-	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_CREATE,
-					  cmd_flags,
-					  dprc_token);
-
-	/* send command to mc*/
-	err = mc_send_command(mc_io, &cmd);
-	if (err)
-		return err;
-
-	/* retrieve response parameters */
-	*obj_id = mc_cmd_read_object_id(&cmd);
-
-	return 0;
-}
-
-/**
- * dprtc_destroy() - Destroy the DPRTC object and release all its resources.
- * @mc_io:	Pointer to MC portal's I/O object
- * @dprc_token: Parent container token; '0' for default container
- * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
- * @object_id:	The object id; it must be a valid id within the container that
- * created this object;
- *
- * The function accepts the authentication token of the parent container that
- * created the object (not the one that currently owns the object). The object
- * is searched within parent using the provided 'object_id'.
- * All tokens to the object must be closed before calling destroy.
- *
- * Return:	'0' on Success; error code otherwise.
- */
-int dprtc_destroy(struct fsl_mc_io *mc_io,
-		  uint16_t dprc_token,
-		  uint32_t cmd_flags,
-		  uint32_t object_id)
-{
-	struct dprtc_cmd_destroy *cmd_params;
-	struct fsl_mc_command cmd = { 0 };
-
-	/* prepare command */
-	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_DESTROY,
-					  cmd_flags,
-					  dprc_token);
-	cmd_params = (struct dprtc_cmd_destroy *)cmd.params;
-	cmd_params->object_id = cpu_to_le32(object_id);
-
-	/* send command to mc*/
-	return mc_send_command(mc_io, &cmd);
-}
-
-int dprtc_enable(struct fsl_mc_io *mc_io,
-		 uint32_t cmd_flags,
-		 uint16_t token)
-{
-	struct fsl_mc_command cmd = { 0 };
-
-	/* prepare command */
-	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_ENABLE, cmd_flags,
-					  token);
-
-	/* send command to mc*/
-	return mc_send_command(mc_io, &cmd);
-}
-
-int dprtc_disable(struct fsl_mc_io *mc_io,
-		  uint32_t cmd_flags,
-		  uint16_t token)
-{
-	struct fsl_mc_command cmd = { 0 };
-
-	/* prepare command */
-	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_DISABLE,
-					  cmd_flags,
-					  token);
-
-	/* send command to mc*/
-	return mc_send_command(mc_io, &cmd);
-}
-
-int dprtc_is_enabled(struct fsl_mc_io *mc_io,
-		     uint32_t cmd_flags,
-		     uint16_t token,
-		     int *en)
-{
-	struct dprtc_rsp_is_enabled *rsp_params;
-	struct fsl_mc_command cmd = { 0 };
-	int err;
-
-	/* prepare command */
-	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_IS_ENABLED, cmd_flags,
-					  token);
-
-	/* send command to mc*/
-	err = mc_send_command(mc_io, &cmd);
-	if (err)
-		return err;
-
-	/* retrieve response parameters */
-	rsp_params = (struct dprtc_rsp_is_enabled *)cmd.params;
-	*en = dprtc_get_field(rsp_params->en, ENABLE);
-
-	return 0;
-}
-
-int dprtc_reset(struct fsl_mc_io *mc_io,
-		uint32_t cmd_flags,
-		uint16_t token)
-{
-	struct fsl_mc_command cmd = { 0 };
-
-	/* prepare command */
-	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_RESET,
-					  cmd_flags,
-					  token);
-
-	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
 
@@ -268,15 +89,14 @@ int dprtc_reset(struct fsl_mc_io *mc_io,
  * Return:	'0' on Success; Error code otherwise.
  */
 int dprtc_set_irq_enable(struct fsl_mc_io *mc_io,
-			 uint32_t cmd_flags,
-			 uint16_t token,
-			 uint8_t irq_index,
-			 uint8_t en)
+			 u32 cmd_flags,
+			 u16 token,
+			 u8 irq_index,
+			 u8 en)
 {
 	struct dprtc_cmd_set_irq_enable *cmd_params;
 	struct fsl_mc_command cmd = { 0 };
 
-	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_SET_IRQ_ENABLE,
 					  cmd_flags,
 					  token);
@@ -284,7 +104,6 @@ int dprtc_set_irq_enable(struct fsl_mc_io *mc_io,
 	cmd_params->irq_index = irq_index;
 	cmd_params->en = en;
 
-	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
 
@@ -299,29 +118,26 @@ int dprtc_set_irq_enable(struct fsl_mc_io *mc_io,
  * Return:	'0' on Success; Error code otherwise.
  */
 int dprtc_get_irq_enable(struct fsl_mc_io *mc_io,
-			 uint32_t cmd_flags,
-			 uint16_t token,
-			 uint8_t irq_index,
-			 uint8_t *en)
+			 u32 cmd_flags,
+			 u16 token,
+			 u8 irq_index,
+			 u8 *en)
 {
 	struct dprtc_rsp_get_irq_enable *rsp_params;
 	struct dprtc_cmd_get_irq *cmd_params;
 	struct fsl_mc_command cmd = { 0 };
 	int err;
 
-	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_GET_IRQ_ENABLE,
 					  cmd_flags,
 					  token);
 	cmd_params = (struct dprtc_cmd_get_irq *)cmd.params;
 	cmd_params->irq_index = irq_index;
 
-	/* send command to mc*/
 	err = mc_send_command(mc_io, &cmd);
 	if (err)
 		return err;
 
-	/* retrieve response parameters */
 	rsp_params = (struct dprtc_rsp_get_irq_enable *)cmd.params;
 	*en = rsp_params->en;
 
@@ -345,15 +161,14 @@ int dprtc_get_irq_enable(struct fsl_mc_io *mc_io,
  * Return:	'0' on Success; Error code otherwise.
  */
 int dprtc_set_irq_mask(struct fsl_mc_io *mc_io,
-		       uint32_t cmd_flags,
-		       uint16_t token,
-		       uint8_t irq_index,
-		       uint32_t mask)
+		       u32 cmd_flags,
+		       u16 token,
+		       u8 irq_index,
+		       u32 mask)
 {
 	struct dprtc_cmd_set_irq_mask *cmd_params;
 	struct fsl_mc_command cmd = { 0 };
 
-	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_SET_IRQ_MASK,
 					  cmd_flags,
 					  token);
@@ -361,7 +176,6 @@ int dprtc_set_irq_mask(struct fsl_mc_io *mc_io,
 	cmd_params->mask = cpu_to_le32(mask);
 	cmd_params->irq_index = irq_index;
 
-	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
 
@@ -379,29 +193,26 @@ int dprtc_set_irq_mask(struct fsl_mc_io *mc_io,
  * Return:	'0' on Success; Error code otherwise.
  */
 int dprtc_get_irq_mask(struct fsl_mc_io *mc_io,
-		       uint32_t cmd_flags,
-		       uint16_t token,
-		       uint8_t irq_index,
-		       uint32_t *mask)
+		       u32 cmd_flags,
+		       u16 token,
+		       u8 irq_index,
+		       u32 *mask)
 {
 	struct dprtc_rsp_get_irq_mask *rsp_params;
 	struct dprtc_cmd_get_irq *cmd_params;
 	struct fsl_mc_command cmd = { 0 };
 	int err;
 
-	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_GET_IRQ_MASK,
 					  cmd_flags,
 					  token);
 	cmd_params = (struct dprtc_cmd_get_irq *)cmd.params;
 	cmd_params->irq_index = irq_index;
 
-	/* send command to mc*/
 	err = mc_send_command(mc_io, &cmd);
 	if (err)
 		return err;
 
-	/* retrieve response parameters */
 	rsp_params = (struct dprtc_rsp_get_irq_mask *)cmd.params;
 	*mask = le32_to_cpu(rsp_params->mask);
 
@@ -422,17 +233,16 @@ int dprtc_get_irq_mask(struct fsl_mc_io *mc_io,
  * Return:	'0' on Success; Error code otherwise.
  */
 int dprtc_get_irq_status(struct fsl_mc_io *mc_io,
-			 uint32_t cmd_flags,
-			 uint16_t token,
-			 uint8_t irq_index,
-			 uint32_t *status)
+			 u32 cmd_flags,
+			 u16 token,
+			 u8 irq_index,
+			 u32 *status)
 {
 	struct dprtc_cmd_get_irq_status *cmd_params;
 	struct dprtc_rsp_get_irq_status *rsp_params;
 	struct fsl_mc_command cmd = { 0 };
 	int err;
 
-	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_GET_IRQ_STATUS,
 					  cmd_flags,
 					  token);
@@ -440,14 +250,12 @@ int dprtc_get_irq_status(struct fsl_mc_io *mc_io,
 	cmd_params->status = cpu_to_le32(*status);
 	cmd_params->irq_index = irq_index;
 
-	/* send command to mc*/
 	err = mc_send_command(mc_io, &cmd);
 	if (err)
 		return err;
 
-	/* retrieve response parameters */
 	rsp_params = (struct dprtc_rsp_get_irq_status *)cmd.params;
-	*status = rsp_params->status;
+	*status = le32_to_cpu(rsp_params->status);
 
 	return 0;
 }
@@ -466,15 +274,14 @@ int dprtc_get_irq_status(struct fsl_mc_io *mc_io,
  * Return:	'0' on Success; Error code otherwise.
  */
 int dprtc_clear_irq_status(struct fsl_mc_io *mc_io,
-			   uint32_t cmd_flags,
-			   uint16_t token,
-			   uint8_t irq_index,
-			   uint32_t status)
+			   u32 cmd_flags,
+			   u16 token,
+			   u8 irq_index,
+			   u32 status)
 {
 	struct dprtc_cmd_clear_irq_status *cmd_params;
 	struct fsl_mc_command cmd = { 0 };
 
-	/* prepare command */
 	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_CLEAR_IRQ_STATUS,
 					  cmd_flags,
 					  token);
@@ -482,265 +289,5 @@ int dprtc_clear_irq_status(struct fsl_mc_io *mc_io,
 	cmd_params->irq_index = irq_index;
 	cmd_params->status = cpu_to_le32(status);
 
-	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
-}
-
-/**
- * dprtc_get_attributes - Retrieve DPRTC attributes.
- *
- * @mc_io:	Pointer to MC portal's I/O object
- * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
- * @token:	Token of DPRTC object
- * @attr:	Returned object's attributes
- *
- * Return:	'0' on Success; Error code otherwise.
- */
-int dprtc_get_attributes(struct fsl_mc_io *mc_io,
-			 uint32_t cmd_flags,
-			 uint16_t token,
-			 struct dprtc_attr *attr)
-{
-	struct dprtc_rsp_get_attributes *rsp_params;
-	struct fsl_mc_command cmd = { 0 };
-	int err;
-
-	/* prepare command */
-	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_GET_ATTR,
-					  cmd_flags,
-					  token);
-
-	/* send command to mc*/
-	err = mc_send_command(mc_io, &cmd);
-	if (err)
-		return err;
-
-	/* retrieve response parameters */
-	rsp_params = (struct dprtc_rsp_get_attributes *)cmd.params;
-	attr->id = le32_to_cpu(rsp_params->id);
-
-	return 0;
-}
-
-/**
- * dprtc_set_clock_offset() - Sets the clock's offset
- * (usually relative to another clock).
- *
- * @mc_io:	Pointer to MC portal's I/O object
- * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
- * @token:	Token of DPRTC object
- * @offset:	New clock offset (in nanoseconds).
- *
- * Return:	'0' on Success; Error code otherwise.
- */
-int dprtc_set_clock_offset(struct fsl_mc_io *mc_io,
-			   uint32_t cmd_flags,
-			   uint16_t token,
-			   int64_t offset)
-{
-	struct dprtc_cmd_set_clock_offset *cmd_params;
-	struct fsl_mc_command cmd = { 0 };
-
-	/* prepare command */
-	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_SET_CLOCK_OFFSET,
-					  cmd_flags,
-					  token);
-	cmd_params = (struct dprtc_cmd_set_clock_offset *)cmd.params;
-	cmd_params->offset = cpu_to_le64(offset);
-
-	/* send command to mc*/
-	return mc_send_command(mc_io, &cmd);
-}
-
-/**
- * dprtc_set_freq_compensation() - Sets a new frequency compensation value.
- *
- * @mc_io:		Pointer to MC portal's I/O object
- * @cmd_flags:		Command flags; one or more of 'MC_CMD_FLAG_'
- * @token:		Token of DPRTC object
- * @freq_compensation:	The new frequency compensation value to set.
- *
- * Return:	'0' on Success; Error code otherwise.
- */
-int dprtc_set_freq_compensation(struct fsl_mc_io *mc_io,
-				uint32_t cmd_flags,
-				uint16_t token,
-				uint32_t freq_compensation)
-{
-	struct dprtc_get_freq_compensation *cmd_params;
-	struct fsl_mc_command cmd = { 0 };
-
-	/* prepare command */
-	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_SET_FREQ_COMPENSATION,
-					  cmd_flags,
-					  token);
-	cmd_params = (struct dprtc_get_freq_compensation *)cmd.params;
-	cmd_params->freq_compensation = cpu_to_le32(freq_compensation);
-
-	/* send command to mc*/
-	return mc_send_command(mc_io, &cmd);
-}
-
-/**
- * dprtc_get_freq_compensation() - Retrieves the frequency compensation value
- *
- * @mc_io:		Pointer to MC portal's I/O object
- * @cmd_flags:		Command flags; one or more of 'MC_CMD_FLAG_'
- * @token:		Token of DPRTC object
- * @freq_compensation:	Frequency compensation value
- *
- * Return:	'0' on Success; Error code otherwise.
- */
-int dprtc_get_freq_compensation(struct fsl_mc_io *mc_io,
-				uint32_t cmd_flags,
-				uint16_t token,
-				uint32_t *freq_compensation)
-{
-	struct dprtc_get_freq_compensation *rsp_params;
-	struct fsl_mc_command cmd = { 0 };
-	int err;
-
-	/* prepare command */
-	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_GET_FREQ_COMPENSATION,
-					  cmd_flags,
-					  token);
-
-	/* send command to mc*/
-	err = mc_send_command(mc_io, &cmd);
-	if (err)
-		return err;
-
-	/* retrieve response parameters */
-	rsp_params = (struct dprtc_get_freq_compensation *)cmd.params;
-	*freq_compensation = le32_to_cpu(rsp_params->freq_compensation);
-
-	return 0;
-}
-
-/**
- * dprtc_get_time() - Returns the current RTC time.
- *
- * @mc_io:	Pointer to MC portal's I/O object
- * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
- * @token:	Token of DPRTC object
- * @time:	Current RTC time.
- *
- * Return:	'0' on Success; Error code otherwise.
- */
-int dprtc_get_time(struct fsl_mc_io *mc_io,
-		   uint32_t cmd_flags,
-		   uint16_t token,
-		   uint64_t *time)
-{
-	struct dprtc_time *rsp_params;
-	struct fsl_mc_command cmd = { 0 };
-	int err;
-
-	/* prepare command */
-	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_GET_TIME,
-					  cmd_flags,
-					  token);
-
-	/* send command to mc*/
-	err = mc_send_command(mc_io, &cmd);
-	if (err)
-		return err;
-
-	/* retrieve response parameters */
-	rsp_params = (struct dprtc_time *)cmd.params;
-	*time = le64_to_cpu(rsp_params->time);
-
-	return 0;
-}
-
-/**
- * dprtc_set_time() - Updates current RTC time.
- *
- * @mc_io:	Pointer to MC portal's I/O object
- * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
- * @token:	Token of DPRTC object
- * @time:	New RTC time.
- *
- * Return:	'0' on Success; Error code otherwise.
- */
-int dprtc_set_time(struct fsl_mc_io *mc_io,
-		   uint32_t cmd_flags,
-		   uint16_t token,
-		   uint64_t time)
-{
-	struct dprtc_time *cmd_params;
-	struct fsl_mc_command cmd = { 0 };
-
-	/* prepare command */
-	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_SET_TIME,
-					  cmd_flags,
-					  token);
-	cmd_params = (struct dprtc_time *)cmd.params;
-	cmd_params->time = cpu_to_le64(time);
-
-	/* send command to mc*/
-	return mc_send_command(mc_io, &cmd);
-}
-
-/**
- * dprtc_set_alarm() - Defines and sets alarm.
- *
- * @mc_io:	Pointer to MC portal's I/O object
- * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
- * @token:	Token of DPRTC object
- * @time:	In nanoseconds, the time when the alarm
- *			should go off - must be a multiple of
- *			1 microsecond
- *
- * Return:	'0' on Success; Error code otherwise.
- */
-int dprtc_set_alarm(struct fsl_mc_io *mc_io,
-		    uint32_t cmd_flags,
-		    uint16_t token, uint64_t time)
-{
-	struct dprtc_time *cmd_params;
-	struct fsl_mc_command cmd = { 0 };
-
-	/* prepare command */
-	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_SET_ALARM,
-					  cmd_flags,
-					  token);
-	cmd_params = (struct dprtc_time *)cmd.params;
-	cmd_params->time = cpu_to_le64(time);
-
-	/* send command to mc*/
-	return mc_send_command(mc_io, &cmd);
-}
-
-/**
- * dprtc_get_api_version() - Get Data Path Real Time Counter API version
- * @mc_io:	Pointer to MC portal's I/O object
- * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
- * @major_ver:	Major version of data path real time counter API
- * @minor_ver:	Minor version of data path real time counter API
- *
- * Return:  '0' on Success; Error code otherwise.
- */
-int dprtc_get_api_version(struct fsl_mc_io *mc_io,
-			  uint32_t cmd_flags,
-			  uint16_t *major_ver,
-			  uint16_t *minor_ver)
-{
-	struct dprtc_rsp_get_api_version *rsp_params;
-	struct fsl_mc_command cmd = { 0 };
-	int err;
-
-	cmd.header = mc_encode_cmd_header(DPRTC_CMDID_GET_API_VERSION,
-					cmd_flags,
-					0);
-
-	err = mc_send_command(mc_io, &cmd);
-	if (err)
-		return err;
-
-	rsp_params = (struct dprtc_rsp_get_api_version *)cmd.params;
-	*major_ver = le16_to_cpu(rsp_params->major);
-	*minor_ver = le16_to_cpu(rsp_params->minor);
-
-	return 0;
 }

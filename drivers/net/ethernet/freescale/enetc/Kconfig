@@ -20,8 +20,8 @@ config FSL_ENETC_VF
 
 config FSL_ENETC_PTP_CLOCK
 	tristate "ENETC PTP clock driver"
-	depends on FSL_ENETC || FSL_ENETC_VF
-	select PTP_1588_CLOCK_QORIQ
+	depends on PTP_1588_CLOCK_QORIQ && (FSL_ENETC || FSL_ENETC_VF)
+	default y
 	---help---
 	  This driver adds support for using the ENETC 1588 timer
 	  as a PTP clock. This clock is only useful if your PTP
@@ -34,7 +34,6 @@ config FSL_ENETC_PTP_CLOCK
 config FSL_ENETC_HW_TIMESTAMPING
 	bool "ENETC hardware timestamping support"
 	depends on FSL_ENETC || FSL_ENETC_VF
-	select FSL_ENETC_PTP_CLOCK
 	---help---
 	  Enable hardware timestamping support on the Ethernet packets
 	  using the SO_TIMESTAMPING API. Because the RX BD ring dynamic

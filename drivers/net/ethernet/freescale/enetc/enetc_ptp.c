@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
-/* Copyright 2018 NXP */
+/* Copyright 2019 NXP */
 
 #include <linux/module.h>
-#include <linux/interrupt.h>
+#include <linux/of.h>
 #include <linux/fsl/ptp_qoriq.h>
 
 #include "enetc.h"
 
-int enetc_phc_index = ENETC_PHC_INDEX_DEFAULT;
+int enetc_phc_index = -1;
 EXPORT_SYMBOL(enetc_phc_index);
 
 static struct ptp_clock_info enetc_ptp_caps = {
 	.owner		= THIS_MODULE,
 	.name		= "ENETC PTP clock",
 	.max_adj	= 512000,
-	.n_alarm	= 2,
+	.n_alarm	= 0,
 	.n_ext_ts	= 2,
-	.n_per_out	= 3,
+	.n_per_out	= 0,
 	.n_pins		= 0,
 	.pps		= 1,
 	.adjfine	= ptp_qoriq_adjfine,
@@ -29,10 +29,14 @@ static struct ptp_clock_info enetc_ptp_caps = {
 static int enetc_ptp_probe(struct pci_dev *pdev,
 			   const struct pci_device_id *ent)
 {
-	struct device *ptp_dev = &pdev->dev;
-	struct qoriq_ptp *qoriq_ptp;
+	struct ptp_qoriq *ptp_qoriq;
 	void __iomem *base;
 	int err, len, n;
+
+	if (pdev->dev.of_node && !of_device_is_available(pdev->dev.of_node)) {
+		dev_info(&pdev->dev, "device is disabled, skipping\n");
+		return -ENODEV;
+	}
 
 	err = pci_enable_device_mem(pdev);
 	if (err) {
@@ -59,8 +63,8 @@ static int enetc_ptp_probe(struct pci_dev *pdev,
 
 	pci_set_master(pdev);
 
-	qoriq_ptp = kzalloc(sizeof(*qoriq_ptp), GFP_KERNEL);
-	if (!qoriq_ptp) {
+	ptp_qoriq = kzalloc(sizeof(*ptp_qoriq), GFP_KERNEL);
+	if (!ptp_qoriq) {
 		err = -ENOMEM;
 		goto err_alloc_ptp;
 	}
@@ -81,29 +85,31 @@ static int enetc_ptp_probe(struct pci_dev *pdev,
 		goto err_irq;
 	}
 
-	qoriq_ptp->irq = pci_irq_vector(pdev, 0);
+	ptp_qoriq->irq = pci_irq_vector(pdev, 0);
 
-	err = request_irq(qoriq_ptp->irq, ptp_qoriq_isr, 0, DRIVER, qoriq_ptp);
+	err = request_irq(ptp_qoriq->irq, ptp_qoriq_isr, 0, DRIVER, ptp_qoriq);
 	if (err) {
 		dev_err(&pdev->dev, "request_irq() failed!\n");
 		goto err_irq;
 	}
 
-	err = qoriq_ptp_init(ptp_dev, qoriq_ptp, base, enetc_ptp_caps);
+	ptp_qoriq->dev = &pdev->dev;
+
+	err = ptp_qoriq_init(ptp_qoriq, base, &enetc_ptp_caps);
 	if (err)
 		goto err_no_clock;
 
-	enetc_phc_index = qoriq_ptp->phc_index;
-	pci_set_drvdata(pdev, qoriq_ptp);
+	enetc_phc_index = ptp_qoriq->phc_index;
+	pci_set_drvdata(pdev, ptp_qoriq);
 
 	return 0;
 
 err_no_clock:
-	free_irq(qoriq_ptp->irq, qoriq_ptp);
+	free_irq(ptp_qoriq->irq, ptp_qoriq);
 err_irq:
 	iounmap(base);
 err_ioremap:
-	kfree(qoriq_ptp);
+	kfree(ptp_qoriq);
 err_alloc_ptp:
 	pci_release_mem_regions(pdev);
 err_pci_mem_reg:
@@ -115,15 +121,11 @@ err_dma:
 
 static void enetc_ptp_remove(struct pci_dev *pdev)
 {
-	struct qoriq_ptp *qoriq_ptp = pci_get_drvdata(pdev);
-	struct qoriq_ptp_registers *regs = &qoriq_ptp->regs;
+	struct ptp_qoriq *ptp_qoriq = pci_get_drvdata(pdev);
 
-	qoriq_write(qoriq_ptp, &regs->ctrl_regs->tmr_temask, 0);
-	qoriq_write(qoriq_ptp, &regs->ctrl_regs->tmr_ctrl,   0);
-
-	ptp_clock_unregister(qoriq_ptp->clock);
-	iounmap(qoriq_ptp->base);
-	kfree(qoriq_ptp);
+	enetc_phc_index = -1;
+	ptp_qoriq_free(ptp_qoriq);
+	kfree(ptp_qoriq);
 
 	pci_release_mem_regions(pdev);
 	pci_disable_device(pdev);
@@ -144,4 +146,4 @@ static struct pci_driver enetc_ptp_driver = {
 module_pci_driver(enetc_ptp_driver);
 
 MODULE_DESCRIPTION("ENETC PTP clock driver");
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("Dual BSD/GPL");

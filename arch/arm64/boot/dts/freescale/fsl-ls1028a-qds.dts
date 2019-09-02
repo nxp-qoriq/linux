@@ -85,6 +85,128 @@
 			system-clock-frequency = <25000000>;
 		};
 	};
+	mdio-mux {
+		compatible = "mdio-mux-multiplexer";
+		mux-controls = <&mux 0>;
+		mdio-parent-bus = <&mdio0>;
+		#address-cells=<1>;
+		#size-cells = <0>;
+
+		/* on-board RGMII PHY */
+		mdio_qds: mdio@00 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x00>;
+		};
+		/* slot 1 - up to 4x, SoC lanes 0, 1, optionally 3, 4 */
+		mdio_slot1: mdio@4 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x4>;
+		};
+		/* slot 2 or SFP cage - 1x, SoC lane 1 */
+		mdio_slot3: mdio_slot2: mdio@5 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x5>;
+		};
+		/* slot 3 - 1x or 2x, SoC lane 2 and optionally 3 */
+		mdio_slot4: mdio@6 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x6>;
+		};
+		/* slot 4  - 1x, SoC lane 3 */
+		mdio_slot15: mdio@7 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x7>;
+		};
+	};
+};
+
+&mdio_qds {
+	qds_phy1: mdio0_phy@5 {
+		/* Atheros 8035 */
+		reg = <5>;
+	};
+};
+
+&mdio_slot1 {
+	/* VSC8234 PHY - 4xSGMII */
+	slot1_phy1: mdio_phy0@1c {
+		reg = <0x1c>;
+		phy-connection-type = "sgmii";
+	};
+	slot1_phy2: mdio_phy1@1d {
+		reg = <0x1d>;
+		phy-connection-type = "sgmii";
+	};
+	slot1_phy3: mdio_phy2@1e {
+		reg = <0x1e>;
+		phy-connection-type = "sgmii";
+	};
+	slot1_phy4: mdio_phy3@1f {
+		reg = <0x1f>;
+		phy-connection-type = "sgmii";
+	};
+};
+
+&mdio_slot2 {
+	/* VSC8514 PHY (aka Freescale F104) */
+	slot2_phy1: emdio1_phy@1 {
+		reg = <0x08>;
+		phy-connection-type = "qsgmii";
+	};
+	slot2_phy2: emdio1_phy@2 {
+		reg = <0x09>;
+		phy-connection-type = "qsgmii";
+	};
+	slot2_phy3: emdio1_phy@3 {
+		reg = <0x0a>;
+		phy-connection-type = "qsgmii";
+	};
+	slot2_phy4: emdio1_phy@4 {
+		reg = <0x0b>;
+		phy-connection-type = "qsgmii";
+	};
+};
+
+&enetc_port0 {
+	phy-handle = <&slot1_phy1>;
+};
+
+&enetc_port1 {
+	phy-handle = <&qds_phy1>;
+};
+
+/* l2switch ports */
+&switch_port0 {
+	fixed-link {
+		speed = <1000>;
+		full-duplex;
+	};
+};
+
+&switch_port1 {
+	fixed-link {
+		speed = <1000>;
+		full-duplex;
+	};
+};
+
+&switch_port2 {
+	fixed-link {
+		speed = <1000>;
+		full-duplex;
+	};
+};
+
+&switch_port3 {
+	fixed-link {
+		speed = <1000>;
+		full-duplex;
+	};
 };
 
 &can0 {
@@ -178,6 +300,19 @@
 				VDDIO-supply = <&reg_1p8v>;
 				clocks = <&sys_mclk>;
 			};
+		};
+	};
+	fpga@66 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "fsl,ls1028aqds-fpga", "fsl,fpga-qixis-i2c",
+			     "simple-mfd";
+		reg = <0x66>;
+
+		mux: mux-controller {
+			compatible = "reg-mux";
+			#mux-control-cells = <1>;
+			mux-reg-masks = <0x54 0xf0>; /* 0: reg 0x54, bits 7:4 */
 		};
 	};
 };

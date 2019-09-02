@@ -292,6 +292,98 @@
 			status = "disabled";
 		};
 
+		pcie@1f0000000 { /* rcie_enetc */
+			compatible = "pci-host-ecam-generic";
+			reg = <0x01 0xf0000000 0x0 0x100000>;
+			#address-cells = <3>;
+			#size-cells = <2>;
+			msi-parent = <&its>;
+			device_type = "pci";
+			bus-range = <0x0 0x0>;
+			dma-coherent;
+			msi-map = <0 &its 0x17 0xe>;
+			iommu-map = <0 &smmu 0x17 0xe>;
+			ranges = <0x82000000 0x0 0x00000000  0x1 0xf8000000  0x0 0x160000   /* PF0-6 BAR0 - non-prefetchable memory */
+				  0xc2000000 0x0 0x00000000  0x1 0xf8160000  0x0 0x070000   /* PF0-6, BAR2 - prefetchable memory */
+				  0x82000000 0x0 0x00000000  0x1 0xf81d0000  0x0 0x020000   /* PF0, VF-BAR0 - non-prefetchable memory */
+				  0xc2000000 0x0 0x00000000  0x1 0xf81f0000  0x0 0x020000   /* PF0, VF-BAR2 - prefetchable memory */
+				  0x82000000 0x0 0x00000000  0x1 0xf8210000  0x0 0x020000   /* PF1, VF-BAR0 - non-prefetchable memory */
+				  0xc2000000 0x0 0x00000000  0x1 0xf8230000  0x0 0x020000   /* PF1, VF-BAR1 - prefetchable memory */
+				  0x82000000 0x0 0x00000000  0x1 0xfc000000  0x0 0x400000>; /* PF2/PF5, BAR4 - non-prefetchable memory */
+
+			enetc_port0: pci@0,0 {
+				reg = <0x000000 0 0 0 0>;
+			};
+			enetc_port1: pci@0,1 {
+				reg = <0x000100 0 0 0 0>;
+			};
+			enetc_port2: pci@0,2 {
+				reg = <0x000200 0 0 0 0>;
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
+			};
+			mdio0: pci@0,3 {
+				reg = <0x000300 0 0 0 0>;
+				device_type = "mdio";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				little-endian;
+			};
+			pci@0,4 {
+				reg = <0x000400 0 0 0 0>;
+				clocks = <&clockgen 4 0>;
+				little-endian;
+			};
+			pci@0,5 {
+				reg = <0x000500 0 0 0 0>;
+				/* l2switch ports */
+				#address-cells = <1>;
+				#size-cells = <0>;
+				/* IEP INT_B */
+				interrupts = <GIC_SPI 95 IRQ_TYPE_LEVEL_HIGH>;
+
+				/* external ports */
+				switch_port0: port@0 {
+					reg = <0>;
+				};
+				switch_port1: port@1 {
+					reg = <1>;
+				};
+				switch_port2: port@2 {
+					reg = <2>;
+				};
+				switch_port3: port@3 {
+					reg = <3>;
+				};
+				/* internal to-cpu ports */
+				port@4 {
+					reg = <4>;
+					fixed-link {
+						speed = <1000>;
+						full-duplex;
+					};
+				};
+				port@5 {
+					reg = <5>;
+					cpu-ethernet = <&enetc_port3>;
+					fixed-link {
+						speed = <1000>;
+						full-duplex;
+					};
+				};
+
+			};
+			enetc_port3: pci@0,6 {
+				reg = <0x000600 0 0 0 0>;
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
+			};
+		};
+
 		can0: can@2180000 {
 			compatible = "fsl,ls1028ar1-flexcan",
 				     "fsl,lx2160ar1-flexcan";

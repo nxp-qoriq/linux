@@ -187,11 +187,6 @@
 			#size-cells = <0>;
 			reg = <0x3>;
 
-			rtc@51 {
-				compatible = "nxp,pcf2129";
-				reg = <0x51>;
-			};
-
 			eeprom@56 {
 				compatible = "atmel,24c512";
 				reg = <0x56>;
@@ -244,6 +239,14 @@
 &enetc_port1 {
 	phy-handle = <&qds_phy1>;
 	phy-connection-type = "rgmii-id";
+};
+
+&i2c1 {
+	status = "okay";
+	rtc@51 {
+		compatible = "nxp,pcf2129";
+		reg = <0x51>;
+	};
 };
 
 &fspi {

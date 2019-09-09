@@ -206,7 +206,6 @@ int enetc_imdio_init(struct enetc_pf *pf)
 	struct device *dev = &pf->si->pdev->dev;
 	struct enetc_mdio_priv *mdio_priv;
 	struct mii_bus *bus;
-	int err;
 
 	bus = devm_mdiobus_alloc_size(dev, sizeof(*mdio_priv));
 	if (!bus)
@@ -220,12 +219,6 @@ int enetc_imdio_init(struct enetc_pf *pf)
 	mdio_priv->hw = &pf->si->hw;
 	mdio_priv->mdio_base = ENETC_PM_IMDIO_BASE;
 	snprintf(bus->id, MII_BUS_ID_SIZE, "%s", dev_name(dev));
-
-	err = mdiobus_register(bus);
-	if (err) {
-		dev_err(dev, "cannot register internal MDIO bus\n");
-		return err;
-	}
 
 	pf->imdio = bus;
 

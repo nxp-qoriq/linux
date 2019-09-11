@@ -137,7 +137,9 @@ long ptp_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned long arg)
 	switch (cmd) {
 
 	case PTP_CLOCK_GETCAPS:
+	case PTP_CLOCK_GETCAPS2:
 		memset(&caps, 0, sizeof(caps));
+
 		caps.max_adj = ptp->info->max_adj;
 		caps.n_alarm = ptp->info->n_alarm;
 		caps.n_ext_ts = ptp->info->n_ext_ts;
@@ -150,10 +152,23 @@ long ptp_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned long arg)
 		break;
 
 	case PTP_EXTTS_REQUEST:
+	case PTP_EXTTS_REQUEST2:
+		memset(&req, 0, sizeof(req));
+
 		if (copy_from_user(&req.extts, (void __user *)arg,
 				   sizeof(req.extts))) {
 			err = -EFAULT;
 			break;
+		}
+		if (((req.extts.flags & ~PTP_EXTTS_VALID_FLAGS) ||
+			req.extts.rsv[0] || req.extts.rsv[1]) &&
+			cmd == PTP_EXTTS_REQUEST2) {
+			err = -EINVAL;
+			break;
+		} else if (cmd == PTP_EXTTS_REQUEST) {
+			req.extts.flags &= ~PTP_EXTTS_VALID_FLAGS;
+			req.extts.rsv[0] = 0;
+			req.extts.rsv[1] = 0;
 		}
 		if (req.extts.index >= ops->n_ext_ts) {
 			err = -EINVAL;
@@ -165,10 +180,26 @@ long ptp_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned long arg)
 		break;
 
 	case PTP_PEROUT_REQUEST:
+	case PTP_PEROUT_REQUEST2:
+		memset(&req, 0, sizeof(req));
+
 		if (copy_from_user(&req.perout, (void __user *)arg,
 				   sizeof(req.perout))) {
 			err = -EFAULT;
 			break;
+		}
+		if (((req.perout.flags & ~PTP_PEROUT_VALID_FLAGS) ||
+			req.perout.rsv[0] || req.perout.rsv[1] ||
+			req.perout.rsv[2] || req.perout.rsv[3]) &&
+			cmd == PTP_PEROUT_REQUEST2) {
+			err = -EINVAL;
+			break;
+		} else if (cmd == PTP_PEROUT_REQUEST) {
+			req.perout.flags &= ~PTP_PEROUT_VALID_FLAGS;
+			req.perout.rsv[0] = 0;
+			req.perout.rsv[1] = 0;
+			req.perout.rsv[2] = 0;
+			req.perout.rsv[3] = 0;
 		}
 		if (req.perout.index >= ops->n_per_out) {
 			err = -EINVAL;
@@ -180,6 +211,9 @@ long ptp_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned long arg)
 		break;
 
 	case PTP_ENABLE_PPS:
+	case PTP_ENABLE_PPS2:
+		memset(&req, 0, sizeof(req));
+
 		if (!capable(CAP_SYS_TIME))
 			return -EPERM;
 		req.type = PTP_CLK_REQ_PPS;
@@ -188,6 +222,7 @@ long ptp_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned long arg)
 		break;
 
 	case PTP_SYS_OFFSET_PRECISE:
+	case PTP_SYS_OFFSET_PRECISE2:
 		if (!ptp->info->getcrosststamp) {
 			err = -EOPNOTSUPP;
 			break;
@@ -212,6 +247,7 @@ long ptp_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned long arg)
 		break;
 
 	case PTP_SYS_OFFSET:
+	case PTP_SYS_OFFSET2:
 		sysoff = memdup_user((void __user *)arg, sizeof(*sysoff));
 		if (IS_ERR(sysoff)) {
 			err = PTR_ERR(sysoff);
@@ -243,9 +279,22 @@ long ptp_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned long arg)
 		break;
 
 	case PTP_PIN_GETFUNC:
+	case PTP_PIN_GETFUNC2:
 		if (copy_from_user(&pd, (void __user *)arg, sizeof(pd))) {
 			err = -EFAULT;
 			break;
+		}
+		if ((pd.rsv[0] || pd.rsv[1] || pd.rsv[2]
+				|| pd.rsv[3] || pd.rsv[4])
+			&& cmd == PTP_PIN_GETFUNC2) {
+			err = -EINVAL;
+			break;
+		} else if (cmd == PTP_PIN_GETFUNC) {
+			pd.rsv[0] = 0;
+			pd.rsv[1] = 0;
+			pd.rsv[2] = 0;
+			pd.rsv[3] = 0;
+			pd.rsv[4] = 0;
 		}
 		pin_index = pd.index;
 		if (pin_index >= ops->n_pins) {
@@ -262,9 +311,22 @@ long ptp_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned long arg)
 		break;
 
 	case PTP_PIN_SETFUNC:
+	case PTP_PIN_SETFUNC2:
 		if (copy_from_user(&pd, (void __user *)arg, sizeof(pd))) {
 			err = -EFAULT;
 			break;
+		}
+		if ((pd.rsv[0] || pd.rsv[1] || pd.rsv[2]
+				|| pd.rsv[3] || pd.rsv[4])
+			&& cmd == PTP_PIN_SETFUNC2) {
+			err = -EINVAL;
+			break;
+		} else if (cmd == PTP_PIN_SETFUNC) {
+			pd.rsv[0] = 0;
+			pd.rsv[1] = 0;
+			pd.rsv[2] = 0;
+			pd.rsv[3] = 0;
+			pd.rsv[4] = 0;
 		}
 		pin_index = pd.index;
 		if (pin_index >= ops->n_pins) {

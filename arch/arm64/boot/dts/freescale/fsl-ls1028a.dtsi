@@ -889,7 +889,7 @@
 		compatible = "fsl,ls1028a-dp";
 		reg = <0x0 0xf200000 0x0 0xfffff>;
 		interrupts = <0 221 IRQ_TYPE_LEVEL_HIGH>;
-		clocks = <&sysclk>, <&hdpclk>, <&hdpclk>,
+		clocks = <&sysclk>, <&clockgen 2 2>, <&hdpclk>,
 			 <&hdpclk>, <&hdpclk>, <&hdpclk>, <&hdpclk>;
 		clock-names = "clk_ipg", "clk_core", "clk_pxl",
 			      "clk_pxl_mux", "clk_pxl_link", "clk_apb",

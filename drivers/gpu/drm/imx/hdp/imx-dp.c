@@ -40,6 +40,9 @@ int hdp_fw_init(state_struct *state)
 
 	core_rate = clk_get_rate(hdp->clks.clk_core);
 
+	/* this clock will be ACLK/4 */
+	core_rate = core_rate/4;
+
 	/* configure the clock */
 	CDN_API_SetClock(state, core_rate/1000000);
 

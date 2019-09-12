@@ -401,19 +401,21 @@ static inline u32 enetc_rd_reg_wa_single(void *reg)
 	int cpu;
 	/* per-cpu ENETC lock array for register access issue WA */
 	spinlock_t *lock[ENETC_NR_CPU_LOCKS];
-	unsigned long flags[ENETC_NR_CPU_LOCKS];
+	unsigned long flags;
 
 	preempt_disable();
 
+	local_irq_save(flags);
 	for_each_online_cpu(cpu) {
 		lock[cpu] = per_cpu_ptr(&enetc_gregs, cpu);
-		spin_lock_irqsave(lock[cpu], flags[cpu]);
+		spin_lock(lock[cpu]);
 	}
 
 	val = ioread32(reg);
 
 	for_each_online_cpu(cpu)
-		spin_unlock_irqrestore(lock[cpu], flags[cpu]);
+		spin_unlock(lock[cpu]);
+	local_irq_restore(flags);
 
 	preempt_enable();
 
@@ -425,19 +427,21 @@ static inline void enetc_wr_reg_wa_single(void *reg, u32 val)
 	int cpu;
 	/* per-cpu ENETC lock array for register access issue WA */
 	spinlock_t *lock[ENETC_NR_CPU_LOCKS];
-	unsigned long flags[ENETC_NR_CPU_LOCKS];
+	unsigned long flags;
 
 	preempt_disable();
 
+	local_irq_save(flags);
 	for_each_online_cpu(cpu) {
 		lock[cpu] = per_cpu_ptr(&enetc_gregs, cpu);
-		spin_lock_irqsave(lock[cpu], flags[cpu]);
+		spin_lock(lock[cpu]);
 	}
 
 	iowrite32(val, reg);
 
 	for_each_online_cpu(cpu)
-		spin_unlock_irqrestore(lock[cpu], flags[cpu]);
+		spin_unlock(lock[cpu]);
+	local_irq_restore(flags);
 
 	preempt_enable();
 }

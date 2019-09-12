@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
-// Copyright 2019 NXP
-
 /*
+ * Copyright 2019 NXP
+ *
  * Clock driver for LS1028A Display output interfaces(LCD, DPHY).
  */
 
@@ -24,7 +24,6 @@
 #define PLLDIG_REG_PLLFD            0x30
 #define PLLDIG_REG_PLLCAL1          0x38
 #define PLLDIG_REG_PLLCAL2          0x3c
-#define PLLDIG_DEFAULE_MULT         0x2c
 #define PLLDIG_LOCK_MASK            BIT(2)
 #define PLLDIG_SSCGBYP_ENABLE       BIT(30)
 #define PLLDIG_FDEN                 BIT(30)
@@ -35,11 +34,35 @@
 #define PLLDIG_GET_RFDPHI1(x)       ((u32)(x) >> 25)
 #define PLLDIG_SET_RFDPHI1(x)       ((u32)(x) << 25)
 
+/* Maximum of the divider */
+#define MAX_RFDPHI1          63
+
+/* Best value of multiplication factor divider */
+#define PLLDIG_DEFAULE_MULT         44
+
+/*
+ * Clock configuration relationship between the PHI1 frequency(fpll_phi) and
+ * the output frequency of the PLL is determined by the PLLDV, according to
+ * the following equation:
+ * fpll_phi = (pll_ref * mfd) / div_rfdphi1
+ */
+struct plldig_phi1_param {
+	unsigned long rate;
+	unsigned int rfdphi1;
+	unsigned int mfd;
+};
+
+enum plldig_phi1_freq_range {
+	PHI1_MIN        = 27000000U,
+	PHI1_MAX        = 600000000U
+};
+
 struct clk_plldig {
 	struct clk_hw hw;
 	void __iomem *regs;
 	struct device *dev;
 };
+
 #define to_clk_plldig(_hw)	container_of(_hw, struct clk_plldig, hw)
 #define LOCK_TIMEOUT_US		USEC_PER_MSEC
 
@@ -82,35 +105,6 @@ static int plldig_is_enabled(struct clk_hw *hw)
 	return (readl(data->regs + PLLDIG_REG_PLLFM) & PLLDIG_SSCGBYP_ENABLE);
 }
 
-/*
- * Clock configuration relationship between the PHI1 frequency(fpll_phi) and
- * the output frequency of the PLL is determined by the PLLDV, according to
- * the following equation:
- * pxlclk = fpll_phi / RFDPHI1 = (pll_ref x PLLDV[MFD]) / PLLDV[RFDPHI1].
- */
-static bool plldig_is_valid_range(unsigned long rate, unsigned long parent_rate,
-		unsigned int *mult, unsigned int *rfdphi1,
-		unsigned long *round_rate_base)
-{
-	u32 div, mfd = PLLDIG_DEFAULE_MULT;
-	unsigned long round_rate;
-
-	round_rate = parent_rate * mfd;
-
-	/* Range of the divider for driving the PHI1 output clock */
-	for (div = 1; div <= 63; div++) {
-		/* Checking match with default mult number at first */
-		if (round_rate / div == rate) {
-			*rfdphi1 = div;
-			*round_rate_base = round_rate;
-			*mult = mfd;
-			return true;
-		}
-	}
-
-	return false;
-}
-
 static unsigned long plldig_recalc_rate(struct clk_hw *hw,
 		unsigned long parent_rate)
 {
@@ -134,45 +128,85 @@ static unsigned long plldig_recalc_rate(struct clk_hw *hw,
 	return (parent_rate * mult) / div;
 }
 
-static long plldig_round_rate(struct clk_hw *hw, unsigned long rate,
-		unsigned long *parent)
+static int plldig_calc_target_rate(unsigned long target_rate,
+				   unsigned long parent_rate,
+				   struct plldig_phi1_param *phi1_out)
 {
-	unsigned long parent_rate = *parent;
+	unsigned int div, mfd, ret;
 	unsigned long round_rate;
-	u32 mult = 0, rfdphi1 = 0;
-	bool found = false;
 
-	found = plldig_is_valid_range(rate, parent_rate, &mult,
-					&rfdphi1, &round_rate);
-	if (!found) {
-		pr_warn("%s: unable to round rate %lu, parent rate :%lu\n",
-				clk_hw_get_name(hw), rate, parent_rate);
-		return 0;
-	}
+	/*
+	 * Firstly, check the target rate whether is divisible
+	 * by the best VCO frequency.
+	 */
+	mfd = PLLDIG_DEFAULE_MULT;
+	round_rate = parent_rate * mfd;
+	div = round_rate / target_rate;
+	if (!div || div > MAX_RFDPHI1)
+		return -EINVAL;
 
-	return round_rate / rfdphi1;
+	ret = round_rate % target_rate;
+	if (!ret)
+		goto out;
+
+	/*
+	 * Otherwise, try a rounding algorithm to driven the target rate,
+	 * this algorithm allows tolerances between the target rate and
+	 * real rate, it based on the best VCO output frequency.
+	 *
+	 * Add half of the target rate so the result will be rounded to
+	 * cloeset instead of rounded down.
+	 */
+	round_rate += (target_rate / 2);
+	div = round_rate / target_rate;
+	if (!div || div > MAX_RFDPHI1)
+		return -EINVAL;
+
+out:
+	phi1_out->rfdphi1 = PLLDIG_SET_RFDPHI1(div);
+	phi1_out->mfd = mfd;
+	phi1_out->rate = target_rate;
+
+	return 0;
+}
+
+static int plldig_determine_rate(struct clk_hw *hw,
+				 struct clk_rate_request *req)
+{
+	int ret;
+	struct clk_hw *parent;
+	struct plldig_phi1_param phi1_param;
+	unsigned long parent_rate;
+
+	if (req->rate == 0 || req->rate < PHI1_MIN || req->rate > PHI1_MAX)
+		return -EINVAL;
+
+	parent = clk_hw_get_parent(hw);
+	parent_rate = clk_hw_get_rate(parent);
+
+	ret = plldig_calc_target_rate(req->rate, parent_rate, &phi1_param);
+	if (ret)
+		return ret;
+
+	req->rate = phi1_param.rate;
+
+	return 0;
 }
 
 static int plldig_set_rate(struct clk_hw *hw, unsigned long rate,
 		unsigned long parent_rate)
 {
 	struct clk_plldig *data = to_clk_plldig(hw);
-	bool valid = false;
-	unsigned long round_rate = 0;
-	u32 rfdphi1 = 0, val, mult = 0, cond = 0;
+	struct plldig_phi1_param phi1_param;
+	unsigned int rfdphi1, val, cond;
 	int ret = -ETIMEDOUT;
 
-	valid = plldig_is_valid_range(rate, parent_rate, &mult,
-					&rfdphi1, &round_rate);
-	if (!valid) {
-		pr_warn("%s: unable to support rate %lu, parent_rate: %lu\n",
-				clk_hw_get_name(hw), rate, parent_rate);
-		return -EINVAL;
-	}
+	ret = plldig_calc_target_rate(rate, parent_rate, &phi1_param);
+	if (ret)
+		return ret;
 
-	val = readl(data->regs + PLLDIG_REG_PLLDV);
-	val = mult;
-	rfdphi1 = PLLDIG_SET_RFDPHI1(rfdphi1);
+	val = phi1_param.mfd;
+	rfdphi1 = phi1_param.rfdphi1;
 	val |= rfdphi1;
 
 	writel(val, data->regs + PLLDIG_REG_PLLDV);
@@ -193,7 +227,7 @@ static const struct clk_ops plldig_clk_ops = {
 	.disable = plldig_disable,
 	.is_enabled = plldig_is_enabled,
 	.recalc_rate = plldig_recalc_rate,
-	.round_rate = plldig_round_rate,
+	.determine_rate = plldig_determine_rate,
 	.set_rate = plldig_set_rate,
 };
 
@@ -204,7 +238,7 @@ static int plldig_clk_probe(struct platform_device *pdev)
 	struct clk_init_data init = {};
 	struct device *dev = &pdev->dev;
 	const char *parent_name;
-	int ret;
+	int ret, val;
 
 	data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
 	if (!data)
@@ -224,6 +258,13 @@ static int plldig_clk_probe(struct platform_device *pdev)
 	data->hw.init = &init;
 	data->dev = dev;
 
+	/*
+	 * The multiplication factor value can't be changed
+	 * on the fly, write the fixed value as default.
+	 */
+	val = PLLDIG_DEFAULE_MULT;
+	writel(val, data->regs + PLLDIG_REG_PLLDV);
+
 	ret = devm_clk_hw_register(dev, &data->hw);
 	if (ret) {
 		dev_err(dev, "failed to register %s clock\n", init.name);
@@ -234,14 +275,8 @@ static int plldig_clk_probe(struct platform_device *pdev)
 								&data->hw);
 }
 
-static int plldig_clk_remove(struct platform_device *pdev)
-{
-	of_clk_del_provider(pdev->dev.of_node);
-	return 0;
-}
-
 static const struct of_device_id plldig_clk_id[] = {
-	{ .compatible = "fsl,ls1028a-plldig", .data = NULL},
+	{ .compatible = "fsl,ls1028a-plldig"},
 	{ }
 };
 MODULE_DEVICE_TABLE(of, plldig_clk_id);
@@ -252,7 +287,6 @@ static struct platform_driver plldig_clk_driver = {
 		.of_match_table = plldig_clk_id,
 	},
 	.probe = plldig_clk_probe,
-	.remove = plldig_clk_remove,
 };
 module_platform_driver(plldig_clk_driver);
 

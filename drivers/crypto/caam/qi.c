@@ -212,7 +212,7 @@ static struct qman_fq *create_caam_req_fq(struct device *qidev,
 	}
 
 	dev_dbg(qidev, "Allocated request FQ %u for CPU %u\n", req_fq->fqid,
-		smp_processor_id());
+		raw_smp_processor_id());
 	return req_fq;
 
 init_req_fq_fail:
@@ -238,7 +238,7 @@ static int empty_retired_fq(struct device *qidev, struct qman_fq *fq)
 	do {
 		struct qman_portal *p;
 
-		p = qman_get_affine_portal(smp_processor_id());
+		p = qman_get_affine_portal(raw_smp_processor_id());
 		qman_p_poll_dqrr(p, 16);
 	} while (fq->flags & QMAN_FQ_STATE_NE);
 

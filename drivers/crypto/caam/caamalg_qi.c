@@ -972,7 +972,7 @@ static struct caam_drv_ctx *get_drv_ctx(struct caam_ctx *ctx,
 			else /* (type == GIVENCRYPT) */
 				desc = ctx->sh_desc_givenc;
 
-			cpu = smp_processor_id();
+			cpu = raw_smp_processor_id();
 			drv_ctx = caam_drv_ctx_init(ctx->qidev, &cpu, desc);
 			if (likely(!IS_ERR_OR_NULL(drv_ctx)))
 				drv_ctx->op_type = type;

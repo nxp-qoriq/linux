@@ -403,9 +403,9 @@ static inline u32 enetc_rd_reg_wa_single(void *reg)
 	spinlock_t *lock[ENETC_NR_CPU_LOCKS];
 	unsigned long flags;
 
+	local_irq_save(flags);
 	preempt_disable();
 
-	local_irq_save(flags);
 	for_each_online_cpu(cpu) {
 		lock[cpu] = per_cpu_ptr(&enetc_gregs, cpu);
 		spin_lock(lock[cpu]);
@@ -429,9 +429,9 @@ static inline void enetc_wr_reg_wa_single(void *reg, u32 val)
 	spinlock_t *lock[ENETC_NR_CPU_LOCKS];
 	unsigned long flags;
 
+	local_irq_save(flags);
 	preempt_disable();
 
-	local_irq_save(flags);
 	for_each_online_cpu(cpu) {
 		lock[cpu] = per_cpu_ptr(&enetc_gregs, cpu);
 		spin_lock(lock[cpu]);

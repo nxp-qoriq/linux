@@ -14,7 +14,7 @@
 #include <net/sock.h>
 
 #include "ocelot.h"
-#include "tsn_switch.h"
+#include "felix_tsn.h"
 
 static const char felix_driver_string[] = "Felix Switch Driver";
 #define DRV_VERSION "0.3"
@@ -38,29 +38,28 @@ MODULE_DEVICE_TABLE(pci, felix_ids);
 
 #ifdef CONFIG_MSCC_FELIX_SWITCH_TSN
 const struct tsn_ops switch_tsn_ops = {
-	.qbv_set			= switch_qbv_set,
-	.qbv_get			= switch_qbv_get,
-	.qbv_get_status			= switch_qbv_get_status,
-	.qbu_set			= switch_qbu_set,
-	.qbu_get                        = switch_qbu_get,
-	.cb_streamid_set		= switch_cb_streamid_set,
-	.cb_streamid_get		= switch_cb_streamid_get,
-	.cb_streamid_counters_get	= switch_cb_streamid_counters_get,
-	.qci_sfi_set			= switch_qci_sfi_set,
-	.qci_sfi_get			= switch_qci_sfi_get,
-	.qci_sfi_counters_get		= switch_qci_sfi_counters_get,
-	.qci_sgi_set			= switch_qci_sgi_set,
-	.qci_sgi_get			= switch_qci_sgi_get,
-	.qci_sgi_status_get		= switch_qci_sgi_status_get,
-	.qci_fmi_set			= switch_qci_fmi_set,
-	.qci_fmi_get			= switch_qci_fmi_get,
-	.cbs_set			= switch_cbs_set,
-	.ct_set				= switch_cut_thru_set,
-	.cbgen_set			= switch_seq_gen_set,
-	.cbrec_set			= switch_seq_rec_set,
-	.cb_get				= switch_cb_get,
-	.pcpmap_set			= switch_pcp_map_set,
-	.dscp_set			= switch_dscp_set,
+	.qbv_set			= felix_qbv_set,
+	.qbv_get			= felix_qbv_get,
+	.qbv_get_status			= felix_qbv_get_status,
+	.qbu_set			= felix_qbu_set,
+	.qbu_get                        = felix_qbu_get,
+	.cb_streamid_set		= felix_cb_streamid_set,
+	.cb_streamid_get		= felix_cb_streamid_get,
+	.qci_sfi_set			= felix_qci_sfi_set,
+	.qci_sfi_get			= felix_qci_sfi_get,
+	.qci_sfi_counters_get		= felix_qci_sfi_counters_get,
+	.qci_sgi_set			= felix_qci_sgi_set,
+	.qci_sgi_get			= felix_qci_sgi_get,
+	.qci_sgi_status_get		= felix_qci_sgi_status_get,
+	.qci_fmi_set			= felix_qci_fmi_set,
+	.qci_fmi_get			= felix_qci_fmi_get,
+	.cbs_set			= felix_cbs_set,
+	.ct_set				= felix_cut_thru_set,
+	.cbgen_set			= felix_seq_gen_set,
+	.cbrec_set			= felix_seq_rec_set,
+	.cb_get				= felix_cb_get,
+	.pcpmap_set			= felix_pcp_map_set,
+	.dscp_set			= felix_dscp_set,
 };
 #endif
 

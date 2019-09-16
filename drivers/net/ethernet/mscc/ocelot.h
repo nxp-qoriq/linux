@@ -36,6 +36,7 @@
 #define PGID_MC      (PGID_AGGR - 3)
 #define PGID_MCIPV4  (PGID_AGGR - 2)
 #define PGID_MCIPV6  (PGID_AGGR - 1)
+#define PGID_MCRED   (PGID_CPU - 20)
 
 #define OCELOT_BUFFER_CELL_SZ 60
 

@@ -67,6 +67,9 @@
 #define AQUANTIA_VND1_GSYSCFG_5G		3
 #define AQUANTIA_VND1_GSYSCFG_10G		4
 
+#define MDIO_PHYXS_VEND_PROV2			0xC441
+#define MDIO_PHYXS_VEND_PROV2_USX_AN		BIT(3)
+
 static int aquantia_write_reg(struct phy_device *phydev, int devad,
 			      u32 regnum, u16 val)
 {
@@ -266,6 +269,10 @@ static int aquantia_config_aneg_set_prot(struct phy_device *phydev)
 			      AQUANTIA_VND1_GSYSCFG_BASE + i,
 			      aquantia_syscfg[if_type].syscfg);
 	}
+
+	if (if_type == PHY_INTERFACE_MODE_USXGMII)
+		phy_write_mmd(phydev, MDIO_MMD_PHYXS, MDIO_PHYXS_VEND_PROV2,
+			      MDIO_PHYXS_VEND_PROV2_USX_AN);
 
 	/* wake PHY back up */
 	phy_write_mmd(phydev, MDIO_MMD_VEND1, AQUANTIA_VND1_GLOBAL_SC, 0);

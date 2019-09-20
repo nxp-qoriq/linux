@@ -832,11 +832,12 @@ static void enetc_configure_sgmii(struct mii_bus *imdio)
 static void enetc_configure_sxgmii(struct mii_bus *imdio)
 {
 	/* Dev ability - SXGMII */
-	imdio->write(imdio, 0, ENETC_PCS_DEV_ABILITY | MII_ADDR_C45,
-		     ENETC_PCS_DEV_ABILITY_SXGMII);
+	imdio->write(imdio, 0, MII_ADDR_C45 | (MDIO_MMD_VEND2 << 16) |
+		     ENETC_PCS_DEV_ABILITY, ENETC_PCS_DEV_ABILITY_SXGMII);
 
 	/* Restart PCS AN */
-	imdio->write(imdio, 0, ENETC_PCS_CR | MII_ADDR_C45,
+	imdio->write(imdio, 0, MII_ADDR_C45 | (MDIO_MMD_VEND2 << 16) |
+		     ENETC_PCS_CR,
 		     ENETC_PCS_CR_LANE_RESET | ENETC_PCS_CR_RESET_AN);
 }
 

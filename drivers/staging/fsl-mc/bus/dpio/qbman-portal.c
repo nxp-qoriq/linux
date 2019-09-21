@@ -172,7 +172,7 @@ int (*qbman_swp_release_ptr)(struct qbman_swp *s,
 
 #define dccvac(p) { asm volatile("dc cvac, %0;" : : "r" (p) : "memory"); }
 #define dcivac(p) { asm volatile("dc ivac, %0" : : "r"(p) : "memory"); }
-static inline void qbman_inval_prefetch(struct qbman_swp *p, u32 offset)
+static inline void qbman_inval_prefetch(struct qbman_swp *p, uint32_t offset)
 {
 	dcivac(p->addr_cena + offset);
 	prefetch(p->addr_cena + offset);
@@ -306,8 +306,8 @@ struct qbman_swp *qbman_swp_init(const struct qbman_swp_desc *d)
 			0); /* EQCR_CI stashing priority enable */
 	} else {
 		reg = qbman_set_swp_cfg(p->dqrr.dqrr_size,
-			0, /* Writes Non-cacheable */
-			1, /* EQCR_CI stashing threshold */
+			1, /* Writes Non-cacheable */
+			0, /* EQCR_CI stashing threshold */
 			3, /* RPM: RCR in array mode */
 			2, /* DCM: Discrete consumption ack */
 			2, /* EPM: EQCR in ring mode */
@@ -740,7 +740,6 @@ int qbman_swp_enqueue_multiple_direct(struct qbman_swp *s,
 	const uint32_t *cl = (uint32_t *)d;
 	uint32_t eqcr_ci, eqcr_pi, half_mask, full_mask;
 	int i, num_enqueued = 0;
-	uint64_t addr_cena;
 
 	half_mask = (s->eqcr.pi_ci_mask>>1);
 	full_mask = s->eqcr.pi_ci_mask;
@@ -788,14 +787,7 @@ int qbman_swp_enqueue_multiple_direct(struct qbman_swp *s,
 			s->eqcr.pi_vb ^= QB_VALID_BIT;
 	}
 
-	/* Flush all the cacheline without load/store in between */
-	eqcr_pi = s->eqcr.pi;
-	addr_cena = (size_t)s->addr_cena;
-	for (i = 0; i < num_enqueued; i++) {
-		dccvac((addr_cena + QBMAN_CENA_SWP_EQCR(eqcr_pi & half_mask)));
-		eqcr_pi++;
-	}
-	s->eqcr.pi = eqcr_pi & full_mask;
+	s->eqcr.pi = (s->eqcr.pi + num_enqueued) & full_mask;
 
 	return num_enqueued;
 }
@@ -902,7 +894,6 @@ int qbman_swp_enqueue_multiple_desc_direct(struct qbman_swp *s,
 	const uint32_t *cl;
 	uint32_t eqcr_ci, eqcr_pi, half_mask, full_mask;
 	int i, num_enqueued = 0;
-	uint64_t addr_cena;
 
 	half_mask = (s->eqcr.pi_ci_mask>>1);
 	full_mask = s->eqcr.pi_ci_mask;
@@ -943,16 +934,7 @@ int qbman_swp_enqueue_multiple_desc_direct(struct qbman_swp *s,
 		if (!(eqcr_pi & half_mask))
 			s->eqcr.pi_vb ^= QB_VALID_BIT;
 	}
-
-	/* Flush all the cacheline without load/store in between */
-	eqcr_pi = s->eqcr.pi;
-	addr_cena = (uint64_t)s->addr_cena;
-	for (i = 0; i < num_enqueued; i++) {
-		dccvac((uint64_t *)(addr_cena +
-			QBMAN_CENA_SWP_EQCR(eqcr_pi & half_mask)));
-		eqcr_pi++;
-	}
-	s->eqcr.pi = eqcr_pi & full_mask;
+	s->eqcr.pi = (s->eqcr.pi + num_enqueued) & full_mask;
 
 	return num_enqueued;
 }
@@ -1215,7 +1197,6 @@ static int qbman_swp_pull_direct(struct qbman_swp *s, struct qbman_pull_desc *d)
 	/* Set the verb byte, have to substitute in the valid-bit */
 	p->verb = d->verb | s->vdq.valid_bit;
 	s->vdq.valid_bit ^= QB_VALID_BIT;
-	dccvac(p);
 
 	return 0;
 }
@@ -1397,7 +1378,8 @@ const struct dpaa2_dq *qbman_swp_dqrr_next_mem_back(struct qbman_swp *s)
 				 s->dqrr.next_idx, pi);
 			s->dqrr.reset_bug = 0;
 		}
-		qbman_inval_prefetch(s,	QBMAN_CENA_SWP_DQRR(s->dqrr.next_idx));
+		prefetch(qbman_get_cmd(s,
+				       QBMAN_CENA_SWP_DQRR(s->dqrr.next_idx)));
 	}
 
 	p = qbman_get_cmd(s, QBMAN_CENA_SWP_DQRR_MEM(s->dqrr.next_idx));
@@ -1412,7 +1394,8 @@ const struct dpaa2_dq *qbman_swp_dqrr_next_mem_back(struct qbman_swp *s)
 	 * knew from reading PI.
 	 */
 	if ((verb & QB_VALID_BIT) != s->dqrr.valid_bit) {
-		qbman_inval_prefetch(s, QBMAN_CENA_SWP_DQRR(s->dqrr.next_idx));
+		prefetch(qbman_get_cmd(s,
+			 QBMAN_CENA_SWP_DQRR(s->dqrr.next_idx)));
 		return NULL;
 	}
 	/*
@@ -1435,7 +1418,7 @@ const struct dpaa2_dq *qbman_swp_dqrr_next_mem_back(struct qbman_swp *s)
 	    (flags & DPAA2_DQ_STAT_EXPIRED))
 		atomic_inc(&s->vdq.available);
 
-	qbman_inval_prefetch(s, QBMAN_CENA_SWP_DQRR(s->dqrr.next_idx));
+	prefetch(qbman_get_cmd(s, QBMAN_CENA_SWP_DQRR(s->dqrr.next_idx)));
 
 	return p;
 }
@@ -1567,7 +1550,6 @@ int qbman_swp_release_direct(struct qbman_swp *s,
 	 */
 	dma_wmb();
 	p->verb = d->verb | RAR_VB(rar) | num_buffers;
-	dccvac(p);
 
 	return 0;
 }

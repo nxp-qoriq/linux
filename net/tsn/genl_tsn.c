@@ -235,8 +235,8 @@ static const struct nla_policy qci_fmi_policy[] = {
 static const struct nla_policy dscp_policy[] = {
 	[TSN_DSCP_ATTR_INDEX]		= { .type = NLA_U32},
 	[TSN_DSCP_ATTR_DISABLE]		= { .type = NLA_FLAG},
-	[TSN_DSCP_ATTR_COS]		= { .type = NLA_U32},
-	[TSN_DSCP_ATTR_DPL]		= { .type = NLA_U32},
+	[TSN_DSCP_ATTR_COS]		= { .type = NLA_U8},
+	[TSN_DSCP_ATTR_DPL]		= { .type = NLA_U8},
 };
 
 static ATOMIC_NOTIFIER_HEAD(tsn_notif_chain);

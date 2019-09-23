@@ -38,6 +38,7 @@ MODULE_DEVICE_TABLE(pci, felix_ids);
 
 #ifdef CONFIG_MSCC_FELIX_SWITCH_TSN
 const struct tsn_ops switch_tsn_ops = {
+	.device_init                    = felix_tsn_init,
 	.qbv_set			= felix_qbv_set,
 	.qbv_get			= felix_qbv_get,
 	.qbv_get_status			= felix_qbv_get_status,

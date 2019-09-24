@@ -191,31 +191,8 @@
 	status = "okay";
 };
 
-&sai4 {
-	status = "okay";
-};
-
-&mdio0 {
-	qsgmii_phy1: ethernet-phy@4 {
-		reg = <0x10>;
-	};
-
-	qsgmii_phy2: ethernet-phy@5 {
-		reg = <0x11>;
-	};
-
-	qsgmii_phy3: ethernet-phy@6 {
-		reg = <0x12>;
-	};
-
-	qsgmii_phy4: ethernet-phy@7 {
-		reg = <0x13>;
-	};
-};
-
 &enetc_port0 {
 	phy-connection-type = "sgmii";
-
 	fixed-link {
 		speed = <1000>;
 		full-duplex;
@@ -224,6 +201,32 @@
 
 &enetc_port1 {
 	status = "disabled";
+};
+
+&enetc_mdio_pf3 {
+	qsgmii_phy1: ethernet-phy@4 {
+		reg = <0x10>;
+		interrupt-parent = <&gpio1>;
+		interrupts = <25 IRQ_TYPE_EDGE_FALLING>;
+	};
+
+	qsgmii_phy2: ethernet-phy@5 {
+		reg = <0x11>;
+		interrupt-parent = <&gpio1>;
+		interrupts = <25 IRQ_TYPE_EDGE_FALLING>;
+	};
+
+	qsgmii_phy3: ethernet-phy@6 {
+		reg = <0x12>;
+		interrupt-parent = <&gpio1>;
+		interrupts = <25 IRQ_TYPE_EDGE_FALLING>;
+	};
+
+	qsgmii_phy4: ethernet-phy@7 {
+		reg = <0x13>;
+		interrupt-parent = <&gpio1>;
+		interrupts = <25 IRQ_TYPE_EDGE_FALLING>;
+	};
 };
 
 /* l2switch ports */
@@ -254,6 +257,11 @@
 		full-duplex;
 	};
 };
+
+&sai4 {
+	status = "okay";
+};
+
 &display1 {
 	fsl,no_edid;
 	resolution = "3840x2160@60",

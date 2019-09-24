@@ -1,6 +1,9 @@
 /* SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause) */
 /* Copyright 2017-2019 NXP */
 
+#ifndef _FSL_ENETC_H
+#define _FSL_ENETC_H
+
 #include <linux/timer.h>
 #include <linux/pci.h>
 #include <linux/netdevice.h>
@@ -283,4 +286,6 @@ void enetc_tsn_pf_deinit(struct net_device *netdev);
 #else
 #define enetc_tsn_pf_init(netdev, pdev) (void)0
 #define enetc_tsn_pf_deinit(netdev) (void)0
+#endif
+
 #endif

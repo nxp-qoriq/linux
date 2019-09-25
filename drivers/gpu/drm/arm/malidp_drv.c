@@ -494,6 +494,8 @@ static int malidp_runtime_pm_suspend(struct device *dev)
 	/* we can only suspend if the hardware is in config mode */
 	WARN_ON(!hwdev->in_config_mode(hwdev));
 
+	malidp_se_irq_fini(drm);
+	malidp_de_irq_fini(drm);
 	hwdev->pm_suspended = true;
 	clk_disable_unprepare(hwdev->mclk);
 	clk_disable_unprepare(hwdev->aclk);
@@ -512,6 +514,8 @@ static int malidp_runtime_pm_resume(struct device *dev)
 	clk_prepare_enable(hwdev->aclk);
 	clk_prepare_enable(hwdev->mclk);
 	hwdev->pm_suspended = false;
+	malidp_de_irq_hw_init(hwdev);
+	malidp_se_irq_hw_init(hwdev);
 
 	return 0;
 }

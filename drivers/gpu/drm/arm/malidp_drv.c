@@ -26,6 +26,7 @@
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_fb_cma_helper.h>
 #include <drm/drm_gem_cma_helper.h>
+#include <drm/drm_modeset_helper.h>
 #include <drm/drm_of.h>
 
 #include "malidp_drv.h"
@@ -786,40 +787,38 @@ static int malidp_platform_remove(struct platform_device *pdev)
 static int __maybe_unused malidp_pm_suspend(struct device *dev)
 {
 	struct drm_device *drm = dev_get_drvdata(dev);
-	struct malidp_drm *malidp = drm->dev_private;
 
-	drm_kms_helper_poll_disable(drm);
-	console_lock();
-	drm_fbdev_cma_set_suspend(malidp->fbdev, 1);
-	console_unlock();
-	malidp->pm_state = drm_atomic_helper_suspend(drm);
-	if (IS_ERR(malidp->pm_state)) {
-		console_lock();
-		drm_fbdev_cma_set_suspend(malidp->fbdev, 0);
-		console_unlock();
-		drm_kms_helper_poll_enable(drm);
-		return PTR_ERR(malidp->pm_state);
-	}
-
-	return 0;
+	return drm_mode_config_helper_suspend(drm);
 }
 
 static int __maybe_unused malidp_pm_resume(struct device *dev)
 {
 	struct drm_device *drm = dev_get_drvdata(dev);
-	struct malidp_drm *malidp = drm->dev_private;
 
-	drm_atomic_helper_resume(drm, malidp->pm_state);
-	console_lock();
-	drm_fbdev_cma_set_suspend(malidp->fbdev, 0);
-	console_unlock();
-	drm_kms_helper_poll_enable(drm);
+	drm_mode_config_helper_resume(drm);
 
+	return 0;
+}
+
+static int __maybe_unused malidp_pm_suspend_late(struct device *dev)
+{
+	if (!pm_runtime_status_suspended(dev)) {
+		malidp_runtime_pm_suspend(dev);
+		pm_runtime_set_suspended(dev);
+	}
+	return 0;
+}
+
+static int __maybe_unused malidp_pm_resume_early(struct device *dev)
+{
+	malidp_runtime_pm_resume(dev);
+	pm_runtime_set_active(dev);
 	return 0;
 }
 
 static const struct dev_pm_ops malidp_pm_ops = {
 	SET_SYSTEM_SLEEP_PM_OPS(malidp_pm_suspend, malidp_pm_resume) \
+	SET_LATE_SYSTEM_SLEEP_PM_OPS(malidp_pm_suspend_late, malidp_pm_resume_early) \
 	SET_RUNTIME_PM_OPS(malidp_runtime_pm_suspend, malidp_runtime_pm_resume, NULL)
 };
 

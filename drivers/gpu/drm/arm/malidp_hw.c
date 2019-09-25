@@ -965,6 +965,23 @@ static irqreturn_t malidp_de_irq_thread_handler(int irq, void *arg)
 	return IRQ_HANDLED;
 }
 
+void malidp_de_irq_hw_init(struct malidp_hw_device *hwdev)
+{
+	/* ensure interrupts are disabled */
+	malidp_hw_disable_irq(hwdev, MALIDP_DE_BLOCK, 0xffffffff);
+	malidp_hw_clear_irq(hwdev, MALIDP_DE_BLOCK, 0xffffffff);
+	malidp_hw_disable_irq(hwdev, MALIDP_DC_BLOCK, 0xffffffff);
+	malidp_hw_clear_irq(hwdev, MALIDP_DC_BLOCK, 0xffffffff);
+
+	/* first enable the DC block IRQs */
+	malidp_hw_enable_irq(hwdev, MALIDP_DC_BLOCK,
+			     hwdev->map.dc_irq_map.irq_mask);
+
+	/* now enable the DE block IRQs */
+	malidp_hw_enable_irq(hwdev, MALIDP_DE_BLOCK,
+			     hwdev->map.de_irq_map.irq_mask);
+}
+
 int malidp_de_irq_init(struct drm_device *drm, int irq)
 {
 	struct malidp_drm *malidp = drm->dev_private;
@@ -1054,6 +1071,16 @@ static irqreturn_t malidp_se_irq(int irq, void *arg)
 	malidp_hw_clear_irq(hwdev, MALIDP_SE_BLOCK, status);
 
 	return IRQ_HANDLED;
+}
+
+void malidp_se_irq_hw_init(struct malidp_hw_device *hwdev)
+{
+	/* ensure interrupts are disabled */
+	malidp_hw_disable_irq(hwdev, MALIDP_SE_BLOCK, 0xffffffff);
+	malidp_hw_clear_irq(hwdev, MALIDP_SE_BLOCK, 0xffffffff);
+
+	malidp_hw_enable_irq(hwdev, MALIDP_SE_BLOCK,
+			     hwdev->map.se_irq_map.irq_mask);
 }
 
 static irqreturn_t malidp_se_irq_thread_handler(int irq, void *arg)

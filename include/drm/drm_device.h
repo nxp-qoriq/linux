@@ -185,6 +185,14 @@ struct drm_device {
 	struct drm_vma_offset_manager *vma_offset_manager;
 	/*@} */
 	int switch_power_state;
+
+	/**
+	 * @fb_helper:
+	 *
+	 * Pointer to the fbdev emulation structure.
+	 * Set by drm_fb_helper_init() and cleared by drm_fb_helper_fini().
+	 */
+	struct drm_fb_helper *fb_helper;
 };
 
 #endif

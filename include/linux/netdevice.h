@@ -925,6 +925,11 @@ struct dev_ifalias {
 struct devlink;
 struct tlsdev_ops;
 
+struct netdev_name_node {
+	struct hlist_node hlist;
+	struct net_device *dev;
+	const char *name;
+};
 
 /*
  * This structure defines the management hooks for network devices.
@@ -1564,7 +1569,7 @@ enum netdev_priv_flags {
  *		(i.e. as seen by users in the "Space.c" file).  It is the name
  *		of the interface.
  *
- *	@name_hlist: 	Device name hash chain, please keep it close to name[]
+ *	@name_node:	Name hashlist node
  *	@ifalias:	SNMP alias
  *	@mem_end:	Shared memory end
  *	@mem_start:	Shared memory start
@@ -1780,7 +1785,7 @@ enum netdev_priv_flags {
 
 struct net_device {
 	char			name[IFNAMSIZ];
-	struct hlist_node	name_hlist;
+	struct netdev_name_node	*name_node;
 	struct dev_ifalias	__rcu *ifalias;
 	/*
 	 *	I/O specific fields

@@ -2,6 +2,7 @@
  * QorIQ 10G MDIO Controller
  *
  * Copyright 2012 Freescale Semiconductor, Inc.
+ * Copyright 2019 NXP
  *
  * Authors: Andy Fleming <afleming@freescale.com>
  *          Timur Tabi <timur@freescale.com>
@@ -11,6 +12,7 @@
  * kind, whether express or implied.
  */
 
+#include <linux/acpi.h>
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/interrupt.h>
@@ -243,14 +245,14 @@ static int xgmac_mdio_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
 	struct mii_bus *bus;
-	struct resource res;
+	struct resource *res;
 	struct mdio_fsl_priv *priv;
 	int ret;
 
-	ret = of_address_to_resource(np, 0, &res);
-	if (ret) {
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!res) {
 		dev_err(&pdev->dev, "could not obtain address\n");
-		return ret;
+		return -ENODEV;
 	}
 
 	bus = mdiobus_alloc_size(sizeof(struct mdio_fsl_priv));
@@ -261,27 +263,49 @@ static int xgmac_mdio_probe(struct platform_device *pdev)
 	bus->read = xgmac_mdio_read;
 	bus->write = xgmac_mdio_write;
 	bus->parent = &pdev->dev;
-	snprintf(bus->id, MII_BUS_ID_SIZE, "%llx", (unsigned long long)res.start);
+	snprintf(bus->id, MII_BUS_ID_SIZE, "%llx", (unsigned long long)res->start);
 
 	/* Set the PHY base address */
 	priv = bus->priv;
-	priv->mdio_base = of_iomap(np, 0);
+	if (dev_of_node(&pdev->dev))
+		priv->mdio_base = of_iomap(np, 0);
+	else if (is_acpi_node(pdev->dev.fwnode))
+		priv->mdio_base = devm_ioremap_resource(&pdev->dev, res);
 	if (!priv->mdio_base) {
 		ret = -ENOMEM;
 		goto err_ioremap;
 	}
 
-	priv->is_little_endian = of_property_read_bool(pdev->dev.of_node,
-						       "little-endian");
 
-	ret = of_mdiobus_register(bus, np);
-	if (ret) {
-		dev_err(&pdev->dev, "cannot register MDIO bus\n");
+	if (dev_of_node(&pdev->dev)) {
+		priv->is_little_endian = of_property_read_bool(pdev->dev.of_node,
+							       "little-endian");
+		ret = of_mdiobus_register(bus, np);
+		if (ret) {
+			dev_err(&pdev->dev, "cannot register MDIO bus\n");
+			goto err_registration;
+		}
+	} else if (is_acpi_node(pdev->dev.fwnode)) {
+		/* Clear all the IRQ properties */
+		memset(bus->irq, PHY_POLL, 4 * PHY_MAX_ADDR);
+
+		/* Mask out all PHYs from auto probing. */
+		bus->phy_mask = ~0;
+		bus->dev.fwnode = pdev->dev.fwnode;
+
+		/* Register the MDIO bus */
+		ret = mdiobus_register(bus);
+		if (ret) {
+			dev_err(&pdev->dev, "cannot register MDIO bus\n");
+			goto err_registration;
+		}
+	} else {
+		dev_err(&pdev->dev, "Cannot get cfg data from DT or ACPI\n");
+		ret = -ENXIO;
 		goto err_registration;
 	}
 
 	platform_set_drvdata(pdev, bus);
-
 	return 0;
 
 err_registration:
@@ -304,7 +328,7 @@ static int xgmac_mdio_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static const struct of_device_id xgmac_mdio_match[] = {
+static const struct of_device_id xgmac_mdio_of_match[] = {
 	{
 		.compatible = "fsl,fman-xmdio",
 	},
@@ -313,12 +337,18 @@ static const struct of_device_id xgmac_mdio_match[] = {
 	},
 	{},
 };
-MODULE_DEVICE_TABLE(of, xgmac_mdio_match);
+MODULE_DEVICE_TABLE(of, xgmac_mdio_of_match);
+
+static const struct acpi_device_id xgmac_mdio_acpi_match[] = {
+	{"NXP0006", 0}
+};
+MODULE_DEVICE_TABLE(acpi, xgmac_mdio_acpi_match);
 
 static struct platform_driver xgmac_mdio_driver = {
 	.driver = {
 		.name = "fsl-fman_xmdio",
-		.of_match_table = xgmac_mdio_match,
+		.of_match_table = xgmac_mdio_of_match,
+		.acpi_match_table = ACPI_PTR(xgmac_mdio_acpi_match),
 	},
 	.probe = xgmac_mdio_probe,
 	.remove = xgmac_mdio_remove,

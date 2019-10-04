@@ -470,6 +470,21 @@ static int ocelot_port_open(struct net_device *dev)
 	struct ocelot *ocelot = port->ocelot;
 	int err;
 
+	if (ocelot->cpu_port_ndev) {
+		if (port->chip_port == ocelot->cpu_port_id) {
+			struct net_device *pair_ndev;
+
+			pair_ndev = port->cpu_inj_handler_data;
+			if (pair_ndev && !netif_running(pair_ndev))
+				netdev_warn(dev, "%s not up!\n",
+					    netdev_name(pair_ndev));
+		} else {
+			if (!netif_running(ocelot->cpu_port_ndev))
+				netdev_warn(dev, "%s not up!\n",
+					    netdev_name(ocelot->cpu_port_ndev));
+		}
+	}
+
 	if (!port->phy)	{
 		struct phy_device *phydev = NULL;
 		struct device_node *phy_node;

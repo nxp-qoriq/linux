@@ -574,6 +574,7 @@ struct ocelot {
 	struct list_head skbs;
 
 	void (*port_pcs_init)(struct ocelot_port *port);
+	struct net_device *cpu_port_ndev;
 
 	struct ptp_clock_info ptp_caps;
 	struct ptp_clock *clock;

@@ -417,6 +417,7 @@ static void felix_setup_port_inj(struct ocelot_port *port,
 		felix_register_rx_handler(port->ocelot, pair_ndev);
 		/* save for cleanup */
 		port->cpu_inj_handler_data = pair_ndev;
+		ocelot->cpu_port_ndev = port->dev;
 	} else {
 		/* set frame injection handler on non-NPI ports */
 		port->cpu_inj_handler = felix_cpu_inj_handler;

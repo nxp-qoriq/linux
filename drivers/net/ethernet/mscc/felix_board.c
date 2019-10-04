@@ -7,7 +7,6 @@
 #include <linux/module.h>
 #include <linux/pci.h>
 #include <linux/netdevice.h>
-#include <linux/phy_fixed.h>
 #include <linux/phy.h>
 #include <linux/of_mdio.h>
 #include <linux/of_net.h>

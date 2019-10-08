@@ -521,6 +521,7 @@ static int enetc_refill_rx_ring(struct enetc_bdr *rx_ring, const int buff_cnt)
 }
 
 #ifdef CONFIG_FSL_ENETC_HW_TIMESTAMPING
+/* Must be called with &enetc_gregs spinlock held */
 static void enetc_get_rx_tstamp(struct net_device *ndev,
 				union enetc_rx_bd *rxbd,
 				struct sk_buff *skb)
@@ -532,8 +533,8 @@ static void enetc_get_rx_tstamp(struct net_device *ndev,
 	u64 tstamp;
 
 	if (le16_to_cpu(rxbd->r.flags) & ENETC_RXBD_FLAG_TSTMP) {
-		lo = enetc_rd(hw, ENETC_SICTR0);
-		hi = enetc_rd(hw, ENETC_SICTR1);
+		lo = enetc_rd_reg_hot(hw->reg + ENETC_SICTR0);
+		hi = enetc_rd_reg_hot(hw->reg + ENETC_SICTR1);
 		tstamp_lo = le32_to_cpu(rxbd->r.tstamp);
 		if (lo <= tstamp_lo)
 			hi -= 1;

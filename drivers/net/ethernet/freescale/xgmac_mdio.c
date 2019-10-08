@@ -25,6 +25,7 @@
 
 /* Number of microseconds to wait for a register to respond */
 #define TIMEOUT	1000
+#define DEFAULT_GPIO_RESET_DELAY	10	/* in microseconds */
 
 struct tgec_mdio_controller {
 	__be32	reserved[12];
@@ -241,13 +242,34 @@ static int xgmac_mdio_read(struct mii_bus *bus, int phy_id, int regnum)
 	return value;
 }
 
+/* Extract the clause 22 phy ID from the compatible string of the form
+ * ethernet-phy-idAAAA.BBBB
+ */
+static int acpi_get_phy_id(struct fwnode_handle *fwnode, u32 *phy_id)
+{
+	const char *cp;
+	unsigned int upper, lower;
+
+	if ((!fwnode_property_read_string(fwnode, "compatible", &cp)) &&
+	    (sscanf(cp, "ethernet-phy-id%4x.%4x", &upper, &lower) == 2)) {
+		*phy_id = ((upper & 0xFFFF) << 16) | (lower & 0xFFFF);
+		return 0;
+	}
+	return -EINVAL;
+}
+
 static int xgmac_mdio_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
 	struct mii_bus *bus;
 	struct resource *res;
 	struct mdio_fsl_priv *priv;
+	struct fwnode_handle *child;
+	struct phy_device *phy_dev;
+	struct acpi_device *acpi_phy_dev;
 	int ret;
+	u32 phy_id = 0;
+	int addr;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
@@ -276,7 +298,6 @@ static int xgmac_mdio_probe(struct platform_device *pdev)
 		goto err_ioremap;
 	}
 
-
 	if (dev_of_node(&pdev->dev)) {
 		priv->is_little_endian = of_property_read_bool(pdev->dev.of_node,
 							       "little-endian");
@@ -292,12 +313,40 @@ static int xgmac_mdio_probe(struct platform_device *pdev)
 		/* Mask out all PHYs from auto probing. */
 		bus->phy_mask = ~0;
 		bus->dev.fwnode = pdev->dev.fwnode;
+		bus->reset_delay_us = DEFAULT_GPIO_RESET_DELAY;
 
 		/* Register the MDIO bus */
 		ret = mdiobus_register(bus);
 		if (ret) {
 			dev_err(&pdev->dev, "cannot register MDIO bus\n");
 			goto err_registration;
+		}
+
+		device_for_each_child_node(&pdev->dev, child) {
+			ret = fwnode_property_read_u32(child, "reg", &addr);
+			if (ret) {
+				dev_err(&pdev->dev, "failed to get reg\n");
+				goto err_registration;
+			}
+
+			if (acpi_get_phy_id(child, &phy_id))
+				goto err_registration;
+
+			phy_dev = phy_device_create(bus, addr, phy_id, 0, NULL);
+
+			if (!phy_dev || IS_ERR(phy_dev))
+				return PTR_ERR(phy_dev);
+
+			phy_dev->mdio.dev.fwnode = child;
+			phy_dev->irq = bus->irq[addr];
+			ret = phy_device_register(phy_dev);
+			if (ret) {
+				dev_err(&pdev->dev, "phy dev register failed\n");
+				phy_device_free(phy_dev);
+				goto err_registration;
+			}
+			acpi_phy_dev = to_acpi_device_node(child);
+			acpi_phy_dev->driver_data = phy_dev;
 		}
 	} else {
 		dev_err(&pdev->dev, "Cannot get cfg data from DT or ACPI\n");

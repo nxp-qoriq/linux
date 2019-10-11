@@ -4,9 +4,11 @@
  *
  * Copyright (C) 2015-2016 Freescale Semiconductor, Inc.
  * Author: German Rivera <German.Rivera@freescale.com>
+ * Copyright 2019 NXP
  *
  */
 
+#include <linux/acpi_iort.h>
 #include <linux/of_device.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
@@ -15,6 +17,8 @@
 #include <linux/msi.h>
 
 #include "fsl-mc-private.h"
+
+struct irq_domain *irq_domain_global;
 
 #ifdef GENERIC_MSI_DOMAIN_OPS
 /*
@@ -174,6 +178,13 @@ struct irq_domain *fsl_mc_msi_create_irq_domain(struct fwnode_handle *fwnode,
 	if (domain)
 		irq_domain_update_bus_token(domain, DOMAIN_BUS_FSL_MC_MSI);
 
+/*
+ * This change needs to be fixed.
+ *  We do not have any corresponding ACPI API to get irq_domain
+ * due to this we are using global temporarily.
+ */
+	irq_domain_global = domain;
+
 	return domain;
 }
 
@@ -185,6 +196,14 @@ int fsl_mc_find_msi_domain(struct device *mc_platform_dev,
 
 	msi_domain = of_msi_get_domain(mc_platform_dev, mc_of_node,
 				       DOMAIN_BUS_FSL_MC_MSI);
+/*
+ * This change needs to be fixed.
+ *  We do not have any corresponding ACPI API to get irq_domain
+ * due to this we are using global temporarily.
+ */
+	if (!msi_domain)
+		msi_domain = irq_domain_global;
+
 	if (!msi_domain) {
 		pr_err("Unable to find fsl-mc MSI domain for %pOF\n",
 		       mc_of_node);

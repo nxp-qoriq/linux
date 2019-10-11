@@ -4,12 +4,13 @@
  *
  * Copyright (C) 2014-2016 Freescale Semiconductor, Inc.
  * Author: German Rivera <German.Rivera@freescale.com>
- * Copyright 2018 NXP
+ * Copyright 2018-2019 NXP
  *
  */
 
 #define pr_fmt(fmt) "fsl-mc: " fmt
 
+#include <linux/acpi.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
 #include <linux/of_address.h>
@@ -1009,6 +1010,8 @@ static int fsl_mc_bus_probe(struct platform_device *pdev)
 	u32 mc_portal_size;
 	struct mc_version mc_version;
 	struct resource res;
+	struct resource *plat_res;
+	int i;
 
 	mc = devm_kzalloc(&pdev->dev, sizeof(*mc), GFP_KERNEL);
 	if (!mc)
@@ -1019,16 +1022,22 @@ static int fsl_mc_bus_probe(struct platform_device *pdev)
 	/*
 	 * Get physical address of MC portal for the root DPRC:
 	 */
-	error = of_address_to_resource(pdev->dev.of_node, 0, &res);
-	if (error < 0) {
-		dev_err(&pdev->dev,
-			"of_address_to_resource() failed for %pOF\n",
-			pdev->dev.of_node);
-		return error;
+	if (dev_of_node(&pdev->dev)) {
+		error = of_address_to_resource(pdev->dev.of_node, 0, &res);
+		if (error < 0) {
+			dev_err(&pdev->dev,
+				"of_address_to_resource() failed for %pOF\n",
+				pdev->dev.of_node);
+			return error;
+		}
+		mc_portal_phys_addr = res.start;
+		mc_portal_size = resource_size(&res);
+	} else {
+		plat_res = platform_get_resource(pdev, IORESOURCE_MEM, 2);
+		mc_portal_phys_addr = plat_res->start;
+		mc_portal_size = resource_size(plat_res);
 	}
 
-	mc_portal_phys_addr = res.start;
-	mc_portal_size = resource_size(&res);
 	error = fsl_create_mc_io(&pdev->dev, mc_portal_phys_addr,
 				 mc_portal_size, NULL,
 				 FSL_MC_IO_ATOMIC_CONTEXT_PORTAL, &mc_io);
@@ -1045,11 +1054,63 @@ static int fsl_mc_bus_probe(struct platform_device *pdev)
 	dev_info(&pdev->dev, "MC firmware version: %u.%u.%u\n",
 		 mc_version.major, mc_version.minor, mc_version.revision);
 
-	error = get_mc_addr_translation_ranges(&pdev->dev,
+	if (dev_of_node(&pdev->dev)) {
+		error = get_mc_addr_translation_ranges(&pdev->dev,
 					       &mc->translation_ranges,
 					       &mc->num_translation_ranges);
-	if (error < 0)
-		goto error_cleanup_mc_io;
+		if (error < 0)
+			goto error_cleanup_mc_io;
+	} else {
+		unsigned int offset, num_translation_ranges;
+
+		error = fwnode_property_read_u32(pdev->dev.fwnode,
+				"dprc-no-reg", &num_translation_ranges);
+		if (error) {
+			dev_err(&pdev->dev,
+				"failed to get number of dprc regions\n");
+			goto error_cleanup_mc_io;
+		}
+
+		mc->num_translation_ranges = num_translation_ranges;
+		mc->translation_ranges = devm_kcalloc(&pdev->dev,
+					mc->num_translation_ranges,
+				sizeof(struct fsl_mc_addr_translation_range),
+				       GFP_KERNEL);
+		if (!(mc->translation_ranges))
+			goto error_cleanup_mc_io;
+
+		for (i = 0 ; i < num_translation_ranges ; i++) {
+			struct fsl_mc_addr_translation_range *range = &(mc->translation_ranges)[i];
+
+			plat_res = platform_get_resource(pdev,
+							IORESOURCE_MEM, i);
+			range->mc_region_type = i;
+			if (i == DPRC_REGION_TYPE_MC_PORTAL) {
+				error =
+				fwnode_property_read_u32(pdev->dev.fwnode,
+						"mc-portal-offset", &offset);
+				if (error) {
+					dev_err(&pdev->dev,
+				"failed to get mc-portal start offset\n");
+					goto error_cleanup_mc_io;
+				}
+			} else {
+				error =
+				fwnode_property_read_u32(pdev->dev.fwnode,
+						"qbman-portal-offset", &offset);
+				if (error) {
+					dev_err(&pdev->dev,
+				"failed to get number of dprc regions\n");
+					goto error_cleanup_mc_io;
+				}
+			}
+			range->start_phys_addr =
+							plat_res->start;
+			range->start_mc_offset = offset;
+			range->end_mc_offset =
+					offset + resource_size(plat_res);
+		}
+	}
 
 	error = dprc_get_container_id(mc_io, 0, &container_id);
 	if (error < 0) {
@@ -1077,6 +1138,7 @@ static int fsl_mc_bus_probe(struct platform_device *pdev)
 		goto error_cleanup_mc_io;
 
 	mc->root_mc_bus_dev = mc_bus_dev;
+	mc_bus_dev->dev.fwnode = pdev->dev.fwnode;
 	return 0;
 
 error_cleanup_mc_io:
@@ -1110,11 +1172,18 @@ static const struct of_device_id fsl_mc_bus_match_table[] = {
 
 MODULE_DEVICE_TABLE(of, fsl_mc_bus_match_table);
 
+static const struct acpi_device_id fsl_mc_bus_acpi_match_table[] = {
+	{"NXP0008", 0 },
+	{ }
+};
+MODULE_DEVICE_TABLE(acpi, fsl_mc_bus_acpi_match_table);
+
 static struct platform_driver fsl_mc_bus_driver = {
 	.driver = {
 		   .name = "fsl_mc_bus",
 		   .pm = NULL,
 		   .of_match_table = fsl_mc_bus_match_table,
+		   .acpi_match_table = fsl_mc_bus_acpi_match_table,
 		   },
 	.probe = fsl_mc_bus_probe,
 	.remove = fsl_mc_bus_remove,

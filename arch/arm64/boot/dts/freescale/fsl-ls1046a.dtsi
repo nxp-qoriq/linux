@@ -3,6 +3,7 @@
  * Device Tree Include file for Freescale Layerscape-1046A family SoC.
  *
  * Copyright 2016 Freescale Semiconductor, Inc.
+ * Copyright 2019 NXP
  *
  * Mingkai Hu <mingkai.hu@nxp.com>
  */
@@ -698,7 +699,7 @@
 			iommu-map = <0 &smmu 0 1>;
 			bus-range = <0x0 0xff>;
 			ranges = <0x81000000 0x0 0x00000000 0x40 0x00010000 0x0 0x00010000   /* downstream I/O */
-				  0x82000000 0x0 0x40000000 0x40 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+				  0x82000000 0x0 0x40000000 0x40 0x40000000 0x0 0x80000000>; /* non-prefetchable memory */
 			msi-parent = <&msi1>, <&msi2>, <&msi3>;
 			#interrupt-cells = <1>;
 			interrupt-map-mask = <0 0 0 7>;
@@ -735,7 +736,7 @@
 			iommu-map = <0 &smmu 0 1>;
 			bus-range = <0x0 0xff>;
 			ranges = <0x81000000 0x0 0x00000000 0x48 0x00010000 0x0 0x00010000   /* downstream I/O */
-				  0x82000000 0x0 0x40000000 0x48 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+				  0x82000000 0x0 0x40000000 0x48 0x40000000 0x0 0x80000000>; /* non-prefetchable memory */
 			msi-parent = <&msi1>, <&msi2>, <&msi3>;
 			#interrupt-cells = <1>;
 			interrupt-map-mask = <0 0 0 7>;
@@ -772,7 +773,7 @@
 			iommu-map = <0 &smmu 0 1>;
 			bus-range = <0x0 0xff>;
 			ranges = <0x81000000 0x0 0x00000000 0x50 0x00010000 0x0 0x00010000   /* downstream I/O */
-				  0x82000000 0x0 0x40000000 0x50 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+				  0x82000000 0x0 0x40000000 0x50 0x40000000 0x0 0x80000000>; /* non-prefetchable memory */
 			msi-parent = <&msi1>, <&msi2>, <&msi3>;
 			#interrupt-cells = <1>;
 			interrupt-map-mask = <0 0 0 7>;

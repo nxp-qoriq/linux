@@ -267,6 +267,9 @@ static int dsa_port_setup(struct dsa_port *dp)
 	bool dsa_port_enabled = false;
 	int err = 0;
 
+	if (dp->setup)
+		return 0;
+
 	switch (dp->type) {
 	case DSA_PORT_TYPE_UNUSED:
 		dsa_port_disable(dp);
@@ -339,13 +342,20 @@ static int dsa_port_setup(struct dsa_port *dp)
 		dsa_port_link_unregister_of(dp);
 	if (err && devlink_port_registered)
 		devlink_port_unregister(dlp);
+	if (err)
+		return err;
 
-	return err;
+	dp->setup = true;
+
+	return 0;
 }
 
 static void dsa_port_teardown(struct dsa_port *dp)
 {
 	struct devlink_port *dlp = &dp->devlink_port;
+
+	if (!dp->setup)
+		return;
 
 	switch (dp->type) {
 	case DSA_PORT_TYPE_UNUSED:
@@ -369,12 +379,17 @@ static void dsa_port_teardown(struct dsa_port *dp)
 		}
 		break;
 	}
+
+	dp->setup = false;
 }
 
 static int dsa_switch_setup(struct dsa_switch *ds)
 {
 	struct dsa_devlink_priv *dl_priv;
 	int err;
+
+	if (ds->setup)
+		return 0;
 
 	/* Initialize ds->phys_mii_mask before registering the slave MDIO bus
 	 * driver and before ops->setup() has run, since the switch drivers and
@@ -420,6 +435,8 @@ static int dsa_switch_setup(struct dsa_switch *ds)
 			goto unregister_notifier;
 	}
 
+	ds->setup = true;
+
 	return 0;
 
 unregister_notifier:
@@ -435,6 +452,9 @@ free_devlink:
 
 static void dsa_switch_teardown(struct dsa_switch *ds)
 {
+	if (!ds->setup)
+		return;
+
 	if (ds->slave_mii_bus && ds->ops->phy_read)
 		mdiobus_unregister(ds->slave_mii_bus);
 
@@ -449,72 +469,47 @@ static void dsa_switch_teardown(struct dsa_switch *ds)
 		ds->devlink = NULL;
 	}
 
+	ds->setup = false;
 }
 
 static int dsa_tree_setup_switches(struct dsa_switch_tree *dst)
 {
-	struct dsa_switch *ds;
 	struct dsa_port *dp;
-	int device, port, i;
-	int err = 0;
+	int err;
 
-	for (device = 0; device < DSA_MAX_SWITCHES; device++) {
-		ds = dst->ds[device];
-		if (!ds)
-			continue;
-
-		err = dsa_switch_setup(ds);
+	list_for_each_entry(dp, &dst->ports, list) {
+		err = dsa_switch_setup(dp->ds);
 		if (err)
-			goto switch_teardown;
+			goto teardown;
+	}
 
-		for (port = 0; port < ds->num_ports; port++) {
-			dp = &ds->ports[port];
-
-			err = dsa_port_setup(dp);
-			if (err)
-				continue;
-		}
+	list_for_each_entry(dp, &dst->ports, list) {
+		err = dsa_port_setup(dp);
+		if (err)
+			goto teardown;
 	}
 
 	return 0;
 
-switch_teardown:
-	for (i = 0; i < device; i++) {
-		ds = dst->ds[i];
-		if (!ds)
-			continue;
+teardown:
+	list_for_each_entry(dp, &dst->ports, list)
+		dsa_port_teardown(dp);
 
-		for (port = 0; port < ds->num_ports; port++) {
-			dp = &ds->ports[port];
-
-			dsa_port_teardown(dp);
-		}
-
-		dsa_switch_teardown(ds);
-	}
+	list_for_each_entry(dp, &dst->ports, list)
+		dsa_switch_teardown(dp->ds);
 
 	return err;
 }
 
 static void dsa_tree_teardown_switches(struct dsa_switch_tree *dst)
 {
-	struct dsa_switch *ds;
 	struct dsa_port *dp;
-	int device, port;
 
-	for (device = 0; device < DSA_MAX_SWITCHES; device++) {
-		ds = dst->ds[device];
-		if (!ds)
-			continue;
+	list_for_each_entry(dp, &dst->ports, list)
+		dsa_port_teardown(dp);
 
-		for (port = 0; port < ds->num_ports; port++) {
-			dp = &ds->ports[port];
-
-			dsa_port_teardown(dp);
-		}
-
-		dsa_switch_teardown(ds);
-	}
+	list_for_each_entry(dp, &dst->ports, list)
+		dsa_switch_teardown(dp->ds);
 }
 
 static int dsa_tree_setup_master(struct dsa_switch_tree *dst)

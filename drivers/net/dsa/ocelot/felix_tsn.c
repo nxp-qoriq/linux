@@ -33,7 +33,7 @@ static int felix_dev_to_port(struct net_device *ndev, struct ocelot *ocelot)
 	int i;
 
 	for (i = 0; i < ds->num_ports; i++) {
-		dp = &ds->ports[i];
+		dp = dsa_to_port(ds, i);
 		if (dp->dn == ndev->dev.of_node)
 			return dp->index;
 	}

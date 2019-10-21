@@ -288,7 +288,6 @@ struct dsa_switch {
 
 	/* Dynamically allocated ports, keep last */
 	size_t num_ports;
-	struct dsa_port ports[];
 };
 
 static inline struct dsa_port *dsa_to_port(struct dsa_switch *ds, int p)

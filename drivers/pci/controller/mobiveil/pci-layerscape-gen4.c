@@ -2,7 +2,7 @@
 /*
  * PCIe host controller driver for NXP Layerscape SoCs
  *
- * Copyright 2018 NXP
+ * Copyright 2018-2019 NXP
  *
  * Author: Zhiqiang Hou <Zhiqiang.Hou@nxp.com>
  */
@@ -19,6 +19,8 @@
 #include <linux/resource.h>
 #include <linux/mfd/syscon.h>
 #include <linux/regmap.h>
+#include <linux/pci-acpi.h>
+#include <linux/pci-ecam.h>
 
 #include "pcie-mobiveil.h"
 
@@ -48,6 +50,71 @@ struct ls_pcie_g4 {
 	int irq;
 	u8 rev;
 };
+
+
+#if defined(CONFIG_ACPI) && defined(CONFIG_PCI_QUIRKS)
+
+/*
+ * config transaction read function
+ */
+static int layerscape_gen4_acpi_pcie_rd_conf(struct pci_bus *bus, u32 devfn,
+	 int where, int size, u32 *val)
+{
+	return 0;
+}
+
+/*
+ * config transaction write function
+ */
+static int layerscape_gen4_acpi_pcie_wr_conf(struct pci_bus *bus, u32 devfn,
+	 int where, int size, u32 val)
+{
+	return 0;
+}
+
+/*
+ * map function to decide if the target of config transaction.
+ * If the target is PCIe bridge, do AXI read.
+ * else get the BDF value of target device and write BDF to
+ * BIT[31:16] of outbound config window.
+ *
+ */
+static void __iomem *layerscape_gen4_apci_pcie_map_bus(struct pci_bus *bus,
+	 unsigned int devfn, int where)
+{
+}
+
+/*
+ * Retrieve RC base and size from a NXP0016 device with _UID
+ * matching our segment. cfg->priv will point to configuration
+ * base address.
+ */
+
+static int layerscape_gen4_acpi_pcie_init(struct pci_config_window *cfg)
+{
+	return 0;
+}
+
+/*
+ * Register pci_ecam_ops for layerscape_gen4 controller.
+ * These functions will override the generic read,
+ * write and map function used with ecam.
+ * .bus_shift : start of bus number bit
+ *
+ * TODO:
+ *	- Register quirks in pci_mcfg.c
+ *	- Implement Specific .map_bus, .read, .write functions
+ */
+struct pci_ecam_ops layerscape_gen4_acpi_pcie_ops = {
+	.bus_shift    = 24,
+	.init         =  layerscape_gen4_acpi_pcie_init,
+	.pci_ops      = {
+	.map_bus      = layerscape_gen4_apci_pcie_map_bus,
+	.read         = layerscape_gen4_acpi_pcie_rd_conf,
+	.write        = layerscape_gen4_acpi_pcie_wr_conf,
+	}
+};
+#endif
 
 static inline u32 ls_pcie_g4_lut_readl(struct ls_pcie_g4 *pcie, u32 off)
 {

@@ -220,4 +220,8 @@ static inline int fsl_mc_restool_init(void)
 
 #endif
 
+int disable_dprc_irq(struct fsl_mc_device *mc_dev);
+int enable_dprc_irq(struct fsl_mc_device *mc_dev);
+int get_dprc_irq_state(struct fsl_mc_device *mc_dev);
+
 #endif /* _FSL_MC_PRIVATE_H_ */

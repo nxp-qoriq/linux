@@ -1096,8 +1096,22 @@ int __hot dpa_tx_extended(struct sk_buff *skb, struct net_device *net_dev,
 	struct dpa_percpu_priv_s *percpu_priv;
 	struct rtnl_link_stats64 *percpu_stats;
 	int err = 0;
-	bool nonlinear;
+	bool nonlinear, skb_changed, skb_need_wa;
 	int *countptr, offset = 0;
+
+	/* Flags to help optimize the A010022 errata restriction checks.
+	 *
+	 * First flag marks if the skb changed between the first A010022 check
+	 * and the moment it's converted to an FD.
+	 *
+	 * The second flag marks if the skb needs to be realigned in order to
+	 * avoid the errata.
+	 *
+	 * The flags should have minimal impact on platforms not impacted by
+	 * the errata.
+	 */
+	skb_changed = false;
+	skb_need_wa = false;
 
 	priv = netdev_priv(net_dev);
 	/* Non-migratable context, safe to use raw_cpu_ptr */
@@ -1108,11 +1122,8 @@ int __hot dpa_tx_extended(struct sk_buff *skb, struct net_device *net_dev,
 	clear_fd(&fd);
 
 #ifndef CONFIG_PPC
-	if (unlikely(dpaa_errata_a010022) && a010022_check_skb(skb, priv)) {
-		skb = a010022_realign_skb(skb, priv);
-		if (!skb)
-			goto skb_to_fd_failed;
-	}
+	if (unlikely(dpaa_errata_a010022) && a010022_check_skb(skb, priv))
+		skb_need_wa = true;
 #endif
 
 	nonlinear = skb_is_nonlinear(skb);
@@ -1133,8 +1144,8 @@ int __hot dpa_tx_extended(struct sk_buff *skb, struct net_device *net_dev,
 	 * Btw, we're using the first sgt entry to store the linear part of
 	 * the skb, so we're one extra frag short.
 	 */
-	if (nonlinear &&
-		likely(skb_shinfo(skb)->nr_frags < DPA_SGT_MAX_ENTRIES)) {
+	if (nonlinear && !skb_need_wa &&
+	    likely(skb_shinfo(skb)->nr_frags < DPA_SGT_MAX_ENTRIES)) {
 		/* Just create a S/G fd based on the skb */
 		err = skb_to_sg_fd(priv, skb, &fd);
 		percpu_priv->tx_frag_skbuffs++;
@@ -1159,36 +1170,59 @@ int __hot dpa_tx_extended(struct sk_buff *skb, struct net_device *net_dev,
 
 			dev_kfree_skb(skb);
 			skb = skb_new;
+			skb_changed = true;
 		}
 
 		/* We're going to store the skb backpointer at the beginning
 		 * of the data buffer, so we need a privately owned skb
+		 *
+		 * Under the A010022 errata, we are going to have a privately
+		 * owned skb after realigning the current one, so no point in
+		 * copying it here in that case.
 		 */
 
 		/* Code borrowed from skb_unshare(). */
-		if (skb_cloned(skb)) {
+		if (skb_cloned(skb) && !skb_need_wa) {
 			struct sk_buff *nskb = skb_copy(skb, GFP_ATOMIC);
 			kfree_skb(skb);
 			skb = nskb;
-#ifndef CONFIG_PPC
-			if (unlikely(dpaa_errata_a010022) &&
-			    a010022_check_skb(skb, priv)) {
-				skb = a010022_realign_skb(skb, priv);
-				if (!skb)
-					goto skb_to_fd_failed;
-			}
-#endif
+			skb_changed = true;
+
 			/* skb_copy() has now linearized the skbuff. */
-		} else if (unlikely(nonlinear)) {
+		} else if (unlikely(nonlinear) && !skb_need_wa) {
 			/* We are here because the egress skb contains
 			 * more fragments than we support. In this case,
 			 * we have no choice but to linearize it ourselves.
 			 */
-			err = __skb_linearize(skb);
+#ifndef CONFIG_PPC
+			/* No point in linearizing the skb now if we are going
+			 * to realign and linearize it again further down due
+			 * to the A010022 errata
+			 */
+			if (unlikely(dpaa_errata_a010022))
+				skb_need_wa = true;
+			else
+#endif
+				err = __skb_linearize(skb);
 		}
 		if (unlikely(!skb || err < 0))
 			/* Common out-of-memory error path */
 			goto enomem;
+
+#ifndef CONFIG_PPC
+		/* Verify the skb a second time if it has been updated since
+		 * the previous check
+		 */
+		if (unlikely(dpaa_errata_a010022) && skb_changed &&
+		    a010022_check_skb(skb, priv))
+			skb_need_wa = true;
+
+		if (unlikely(dpaa_errata_a010022) && skb_need_wa) {
+			skb = a010022_realign_skb(skb, priv);
+			if (!skb)
+				goto skb_to_fd_failed;
+		}
+#endif
 
 		err = skb_to_contig_fd(priv, skb, &fd, countptr, &offset);
 	}

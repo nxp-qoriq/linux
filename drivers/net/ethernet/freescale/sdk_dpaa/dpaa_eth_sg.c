@@ -771,31 +771,72 @@ int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
 EXPORT_SYMBOL(skb_to_contig_fd);
 
 #ifndef CONFIG_PPC
-/* Verify the conditions that trigger the A010022 errata: data unaligned to
- * 16 bytes, 4K memory address crossings and S/G fragments.
+/* Verify the conditions that trigger the A010022 errata:
+ * - 4K memory address boundary crossings when the data/SG fragments aren't
+ *   aligned to 256 bytes
+ * - data and SG fragments that aren't aligned to 16 bytes
+ * - SG fragments that aren't mod 16 bytes in size (except for the last
+ *   fragment)
  */
 static bool a010022_check_skb(struct sk_buff *skb, struct dpa_priv_s *priv)
 {
-	/* Check if the headroom is aligned */
-	if (((uintptr_t)skb->data - priv->tx_headroom) %
-	    priv->buf_layout[TX].data_align != 0)
+	skb_frag_t *frag;
+	int i, nr_frags;
+
+	nr_frags = skb_shinfo(skb)->nr_frags;
+
+	/* Check if the linear data is 16 byte aligned */
+	if ((uintptr_t)skb->data % 16)
 		return true;
 
-	/* Check for paged data in the skb. We do not support S/G fragments */
-	if (skb_is_nonlinear(skb))
+	/* Check if the needed headroom crosses a 4K address boundary without
+	 * being 256 byte aligned
+	 */
+	if (CROSS_4K(skb->data - priv->tx_headroom, priv->tx_headroom) &&
+	    (((uintptr_t)skb->data - priv->tx_headroom) % 256))
 		return true;
 
-	/* Check if the headroom crosses a boundary */
-	if (HAS_DMA_ISSUE(skb->head, skb_headroom(skb)))
+	/* Check if the linear data crosses a 4K address boundary without
+	 * being 256 byte aligned
+	 */
+	if (CROSS_4K(skb->data, skb_headlen(skb)) &&
+	    ((uintptr_t)skb->data % 256))
 		return true;
 
-	/* Check if the non-paged data crosses a boundary */
-	if (HAS_DMA_ISSUE(skb->data, skb_headlen(skb)))
+	/* When using Scatter/Gather, the linear data becomes the first
+	 * fragment in the list and must follow the same restrictions as the
+	 * other fragments.
+	 *
+	 * Check if the linear data is mod 16 bytes in size.
+	 */
+	if (nr_frags && (skb_headlen(skb) % 16))
 		return true;
 
-	/* Check if the entire linear skb crosses a boundary */
-	if (HAS_DMA_ISSUE(skb->head, skb_end_offset(skb)))
-		return true;
+	/* Check the SG fragments. They must follow the same rules as the
+	 * linear data with and additional restriction: they must be multiple
+	 * of 16 bytes in size to account for the hardware carryover effect.
+	 */
+	for (i = 0; i < nr_frags; i++) {
+		frag = &skb_shinfo(skb)->frags[i];
+
+		/* Check if the fragment is a multiple of 16 bytes in size.
+		 * The last fragment is exempt from this restriction.
+		 */
+		if ((i != (nr_frags - 1)) && (skb_frag_size(frag) % 16))
+			return true;
+
+		/* Check if the fragment is 16 byte aligned */
+		if (frag->page_offset % 16)
+			return true;
+
+		/* Check if the fragment crosses a 4K address boundary. Since
+		 * the alignment of previous fragments can influence the
+		 * current fragment, checking for the 256 byte alignment
+		 * isn't relevant.
+		 */
+		if (CROSS_4K(frag->page_offset, skb_frag_size(frag)))
+			return true;
+	}
 
 	return false;
 }

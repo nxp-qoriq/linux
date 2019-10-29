@@ -911,8 +911,13 @@ int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 	 * is in place and we need to avoid crossing a 4k boundary.
 	 */
 #ifndef CONFIG_PPC
-	if (unlikely(dpaa_errata_a010022))
-		sgt_buf = page_address(alloc_page(GFP_ATOMIC));
+	if (unlikely(dpaa_errata_a010022)) {
+		struct page *new_page = alloc_page(GFP_ATOMIC);
+
+		if (unlikely(!new_page))
+			return -ENOMEM;
+		sgt_buf = page_address(new_page);
+	}
 	else
 #endif
 		sgt_buf = netdev_alloc_frag(priv->tx_headroom + sgt_size);

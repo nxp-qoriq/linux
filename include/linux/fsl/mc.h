@@ -410,6 +410,8 @@ int __must_check fsl_mc_allocate_irqs(struct fsl_mc_device *mc_dev);
 
 void fsl_mc_free_irqs(struct fsl_mc_device *mc_dev);
 
+struct fsl_mc_device *fsl_mc_get_endpoint(struct fsl_mc_device *mc_dev);
+
 extern struct bus_type fsl_mc_bus_type;
 
 extern struct device_type fsl_mc_bus_dprc_type;
@@ -540,6 +542,8 @@ static inline bool is_fsl_mc_bus_dpdmai(const struct fsl_mc_device *mc_dev)
 #define DPRC_CMDID_GET_OBJ_REG_V2               DPRC_CMD_V2(0x15E)
 #define DPRC_CMDID_SET_OBJ_IRQ                  DPRC_CMD(0x15F)
 
+#define DPRC_CMDID_GET_CONNECTION               DPRC_CMD(0x16C)
+
 struct dprc_cmd_open {
 	__le32 container_id;
 };
@@ -666,6 +670,23 @@ struct dprc_cmd_set_obj_irq {
 	/* cmd word 3-4 */
 	u8 obj_type[16];
 };
+
+struct dprc_cmd_get_connection {
+	__le32 ep1_id;
+	__le16 ep1_interface_id;
+	u8 pad[2];
+	u8 ep1_type[16];
+};
+
+struct dprc_rsp_get_connection {
+	__le64 pad[3];
+	__le32 ep2_id;
+	__le16 ep2_interface_id;
+	__le16 pad1;
+	u8 ep2_type[16];
+	__le32 state;
+};
+
 
 /*
  * DPRC API for managing and querying DPAA resources

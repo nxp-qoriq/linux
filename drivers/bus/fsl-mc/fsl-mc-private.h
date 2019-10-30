@@ -69,6 +69,27 @@ int dpmcp_reset(struct fsl_mc_io *mc_io,
 		u32 cmd_flags,
 		u16 token);
 
+/**
+ * struct dprc_endpoint - Endpoint description for link connect/disconnect
+ *			operations
+ * @type:	Endpoint object type: NULL terminated string
+ * @id:		Endpoint object ID
+ * @if_id:	Interface ID; should be set for endpoints with multiple
+ *		interfaces ("dpsw", "dpdmux"); for others, always set to 0
+ */
+struct dprc_endpoint {
+	char type[16];
+	int id;
+	u16 if_id;
+};
+
+int dprc_get_connection(struct fsl_mc_io *mc_io,
+			u32 cmd_flags,
+			u16 token,
+			const struct dprc_endpoint *endpoint1,
+			struct dprc_endpoint *endpoint2,
+			int *state);
+
 /*
  * Data Path Buffer Pool (DPBP) API
  */
@@ -206,5 +227,8 @@ static inline void fsl_mc_uapi_remove_device_file(struct fsl_mc_bus *mc_bus)
 int disable_dprc_irq(struct fsl_mc_device *mc_dev);
 int enable_dprc_irq(struct fsl_mc_device *mc_dev);
 int get_dprc_irq_state(struct fsl_mc_device *mc_dev);
+
+struct fsl_mc_device *fsl_mc_device_lookup(struct fsl_mc_obj_desc *obj_desc,
+					   struct fsl_mc_device *mc_bus_dev);
 
 #endif /* _FSL_MC_PRIVATE_H_ */

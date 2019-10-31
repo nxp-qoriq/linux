@@ -143,6 +143,12 @@ config LS104XA_BAREMETAL
 	help
 	  This enables support for Freescale LS1043A and LS1046A baremetal.
 
+config LS1028A_BAREMETAL
+	bool "NXP LS1028A baremetal support"
+	select BAREMETAL
+	help
+	  This enables support for NXP LS1028A baremetal.
+
 config ARCH_LG1K
 	bool "LG Electronics LG1K SoC Family"
 	help

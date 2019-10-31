@@ -78,3 +78,7 @@
 &pcie3 {
 	status = "disabled";
 };
+
+&optee {
+	status = "disabled";
+};

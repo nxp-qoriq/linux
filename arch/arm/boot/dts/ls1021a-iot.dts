@@ -90,6 +90,22 @@
 	status = "okay";
 };
 
+&can0{
+	status = "disabled";
+};
+
+&can1{
+	status = "disabled";
+};
+
+&can2{
+	status = "disabled";
+};
+
+&can3{
+	status = "okay";
+};
+
 &i2c0 {
 	status = "okay";
 

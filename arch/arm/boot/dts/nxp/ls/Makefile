@@ -5,4 +5,5 @@ dtb-$(CONFIG_SOC_LS1021A) += \
 	ls1021a-qds.dtb \
 	ls1021a-tqmls1021a-mbls1021a.dtb \
 	ls1021a-tsn.dtb \
-	ls1021a-twr.dtb
+	ls1021a-twr.dtb \
+	ls1021a-iot.dtb

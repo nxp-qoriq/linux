@@ -3,6 +3,7 @@
 # Makefile for nfc devices
 #
 
+obj-$(CONFIG_NFC_NXP_PN5XX)	+= pn5xx/
 obj-$(CONFIG_NFC_FDP)		+= fdp/
 obj-$(CONFIG_NFC_PN544)		+= pn544/
 obj-$(CONFIG_NFC_MICROREAD)	+= microread/

@@ -240,6 +240,18 @@
 				reg = <0x51>;
 			};
 		};
+
+		i2c@6 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x6>;
+
+			pn7120: pn7120 {
+				compatible = "nxp,pn7120", "nxp,pn544";
+				reg = <0x28>;
+				clock-frequency = <1000000>;
+			};
+		};
 	};
 };
 

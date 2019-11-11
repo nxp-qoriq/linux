@@ -1009,9 +1009,7 @@ static int fsl_mc_bus_probe(struct platform_device *pdev)
 	phys_addr_t mc_portal_phys_addr;
 	u32 mc_portal_size;
 	struct mc_version mc_version;
-	struct resource res;
 	struct resource *plat_res;
-	int i;
 
 	mc = devm_kzalloc(&pdev->dev, sizeof(*mc), GFP_KERNEL);
 	if (!mc)
@@ -1022,22 +1020,9 @@ static int fsl_mc_bus_probe(struct platform_device *pdev)
 	/*
 	 * Get physical address of MC portal for the root DPRC:
 	 */
-	if (dev_of_node(&pdev->dev)) {
-		error = of_address_to_resource(pdev->dev.of_node, 0, &res);
-		if (error < 0) {
-			dev_err(&pdev->dev,
-				"of_address_to_resource() failed for %pOF\n",
-				pdev->dev.of_node);
-			return error;
-		}
-		mc_portal_phys_addr = res.start;
-		mc_portal_size = resource_size(&res);
-	} else {
-		plat_res = platform_get_resource(pdev, IORESOURCE_MEM, 2);
-		mc_portal_phys_addr = plat_res->start;
-		mc_portal_size = resource_size(plat_res);
-	}
-
+	plat_res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	mc_portal_phys_addr = plat_res->start;
+	mc_portal_size = resource_size(plat_res);
 	error = fsl_create_mc_io(&pdev->dev, mc_portal_phys_addr,
 				 mc_portal_size, NULL,
 				 FSL_MC_IO_ATOMIC_CONTEXT_PORTAL, &mc_io);
@@ -1060,56 +1045,6 @@ static int fsl_mc_bus_probe(struct platform_device *pdev)
 					       &mc->num_translation_ranges);
 		if (error < 0)
 			goto error_cleanup_mc_io;
-	} else {
-		unsigned int offset, num_translation_ranges;
-
-		error = fwnode_property_read_u32(pdev->dev.fwnode,
-				"dprc-no-reg", &num_translation_ranges);
-		if (error) {
-			dev_err(&pdev->dev,
-				"failed to get number of dprc regions\n");
-			goto error_cleanup_mc_io;
-		}
-
-		mc->num_translation_ranges = num_translation_ranges;
-		mc->translation_ranges = devm_kcalloc(&pdev->dev,
-					mc->num_translation_ranges,
-				sizeof(struct fsl_mc_addr_translation_range),
-				       GFP_KERNEL);
-		if (!(mc->translation_ranges))
-			goto error_cleanup_mc_io;
-
-		for (i = 0 ; i < num_translation_ranges ; i++) {
-			struct fsl_mc_addr_translation_range *range = &(mc->translation_ranges)[i];
-
-			plat_res = platform_get_resource(pdev,
-							IORESOURCE_MEM, i);
-			range->mc_region_type = i;
-			if (i == DPRC_REGION_TYPE_MC_PORTAL) {
-				error =
-				fwnode_property_read_u32(pdev->dev.fwnode,
-						"mc-portal-offset", &offset);
-				if (error) {
-					dev_err(&pdev->dev,
-				"failed to get mc-portal start offset\n");
-					goto error_cleanup_mc_io;
-				}
-			} else {
-				error =
-				fwnode_property_read_u32(pdev->dev.fwnode,
-						"qbman-portal-offset", &offset);
-				if (error) {
-					dev_err(&pdev->dev,
-				"failed to get number of dprc regions\n");
-					goto error_cleanup_mc_io;
-				}
-			}
-			range->start_phys_addr =
-							plat_res->start;
-			range->start_mc_offset = offset;
-			range->end_mc_offset =
-					offset + resource_size(plat_res);
-		}
 	}
 
 	error = dprc_get_container_id(mc_io, 0, &container_id);

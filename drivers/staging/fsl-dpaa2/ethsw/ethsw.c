@@ -1191,10 +1191,6 @@ err_addr_alloc:
 	return NOTIFY_BAD;
 }
 
-static struct notifier_block port_switchdev_nb = {
-	.notifier_call = port_switchdev_event,
-};
-
 static int ethsw_register_notifier(struct device *dev)
 {
 	struct ethsw_core *ethsw = dev_get_drvdata(dev);
@@ -1207,7 +1203,8 @@ static int ethsw_register_notifier(struct device *dev)
 		return err;
 	}
 
-	err = register_switchdev_notifier(&port_switchdev_nb);
+	ethsw->port_switchdev_nb.notifier_call = port_switchdev_event;
+	err = register_switchdev_notifier(&ethsw->port_switchdev_nb);
 	if (err) {
 		dev_err(dev, "Failed to register switchdev notifier\n");
 		goto err_switchdev_nb;
@@ -1404,7 +1401,7 @@ static void ethsw_unregister_notifier(struct device *dev)
 	struct ethsw_core *ethsw = dev_get_drvdata(dev);
 	int err;
 
-	err = unregister_switchdev_notifier(&port_switchdev_nb);
+	err = unregister_switchdev_notifier(&ethsw->port_switchdev_nb);
 	if (err)
 		dev_err(dev,
 			"Failed to unregister switchdev notifier (%d)\n", err);

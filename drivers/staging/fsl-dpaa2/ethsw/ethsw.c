@@ -1099,10 +1099,6 @@ static int port_netdevice_event(struct notifier_block *unused,
 	return notifier_from_errno(err);
 }
 
-static struct notifier_block port_nb __read_mostly = {
-	.notifier_call = port_netdevice_event,
-};
-
 struct ethsw_switchdev_event_work {
 	struct work_struct work;
 	struct switchdev_notifier_fdb_info fdb_info;
@@ -1201,9 +1197,11 @@ static struct notifier_block port_switchdev_nb = {
 
 static int ethsw_register_notifier(struct device *dev)
 {
+	struct ethsw_core *ethsw = dev_get_drvdata(dev);
 	int err;
 
-	err = register_netdevice_notifier(&port_nb);
+	ethsw->port_nb.notifier_call = port_netdevice_event;
+	err = register_netdevice_notifier(&ethsw->port_nb);
 	if (err) {
 		dev_err(dev, "Failed to register netdev notifier\n");
 		return err;
@@ -1218,7 +1216,7 @@ static int ethsw_register_notifier(struct device *dev)
 	return 0;
 
 err_switchdev_nb:
-	unregister_netdevice_notifier(&port_nb);
+	unregister_netdevice_notifier(&ethsw->port_nb);
 	return err;
 }
 
@@ -1403,6 +1401,7 @@ static int ethsw_port_init(struct ethsw_port_priv *port_priv, u16 port)
 
 static void ethsw_unregister_notifier(struct device *dev)
 {
+	struct ethsw_core *ethsw = dev_get_drvdata(dev);
 	int err;
 
 	err = unregister_switchdev_notifier(&port_switchdev_nb);
@@ -1410,7 +1409,7 @@ static void ethsw_unregister_notifier(struct device *dev)
 		dev_err(dev,
 			"Failed to unregister switchdev notifier (%d)\n", err);
 
-	err = unregister_netdevice_notifier(&port_nb);
+	err = unregister_netdevice_notifier(&ethsw->port_nb);
 	if (err)
 		dev_err(dev,
 			"Failed to unregister netdev notifier (%d)\n", err);

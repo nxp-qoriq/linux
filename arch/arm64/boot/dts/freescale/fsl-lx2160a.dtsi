@@ -1044,7 +1044,7 @@
 			       0x90 0x00000000 0x8 0x00000000>;
 			reg-names = "regs", "addr_space";
 			num-ob-windows = <256>;
-			max-functions = <2>;
+			max-functions = /bits/ 8 <2>;
 			status = "disabled";
 		};
 
@@ -1119,7 +1119,7 @@
 			       0xa0 0x00000000 0x8 0x00000000>;
 			reg-names = "regs", "addr_space";
 			num-ob-windows = <256>;
-			max-functions = <2>;
+			max-functions = /bits/ 8 <2>;
 			status = "disabled";
 		};
 

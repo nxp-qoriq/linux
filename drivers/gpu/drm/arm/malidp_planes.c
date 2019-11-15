@@ -165,6 +165,7 @@ static int malidp_se_check_scaling(struct malidp_plane *mp,
 		src_h = state->src_h >> 16;
 	}
 
+	mc = to_malidp_crtc_state(crtc_state);
 	if ((state->crtc_w == src_w) && (state->crtc_h == src_h)) {
 		/* Scaling not necessary for this plane. */
 		mc->scaled_planes_mask &= ~(mp->layer->id);
@@ -173,8 +174,6 @@ static int malidp_se_check_scaling(struct malidp_plane *mp,
 
 	if (mp->layer->id & (DE_SMART | DE_GRAPHICS2))
 		return -EINVAL;
-
-	mc = to_malidp_crtc_state(crtc_state);
 
 	mc->scaled_planes_mask |= mp->layer->id;
 	/* Defer scaling requirements calculation to the crtc check. */

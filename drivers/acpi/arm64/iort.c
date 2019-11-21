@@ -627,6 +627,29 @@ static int iort_dev_find_its_id(struct device *dev, u32 req_id,
 }
 
 /**
+ * iort_get_fsl_mc_device_domain() - Find MSI domain related to a device
+ * @dev: The device.
+ * @mc_icid: ICID for the fsl_mc device.
+ *
+ * Returns: the MSI domain for this device, NULL otherwise
+ */
+struct irq_domain *iort_get_fsl_mc_device_domain(struct device *dev,
+							u32 mc_icid)
+{
+	struct fwnode_handle *handle;
+	int its_id;
+
+	if (iort_dev_find_its_id(dev, mc_icid, 0, &its_id))
+		return NULL;
+
+	handle = iort_find_domain_token(its_id);
+	if (!handle)
+		return NULL;
+
+	return irq_find_matching_fwnode(handle, DOMAIN_BUS_FSL_MC_MSI);
+}
+
+/**
  * iort_get_device_domain() - Find MSI domain related to a device
  * @dev: The device.
  * @req_id: Requester ID for the device.

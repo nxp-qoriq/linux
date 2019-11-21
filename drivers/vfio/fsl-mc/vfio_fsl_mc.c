@@ -548,7 +548,8 @@ static int vfio_fsl_mc_initialize_dprc(struct vfio_fsl_mc_device *vdev)
 	}
 
 	/* MSI domain set up */
-	ret = fsl_mc_find_msi_domain(root_dprc_dev->parent, &mc_msi_domain);
+	ret = fsl_mc_find_msi_domain(root_dprc_dev->parent, &mc_msi_domain,
+								mc_dev);
 	if (ret < 0)
 		goto free_mc_portal;
 

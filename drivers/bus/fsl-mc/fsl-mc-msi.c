@@ -15,10 +15,9 @@
 #include <linux/irq.h>
 #include <linux/irqdomain.h>
 #include <linux/msi.h>
+#include <linux/acpi_iort.h>
 
 #include "fsl-mc-private.h"
-
-struct irq_domain *irq_domain_global;
 
 #ifdef GENERIC_MSI_DOMAIN_OPS
 /*
@@ -178,31 +177,22 @@ struct irq_domain *fsl_mc_msi_create_irq_domain(struct fwnode_handle *fwnode,
 	if (domain)
 		irq_domain_update_bus_token(domain, DOMAIN_BUS_FSL_MC_MSI);
 
-/*
- * This change needs to be fixed.
- *  We do not have any corresponding ACPI API to get irq_domain
- * due to this we are using global temporarily.
- */
-	irq_domain_global = domain;
-
 	return domain;
 }
 
 int fsl_mc_find_msi_domain(struct device *mc_platform_dev,
-			   struct irq_domain **mc_msi_domain)
+			   struct irq_domain **mc_msi_domain,
+				struct fsl_mc_device *mc_dev)
 {
 	struct irq_domain *msi_domain;
 	struct device_node *mc_of_node = mc_platform_dev->of_node;
 
 	msi_domain = of_msi_get_domain(mc_platform_dev, mc_of_node,
 				       DOMAIN_BUS_FSL_MC_MSI);
-/*
- * This change needs to be fixed.
- *  We do not have any corresponding ACPI API to get irq_domain
- * due to this we are using global temporarily.
- */
+
 	if (!msi_domain)
-		msi_domain = irq_domain_global;
+		msi_domain = iort_get_fsl_mc_device_domain(mc_platform_dev,
+								mc_dev->icid);
 
 	if (!msi_domain) {
 		pr_err("Unable to find fsl-mc MSI domain for %pOF\n",

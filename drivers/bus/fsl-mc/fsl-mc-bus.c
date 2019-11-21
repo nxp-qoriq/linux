@@ -137,12 +137,25 @@ static int fsl_mc_bus_uevent(struct device *dev, struct kobj_uevent_env *env)
 
 static int fsl_mc_dma_configure(struct device *dev)
 {
+	enum dev_dma_attr attr;
 	struct device *dma_dev = dev;
+	int err = -ENODEV;
 
 	while (dev_is_fsl_mc(dma_dev))
 		dma_dev = dma_dev->parent;
 
-	return of_dma_configure(dev, dma_dev->of_node, 1);
+	if (dma_dev->of_node)
+		err = of_dma_configure(dev, dma_dev->of_node, 1);
+	else {
+		if (has_acpi_companion(dma_dev)) {
+			attr = acpi_get_dma_attr(to_acpi_device_node
+							(dma_dev->fwnode));
+			if (attr != DEV_DMA_NOT_SUPPORTED)
+				err = acpi_dma_configure(dev, attr);
+		}
+	}
+
+	return err;
 }
 
 static ssize_t modalias_show(struct device *dev, struct device_attribute *attr,

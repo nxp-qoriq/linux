@@ -25,7 +25,6 @@
 
 /* Number of microseconds to wait for a register to respond */
 #define TIMEOUT	1000
-#define DEFAULT_GPIO_RESET_DELAY	10	/* in microseconds */
 
 struct tgec_mdio_controller {
 	__be32	reserved[12];
@@ -242,34 +241,13 @@ static int xgmac_mdio_read(struct mii_bus *bus, int phy_id, int regnum)
 	return value;
 }
 
-/* Extract the clause 22 phy ID from the compatible string of the form
- * ethernet-phy-idAAAA.BBBB
- */
-static int acpi_get_phy_id(struct fwnode_handle *fwnode, u32 *phy_id)
-{
-	const char *cp;
-	unsigned int upper, lower;
-
-	if ((!fwnode_property_read_string(fwnode, "compatible", &cp)) &&
-	    (sscanf(cp, "ethernet-phy-id%4x.%4x", &upper, &lower) == 2)) {
-		*phy_id = ((upper & 0xFFFF) << 16) | (lower & 0xFFFF);
-		return 0;
-	}
-	return -EINVAL;
-}
-
 static int xgmac_mdio_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
 	struct mii_bus *bus;
 	struct resource *res;
 	struct mdio_fsl_priv *priv;
-	struct fwnode_handle *child;
-	struct phy_device *phy_dev;
-	struct acpi_device *acpi_phy_dev;
 	int ret;
-	u32 phy_id = 0;
-	int addr;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
@@ -289,16 +267,13 @@ static int xgmac_mdio_probe(struct platform_device *pdev)
 
 	/* Set the PHY base address */
 	priv = bus->priv;
-	if (dev_of_node(&pdev->dev))
-		priv->mdio_base = of_iomap(np, 0);
-	else if (is_acpi_node(pdev->dev.fwnode))
-		priv->mdio_base = devm_ioremap_resource(&pdev->dev, res);
+	priv->mdio_base = devm_ioremap_resource(&pdev->dev, res);
 	if (!priv->mdio_base) {
 		ret = -ENOMEM;
 		goto err_ioremap;
 	}
 
-	if (dev_of_node(&pdev->dev)) {
+	if (is_of_node(pdev->dev.fwnode)) {
 		priv->is_little_endian = of_property_read_bool(pdev->dev.of_node,
 							       "little-endian");
 		ret = of_mdiobus_register(bus, np);
@@ -307,46 +282,13 @@ static int xgmac_mdio_probe(struct platform_device *pdev)
 			goto err_registration;
 		}
 	} else if (is_acpi_node(pdev->dev.fwnode)) {
-		/* Clear all the IRQ properties */
-		memset(bus->irq, PHY_POLL, 4 * PHY_MAX_ADDR);
-
-		/* Mask out all PHYs from auto probing. */
-		bus->phy_mask = ~0;
-		bus->dev.fwnode = pdev->dev.fwnode;
-		bus->reset_delay_us = DEFAULT_GPIO_RESET_DELAY;
-
-		/* Register the MDIO bus */
-		ret = mdiobus_register(bus);
+		priv->is_little_endian =
+			fwnode_property_read_bool(pdev->dev.fwnode,
+						  "little-endian");
+		ret = fwnode_mdiobus_register(bus, pdev->dev.fwnode);
 		if (ret) {
 			dev_err(&pdev->dev, "cannot register MDIO bus\n");
 			goto err_registration;
-		}
-
-		device_for_each_child_node(&pdev->dev, child) {
-			ret = fwnode_property_read_u32(child, "reg", &addr);
-			if (ret) {
-				dev_err(&pdev->dev, "failed to get reg\n");
-				goto err_registration;
-			}
-
-			if (acpi_get_phy_id(child, &phy_id))
-				goto err_registration;
-
-			phy_dev = phy_device_create(bus, addr, phy_id, 0, NULL);
-
-			if (!phy_dev || IS_ERR(phy_dev))
-				return PTR_ERR(phy_dev);
-
-			phy_dev->mdio.dev.fwnode = child;
-			phy_dev->irq = bus->irq[addr];
-			ret = phy_device_register(phy_dev);
-			if (ret) {
-				dev_err(&pdev->dev, "phy dev register failed\n");
-				phy_device_free(phy_dev);
-				goto err_registration;
-			}
-			acpi_phy_dev = to_acpi_device_node(child);
-			acpi_phy_dev->driver_data = phy_dev;
 		}
 	} else {
 		dev_err(&pdev->dev, "Cannot get cfg data from DT or ACPI\n");
@@ -355,11 +297,10 @@ static int xgmac_mdio_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, bus);
+
 	return 0;
 
 err_registration:
-	iounmap(priv->mdio_base);
-
 err_ioremap:
 	mdiobus_free(bus);
 
@@ -371,7 +312,6 @@ static int xgmac_mdio_remove(struct platform_device *pdev)
 	struct mii_bus *bus = platform_get_drvdata(pdev);
 
 	mdiobus_unregister(bus);
-	iounmap(bus->priv);
 	mdiobus_free(bus);
 
 	return 0;

@@ -545,44 +545,42 @@ static void teardown_irqs(struct fsl_mc_device *mc_dev)
 	fsl_mc_free_irqs(mc_dev);
 }
 
-static struct fwnode_handle *acpi_find_dpmac_node(struct device *dev,
-						  u16 dpmac_id)
+static struct fwnode_handle *find_dpmac_fwnode(struct device *dev,
+					       u16 dpmac_id)
 {
-	struct fwnode_handle *acpi_fwnode;
-	int ret, phy_id;
+	struct fwnode_handle *dpmac_fwnode;
+	struct fwnode_handle *dpmacs, *dpmac = NULL;
+	int ret, id;
 
-	device_for_each_child_node(dev->parent, acpi_fwnode) {
-		ret = fwnode_property_read_u32(acpi_fwnode, "reg", &phy_id);
-		if (ret) {
-			dev_err(dev->parent, "failed to get reg\n");
-			continue;
-		} else {
-			if (phy_id == dpmac_id)
-				return acpi_fwnode;
+	if (is_of_node(dev->parent->fwnode)) {
+		dpmacs = device_get_named_child_node(dev->parent, "dpmacs");
+		if (!dpmacs) {
+			dev_err(dev, "No dpmacs subnode in device-tree\n");
+			return NULL;
 		}
-	}
-	return NULL;
-}
 
-static struct device_node *find_dpmac_node(struct device *dev, u16 dpmac_id)
-{
-	struct device_node *dpmacs, *dpmac = NULL;
-	struct device_node *mc_node = dev->of_node;
-	u32 id;
-	int err;
-
-	dpmacs = of_find_node_by_name(mc_node, "dpmacs");
-	if (!dpmacs) {
-		dev_err(dev, "No dpmacs subnode in device-tree\n");
-		return NULL;
-	}
-
-	while ((dpmac = of_get_next_child(dpmacs, dpmac))) {
-		err = of_property_read_u32(dpmac, "reg", &id);
-		if (err)
-			continue;
-		if (id == dpmac_id)
-			return dpmac;
+		while ((dpmac = fwnode_get_next_child_node(dpmacs, dpmac))) {
+			ret = fwnode_property_read_u32(dpmac, "reg", &id);
+			if (ret) {
+				dev_err(dev->parent, "failed to get reg\n");
+				continue;
+			} else {
+				if (id == dpmac_id)
+					return dpmac;
+			}
+		}
+	} else if (is_acpi_node(dev->parent->fwnode)) {
+		device_for_each_child_node(dev->parent, dpmac_fwnode) {
+			ret = fwnode_property_read_u32(dpmac_fwnode, "reg",
+						       &id);
+			if (ret) {
+				dev_err(dev->parent, "failed to get reg\n");
+				continue;
+			} else {
+				if (id == dpmac_id)
+					return dpmac_fwnode;
+			}
+		}
 	}
 
 	return NULL;
@@ -599,7 +597,6 @@ static int dpaa2_mac_probe(struct fsl_mc_device *mc_dev)
 	int			err = 0;
 	int			status;
 	struct fwnode_reference_args	args;
-	struct acpi_device		*acpi_phy_dev;
 	struct phy_device		*phy_dev;
 
 	dev = &mc_dev->dev;
@@ -663,24 +660,15 @@ static int dpaa2_mac_probe(struct fsl_mc_device *mc_dev)
 		goto err_close;
 	}
 
-	if (is_of_node(dev->fwnode)) {
-		/* Look up the DPMAC node in the device-tree. */
-		dpmac_node = find_dpmac_node(dev, priv->attr.id);
-		if (!dpmac_node) {
-			dev_err(dev, "No dpmac@%d subnode found.\n",
-				priv->attr.id);
-			err = -ENODEV;
-			goto err_close;
-		}
-	} else if (is_acpi_node(dev->parent->fwnode)) {
-		dpmac_fwnode = acpi_find_dpmac_node(dev, priv->attr.id);
-		if (!dpmac_fwnode) {
-			dev_err(dev, "No dpmac@%d subnode found.\n",
-				priv->attr.id);
-			err = -ENODEV;
-			goto err_close;
-		}
+	/* Look up the DPMAC node in the device-tree or ACPI table */
+	dpmac_fwnode = find_dpmac_fwnode(dev, priv->attr.id);
+	if (!dpmac_fwnode) {
+		dev_err(dev, "No dpmac@%d subnode found.\n",
+			priv->attr.id);
+		err = -ENODEV;
+		goto err_close;
 	}
+
 	err = setup_irqs(mc_dev);
 	if (err) {
 		err = -EFAULT;
@@ -703,12 +691,10 @@ static int dpaa2_mac_probe(struct fsl_mc_device *mc_dev)
 	}
 #endif /* CONFIG_FSL_DPAA2_MAC_NETDEVS */
 
-	/* get the interface mode from the dpmac of node or from the MC attributes */
-	if_mode = -EINVAL;
-	if (is_of_node(dev->fwnode))
-		if_mode = of_get_phy_mode(dpmac_node);
-	else if (is_acpi_node(dev->parent->fwnode))
-		if_mode = fwnode_get_phy_mode(dpmac_fwnode);
+	/* get the interface mode from the dpmac fwnode
+	 * or from the MC attributes.
+	 */
+	if_mode = fwnode_get_phy_mode(dpmac_fwnode);
 
 	if (if_mode >= 0) {
 		dev_dbg(dev, "\tusing if mode %s for eth_if %d\n",
@@ -732,7 +718,8 @@ link_type:
 	if (priv->attr.link_type == DPMAC_LINK_TYPE_FIXED)
 		goto probe_fixed_link;
 
-	if (is_of_node(dev->fwnode)) {
+	if (is_of_node(dev->parent->fwnode)) {
+		dpmac_node = to_of_node(dpmac_fwnode);
 		/* or if there's no phy-handle defined in the device tree */
 		phy_node = of_parse_phandle(dpmac_node, "phy-handle", 0);
 		if (!phy_node)
@@ -743,7 +730,9 @@ link_type:
 						&dpaa2_mac_link_changed,
 						0, if_mode);
 		if (!netdev->phydev) {
-		/* No need for dev_err(); the kernel's loud enough as it is. */
+			/* No need for dev_err(); the kernel's loud enough
+			 * as it is.
+			 */
 			dev_dbg(dev, "Can't of_phy_connect() now.\n");
 		/* We might be waiting for the MDIO MUX to probe, so defer
 		 * our own probing.
@@ -751,7 +740,7 @@ link_type:
 			err = -EPROBE_DEFER;
 			goto err_defer;
 		}
-	} else if (is_acpi_node(dev->fwnode)) {
+	} else if (is_acpi_node(dev->parent->fwnode)) {
 		status = acpi_node_get_property_reference(dpmac_fwnode,
 							  "phy-handle", 0,
 							  &args);
@@ -760,18 +749,14 @@ link_type:
 			return -ENODEV;
 		}
 
-		acpi_phy_dev = to_acpi_device_node(args.fwnode);
-
-		if (acpi_phy_dev)
-			phy_dev = acpi_phy_dev->driver_data;
-		else
-			phy_dev = NULL;
-
+		phy_dev = fwnode_phy_find_device(args.fwnode);
+		netdev->phydev = phy_dev;
 		if (!phy_dev ||
 		    phy_connect_direct(netdev, phy_dev, &dpaa2_mac_link_changed,
 				       if_mode)) {
 			netdev_err(netdev, "Could not connect to PHY\n");
-			return -ENODEV;
+			err = -EPROBE_DEFER;
+			goto err_defer;
 		}
 	}
 

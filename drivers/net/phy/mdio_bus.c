@@ -3,6 +3,7 @@
  * Author: Andy Fleming
  *
  * Copyright (c) 2004 Freescale Semiconductor, Inc.
+ * Copyright 2019 NXP
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the terms of  the GNU General  Public License as published by the
@@ -718,19 +719,43 @@ static int mdio_uevent(struct device *dev, struct kobj_uevent_env *env)
 	return 0;
 }
 
+/* Extract the clause 22 phy ID from the compatible string of the form
+ * ethernet-phy-idAAAA.BBBB
+ */
+static int fwnode_get_phy_id(struct fwnode_handle *fwnode, u32 *phy_id)
+{
+	const char *cp;
+	unsigned int upper, lower;
+	int ret;
+
+	ret = fwnode_property_read_string(fwnode, "compatible", &cp);
+	if (!ret) {
+		if (sscanf(cp, "ethernet-phy-id%4x.%4x",
+			   &upper, &lower) == 2) {
+			*phy_id = ((upper & 0xFFFF) << 16) | (lower & 0xFFFF);
+			return 0;
+		}
+	}
+	return -EINVAL;
+}
+
 static int fwnode_mdiobus_register_phy(struct mii_bus *bus,
 				       struct fwnode_handle *child, u32 addr)
 {
 	struct phy_device *phy;
 	bool is_c45 = false;
 	int rc;
+	const char *cp;
+	u32 phy_id;
 
-	rc = fwnode_property_match_string(child, "compatible",
-					  "ethernet-phy-ieee802.3-c45");
-	if (!rc)
+	fwnode_property_read_string(child, "compatible", &cp);
+	if (!strcmp(cp, "ethernet-phy-ieee802.3-c45"))
 		is_c45 = true;
 
-	phy = get_phy_device(bus, addr, is_c45);
+	if (!is_c45 && !fwnode_get_phy_id(child, &phy_id))
+		phy = phy_device_create(bus, addr, phy_id, 0, NULL);
+	else
+		phy = get_phy_device(bus, addr, is_c45);
 	if (IS_ERR(phy))
 		return PTR_ERR(phy);
 
@@ -827,21 +852,23 @@ static int fwnode_mdio_parse_addr(struct device *dev,
 static bool fwnode_mdiobus_child_is_phy(struct fwnode_handle *child)
 {
 	int ret;
+	const char *cp;
+	u32 phy_id;
 
-	ret = fwnode_property_match_string(child, "compatible",
-					   "ethernet-phy-ieee802.3-c45");
-	if (!ret)
+	if (fwnode_get_phy_id(child, &phy_id) != -EINVAL)
 		return true;
 
-	ret = fwnode_property_match_string(child, "compatible",
-					   "ethernet-phy-ieee802.3-c22");
-	if (!ret)
-		return true;
-
-	if (!fwnode_property_present(child, "compatible"))
-		return true;
-
-	return false;
+	ret = fwnode_property_read_string(child, "compatible", &cp);
+	if (!ret) {
+		if (!strcmp(cp, "ethernet-phy-ieee802.3-c22"))
+			return true;
+		else if (!strcmp(cp, "ethernet-phy-ieee802.3-c45"))
+			return true;
+		else
+			return false;
+	} else {
+		return false;
+	}
 }
 
 /**

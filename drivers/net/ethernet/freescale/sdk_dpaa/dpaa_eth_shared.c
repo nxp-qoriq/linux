@@ -90,7 +90,7 @@ static const struct net_device_ops dpa_shared_ops = {
 	.ndo_get_stats64 = dpa_get_stats64,
 	.ndo_set_mac_address = dpa_set_mac_address,
 	.ndo_validate_addr = eth_validate_addr,
-#ifdef CONFIG_FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
+#ifdef CONFIG_FMAN_PFC
 	.ndo_select_queue = dpa_select_queue,
 #endif
 	.ndo_change_mtu = dpa_change_mtu,
@@ -339,6 +339,8 @@ shared_rx_dqrr(struct qman_portal *portal, struct qman_fq *fq,
 
 skb_copied:
 	skb->protocol = eth_type_trans(skb, net_dev);
+
+	skb_record_rx_queue(skb, raw_smp_processor_id());
 
 	if (unlikely(netif_rx(skb) != NET_RX_SUCCESS))
 		goto out;

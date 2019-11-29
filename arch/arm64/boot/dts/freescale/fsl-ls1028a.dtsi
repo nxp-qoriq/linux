@@ -554,7 +554,7 @@
 				compatible = "fsl,enetc";
 				reg = <0x000100 0 0 0 0>;
 			};
-			ethernet@0,2 {
+			enetc_port2: ethernet@0,2 {
 				compatible = "fsl,enetc";
 				reg = <0x000200 0 0 0 0>;
 				fixed-link {
@@ -600,6 +600,9 @@
 					/* internal to-cpu ports */
 					port@4 {
 						reg = <4>;
+						ethernet = <&enetc_port2>;
+						phy-mode = "gmii";
+
 						fixed-link {
 							speed = <1000>;
 							full-duplex;
@@ -607,7 +610,8 @@
 					};
 					port@5 {
 						reg = <5>;
-						ethernet = <&enetc_port3>;
+						phy-mode = "gmii";
+
 						fixed-link {
 							speed = <1000>;
 							full-duplex;
@@ -618,6 +622,8 @@
 			enetc_port3: ethernet@0,6 {
 				compatible = "fsl,enetc";
 				reg = <0x000600 0 0 0 0>;
+				status = "disabled";
+
 				fixed-link {
 					speed = <1000>;
 					full-duplex;

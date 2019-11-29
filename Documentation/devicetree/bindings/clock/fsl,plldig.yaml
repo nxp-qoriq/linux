@@ -24,6 +24,17 @@ properties:
   '#clock-cells':
     const: 0
 
+  vco-frequency:
+     $ref: '/schemas/types.yaml#/definitions/uint32'
+     description: Optional for VCO frequency of the PLL in Hertz.
+        The VCO frequency of this PLL cannot be changed during runtime
+        only at startup. Therefore, the output frequencies are very
+        limited and might not even closely match the requested frequency.
+        To work around this restriction the user may specify its own
+        desired VCO frequency for the PLL. The frequency has to be in the
+        range of 650000000 to 1300000000.
+        If not set, the default frequency is 1188000000.
+
 required:
   - compatible
   - reg

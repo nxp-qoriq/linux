@@ -477,6 +477,11 @@ static int ls_g4_acpi_pcie_init(struct pci_config_window *cfg)
 	if (ret)
 		dev_info(dev, "link bring-up failed\n");
 
+	/* Enable interrupts */
+	value = PAB_INTP_INTX_MASK | PAB_INTP_MSI | PAB_INTP_RESET |
+	      PAB_INTP_PCIE_UE | PAB_INTP_IE_PMREDI | PAB_INTP_IE_EC;
+	csr_writel(mv_pci, value, PAB_INTP_AMBA_MISC_ENB);
+
 	cfg->priv = pcie;
 	return 0;
 }

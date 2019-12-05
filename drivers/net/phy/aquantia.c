@@ -4,7 +4,7 @@
  * Author: Shaohui Xie <Shaohui.Xie@freescale.com>
  *
  * Copyright 2015 Freescale Semiconductor, Inc.
- * Copyright 2018 NXP
+ * Copyright 2019 NXP
  *
  * This file is licensed under the terms of the GNU General Public License
  * version 2.  This program is licensed "as is" without any warranty of any
@@ -206,6 +206,30 @@ static int aquantia_config_advert(struct phy_device *phydev)
 	}
 
 	return changed;
+}
+
+static int phy_modify_mmd(struct phy_device *phydev, int devad, u32 regnum,
+			  u16 mask, u16 set)
+{
+	int ret;
+
+	ret = phy_read_mmd(phydev, devad, regnum);
+	if (ret >= 0)
+		ret = phy_write_mmd(phydev, devad, regnum, (ret & ~mask) | set);
+
+	return ret < 0 ? ret : 0;
+}
+
+static int phy_set_bits_mmd(struct phy_device *phydev, int devad,
+		u32 regnum, u16 val)
+{
+	return phy_modify_mmd(phydev, devad, regnum, 0, val);
+}
+
+static int phy_clear_bits_mmd(struct phy_device *phydev, int devad,
+		u32 regnum, u16 val)
+{
+	return phy_modify_mmd(phydev, devad, regnum, val, 0);
 }
 
 static int aquantia_config_aneg(struct phy_device *phydev)

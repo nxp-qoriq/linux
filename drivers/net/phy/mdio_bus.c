@@ -761,15 +761,13 @@ static int fwnode_mdiobus_register_phy(struct mii_bus *bus,
 
 	phy->irq = bus->irq[addr];
 
-	if (to_of_node(child)) {
-		rc = of_irq_get(to_of_node(child), 0);
-		if (rc == -EPROBE_DEFER) {
-			phy_device_free(phy);
-			return rc;
-		} else if (rc > 0) {
-			phy->irq = rc;
-			bus->irq[addr] = rc;
-		}
+	rc = fwnode_irq_get(child, 0);
+	if (rc == -EPROBE_DEFER) {
+		phy_device_free(phy);
+		return rc;
+	} else if (rc > 0) {
+		phy->irq = rc;
+		bus->irq[addr] = rc;
 	}
 
 	if (fwnode_property_read_bool(child, "broken-turn-around"))

@@ -845,8 +845,8 @@ static struct sk_buff *a010022_realign_skb(struct sk_buff *skb,
 {
 	int trans_offset = skb_transport_offset(skb);
 	int net_offset = skb_network_offset(skb);
-	int nsize, headroom, npage_order;
 	struct sk_buff *nskb = NULL;
+	int nsize, headroom;
 	struct page *npage;
 	void *npage_addr;
 
@@ -861,8 +861,7 @@ static struct sk_buff *a010022_realign_skb(struct sk_buff *skb,
 		SKB_DATA_ALIGN(sizeof(struct skb_shared_info));
 
 	/* Reserve enough memory to accommodate Jumbo frames */
-	npage_order = (nsize - 1) / PAGE_SIZE;
-	npage = alloc_pages(GFP_ATOMIC | __GFP_COMP, npage_order);
+	npage = alloc_pages(GFP_ATOMIC | __GFP_COMP, get_order(nsize));
 	if (unlikely(!npage)) {
 		WARN_ONCE(1, "Memory allocation failure\n");
 		return NULL;

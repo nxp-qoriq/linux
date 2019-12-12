@@ -901,7 +901,6 @@ static struct sk_buff *a010022_realign_skb(struct sk_buff *skb,
 	skb_set_network_header(nskb, net_offset);
 	skb_set_transport_header(nskb, trans_offset);
 
-	dev_kfree_skb(skb);
 	return nskb;
 
 err:
@@ -1098,6 +1097,7 @@ int __hot dpa_tx_extended(struct sk_buff *skb, struct net_device *net_dev,
 	int err = 0;
 	bool nonlinear, skb_changed, skb_need_wa;
 	int *countptr, offset = 0;
+	struct sk_buff *nskb;
 
 	/* Flags to help optimize the A010022 errata restriction checks.
 	 *
@@ -1183,7 +1183,7 @@ int __hot dpa_tx_extended(struct sk_buff *skb, struct net_device *net_dev,
 
 		/* Code borrowed from skb_unshare(). */
 		if (skb_cloned(skb) && !skb_need_wa) {
-			struct sk_buff *nskb = skb_copy(skb, GFP_ATOMIC);
+			nskb = skb_copy(skb, GFP_ATOMIC);
 			kfree_skb(skb);
 			skb = nskb;
 			skb_changed = true;
@@ -1218,9 +1218,11 @@ int __hot dpa_tx_extended(struct sk_buff *skb, struct net_device *net_dev,
 			skb_need_wa = true;
 
 		if (unlikely(fm_has_errata_a010022()) && skb_need_wa) {
-			skb = a010022_realign_skb(skb, priv);
-			if (!skb)
+			nskb = a010022_realign_skb(skb, priv);
+			if (!nskb)
 				goto skb_to_fd_failed;
+			dev_kfree_skb(skb);
+			skb = nskb;
 		}
 #endif
 

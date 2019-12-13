@@ -671,9 +671,6 @@ static int dpaa2_mac_probe(struct fsl_mc_device *mc_dev)
 	netdev->netdev_ops = &dpaa2_mac_ndo_ops;
 	netdev->ethtool_ops = &dpaa2_mac_ethtool_ops;
 
-	/* phy starts up enabled so netdev should be up too */
-	netdev->flags |= IFF_UP;
-
 	err = register_netdev(priv->netdev);
 	if (err < 0) {
 		dev_err(dev, "register_netdev error %d\n", err);
@@ -783,7 +780,8 @@ static int dpaa2_mac_remove(struct fsl_mc_device *mc_dev)
 	struct dpaa2_mac_priv	*priv = dev_get_drvdata(dev);
 	struct net_device	*netdev = priv->netdev;
 
-	dpaa2_mac_stop(netdev);
+	if (netdev->flags & IFF_UP)
+		dpaa2_mac_stop(netdev);
 
 	if (phy_is_pseudo_fixed_link(netdev->phydev))
 		fixed_phy_unregister(netdev->phydev);

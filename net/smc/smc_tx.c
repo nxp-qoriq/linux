@@ -75,13 +75,11 @@ static int smc_tx_wait(struct smc_sock *smc, int flags)
 	DEFINE_WAIT_FUNC(wait, woken_wake_function);
 	struct smc_connection *conn = &smc->conn;
 	struct sock *sk = &smc->sk;
-	bool noblock;
 	long timeo;
 	int rc = 0;
 
 	/* similar to sk_stream_wait_memory */
 	timeo = sock_sndtimeo(sk, flags & MSG_DONTWAIT);
-	noblock = timeo ? false : true;
 	add_wait_queue(sk_sleep(sk), &wait);
 	while (1) {
 		sk_set_bit(SOCKWQ_ASYNC_NOSPACE, sk);
@@ -96,8 +94,8 @@ static int smc_tx_wait(struct smc_sock *smc, int flags)
 			break;
 		}
 		if (!timeo) {
-			if (noblock)
-				set_bit(SOCK_NOSPACE, &sk->sk_socket->flags);
+			/* ensure EPOLLOUT is subsequently generated */
+			set_bit(SOCK_NOSPACE, &sk->sk_socket->flags);
 			rc = -EAGAIN;
 			break;
 		}
@@ -165,12 +163,11 @@ int smc_tx_sendmsg(struct smc_sock *smc, struct msghdr *msg, size_t len)
 			conn->local_tx_ctrl.prod_flags.urg_data_pending = 1;
 
 		if (!atomic_read(&conn->sndbuf_space) || conn->urg_tx_pend) {
+			if (send_done)
+				return send_done;
 			rc = smc_tx_wait(smc, msg->msg_flags);
-			if (rc) {
-				if (send_done)
-					return send_done;
+			if (rc)
 				goto out_err;
-			}
 			continue;
 		}
 
@@ -598,7 +595,8 @@ void smc_tx_consumer_update(struct smc_connection *conn, bool force)
 	if (to_confirm > conn->rmbe_update_limit) {
 		smc_curs_copy(&prod, &conn->local_rx_ctrl.prod, conn);
 		sender_free = conn->rmb_desc->len -
-			      smc_curs_diff(conn->rmb_desc->len, &prod, &cfed);
+			      smc_curs_diff_large(conn->rmb_desc->len,
+						  &cfed, &prod);
 	}
 
 	if (conn->local_rx_ctrl.prod_flags.cons_curs_upd_req ||

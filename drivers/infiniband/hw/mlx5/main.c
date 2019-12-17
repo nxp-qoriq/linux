@@ -1823,6 +1823,14 @@ static struct ib_ucontext *mlx5_ib_alloc_ucontext(struct ib_device *ibdev,
 	context->lib_caps = req.lib_caps;
 	print_lib_caps(dev, context->lib_caps);
 
+	if (mlx5_lag_is_active(dev->mdev)) {
+		u8 port = mlx5_core_native_port_num(dev->mdev);
+
+		atomic_set(&context->tx_port_affinity,
+			   atomic_add_return(
+				   1, &dev->roce[port].tx_port_affinity));
+	}
+
 	return &context->ibucontext;
 
 out_mdev:
@@ -6370,6 +6378,7 @@ static void mlx5_ib_remove(struct mlx5_core_dev *mdev, void *context)
 			mlx5_ib_unbind_slave_port(mpi->ibdev, mpi);
 		list_del(&mpi->list);
 		mutex_unlock(&mlx5_ib_multiport_mutex);
+		kfree(mpi);
 		return;
 	}
 

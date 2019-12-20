@@ -910,7 +910,7 @@ err_init_prio_cls:
 static int ceetm_init_wbfs(struct Qdisc *sch, struct ceetm_qdisc *priv,
 			   struct tc_ceetm_qopt *qopt)
 {
-	struct ceetm_class *parent_cl, *child_cl, *root_cl;
+	struct ceetm_class *parent_cl, *child_cl, *tmp_cl, *root_cl = NULL;
 	struct Qdisc *root_qdisc, *parent_qdisc = NULL;
 	struct net_device *dev = qdisc_dev(sch);
 	unsigned int i, id, prio_a, prio_b;
@@ -936,12 +936,13 @@ static int ceetm_init_wbfs(struct Qdisc *sch, struct ceetm_qdisc *priv,
 
 	/* Obtain the root ceetm class and the parent prio ceetm qdisc */
 	for (i = 0; i < root_priv->clhash.hashsize; i++) {
-		hlist_for_each_entry(root_cl, &root_priv->clhash.hash[i],
+		hlist_for_each_entry(tmp_cl, &root_priv->clhash.hash[i],
 				     common.hnode) {
-			if (root_cl->root.child &&
-			    (TC_H_MAJ(root_cl->root.child->handle) ==
+			if (tmp_cl->root.child &&
+			    (TC_H_MAJ(tmp_cl->root.child->handle) ==
 			    TC_H_MAJ(sch->parent))) {
-				parent_qdisc = root_cl->root.child;
+				parent_qdisc = tmp_cl->root.child;
+				root_cl = tmp_cl;
 				break;
 			}
 		}

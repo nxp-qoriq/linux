@@ -390,6 +390,7 @@
 			status = "disabled";
 			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
 			snps,host-vbus-glitches;
+			dma-coherent;
 		};
 
 		usb1: usb3@3110000 {
@@ -402,6 +403,7 @@
 			status = "disabled";
 			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
 			snps,host-vbus-glitches;
+			dma-coherent;
 		};
 
 		sata: sata@3200000 {

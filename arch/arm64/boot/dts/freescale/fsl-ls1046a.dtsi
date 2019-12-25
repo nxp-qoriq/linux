@@ -600,6 +600,7 @@
 				snps,dis-u1u2-when-u3-quirk;
 				snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
 				snps,host-vbus-glitches;
+				dma-coherent;
 			};
 
 			usb1: usb@3000000 {
@@ -613,6 +614,7 @@
 				snps,dis-u1u2-when-u3-quirk;
 				snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
 				snps,host-vbus-glitches;
+				dma-coherent;
 			};
 
 			usb2: usb@3100000 {
@@ -626,6 +628,7 @@
 				snps,dis-u1u2-when-u3-quirk;
 				snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
 				snps,host-vbus-glitches;
+				dma-coherent;
 			};
 
 			sata: sata@3200000 {

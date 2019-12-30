@@ -472,6 +472,8 @@ void __init arm64_memblock_init(void)
 	}
 #endif
 
+	reserve_elfcorehdr();
+
 	early_init_fdt_scan_reserved_mem();
 
 	/* 4GB maximum for 32-bit only capable devices */
@@ -481,8 +483,6 @@ void __init arm64_memblock_init(void)
 		arm64_dma_phys_limit = PHYS_MASK + 1;
 
 	reserve_crashkernel();
-
-	reserve_elfcorehdr();
 
 	high_memory = __va(memblock_end_of_DRAM() - 1) + 1;
 

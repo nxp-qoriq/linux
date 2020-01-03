@@ -269,7 +269,7 @@ static void dpaa2_ceetm_cls_destroy(struct Qdisc *sch,
 
 	/* Recurse into child first */
 	if (cl->child) {
-		qdisc_put(cl->child);
+		qdisc_destroy(cl->child);
 		cl->child = NULL;
 	}
 
@@ -338,7 +338,7 @@ static void dpaa2_ceetm_destroy(struct Qdisc *sch)
 		 */
 		for (i = 0; i < dev->num_tx_queues; i++)
 			if (priv->root.qdiscs[i])
-				qdisc_put(priv->root.qdiscs[i]);
+				qdisc_destroy(priv->root.qdiscs[i]);
 
 		kfree(priv->root.qdiscs);
 		break;
@@ -672,7 +672,7 @@ static void dpaa2_ceetm_attach(struct Qdisc *sch)
 		qdisc = priv->root.qdiscs[i];
 		old_qdisc = dev_graft_qdisc(qdisc->dev_queue, qdisc);
 		if (old_qdisc)
-			qdisc_put(old_qdisc);
+			qdisc_destroy(old_qdisc);
 	}
 
 	/* Remove the references to the pfifo qdiscs since the kernel will

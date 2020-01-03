@@ -54,7 +54,7 @@ struct iommu_dma_cookie {
 		dma_addr_t		msi_iova;
 	};
 	struct list_head		msi_page_list;
-	spinlock_t			msi_lock;
+	raw_spinlock_t			msi_lock;
 };
 
 static inline size_t cookie_msi_granule(struct iommu_dma_cookie *cookie)
@@ -70,7 +70,7 @@ static struct iommu_dma_cookie *cookie_alloc(enum iommu_dma_cookie_type type)
 
 	cookie = kzalloc(sizeof(*cookie), GFP_KERNEL);
 	if (cookie) {
-		spin_lock_init(&cookie->msi_lock);
+		raw_spin_lock_init(&cookie->msi_lock);
 		INIT_LIST_HEAD(&cookie->msi_page_list);
 		cookie->type = type;
 	}
@@ -884,9 +884,9 @@ void iommu_dma_map_msi_msg(int irq, struct msi_msg *msg)
 	 * irq_desc_lock if, say, someone tries to retarget the affinity
 	 * of an MSI from within an IPI handler.
 	 */
-	spin_lock_irqsave(&cookie->msi_lock, flags);
+	raw_spin_lock_irqsave(&cookie->msi_lock, flags);
 	msi_page = iommu_dma_get_msi_page(dev, msi_addr, domain);
-	spin_unlock_irqrestore(&cookie->msi_lock, flags);
+	raw_spin_unlock_irqrestore(&cookie->msi_lock, flags);
 
 	if (WARN_ON(!msi_page)) {
 		/*

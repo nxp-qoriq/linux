@@ -439,7 +439,7 @@ static void ceetm_cls_destroy(struct Qdisc *sch, struct ceetm_class *cl)
 	switch (cl->type) {
 	case CEETM_ROOT:
 		if (cl->root.child) {
-			qdisc_put(cl->root.child);
+			qdisc_destroy(cl->root.child);
 			cl->root.child = NULL;
 		}
 
@@ -452,7 +452,7 @@ static void ceetm_cls_destroy(struct Qdisc *sch, struct ceetm_class *cl)
 
 	case CEETM_PRIO:
 		if (cl->prio.child) {
-			qdisc_put(cl->prio.child);
+			qdisc_destroy(cl->prio.child);
 			cl->prio.child = NULL;
 		}
 
@@ -574,7 +574,7 @@ static void ceetm_destroy(struct Qdisc *sch)
 		 */
 		for (ntx = 0; ntx < dev->num_tx_queues; ntx++)
 			if (priv->root.qdiscs[ntx])
-				qdisc_put(priv->root.qdiscs[ntx]);
+				qdisc_destroy(priv->root.qdiscs[ntx]);
 
 		kfree(priv->root.qdiscs);
 		break;
@@ -1393,7 +1393,7 @@ static void ceetm_attach(struct Qdisc *sch)
 		qdisc = priv->root.qdiscs[i];
 		old_qdisc = dev_graft_qdisc(qdisc->dev_queue, qdisc);
 		if (old_qdisc)
-			qdisc_put(old_qdisc);
+			qdisc_destroy(old_qdisc);
 	}
 
 	kfree(priv->root.qdiscs);

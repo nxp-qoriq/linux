@@ -283,6 +283,3 @@
 &sata {
 	status = "okay";
 };
-
-#include "fsl-ls1028a-qds-8xxx.dtsi"
-#include "fsl-ls1028a-qds-x5xx.dtsi"

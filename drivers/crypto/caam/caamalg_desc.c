@@ -706,11 +706,14 @@ void cnstr_shdsc_tls_encap(u32 * const desc, struct alginfo *cdata,
 	append_operation(desc, cdata->algtype | OP_ALG_AS_INITFINAL |
 			 OP_ALG_ENCRYPT);
 
-	/* payloadlen = input data length - (assoclen + ivlen) */
-	append_math_sub_imm_u32(desc, REG0, SEQINLEN, IMM, assoclen + ivsize);
+	/* payloadlen = input data length
+	 * - (assoclen + ivsize + xplicit ivsize)
+	 */
+	append_math_sub_imm_u32(desc, REG0, SEQINLEN,
+				IMM, assoclen + 2 * ivsize);
 
-	/* math1 = payloadlen + icvlen */
-	append_math_add_imm_u32(desc, REG1, REG0, IMM, authsize);
+	/* math1 = payloadlen + icvlen + xplicit ivsize */
+	append_math_add_imm_u32(desc, REG1, REG0, IMM, authsize + ivsize);
 
 	/* padlen = block_size - math1 % block_size */
 	append_math_and_imm_u32(desc, REG3, REG1, IMM, blocksize - 1);
@@ -749,6 +752,11 @@ void cnstr_shdsc_tls_encap(u32 * const desc, struct alginfo *cdata,
 	/* read assoc for authentication */
 	append_seq_fifo_load(desc, assoclen, FIFOLD_CLASS_CLASS2 |
 			     FIFOLD_TYPE_MSG);
+
+	/* read xplicit iv in case of >TL10 */
+	append_seq_fifo_load(desc, ivsize, FIFOLD_CLASS_CLASS1 |
+				     FIFOLD_TYPE_MSG);
+
 	/* insnoop payload */
 	append_seq_fifo_load(desc, 0, FIFOLD_CLASS_BOTH | FIFOLD_TYPE_MSG |
 			     FIFOLD_TYPE_LAST2 | FIFOLDST_VLF);

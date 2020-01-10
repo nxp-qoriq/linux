@@ -420,6 +420,8 @@ static void aux_cfg_t28hpc(state_struct *state)
 #endif
 	Afe_write(state, TX_DIG_CTRL_REG_2, 36);
 
+	Afe_write(state, TX_DIG_CTRL_REG_1, 0x3);
+	cdn_usleep(150);
 	Afe_write(state, TX_ANA_CTRL_REG_2, 0x0100);
 	cdn_usleep(150);
 	Afe_write(state, TX_ANA_CTRL_REG_2, 0x0300);

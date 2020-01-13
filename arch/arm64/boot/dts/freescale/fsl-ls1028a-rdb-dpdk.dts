@@ -230,28 +230,32 @@
 };
 
 /* l2switch ports */
-&switch_port0 {
+&mscc_felix_port0 {
+	status = "okay";
 	fixed-link {
 		speed = <1000>;
 		full-duplex;
 	};
 };
 
-&switch_port1 {
+&mscc_felix_port1 {
+	status = "okay";
 	fixed-link {
 		speed = <1000>;
 		full-duplex;
 	};
 };
 
-&switch_port2 {
+&mscc_felix_port2 {
+	status = "okay";
 	fixed-link {
 		speed = <1000>;
 		full-duplex;
 	};
 };
 
-&switch_port3 {
+&mscc_felix_port3 {
+	status = "okay";
 	fixed-link {
 		speed = <1000>;
 		full-duplex;

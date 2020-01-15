@@ -37,6 +37,7 @@ MODULE_DEVICE_TABLE(pci, felix_ids);
 #ifdef CONFIG_MSCC_FELIX_SWITCH_TSN
 const struct tsn_ops switch_tsn_ops = {
 	.device_init			= felix_tsn_init,
+	.get_capability                 = felix_tsn_get_cap,
 	.qbv_set			= felix_qbv_set,
 	.qbv_get			= felix_qbv_get,
 	.qbv_get_status			= felix_qbv_get_status,
@@ -44,9 +45,11 @@ const struct tsn_ops switch_tsn_ops = {
 	.qbu_get                        = felix_qbu_get,
 	.cb_streamid_set		= felix_cb_streamid_set,
 	.cb_streamid_get		= felix_cb_streamid_get,
+	.cb_streamid_counters_get       = felix_cb_streamid_counters_get,
 	.qci_sfi_set			= felix_qci_sfi_set,
 	.qci_sfi_get			= felix_qci_sfi_get,
 	.qci_sfi_counters_get		= felix_qci_sfi_counters_get,
+	.qci_get_maxcap                 = felix_qci_max_cap_get,
 	.qci_sgi_set			= felix_qci_sgi_set,
 	.qci_sgi_get			= felix_qci_sgi_get,
 	.qci_sgi_status_get		= felix_qci_sgi_status_get,

@@ -61,6 +61,16 @@ static struct mscc_switch_capa capa __ro_after_init = {
 	.qos_dp_max	= 1,
 };
 
+u32 felix_tsn_get_cap(struct net_device *ndev)
+{
+	u32 cap;
+
+	cap = (TSN_CAP_QBV | TSN_CAP_QCI | TSN_CAP_QBU | TSN_CAP_CBS |
+	       TSN_CAP_CB | TSN_CAP_TBS | TSN_CAP_CTH);
+
+	return cap;
+}
+
 static int qos_port_tas_gcl_set(struct net_device *ndev,
 				struct ocelot *ocelot, const u8 gcl_ix,
 				struct tsn_qbv_entry *control_list)
@@ -352,7 +362,7 @@ int felix_qbv_get_status(struct net_device *ndev,
 
 	val = ocelot_read(ocelot, QSYS_PARAM_STATUS_REG_8);
 	qbvstatus->config_pending =
-		(val & QSYS_PARAM_STATUS_REG_8_CONFIG_PENDING);
+		(val & QSYS_PARAM_STATUS_REG_8_CONFIG_PENDING) ? 1 : 0;
 
 	qbvstatus->config_change_time =
 		ocelot_read(ocelot, QSYS_PARAM_STATUS_REG_7);
@@ -565,6 +575,12 @@ int felix_qbu_get(struct net_device *ndev, struct tsn_preempt_status *c)
 	c->preemption_active =
 		DEV_GMII_MM_STATISTICS_MM_STATUS_PRMPT_ACTIVE_STATUS & val;
 
+	return 0;
+}
+
+int felix_cb_streamid_counters_get(struct net_device *ndev, u32 index,
+				   struct tsn_cb_streamid_counters *s_counters)
+{
 	return 0;
 }
 
@@ -855,6 +871,22 @@ static int streamid_multi_forward_set(struct ocelot *ocelot, u32 index,
 	return 0;
 }
 
+int felix_qci_max_cap_get(struct net_device *ndev,
+			  struct tsn_qci_psfp_stream_param *stream_para)
+{
+	/* MaxStreamFilterInstances */
+	stream_para->max_sf_instance = capa.num_psfp_sfid;
+	/* MaxStreamGateInstances */
+	stream_para->max_sg_instance = capa.num_psfp_sgid;
+	/* MaxFlowMeterInstances */
+	stream_para->max_fm_instance = capa.psfp_fmi_max -
+		capa.psfp_fmi_min + 1;
+	/* SupportedListMax */
+	stream_para->supported_list_max = capa.num_sgi_gcl;
+
+	return 0;
+}
+
 int felix_qci_sfi_get(struct net_device *ndev, u32 index,
 		      struct tsn_qci_psfp_sfi_conf *sfi)
 {
@@ -868,6 +900,9 @@ int felix_qci_sfi_get(struct net_device *ndev, u32 index,
 			    sfid, capa.num_psfp_sfid);
 		return -EINVAL;
 	}
+
+	/* In switch, streamhandle and sfid are the same parameter */
+	sfi->stream_handle_spec = (s32)sfid;
 
 	ocelot_field_write(ocelot, ANA_TABLES_SFIDTIDX_SFID_INDEX_0, sfid);
 
@@ -906,6 +941,7 @@ int felix_qci_sfi_set(struct net_device *ndev, u32 index, bool enable,
 	int fmid = sfi->stream_filter.flow_meter_instance_id;
 	u16 max_sdu_len = sfi->stream_filter.maximum_sdu_size;
 	int sfid = index;
+	u32 val;
 
 	if (fmid == -1)
 		pol_idx = capa.psfp_fmi_max;
@@ -916,6 +952,15 @@ int felix_qci_sfi_set(struct net_device *ndev, u32 index, bool enable,
 		netdev_info(ndev, "Invalid index %u, maximum:%u\n",
 			    sfid, capa.num_psfp_sfid);
 		return -EINVAL;
+	}
+
+	if (!enable) {
+		val = ANA_TABLES_SFIDACCESS_SFID_TBL_CMD(SFIDACCESS_CMD_WRITE);
+		ocelot_write(ocelot,
+			     ANA_TABLES_SFIDTIDX_SFID_INDEX(sfid),
+			     ANA_TABLES_SFIDTIDX);
+		ocelot_write(ocelot, val, ANA_TABLES_SFIDACCESS);
+		return 0;
 	}
 
 	if (sgid >= capa.num_psfp_sgid) {
@@ -1173,6 +1218,9 @@ int felix_qci_sgi_get(struct net_device *ndev, u32 index,
 		admin->init_ipv = ANA_SG_CONFIG_REG_3_INIT_IPV_X(val);
 	else
 		admin->init_ipv = -1;
+
+	if (val & ANA_SG_CONFIG_REG_3_GATE_ENABLE)
+		sgi_conf->gate_enabled = 1;
 
 	admin->control_list_length = ANA_SG_CONFIG_REG_3_LIST_LENGTH_X(val);
 

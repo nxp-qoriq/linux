@@ -3,6 +3,7 @@
  * PCIe host controller driver for Freescale Layerscape SoCs
  *
  * Copyright (C) 2014 Freescale Semiconductor.
+ * Copyright 2020 NXP 
  *
  * Author: Minghuan Lian <Minghuan.Lian@freescale.com>
  */
@@ -19,7 +20,12 @@
 #include <linux/resource.h>
 #include <linux/mfd/syscon.h>
 #include <linux/regmap.h>
+#if defined(CONFIG_ACPI)
+#include <linux/pci-acpi.h>
+#include <linux/pci-ecam.h>
+#endif
 
+#include "../../pci.h"
 #include "pcie-designware.h"
 
 /* PEX1/2 Misc Ports Status Register */
@@ -348,3 +354,62 @@ static struct platform_driver ls_pcie_driver = {
 	},
 };
 builtin_platform_driver_probe(ls_pcie_driver, ls_pcie_probe);
+
+#if defined(CONFIG_ACPI) && defined(CONFIG_PCI_QUIRKS)
+static void __iomem *ls_acpi_pcie_map_bus(struct pci_bus *bus,
+						unsigned int devfn, int where)
+{
+	struct pci_config_window *cfg = bus->sysdata;
+	void __iomem *reg_base = cfg->priv;
+	int dev = PCI_SLOT(devfn);
+
+	if (bus->number == cfg->busr.start) {
+		if (dev > 0)
+			return 0;
+		else
+			return reg_base + where;
+	} else
+		return pci_ecam_map_bus(bus, devfn, where);
+}
+
+static int ls_acpi_pcie_init(struct pci_config_window *cfg)
+{
+	struct device *dev = cfg->parent;
+	struct acpi_device *adev = to_acpi_device(dev);
+	struct acpi_pci_root *root = acpi_driver_data(adev);
+	struct resource *res;
+	void __iomem *reg_base;
+	int ret;
+
+	/*
+	 * Retrieve RC base and size from a NXP0016 device with _UID
+	 * matching our segment.
+	 */
+	res = devm_kzalloc(dev, sizeof(*res), GFP_KERNEL);
+	if (!res)
+		return -ENOMEM;
+
+	ret = acpi_get_rc_resources(dev, "NXP0016", root->segment, res);
+	if (ret) {
+		dev_err(dev, "can't get rc base address\n");
+		return -ENOMEM;
+	}
+
+	reg_base = devm_pci_remap_cfgspace(dev, res->start, resource_size(res));
+	if (!reg_base)
+		return -ENOMEM;
+
+	cfg->priv = reg_base;
+	return 0;
+}
+
+struct pci_ecam_ops ls_acpi_pcie_ops = {
+	.bus_shift    = 20,
+	.init         =  ls_acpi_pcie_init,
+	.pci_ops      = {
+		.map_bus    = ls_acpi_pcie_map_bus,
+		.read       = pci_generic_config_read,
+		.write      = pci_generic_config_write,
+	}
+};
+#endif

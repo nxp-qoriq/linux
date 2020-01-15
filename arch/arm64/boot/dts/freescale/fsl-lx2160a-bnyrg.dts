@@ -92,24 +92,23 @@
 				reg = <0x4c>;
 				vcc-supply = <&sb_3v3>;
 			};
-
-			temperature-sensor@4d {
-				compatible = "nxp,sa56004";
-				reg = <0x4d>;
-				vcc-supply = <&sb_3v3>;
-			};
 		};
 	};
 };
 
-&i2c4 {
+&i2c3 {
 	status = "okay";
 
 	rtc@51 {
 		compatible = "nxp,pcf2129";
 		reg = <0x51>;
-		// IRQ10_B
 		interrupts = <0 150 0x4>;
+	};
+
+	temperature-sensor@4c {
+		compatible = "nxp,sa56004";
+		reg = <0x4c>;
+		vcc-supply = <&sb_3v3>;
 	};
 };
 

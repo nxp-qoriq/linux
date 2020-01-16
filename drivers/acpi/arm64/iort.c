@@ -23,6 +23,7 @@
 #include <linux/kernel.h>
 #include <linux/list.h>
 #include <linux/pci.h>
+#include <linux/fsl/mc.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 
@@ -323,7 +324,7 @@ static int iort_id_map(struct acpi_iort_id_mapping *map, u8 type, u32 rid_in,
 	}
 
 	if (rid_in < map->input_base ||
-	    (rid_in >= map->input_base + map->id_count))
+	    (rid_in > map->input_base + map->id_count))
 		return -ENXIO;
 
 	*rid_out = map->output_base + (rid_in - map->input_base);
@@ -624,6 +625,29 @@ static int iort_dev_find_its_id(struct device *dev, u32 req_id,
 
 	*its_id = its->identifiers[idx];
 	return 0;
+}
+
+/**
+ * iort_get_fsl_mc_device_domain() - Find MSI domain related to a device
+ * @dev: The device.
+ * @mc_icid: ICID for the fsl_mc device.
+ *
+ * Returns: the MSI domain for this device, NULL otherwise
+ */
+struct irq_domain *iort_get_fsl_mc_device_domain(struct device *dev,
+							u32 mc_icid)
+{
+	struct fwnode_handle *handle;
+	int its_id;
+
+	if (iort_dev_find_its_id(dev, mc_icid, 0, &its_id))
+		return NULL;
+
+	handle = iort_find_domain_token(its_id);
+	if (!handle)
+		return NULL;
+
+	return irq_find_matching_fwnode(handle, DOMAIN_BUS_FSL_MC_MSI);
 }
 
 /**
@@ -929,6 +953,21 @@ static int iort_pci_iommu_init(struct pci_dev *pdev, u16 alias, void *data)
 	return iort_iommu_xlate(info->dev, parent, streamid);
 }
 
+static int iort_fsl_mc_iommu_init(struct device *dev,
+				struct acpi_iort_node *node, u32 *streamid)
+{
+	struct acpi_iort_node *parent;
+	struct fsl_mc_device *mc_dev = to_fsl_mc_device(dev);
+
+	parent = iort_node_map_id(node, mc_dev->icid, streamid,
+						IORT_IOMMU_TYPE);
+
+	if (parent)
+		return iort_iommu_xlate(dev, parent, *streamid);
+
+	return 0;
+}
+
 static int nc_dma_get_range(struct device *dev, u64 *size)
 {
 	struct acpi_iort_node *node;
@@ -1062,6 +1101,20 @@ const struct iommu_ops *iort_iommu_configure(struct device *dev)
 		info.node = node;
 		err = pci_for_each_dma_alias(to_pci_dev(dev),
 					     iort_pci_iommu_init, &info);
+	} else if (dev_is_fsl_mc(dev)) {
+		struct device *dma_dev = dev;
+
+		if (!(to_acpi_device_node(dma_dev->fwnode))) {
+			while (dev_is_fsl_mc(dma_dev))
+				dma_dev = dma_dev->parent;
+		}
+
+		node = iort_scan_node(ACPI_IORT_NODE_NAMED_COMPONENT,
+					iort_match_node_callback, dma_dev);
+		if (!node)
+			return NULL;
+
+		err = iort_fsl_mc_iommu_init(dev, node, &streamid);
 	} else {
 		int i = 0;
 

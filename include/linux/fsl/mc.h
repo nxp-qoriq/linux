@@ -4,7 +4,7 @@
  *
  * Copyright (C) 2014-2016 Freescale Semiconductor, Inc.
  * Author: German Rivera <German.Rivera@freescale.com>
- * Copyright 2018 NXP
+ * Copyright 2018-2019 NXP
  *
  */
 #ifndef _FSL_MC_H_
@@ -1014,7 +1014,8 @@ int dprc_scan_objects(struct fsl_mc_device *mc_bus_dev,
 		      unsigned int *total_irq_count);
 
 int fsl_mc_find_msi_domain(struct device *mc_platform_dev,
-			   struct irq_domain **mc_msi_domain);
+				struct irq_domain **mc_msi_domain,
+				struct fsl_mc_device *mc_dev);
 
 int fsl_mc_populate_irq_pool(struct fsl_mc_bus *mc_bus,
 			     unsigned int irq_count);

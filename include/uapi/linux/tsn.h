@@ -85,7 +85,6 @@ enum {
 	TSN_CMD_ATTR_DATA,		/* demo data */
 	TSN_ATTR_IFNAME,
 	TSN_ATTR_PORT_NUMBER,
-	TSN_ATTR_CAP,		/* TSN capbility */
 	TSN_ATTR_QBV,
 	TSN_ATTR_STREAM_IDENTIFY, /* stream identify */
 	TSN_ATTR_QCI_SP,		/* psfp port capbility parameters */
@@ -99,7 +98,9 @@ enum {
 	TSN_ATTR_CBGEN,			/* 802.1CB sequence generate */
 	TSN_ATTR_CBREC,			/* 802.1CB sequence recover */
 	TSN_ATTR_CBSTAT,                 /* 802.1CB status */
+	TSN_ATTR_PCPMAP_UNUSE,
 	TSN_ATTR_DSCP,
+	TSN_ATTR_CAP,		/* TSN capbility */
 	__TSN_CMD_ATTR_MAX,
 };
 #define TSN_CMD_ATTR_MAX (__TSN_CMD_ATTR_MAX - 1)

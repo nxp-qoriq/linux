@@ -47,6 +47,8 @@
 /* Length for long prefix header used for frame injection/extraction */
 #define XFH_LONG_PREFIX_LEN 32
 
+#define OCELOT_PTP_QUEUE_SZ	128
+
 struct frame_info {
 	u32 len;
 	u16 port;
@@ -571,21 +573,12 @@ struct ocelot {
 	struct workqueue_struct *ocelot_wq;
 	struct work_struct irq_handle_work;
 
-	struct list_head skbs;
-
 	void (*port_pcs_init)(struct ocelot_port *port);
 	struct net_device *cpu_port_ndev;
 
 	struct ptp_clock_info ptp_caps;
 	struct ptp_clock *clock;
 	int phc_index;
-};
-
-struct ocelot_skb {
-	struct list_head head;
-	struct sk_buff *skb;
-	u8 tstamp_id;
-	u8 tx_port;
 };
 
 struct ocelot_port {
@@ -619,6 +612,7 @@ struct ocelot_port {
 	bool tx_tstamp;
 	bool rx_tstamp;
 	u8 tstamp_id;
+	struct sk_buff_head tx_skbs;
 };
 
 u32 __ocelot_read_ix(struct ocelot *ocelot, u32 reg, u32 offset);

@@ -1911,12 +1911,19 @@ EXPORT_SYMBOL(ocelot_init);
 void ocelot_deinit(struct ocelot *ocelot)
 {
 	struct ocelot_ace_rule *rule = container_of(&ocelot, struct ocelot_ace_rule, ocelot);
+	struct ocelot_port *port;
+	int i;
 
 	cancel_delayed_work(&ocelot->stats_work);
 	destroy_workqueue(ocelot->stats_queue);
 	mutex_destroy(&ocelot->stats_lock);
 	ocelot_ace_rule_offload_del(rule);
 	ocelot_ace_deinit();
+
+	for (i = 0; i < ocelot->num_phys_ports; i++) {
+		port = ocelot->ports[i];
+		skb_queue_purge(&port->tx_skbs);
+	}
 }
 EXPORT_SYMBOL(ocelot_deinit);
 

@@ -228,18 +228,12 @@ static netdev_tx_t felix_cpu_inj_handler(struct sk_buff *skb,
 		return NETDEV_TX_BUSY;
 
 	if (do_tstamp) {
-		struct ocelot_skb *oskb =
-			devm_kzalloc(port->ocelot->dev,
-				     sizeof(struct ocelot_skb),
-				     GFP_KERNEL);
-		oskb->skb = skb_clone(skb, GFP_ATOMIC);
-		if (skb->sk)
-			skb_set_owner_w(oskb->skb, skb->sk);
-		oskb->tstamp_id = port->tstamp_id % 4;
-		oskb->tx_port = port->chip_port;
-		list_add_tail(&oskb->head, &port->ocelot->skbs);
+		struct sk_buff *clone = skb_clone_sk(skb);
 
-		skb_shinfo(oskb->skb)->tx_flags |= SKBTX_IN_PROGRESS;
+		skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
+		/* Store timestamp ID in cb[0] of sk_buff */
+		clone->cb[0] = port->tstamp_id % 4;
+		skb_queue_tail(&port->tx_skbs, clone);
 	}
 
 	if (unlikely(skb_headroom(skb) < FELIX_XFH_LEN)) {
@@ -466,54 +460,63 @@ static void felix_get_hwtimestamp(struct ocelot *ocelot, struct timespec64 *ts)
 		ts->tv_sec--;
 }
 
-static bool felix_tx_tstamp_avail(struct ocelot *ocelot)
+static bool felix_get_txtstamp(struct ocelot *ocelot)
 {
-	return (!list_empty(&ocelot->skbs)) &&
-	       (ocelot_read(ocelot, SYS_PTP_STATUS) &
-		SYS_PTP_STATUS_PTP_MESS_VLD);
-}
+	int budget = OCELOT_PTP_QUEUE_SZ;
+	bool tx_tstamp_avail;
 
-static void felix_tx_clean(struct ocelot *ocelot)
-{
-	do {
-		struct list_head *pos, *tmp;
-		struct ocelot_skb *entry;
-		struct sk_buff *skb = NULL;
-		struct timespec64 ts;
+	while (budget--) {
+		struct sk_buff *skb, *skb_tmp, *skb_match = NULL;
 		struct skb_shared_hwtstamps shhwtstamps;
-		u32 val, id, port;
+		struct ocelot_port *port;
+		struct timespec64 ts;
+		unsigned long flags;
+		u32 val, id, txport;
 
 		val = ocelot_read(ocelot, SYS_PTP_STATUS);
 
+		/* Check if a timestamp can be retrieved */
+		if (!(val & SYS_PTP_STATUS_PTP_MESS_VLD))
+			break;
+
+		tx_tstamp_avail = true;
+		WARN_ON(val & SYS_PTP_STATUS_PTP_OVFL);
+
+		/* Retrieve the ts ID and Tx port */
 		id = SYS_PTP_STATUS_PTP_MESS_ID_X(val);
-		port = SYS_PTP_STATUS_PTP_MESS_TXPORT_X(val);
+		txport = SYS_PTP_STATUS_PTP_MESS_TXPORT_X(val);
 
-		list_for_each_safe(pos, tmp, &ocelot->skbs) {
-			entry = list_entry(pos, struct ocelot_skb, head);
-			if (entry->tstamp_id != id ||
-			    entry->tx_port != port)
+		/* Retrieve its associated skb */
+		port = ocelot->ports[txport];
+
+		spin_lock_irqsave(&port->tx_skbs.lock, flags);
+
+		skb_queue_walk_safe(&port->tx_skbs, skb, skb_tmp) {
+			if (skb->cb[0] != id)
 				continue;
-			skb = entry->skb;
-
-			list_del(pos);
-			devm_kfree(ocelot->dev, entry);
+			__skb_unlink(skb, &port->tx_skbs);
+			skb_match = skb;
 			break;
 		}
 
-		if (likely(skb)) {
-			felix_get_hwtimestamp(ocelot, &ts);
-			memset(&shhwtstamps, 0, sizeof(shhwtstamps));
-			shhwtstamps.hwtstamp = ktime_set(ts.tv_sec, ts.tv_nsec);
-			skb_tstamp_tx(skb, &shhwtstamps);
+		spin_unlock_irqrestore(&port->tx_skbs.lock, flags);
 
-			dev_kfree_skb_any(skb);
-		}
-
-		/* Next tstamp */
+		/* Next ts */
 		ocelot_write(ocelot, SYS_PTP_NXT_PTP_NXT, SYS_PTP_NXT);
 
-	} while (ocelot_read(ocelot, SYS_PTP_STATUS) &
-		 SYS_PTP_STATUS_PTP_MESS_VLD);
+		if (unlikely(!skb_match))
+			continue;
+
+		/* Get the h/w timestamp */
+		felix_get_hwtimestamp(ocelot, &ts);
+
+		/* Set the timestamp into the skb */
+		memset(&shhwtstamps, 0, sizeof(shhwtstamps));
+		shhwtstamps.hwtstamp = ktime_set(ts.tv_sec, ts.tv_nsec);
+		skb_complete_tx_timestamp(skb_match, &shhwtstamps);
+	}
+
+	return tx_tstamp_avail;
 }
 
 static void felix_preempt_irq_clean(struct ocelot *ocelot)
@@ -535,14 +538,14 @@ static void felix_irq_handle_work(struct work_struct *work)
 	struct ocelot *ocelot = container_of(work, struct ocelot,
 					     irq_handle_work);
 	struct pci_dev *pdev = container_of(ocelot->dev, struct pci_dev, dev);
+	bool tx_tstamp_avail;
 
 	/* The INTB interrupt is used both for 1588 interrupt and
 	 * preemption status change interrupt on each port. So check
 	 * which interrupt it is, and clean it.
 	 */
-	if (felix_tx_tstamp_avail(ocelot))
-		felix_tx_clean(ocelot);
-	else
+	tx_tstamp_avail = felix_get_txtstamp(ocelot);
+	if (!tx_tstamp_avail)
 		felix_preempt_irq_clean(ocelot);
 
 	enable_irq(pdev->irq);
@@ -659,6 +662,8 @@ static int felix_ports_init(struct pci_dev *pdev)
 		ocelot_port = ocelot->ports[port];
 		ocelot_port->phy_mode = phy_mode;
 		ocelot_port->portnp = portnp;
+
+		skb_queue_head_init(&ocelot_port->tx_skbs);
 
 		if (pair_ndev)
 			felix_setup_port_inj(ocelot_port, pair_ndev);
@@ -783,8 +788,6 @@ static int felix_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	}
 
 	INIT_WORK(&ocelot->irq_handle_work, felix_irq_handle_work);
-
-	INIT_LIST_HEAD(&ocelot->skbs);
 
 	len = pci_resource_len(pdev, FELIX_SWITCH_BAR);
 	if (!len) {

@@ -528,6 +528,9 @@ static void felix_preempt_irq_clean(struct ocelot *ocelot)
 	val = DEV_GMII_MM_STATISTICS_MM_STATUS_PRMPT_ACTIVE_STICKY;
 	for (port = 0; port < FELIX_MAX_NUM_PHY_PORTS; port++) {
 		ocelot_port = ocelot->ports[port];
+		if (!ocelot_port)
+			continue;
+
 		ocelot_port_rmwl(ocelot_port, val, val,
 				 DEV_GMII_MM_STATISTICS_MM_STATUS);
 	}

@@ -1697,6 +1697,27 @@ static inline struct device *get_dev_ptr(char *if_name)
 	return dev;
 }
 
+static int ioctl_set_link_status(struct usdpaa_ioctl_update_link_status *args)
+{
+	struct device *dev;
+	struct mac_device *mac_dev;
+	struct proxy_device *proxy_dev;
+
+	dev = get_dev_ptr(args->if_name);
+	if (!dev)
+		return -ENODEV;
+	proxy_dev = dev_get_drvdata(dev);
+	mac_dev =  proxy_dev->mac_dev;
+
+	if (args->set_link_status == ETH_LINK_UP)
+		phy_resume(mac_dev->phy_dev);
+	else if (args->set_link_status == ETH_LINK_DOWN)
+		phy_suspend(mac_dev->phy_dev);
+	else
+		return -EINVAL;
+	return 0;
+}
+
 /* This function will return Current link status of the device
  * '1' if Link is UP, '0' otherwise.
  *
@@ -1998,6 +2019,20 @@ static long usdpaa_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
 			return -EFAULT;
 
 		return 0;
+	}
+	case USDPAA_IOCTL_UPDATE_LINK_STATUS:
+	{
+		struct usdpaa_ioctl_update_link_status input;
+		int ret;
+
+		if (copy_from_user(&input, a, sizeof(input)))
+			return -EFAULT;
+
+		ret = ioctl_set_link_status(&input);
+		if (ret)
+			pr_err("Error(%d) updating link status:IF: %s\n",
+			       ret, input.if_name);
+		return ret;
 	}
 	}
 	return -EINVAL;

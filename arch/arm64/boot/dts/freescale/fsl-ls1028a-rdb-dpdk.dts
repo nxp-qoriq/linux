@@ -262,6 +262,19 @@
 	};
 };
 
+&mscc_felix_port5 {
+	status = "okay";
+	fixed-link {
+		speed = <1000>;
+		full-duplex;
+	};
+};
+
+
+&enetc_port3 {
+	status = "okay";
+};
+
 &sai4 {
 	status = "okay";
 };

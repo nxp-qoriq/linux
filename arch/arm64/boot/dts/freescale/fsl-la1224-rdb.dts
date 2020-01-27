@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: (GPL-2.0 OR MIT)
 //
-// Device Tree file for LX2160BNYRG
+// Device Tree file for LA1224RDB
 //
 // Copyright 2020 NXP
 
@@ -9,8 +9,8 @@
 #include "fsl-lx2160a.dtsi"
 
 / {
-	model = "NXP Layerscape LX2160ABNYRG";
-	compatible = "fsl,lx2160a-bnyrg", "fsl,lx2160a";
+	model = "NXP Layerscape LA1224RDB";
+	compatible = "nxp,la1224-rdb", "fsl,lx2160a";
 
 	aliases {
 		crypto = &crypto;

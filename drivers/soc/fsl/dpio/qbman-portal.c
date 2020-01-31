@@ -731,6 +731,7 @@ int qbman_swp_enqueue_multiple_direct(struct qbman_swp *s,
 	/* Fill in the EQCR ring */
 	for (i = 0; i < num_enqueued; i++) {
 		p = (s->addr_cena + QBMAN_CENA_SWP_EQCR(eqcr_pi & half_mask));
+		dcivac(p);
 		/* Skip copying the verb */
 		memcpy(&p[1], &cl[1], EQ_DESC_SIZE_WITHOUT_FD - 1);
 		memcpy(&p[EQ_DESC_SIZE_FD_START/sizeof(uint32_t)],
@@ -892,6 +893,7 @@ int qbman_swp_enqueue_multiple_desc_direct(struct qbman_swp *s,
 	/* Fill in the EQCR ring */
 	for (i = 0; i < num_enqueued; i++) {
 		p = (s->addr_cena + QBMAN_CENA_SWP_EQCR(eqcr_pi & half_mask));
+		dcivac(p);
 		cl = (uint32_t *)(&d[i]);
 		/* Skip copying the verb */
 		memcpy(&p[1], &cl[1], EQ_DESC_SIZE_WITHOUT_FD - 1);

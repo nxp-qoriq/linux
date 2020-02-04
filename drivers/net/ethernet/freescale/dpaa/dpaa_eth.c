@@ -2452,6 +2452,9 @@ static void dpaa_adjust_link(struct net_device *net_dev)
 	mac_dev->adjust_link(mac_dev);
 }
 
+/* The Aquantia PHYs are capable of performing rate adaptation */
+#define PHY_VEND_AQUANTIA	0x03a1b400
+
 static int dpaa_phy_init(struct net_device *net_dev)
 {
 	struct mac_device *mac_dev;
@@ -2469,10 +2472,14 @@ static int dpaa_phy_init(struct net_device *net_dev)
 		return -ENODEV;
 	}
 
-	/* Remove any features not supported by the controller */
-	phy_dev->supported &= mac_dev->if_support;
-	phy_dev->supported |= (SUPPORTED_Pause | SUPPORTED_Asym_Pause);
-	phy_dev->advertising = phy_dev->supported;
+	/* Unless the PHY is capable of rate adaptation */
+	if (mac_dev->phy_if != PHY_INTERFACE_MODE_XGMII ||
+	    ((phy_dev->drv->phy_id & GENMASK(31, 10)) != PHY_VEND_AQUANTIA)) {
+		/* Remove any features not supported by the controller */
+		phy_dev->supported &= mac_dev->if_support;
+		phy_dev->supported |= (SUPPORTED_Pause | SUPPORTED_Asym_Pause);
+		phy_dev->advertising = phy_dev->supported;
+	}
 
 	mac_dev->phy_dev = phy_dev;
 	net_dev->phydev = phy_dev;

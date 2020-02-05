@@ -125,26 +125,24 @@
 
 &fman0 {
 	ethernet@f0000 {
-		phy-handle = <&sgmii_phy1>;
-		phy-connection-type = "sgmii-2500";
+		phy-handle = <&aqr113c_phy1>;
+		phy-connection-type = "xgmii";
 	};
 
 	ethernet@f2000 {
-		phy-handle = <&sgmii_phy2>;
-		phy-connection-type = "sgmii-2500";
+		phy-handle = <&aqr113c_phy2>;
+		phy-connection-type = "xgmii";
 	};
 
 	mdio@fd000 {
-		sgmii_phy1: ethernet-phy@f {
+		aqr113c_phy1: ethernet-phy@0 {
 			compatible = "ethernet-phy-ieee802.3-c45";
-			interrupts = <0 2 4>;
-			reg = <0xf>;
+			reg = <0x0>;
 		};
 
-		sgmii_phy2: ethernet-phy@1 {
+		aqr113c_phy2: ethernet-phy@8 {
 			compatible = "ethernet-phy-ieee802.3-c45";
-			interrupts = <0 2 4>;
-			reg = <0x1>;
+			reg = <0x8>;
 		};
 	};
 };

@@ -53,6 +53,11 @@
 	ethernet@7 {
 		status = "disabled";
 	};
+	ethernet@8 {
+		compatible = "fsl,dpa-ethernet";
+		fsl,fman-mac = <&enet6>;
+		dma-coherent;
+	};
 	ethernet@9 {
 		compatible = "fsl,dpa-ethernet";
 		fsl,fman-mac = <&enet7>;

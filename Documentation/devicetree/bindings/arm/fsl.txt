@@ -238,3 +238,7 @@ Required root node properties:
 LX2160A ARMv8 based RDB Board
 Required root node properties:
     - compatible = "fsl,lx2160a-rdb", "fsl,lx2160a";
+
+LA1224 ARMv8 based RDB Board
+Required root node properties:
+   - compatible = "nxp,la1224-rdb", "fsl,lx2160a";

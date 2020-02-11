@@ -1,0 +1,633 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+//
+// Device Tree file for LA1224RDB Rev C board
+//
+// Copyright 2020-2022 NXP
+
+/dts-v1/;
+
+#include "fsl-lx2160a.dtsi"
+
+/ {
+	model = "NXP Layerscape LA1224-RDB";
+	compatible = "nxp,la1224-rdb", "fsl,lx2160a";
+
+	aliases {
+		crypto = &crypto;
+		serial0 = &uart0;
+		serial1 = &uart1;
+		serial2 = &uart2;
+		serial3 = &uart3;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+
+	sb_3v3: regulator-sb3v3 {
+		compatible = "regulator-fixed";
+		regulator-name = "MC34717-3.3VSB";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+
+	modem0 {
+		compatible = "geul_modem0";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		modem_wdog {
+			compatible = "modem_wdog";
+			reg = <0x0>;
+			interrupt-cells = <3>;
+			interrupts = <GIC_SPI 9 IRQ_TYPE_EDGE_RISING>;
+			modem-reset-gpio = <&pcal6524_1 16 GPIO_ACTIVE_LOW>;
+			status = "okay";
+		};
+
+		modem_hsdcs {
+			compatible = "modem_hsdcs";
+			reg = <0x0>;
+			hsdcs-reset-gpio = <&gpio0 29 GPIO_ACTIVE_LOW>;
+			status = "okay";
+		};
+
+		modem_rf {
+			compatible = "modem_rf";
+			yucca1-reset-gpio = <&gpio2 0 GPIO_ACTIVE_LOW>;
+			yucca2-reset-gpio = <&gpio2 1 GPIO_ACTIVE_LOW>;
+			yucca1-trx-gpio = <&gpio2 17 GPIO_ACTIVE_LOW>;
+			yucca2-trx-gpio = <&gpio2 18 GPIO_ACTIVE_LOW>;
+			yucca-trx-gpio = <&gpio3 8 GPIO_ACTIVE_LOW>;
+		};
+
+		modem_tti {
+			compatible = "modem_tti1";
+			reg = <0x0>;
+			interrupt-cells = <3>;
+			interrupts = <GIC_SPI 1 IRQ_TYPE_EDGE_RISING>,
+				     <GIC_SPI 8 IRQ_TYPE_EDGE_RISING>,
+				     <GIC_SPI 0 IRQ_TYPE_EDGE_RISING>;
+			status = "okay";
+		};
+	};
+
+	modem1 {
+		compatible = "geul_modem1";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		modem_wdog {
+			compatible = "modem_wdog";
+			reg = <0x0>;
+			interrupt-cells = <3>;
+			interrupts = <GIC_SPI 5 IRQ_TYPE_EDGE_RISING>;
+			modem-reset-gpio = <&pcal6524_1 14 GPIO_ACTIVE_LOW>;
+			status = "okay";
+		};
+
+		modem_hsdcs {
+			compatible = "modem_hsdcs";
+			reg = <0x0>;
+			hsdcs-reset-gpio = <&gpio0 29 GPIO_ACTIVE_LOW>;
+			status = "okay";
+		};
+
+		modem_rf {
+			compatible = "modem_rf";
+			yucca1-reset-gpio = <&gpio2 0 GPIO_ACTIVE_LOW>;
+			yucca2-reset-gpio = <&gpio2 1 GPIO_ACTIVE_LOW>;
+			yucca1-trx-gpio = <&gpio2 17 GPIO_ACTIVE_LOW>;
+			yucca2-trx-gpio = <&gpio2 18 GPIO_ACTIVE_LOW>;
+			yucca-trx-gpio = <&gpio3 8 GPIO_ACTIVE_LOW>;
+		};
+
+		modem_tti {
+			compatible = "modem_tti1";
+			reg = <0x0>;
+			interrupt-cells = <3>;
+			interrupts = <GIC_SPI 10 IRQ_TYPE_EDGE_RISING>,
+				     <GIC_SPI 11 IRQ_TYPE_EDGE_RISING>;
+			status = "okay";
+		};
+	};
+
+        la9310_wdog: la9310_wdog@0 {
+                compatible = "la9310_wdog";
+                la9310-reset-gpio = <&pcal6524_1 11 GPIO_ACTIVE_HIGH>;
+        };
+
+	soc {
+		ptp-timer@8b95000 {
+			clocks = <&clockgen 0x04 0x01>;
+			compatible = "fsl,dpaa2-ptp";
+			fsl,cksel = <0x00>;
+			fsl,extts-fifo;
+			fsl,max-adj = <0xEE6B27F>;
+			fsl,tclk-period = <0x0a>;
+			fsl,tmr-add = <0xCCCCCCCD>;
+			fsl,tmr-fiper1 = <0x3b9ac9f6>;
+			fsl,tmr-fiper2 = <0x3b9ac9f6>;
+			fsl,tmr-fiper3 = <0x3b9ac9f6>;
+			fsl,tmr-prsc = <0x02>;
+			little-endian;
+			reg = <0x00 0x8b95000 0x00 0x100>;
+		};
+
+	};
+};
+
+&crypto {
+	status = "okay";
+};
+
+&emdio1 {
+	status = "okay";
+};
+
+&emdio2 {
+	status = "okay";
+};
+
+&esdhc0 {
+	sd-uhs-sdr104;
+	sd-uhs-sdr50;
+	sd-uhs-sdr25;
+	sd-uhs-sdr12;
+	status = "okay";
+};
+
+&esdhc1 {
+	mmc-hs200-1_8v;
+	mmc-hs400-1_8v;
+	bus-width = <8>;
+	status = "okay";
+};
+
+&i2c0 {
+	status = "okay";
+
+	/*
+	 * TBD
+	 * Default state (input/output, high/low) of all below GPIOs
+	 * should be re-visited once this information is available from
+	 * hardware team.
+	 */
+	pcal6524_1: pcal6524@22 {
+
+		compatible = "nxp,pcal6524";
+		reg = <0x22>;
+		gpio-controller;
+		#gpio-cells = <2>;
+
+		P00 {
+			gpio-hog;
+			gpios = <0 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "SW_RCW_SRC3";
+		};
+
+		P01 {
+			gpio-hog;
+			gpios = <1 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "SW_RCW_SRC2";
+		};
+
+		P02 {
+			gpio-hog;
+			gpios = <2 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "SW_RCW_SRC1";
+		};
+
+		P03 {
+			gpio-hog;
+			gpios = <3 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "SW_RCW_SRC0";
+		};
+
+		P04 {
+			gpio-hog;
+			gpios = <4 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "CFG_XSPI_MAP0";
+		};
+
+		P05 {
+			gpio-hog;
+			gpios = <5 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "SD1_CLKF_SEL";
+		};
+
+		P10 {
+			gpio-hog;
+			gpios = <8 GPIO_ACTIVE_LOW>;
+			output-low;
+			line-name = "I2C_RST_PHY1_10GE_B";
+		};
+
+		P11 {
+			gpio-hog;
+			gpios = <9 GPIO_ACTIVE_LOW>;
+			output-low;
+			line-name = "I2C_RST_PHY2_10GE_B";
+		};
+
+		P14 {
+			gpio-hog;
+			gpios = <12 GPIO_ACTIVE_LOW>;
+			output-low;
+			line-name = "I2C_EPHY1_RST_B";
+		};
+
+		P15 {
+			gpio-hog;
+			gpios = <13 GPIO_ACTIVE_LOW>;
+			output-low;
+			line-name = "I2C_LEA_6T_RST_B";
+		};
+
+
+		P17 {
+			gpio-hog;
+			gpios = <15 GPIO_ACTIVE_LOW>;
+			output-low;
+			line-name = "SW_LA1224_BLOCK_PORST_B";
+		};
+
+		P21 {
+			gpio-hog;
+			gpios = <17 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "SI5518_INT_B";
+		};
+
+		P22 {
+			gpio-hog;
+			gpios = <18 GPIO_ACTIVE_HIGH>;
+			output-high;
+			line-name = "LX2_UART_EN";
+		};
+
+		P23 {
+			gpio-hog;
+			gpios = <19 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "MDM_BRD_GPIO_04";
+		};
+
+		P24 {
+			gpio-hog;
+			gpios = <20 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "MODEM_JTAG_MUX";
+		};
+
+		P25 {
+			gpio-hog;
+			gpios = <21 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "RQ_RTC_B";
+		};
+
+		P26 {
+			gpio-hog;
+			gpios = <22 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "BOARD_REVISION_0";
+		};
+
+		P27 {
+			gpio-hog;
+			gpios = <23 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "BOARD_REVISION_1";
+		};
+	};
+
+	pcal6524_2: pcal6524@23 {
+
+		compatible = "nxp,pcal6524";
+		reg = <0x23>;
+		gpio-controller;
+		#gpio-cells = <2>;
+
+		P00 {
+			gpio-hog;
+			gpios = <0 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "SFP_MOD_ABS";
+		};
+
+		P01 {
+			gpio-hog;
+			gpios = <1 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "SFP_TX_FAULT";
+		};
+
+		P02 {
+			gpio-hog;
+			gpios = <2 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "SFP_RX_LOS";
+		};
+
+		P03 {
+			gpio-hog;
+			gpios = <3 GPIO_ACTIVE_LOW>;
+			output-high;
+			line-name = "SFP_TX_EN";
+		};
+
+		P04 {
+			gpio-hog;
+			gpios = <4 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "PCIE1_WIGIG_EN";
+		};
+
+		P05 {
+			gpio-hog;
+			gpios = <5 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "PCIE1_WDISABLE_B";
+		};
+
+		P06 {
+			gpio-hog;
+			gpios = <6 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "PCIE2_WIGIG_EN";
+		};
+
+		P07 {
+			gpio-hog;
+			gpios = <7 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "PCIE2_WDISABLE_B";
+		};
+
+		P10 {
+			gpio-hog;
+			gpios = <8 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "BUFF_M2_PWR_EN";
+		};
+
+		P11 {
+			gpio-hog;
+			gpios = <9 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "MODEMBRD_THERMSHUT_B";
+		};
+
+		P12 {
+			gpio-hog;
+			gpios = <10 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "SW_RST_SI5518_B";
+		};
+
+		P13 {
+			gpio-hog;
+			gpios = <11 GPIO_ACTIVE_HIGH>;
+			output-high;
+			line-name = "CPU_FR1_PWR_EN";
+		};
+
+		P14 {
+			gpio-hog;
+			gpios = <12 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "PROG_SFP_EN";
+		};
+
+		P15 {
+			gpio-hog;
+			gpios = <13 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "LED_PASS";
+		};
+
+		P16 {
+			gpio-hog;
+			gpios = <14 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "LED_FAIL";
+		};
+
+		P17 {
+			gpio-hog;
+			gpios = <15 GPIO_ACTIVE_HIGH>;
+			output-high;
+			line-name = "SD_CARD_PWR_CNTL";
+		};
+
+		P20 {
+			gpio-hog;
+			gpios = <16 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "PMIC_INT_B";
+		};
+
+		P21 {
+			gpio-hog;
+			gpios = <17 GPIO_ACTIVE_HIGH>;
+			input; // spread is off (default)
+			line-name = "CFG_SPREAD_EN";
+		};
+
+		P22 {
+			gpio-hog;
+			gpios = <18 GPIO_ACTIVE_HIGH>;
+			output-high;
+			line-name = "CPU_FR2_PWR_EN";
+		};
+
+		P23 {
+			gpio-hog;
+			gpios = <19 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "SPI_MUX_SEL";
+		};
+
+		P24 {
+			gpio-hog;
+			gpios = <20 GPIO_ACTIVE_LOW>;
+			output-low;
+			line-name = "SPI_MUX_EN_B";
+		};
+
+		P25 {
+			gpio-hog;
+			gpios = <21 GPIO_ACTIVE_HIGH>;
+			output-high;
+			line-name = "CFG_MUX_1PPS_S0";
+		};
+
+		P26 {
+			gpio-hog;
+			gpios = <22 GPIO_ACTIVE_HIGH>;
+			output-high;
+			line-name = "CFG_MUX_1PPS_S1";
+		};
+
+		P27 {
+			gpio-hog;
+			gpios = <23 GPIO_ACTIVE_HIGH>;
+			output-high;
+			line-name = "CFG_MUX_1PPS_ATIME";
+		};
+	};
+
+	i2c-mux@77 {
+		compatible = "nxp,pca9547";
+		reg = <0x77>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		i2c@2 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x2>;
+
+			power-monitor@40 {
+				compatible = "ti,ina220";
+				reg = <0x40>;
+				shunt-resistor = <500>;
+			};
+		};
+
+		i2c@3 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x3>;
+
+			temperature-sensor@4c {
+				compatible = "nxp,sa56004";
+				reg = <0x4c>;
+				vcc-supply = <&sb_3v3>;
+			};
+		};
+	};
+};
+
+&i2c3 {
+	status = "okay";
+
+	rtc@51 {
+		compatible = "nxp,pcf2129";
+		reg = <0x51>;
+		interrupts = <0 150 0x4>;
+	};
+
+	temperature-sensor@4c {
+		compatible = "nxp,sa56004";
+		reg = <0x4c>;
+		vcc-supply = <&sb_3v3>;
+	};
+};
+
+&dspi2 {
+	status = "okay";
+	spidev@1 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "silabs,si5518";
+		reg = <1>; /* CS1 */
+		spi-max-frequency = <5000000>;
+	};
+};
+
+&fspi {
+	status = "okay";
+
+	mt35xu512aba0: flash@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "spansion,m25p80";
+		m25p,fast-read;
+		spi-max-frequency = <50000000>;
+		reg = <0>;
+		spi-rx-bus-width = <8>;
+		spi-tx-bus-width = <8>;
+	};
+
+	mt35xu512aba1: flash@1 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "spansion,m25p80";
+		m25p,fast-read;
+		spi-max-frequency = <50000000>;
+		reg = <1>;
+		spi-rx-bus-width = <8>;
+		spi-tx-bus-width = <8>;
+	};
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&uart1 {
+	status = "okay";
+};
+
+&uart2 {
+	status = "okay";
+};
+
+&uart3 {
+	status = "okay";
+};
+
+&usb0 {
+	status = "okay";
+};
+
+&usb1 {
+	status = "okay";
+};
+
+&emdio1 {
+	rgmii_phy1: ethernet-phy@3 {
+		/* AR8035 PHY - "compatible" property not strictly needed */
+		compatible = "ethernet-phy-id004d.d072";
+		reg = <0x3>;
+		/* Poll mode - no "interrupts" property defined */
+	};
+	aquantia_phy1: ethernet-phy@8 {
+		/* AQR113 PHY - "compatible" property not strictly needed */
+		compatible = "ethernet-phy-ieee802.3-c45";
+		interrupts = <GIC_SPI 2 IRQ_TYPE_LEVEL_HIGH>;
+		reg = <0x8>;
+	};
+	aquantia_phy2: ethernet-phy@0 {
+		/* AQR113 PHY - "compatible" property not strictly needed */
+		compatible = "ethernet-phy-ieee802.3-c45";
+		interrupts = <GIC_SPI 3 IRQ_TYPE_LEVEL_HIGH>;
+		reg = <0x0>;
+	};
+};
+
+&dpmac3 {
+	phy-handle = <&aquantia_phy1>;
+	phy-connection-type = "usxgmii";
+};
+
+&dpmac4 {
+	phy-handle = <&aquantia_phy2>;
+	phy-connection-type = "usxgmii";
+};
+
+&dpmac17 {
+	phy-handle = <&rgmii_phy1>;
+	phy-connection-type = "rgmii-id";
+};

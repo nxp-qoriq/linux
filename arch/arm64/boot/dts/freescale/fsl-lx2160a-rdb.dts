@@ -2,7 +2,7 @@
 //
 // Device Tree file for LX2160ARDB
 //
-// Copyright 2018-2020 NXP
+// Copyright 2018-2022 NXP
 
 /dts-v1/;
 
@@ -30,6 +30,19 @@
 		regulator-max-microvolt = <3300000>;
 		regulator-boot-on;
 		regulator-always-on;
+	};
+
+	soc {
+		ptp-timer@8b95000 {
+			fsl,cksel       = <0>;
+			fsl,tclk-period = <200>;
+			fsl,tmr-prsc    = <2>;
+			fsl,tmr-add     = <0x80000000>;
+			fsl,tmr-fiper1  = <999999800>;
+			fsl,tmr-fiper2  = <99800>;
+			fsl,tmr-fiper3  = <999999800>;
+			fsl,max-adj     = <999999999>;
+		};
 	};
 };
 

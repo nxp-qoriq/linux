@@ -1001,6 +1001,12 @@ properties:
               - fsl,lx2162a-qds
           - const: fsl,lx2160a
 
+      - description: LA1224 ARMv8 based RDB Board
+        items:
+          - enum:
+              - nxp,la1224-rdb
+          - const: fsl,lx2160a
+
       - description: SolidRun LX2160A based Boards
         items:
           - enum:

@@ -4,7 +4,7 @@
  *
  * Copyright (C) 2014-2016 Freescale Semiconductor, Inc.
  * Author: German Rivera <German.Rivera@freescale.com>
- * Copyright 2018 NXP
+ * Copyright 2018-2019 NXP
  *
  */
 
@@ -686,8 +686,9 @@ static int dprc_probe(struct fsl_mc_device *mc_dev)
 		if (dev_is_fsl_mc(parent_dev))
 			return -EINVAL;
 
-		error = fsl_mc_find_msi_domain(parent_dev,
-					       &mc_msi_domain);
+	error = fsl_mc_find_msi_domain(parent_dev,
+					&mc_msi_domain, mc_dev);
+
 		if (error < 0) {
 			dev_warn(&mc_dev->dev,
 				 "WARNING: MC bus without interrupt support\n");

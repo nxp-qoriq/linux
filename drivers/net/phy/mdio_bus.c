@@ -3,7 +3,7 @@
  * Author: Andy Fleming
  *
  * Copyright (c) 2004 Freescale Semiconductor, Inc.
- * Copyright 2019 NXP
+ * Copyright 2019-2020 NXP
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the terms of  the GNU General  Public License as published by the
@@ -832,7 +832,7 @@ static int fwnode_mdio_parse_addr(struct device *dev,
 	}
 
 	/* A PHY must have a reg property in the range [0-31] */
-	if (addr < 0 || addr >= PHY_MAX_ADDR) {
+	if (addr >= PHY_MAX_ADDR) {
 		dev_err(dev, "PHY address %i is invalid\n", addr);
 		return -EINVAL;
 	}

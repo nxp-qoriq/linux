@@ -595,14 +595,6 @@
 #define DWC3_OSTS_VBUSVLD		BIT(1)
 #define DWC3_OSTS_CONIDSTS		BIT(0)
 
-/* Partial XHCI Register and Bit fields for quirk */
-#define XHCI_HCSPARAMS1		0x4
-#define XHCI_PORTSC_BASE	0x400
-#define PORT_POWER			(1 << 9)
-#define HCS_MAX_PORTS(p)	(((p) >> 24) & 0x7f)
-#define XHCI_HC_LENGTH(p)	(((p)>>00)&0x00ff)
-#define HC_LENGTH(p)		XHCI_HC_LENGTH(p)
-
 /* Structures */
 
 struct dwc3_trb;
@@ -1012,7 +1004,7 @@ struct dwc3_scratchpad_array {
  *				interrupted
  * @quirk_stop_ep_in_u1: replace stop commad with disable slot command
  * @dis_metastability_quirk: set to disable metastability quirk.
- * @host-vbus-glitches: set to avoid vbus glitch during
+ * @host_vbus_glitches: set to avoid vbus glitch during
  *                      xhci reset.
  * @imod_interval: set the interrupt moderation interval in 250ns
  *                 increments or 0 to disable.

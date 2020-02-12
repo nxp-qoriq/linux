@@ -13,6 +13,8 @@
 #include <linux/slab.h>
 #include <linux/suspend.h>
 #include <linux/kernel.h>
+#include <linux/regmap.h>
+#include <linux/mfd/syscon.h>
 
 #define RCPM_WAKEUP_CELL_MAX_SIZE	7
 
@@ -29,6 +31,9 @@ static int rcpm_pm_prepare(struct device *dev)
 	struct rcpm		*rcpm;
 	u32 value[RCPM_WAKEUP_CELL_MAX_SIZE + 1], tmp;
 	int i, ret, idx;
+	struct regmap *scfg_addr_regmap = NULL;
+	u32 reg_offset[RCPM_WAKEUP_CELL_MAX_SIZE + 1];
+	u32 reg_value = 0;
 
 	rcpm = dev_get_drvdata(dev);
 	if (!rcpm)
@@ -62,6 +67,34 @@ static int rcpm_pm_prepare(struct device *dev)
 					tmp = ioread32be(rcpm->ippdexpcr_base + i * 4);
 					tmp |= value[i + 1];
 					iowrite32be(tmp, rcpm->ippdexpcr_base + i * 4);
+				}
+				/* Workaround of errata A-008646 on SoC LS1021A:
+				 * There is a bug of register ippdexpcr1.
+				 * Reading configuration register RCPM_IPPDEXPCR1
+				 * always return zero. So save ippdexpcr1's value
+				 * to register SCFG_SPARECR8.And the value of
+				 * ippdexpcr1 will be read from SCFG_SPARECR8.
+				 */
+				scfg_addr_regmap = syscon_regmap_lookup_by_phandle(np,
+										   "fsl,ippdexpcr1-alt-addr");
+				if (scfg_addr_regmap && (1 == i)) {
+					if (of_property_read_u32_array(dev->of_node,
+					    "fsl,ippdexpcr1-alt-addr",
+					    reg_offset,
+					    1 + sizeof(u64)/sizeof(u32))) {
+						scfg_addr_regmap = NULL;
+						continue;
+					}
+					/* Read value from register SCFG_SPARECR8 */
+					regmap_read(scfg_addr_regmap,
+						    (u32)(((u64)(reg_offset[1] << (sizeof(u32) * 8) |
+						    reg_offset[2])) & 0xffffffff),
+						    &reg_value);
+					/* Write value to register SCFG_SPARECR8 */
+					regmap_write(scfg_addr_regmap,
+						     (u32)(((u64)(reg_offset[1] << (sizeof(u32) * 8) |
+						     reg_offset[2])) & 0xffffffff),
+						     tmp | reg_value);
 				}
 			}
 		}

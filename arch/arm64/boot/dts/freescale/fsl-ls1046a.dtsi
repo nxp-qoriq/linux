@@ -180,7 +180,7 @@
 		modem_wdog: modem_wdog@0 {
                         compatible = "modem_wdog";
                         reg = <0x0 0x0 0x0 0x0>;
-                        interrupts = <GIC_SPI 131 IRQ_TYPE_EDGE_RISING>;
+                        interrupts = <GIC_SPI 150 IRQ_TYPE_EDGE_RISING>;
                         modem-reset-gpio = <&gpio2 18 1>;
 		};
 

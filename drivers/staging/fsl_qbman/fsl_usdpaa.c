@@ -1,4 +1,5 @@
 /* Copyright (C) 2008-2012 Freescale Semiconductor, Inc.
+ * Copyright 2020 NXP
  * Authors: Andy Fleming <afleming@freescale.com>
  *	    Timur Tabi <timur@freescale.com>
  *	    Geoff Thorpe <Geoff.Thorpe@freescale.com>

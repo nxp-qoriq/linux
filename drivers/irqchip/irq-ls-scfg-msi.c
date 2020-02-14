@@ -2,7 +2,7 @@
  * Freescale SCFG MSI(-X) support
  *
  * Copyright (C) 2016 Freescale Semiconductor.
- *
+ * Copyright 2020 NXP
  * Author: Minghuan Lian <Minghuan.Lian@nxp.com>
  *
  * This program is free software; you can redistribute it and/or modify

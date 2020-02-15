@@ -63,7 +63,241 @@
 
 &i2c0 {
 	status = "okay";
+	pcal6416@20 {
+		compatible = "nxp,pcal6416";
+		reg = <0x20>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		P00 {
+			gpio-hog;
+			gpios = <0 GPIO_ACTIVE_LOW>;
+			output-high;
+			line-name = "i2c_rst_phy1_10ge_b";
+		};
 
+		P01 {
+			gpio-hog;
+			gpios = <1 GPIO_ACTIVE_LOW>;
+			output-high;
+			line-name = "i2c_rst_phy2_10ge_b";
+		};
+
+		P02 {
+			gpio-hog;
+			gpios = <2 GPIO_ACTIVE_LOW>;
+			output-high;
+			line-name = "i2c_m2_slot1_rst_b";
+		};
+
+		P03 {
+			gpio-hog;
+			gpios = <3 GPIO_ACTIVE_LOW>;
+			output-high;
+			line-name = "i2c_m2_slot2_rst_b";
+		};
+
+		P04 {
+			gpio-hog;
+			gpios = <4 GPIO_ACTIVE_LOW>;
+			output-high;
+			line-name = "i2c_ephy1_rst_b";
+		};
+
+		P05 {
+			gpio-hog;
+			gpios = <5 GPIO_ACTIVE_LOW>;
+			output-high;
+			line-name = "i2c_lea_6t_rst_b";
+		};
+
+		P06 {
+			gpio-hog;
+			gpios = <6 GPIO_ACTIVE_LOW>;
+			output-high;
+			line-name = "i2c_modem_rst_b";
+		};
+
+		P07 {
+			gpio-hog;
+			gpios = <7 GPIO_ACTIVE_LOW>;
+			output-high;
+			line-name = "i2c_la1224_rst_b";
+		};
+
+		P10 {
+			gpio-hog;
+			gpios = <8 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "pmic_int_b";
+		};
+
+		P11 {
+			gpio-hog;
+			gpios = <9 GPIO_ACTIVE_HIGH>;
+			input; // spread is off (default)
+			line-name = "cfg_spread_en";
+		};
+
+		P12 {
+			gpio-hog;
+			gpios = <10 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "lx2_uart_en";
+		};
+
+		P13 {
+			gpio-hog;
+			gpios = <11 GPIO_ACTIVE_LOW>;
+			output-high;
+			line-name = "mdm_brd_gpio_04";
+		};
+
+		P14 {
+			gpio-hog;
+			gpios = <12 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "mdm_brd_id";
+		};
+
+		P15 {
+			gpio-hog;
+			gpios = <13 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "irq_rtc_b";
+		};
+
+		P16 {
+			gpio-hog;
+			gpios = <14 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "board_revision[0]";
+		};
+
+		P17 {
+			gpio-hog;
+			gpios = <15 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "board_revision[1]";
+		};
+	};
+	pcal6416@21 {
+		compatible = "nxp,pcal6416";
+		reg = <0x21>;
+		gpio-controller;
+		#gpio-cells = <2>;
+
+		P00 {
+			gpio-hog;
+			gpios = <0 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "sfp_mod_abs";
+		};
+
+		P01 {
+			gpio-hog;
+			gpios = <1 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "sfp_tx_fault";
+		};
+
+		P02 {
+			gpio-hog;
+			gpios = <2 GPIO_ACTIVE_HIGH>;
+			input;
+			line-name = "sfp_rx_los";
+		};
+
+		P03 {
+			gpio-hog;
+			gpios = <3 GPIO_ACTIVE_LOW>;
+			output-high;
+			line-name = "sfp_tx_en";
+		};
+
+		P04 {
+			gpio-hog;
+			gpios = <4 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "pcie1_wigig_en[0]";
+		};
+
+		P05 {
+			gpio-hog;
+			gpios = <5 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "pcie1_wdisable_b[0]";
+		};
+
+		P06 {
+			gpio-hog;
+			gpios = <6 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "pcie1_wigig_en[1]";
+		};
+
+		P07 {
+			gpio-hog;
+			gpios = <7 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "pcie1_wdisable_b[1]";
+		};
+
+		P10 {
+			gpio-hog;
+			gpios = <8 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "buff_m2_pwr_en";
+		};
+
+		P11 {
+			gpio-hog;
+			gpios = <9 GPIO_ACTIVE_HIGH>;
+			input; 
+			line-name = "modembrd_thermshut_b";
+		};
+
+		P12 {
+			gpio-hog;
+			gpios = <10 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "cfg_ieee_src[0]";
+		};
+
+		P13 {
+			gpio-hog;
+			gpios = <11 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "cfg_ieee_src[1]";
+		};
+
+		P14 {
+			gpio-hog;
+			gpios = <12 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "prog_sfg_en";
+		};
+
+		P15 {
+			gpio-hog;
+			gpios = <13 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "led_pass";
+		};
+
+		P16 {
+			gpio-hog;
+			gpios = <14 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "led_fail";
+		};
+
+		P17 {
+			gpio-hog;
+			gpios = <15 GPIO_ACTIVE_LOW>;
+			output-high;
+			line-name = "si5341_lol_b";
+		};
+	};
 	i2c-mux@77 {
 		compatible = "nxp,pca9547";
 		reg = <0x77>;

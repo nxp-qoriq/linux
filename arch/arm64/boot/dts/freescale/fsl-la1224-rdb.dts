@@ -403,17 +403,17 @@
 		reg = <0x3>;
 		/* Poll mode - no "interrupts" property defined */
 	};
-	aquantia_phy1: ethernet-phy@0 {
-		/* AQR107 PHY - "compatible" property not strictly needed */
+	aquantia_phy1: ethernet-phy@8 {
+		/* AQR113 PHY - "compatible" property not strictly needed */
 		compatible = "ethernet-phy-ieee802.3-c45";
 		interrupts = <GIC_SPI 2 IRQ_TYPE_LEVEL_HIGH>;
-		reg = <0x0>;
+		reg = <0x8>;
 	};
-	aquantia_phy2: ethernet-phy@8 {
-		/* AQR107 PHY - "compatible" property not strictly needed */
+	aquantia_phy2: ethernet-phy@0 {
+		/* AQR113 PHY - "compatible" property not strictly needed */
 		compatible = "ethernet-phy-ieee802.3-c45";
 		interrupts = <GIC_SPI 3 IRQ_TYPE_LEVEL_HIGH>;
-		reg = <0x8>;
+		reg = <0x0>;
 	};
 };
 

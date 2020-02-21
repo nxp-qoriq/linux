@@ -58,35 +58,35 @@ void __weak arch_irq_work_raise(void)
 }
 
 /* Enqueue on current CPU, work must already be claimed and preempt disabled */
-static void __irq_work_queue_local(struct irq_work *work, struct llist_head *list)
+static void __irq_work_queue_local(struct irq_work *work)
 {
-	bool empty;
+	struct llist_head *list;
+	bool lazy_work, realtime = IS_ENABLED(CONFIG_PREEMPT_RT_FULL);
 
-	empty = llist_add(&work->llnode, list);
+	lazy_work = work->flags & IRQ_WORK_LAZY;
 
-	if (empty &&
-	    (!(work->flags & IRQ_WORK_LAZY) ||
-	     tick_nohz_tick_stopped()))
-		arch_irq_work_raise();
+	/* If the work is "lazy", handle it from next tick if any */
+	if (lazy_work || (realtime && !(work->flags & IRQ_WORK_HARD_IRQ)))
+		list = this_cpu_ptr(&lazy_list);
+	else
+		list = this_cpu_ptr(&raised_list);
+
+	if (llist_add(&work->llnode, list)) {
+		if (!lazy_work || tick_nohz_tick_stopped())
+			arch_irq_work_raise();
+	}
 }
 
 /* Enqueue the irq work @work on the current CPU */
 bool irq_work_queue(struct irq_work *work)
 {
-	struct llist_head *list;
-
 	/* Only queue if not already pending */
 	if (!irq_work_claim(work))
 		return false;
 
 	/* Queue the entry and raise the IPI if needed. */
 	preempt_disable();
-	if (IS_ENABLED(CONFIG_PREEMPT_RT_FULL) && !(work->flags & IRQ_WORK_HARD_IRQ))
-		list = this_cpu_ptr(&lazy_list);
-	else
-		list = this_cpu_ptr(&raised_list);
-
-	__irq_work_queue_local(work, list);
+	__irq_work_queue_local(work);
 	preempt_enable();
 
 	return true;
@@ -105,9 +105,6 @@ bool irq_work_queue_on(struct irq_work *work, int cpu)
 	return irq_work_queue(work);
 
 #else /* CONFIG_SMP: */
-	struct llist_head *list;
-	bool lazy_work, realtime = IS_ENABLED(CONFIG_PREEMPT_RT_FULL);
-
 	/* All work should have been flushed before going offline */
 	WARN_ON_ONCE(cpu_is_offline(cpu));
 
@@ -116,21 +113,20 @@ bool irq_work_queue_on(struct irq_work *work, int cpu)
 		return false;
 
 	preempt_disable();
-
-	lazy_work = work->flags & IRQ_WORK_LAZY;
-
-	if (lazy_work || (realtime && !(work->flags & IRQ_WORK_HARD_IRQ)))
-		list = &per_cpu(lazy_list, cpu);
-	else
-		list = &per_cpu(raised_list, cpu);
-
 	if (cpu != smp_processor_id()) {
+		struct llist_head *list;
+
 		/* Arch remote IPI send/receive backend aren't NMI safe */
 		WARN_ON_ONCE(in_nmi());
+		if (IS_ENABLED(CONFIG_PREEMPT_RT_FULL) && !(work->flags & IRQ_WORK_HARD_IRQ))
+			list = &per_cpu(lazy_list, cpu);
+		else
+			list = &per_cpu(raised_list, cpu);
+
 		if (llist_add(&work->llnode, list))
 			arch_send_call_function_single_ipi(cpu);
 	} else {
-		__irq_work_queue_local(work, list);
+		__irq_work_queue_local(work);
 	}
 	preempt_enable();
 

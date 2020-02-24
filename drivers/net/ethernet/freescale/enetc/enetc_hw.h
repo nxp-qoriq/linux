@@ -964,7 +964,7 @@ struct tgs_gcl_data {
 	__le32		bth;
 	__le32		ct;
 	__le32		cte;
-	struct gce	entry[0];
+	struct gce	entry[];
 };
 
 /* class 5, command 1 */

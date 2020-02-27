@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright 2019 NXP */
+/* Copyright 2019-2020 NXP */
 
 #ifndef __FSL_DPDMAI_H
 #define __FSL_DPDMAI_H
@@ -18,6 +18,7 @@
 #define DPDMAI_CMDID_CLOSE		DPDMAI_CMDID_FORMAT(0x800)
 #define DPDMAI_CMDID_OPEN               DPDMAI_CMDID_FORMAT(0x80E)
 #define DPDMAI_CMDID_CREATE             DPDMAI_CMDID_FORMAT(0x90E)
+#define DPDMAI_CMDID_DESTROY            DPDMAI_CMDID_FORMAT(0x900)
 
 #define DPDMAI_CMDID_ENABLE             DPDMAI_CMDID_FORMAT(0x002)
 #define DPDMAI_CMDID_DISABLE            DPDMAI_CMDID_FORMAT(0x003)
@@ -160,6 +161,7 @@ struct dpdmai_rx_queue_attr {
 int dpdmai_open(struct fsl_mc_io *mc_io, u32 cmd_flags,
 		int dpdmai_id, u16 *token);
 int dpdmai_close(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token);
+int dpdmai_destroy(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token);
 int dpdmai_create(struct fsl_mc_io *mc_io, u32 cmd_flags,
 		  const struct dpdmai_cfg *cfg, u16 *token);
 int dpdmai_enable(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token);

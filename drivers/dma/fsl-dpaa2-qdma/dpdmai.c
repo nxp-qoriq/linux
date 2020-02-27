@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-// Copyright 2019 NXP
+// Copyright 2019-2020 NXP
 
 #include <linux/module.h>
 #include <linux/types.h>
@@ -158,6 +158,27 @@ int dpdmai_create(struct fsl_mc_io *mc_io, u32 cmd_flags,
 
 	return 0;
 }
+
+/**
+ * dpdmai_destroy() - Destroy the DPDMAI object and release all its resources.
+ * @mc_io:      Pointer to MC portal's I/O object
+ * @cmd_flags:  Command flags; one or more of 'MC_CMD_FLAG_'
+ * @token:      Token of DPDMAI object
+ *
+ * Return:      '0' on Success; error code otherwise.
+ */
+int dpdmai_destroy(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token)
+{
+	struct fsl_mc_command cmd = { 0 };
+
+	/* prepare command */
+	cmd.header = mc_encode_cmd_header(DPDMAI_CMDID_DESTROY,
+					  cmd_flags, token);
+
+	/* send command to mc*/
+	return mc_send_command(mc_io, &cmd);
+}
+EXPORT_SYMBOL_GPL(dpdmai_destroy);
 
 /**
  * dpdmai_enable() - Enable the DPDMAI, allow sending and receiving frames.

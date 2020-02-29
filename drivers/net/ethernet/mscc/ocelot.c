@@ -2519,11 +2519,10 @@ int ocelot_init(struct ocelot *ocelot)
 		ptp_rule->frame.etype.etype.mask[0] = 0xff;
 		ptp_rule->frame.etype.etype.mask[1] = 0xff;
 		/* Available on all ingress port except CPU port */
-		ptp_rule->ocelot = ocelot;
 		ptp_rule->ingress_port_mask =
 			GENMASK(ocelot->num_phys_ports - 1, 0);
 		ptp_rule->ingress_port_mask &= ~BIT(ocelot->cpu);
-		ocelot_ace_rule_offload_add(ptp_rule);
+		ocelot_ace_rule_offload_add(ocelot, ptp_rule);
 	}
 
 	return 0;
@@ -2539,8 +2538,7 @@ void ocelot_deinit(struct ocelot *ocelot)
 	destroy_workqueue(ocelot->stats_queue);
 	mutex_destroy(&ocelot->stats_lock);
 	if (ocelot->ptp)
-		ocelot_ace_rule_offload_del(ptp_rule);
-	ocelot_ace_deinit();
+		ocelot_ace_rule_offload_del(ocelot, ptp_rule);
 	if (ocelot->ptp_clock)
 		ptp_clock_unregister(ocelot->ptp_clock);
 

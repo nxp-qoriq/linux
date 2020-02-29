@@ -601,4 +601,11 @@ int ocelot_dscp_set(struct ocelot *ocelot, int port,
 		    bool enable, const u8 dscp_ix,
 		    struct tsn_qos_switch_dscp_conf *c);
 void ocelot_preempt_irq_clean(struct ocelot *ocelot);
+int ocelot_cls_flower_replace(struct ocelot *ocelot, int port,
+			      struct flow_cls_offload *f, bool ingress);
+int ocelot_cls_flower_destroy(struct ocelot *ocelot, int port,
+			      struct flow_cls_offload *f, bool ingress);
+int ocelot_cls_flower_stats(struct ocelot *ocelot, int port,
+			    struct flow_cls_offload *f, bool ingress);
+
 #endif

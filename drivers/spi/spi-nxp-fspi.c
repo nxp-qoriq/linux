@@ -3,7 +3,8 @@
 /*
  * NXP FlexSPI(FSPI) controller driver.
  *
- * Copyright 2018 NXP.
+ * Copyright 2018, 2020 NXP
+ * Copyright 2020 Puresoftware Ltd
  *
  * FlexSPI is a flexsible SPI host controller which supports two SPI
  * channels and up to 4 external devices. Each channel supports
@@ -48,6 +49,7 @@
 #include <linux/pm_qos.h>
 #include <linux/sizes.h>
 #include <linux/iopoll.h>
+#include <linux/acpi.h>
 
 #include <linux/spi/spi.h>
 #include <linux/spi/spi-mem.h>
@@ -313,6 +315,10 @@
 
 #define POLL_TOUT_US		5000
 
+/* Memory Resource index*/
+#define FSPI_BASE		0
+#define FSPI_MMAP		1
+
 struct nxp_fspi_devtype_data {
 	unsigned int rxfifo;
 	unsigned int txfifo;
@@ -345,6 +351,7 @@ struct nxp_fspi {
 	int selected;
 	void (*write)(u32 val, void __iomem *addr);
 	u32 (*read)(void __iomem *addr);
+	bool is_acpi_node;
 };
 
 static void fspi_writel_be(u32 val, void __iomem *addr)
@@ -555,14 +562,16 @@ static int nxp_fspi_clk_prep_enable(struct nxp_fspi *f)
 {
 	int ret;
 
-	ret = clk_prepare_enable(f->clk_en);
-	if (ret)
-		return ret;
+	if (!f->is_acpi_node) {
+		ret = clk_prepare_enable(f->clk_en);
+		if (ret)
+			return ret;
 
-	ret = clk_prepare_enable(f->clk);
-	if (ret) {
-		clk_disable_unprepare(f->clk_en);
-		return ret;
+		ret = clk_prepare_enable(f->clk);
+		if (ret) {
+			clk_disable_unprepare(f->clk_en);
+			return ret;
+		}
 	}
 
 	return 0;
@@ -570,8 +579,10 @@ static int nxp_fspi_clk_prep_enable(struct nxp_fspi *f)
 
 static void nxp_fspi_clk_disable_unprep(struct nxp_fspi *f)
 {
-	clk_disable_unprepare(f->clk);
-	clk_disable_unprepare(f->clk_en);
+	if (!f->is_acpi_node) {
+		clk_disable_unprepare(f->clk);
+		clk_disable_unprepare(f->clk_en);
+	}
 }
 
 /*
@@ -1020,7 +1031,16 @@ static int nxp_fspi_probe(struct platform_device *pdev)
 
 	f = spi_controller_get_devdata(ctlr);
 	f->dev = dev;
-	f->devtype_data = of_device_get_match_data(dev);
+	if (has_acpi_companion(&pdev->dev))
+		f->is_acpi_node = true;
+	else
+		f->is_acpi_node = false;
+
+	if (f->is_acpi_node) {
+		f->devtype_data = device_get_match_data(dev);
+	} else {
+		f->devtype_data = of_device_get_match_data(dev);
+	}
 	if (!f->devtype_data) {
 		ret = -ENODEV;
 		goto err_put_ctrl;
@@ -1029,7 +1049,12 @@ static int nxp_fspi_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, f);
 
 	/* find the resources - configuration register address space */
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "fspi_base");
+	if (f->is_acpi_node) {
+		res = platform_get_resource(pdev, IORESOURCE_MEM, FSPI_BASE);
+	} else {
+		res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
+								"fspi_base");
+	}
 	f->iobase = devm_ioremap_resource(dev, res);
 	if (IS_ERR(f->iobase)) {
 		ret = PTR_ERR(f->iobase);
@@ -1037,7 +1062,11 @@ static int nxp_fspi_probe(struct platform_device *pdev)
 	}
 
 	/* find the resources - controller memory mapped space */
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "fspi_mmap");
+	if (f->is_acpi_node)
+		res = platform_get_resource(pdev, IORESOURCE_MEM, FSPI_MMAP);
+	else
+		res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
+								"fspi_mmap");
 	f->ahb_addr = devm_ioremap_resource(dev, res);
 	if (IS_ERR(f->ahb_addr)) {
 		ret = PTR_ERR(f->ahb_addr);
@@ -1049,18 +1078,19 @@ static int nxp_fspi_probe(struct platform_device *pdev)
 	f->memmap_phy_size = resource_size(res);
 
 	/* find the clocks */
-	f->clk_en = devm_clk_get(dev, "fspi_en");
-	if (IS_ERR(f->clk_en)) {
-		ret = PTR_ERR(f->clk_en);
-		goto err_put_ctrl;
-	}
+	if (!f->is_acpi_node) {
+		f->clk_en = devm_clk_get(dev, "fspi_en");
+		if (IS_ERR(f->clk_en)) {
+			ret = PTR_ERR(f->clk_en);
+			goto err_put_ctrl;
+		}
 
-	f->clk = devm_clk_get(dev, "fspi");
-	if (IS_ERR(f->clk)) {
-		ret = PTR_ERR(f->clk);
-		goto err_put_ctrl;
+		f->clk = devm_clk_get(dev, "fspi");
+		if (IS_ERR(f->clk)) {
+			ret = PTR_ERR(f->clk);
+			goto err_put_ctrl;
+		}
 	}
-
 	/*
 	 * R/W functions for big- or little-endian registers:
 	 * The FSPI controller's endianness is independent of
@@ -1081,7 +1111,6 @@ static int nxp_fspi_probe(struct platform_device *pdev)
 		dev_err(dev, "can not enable the clock\n");
 		goto err_put_ctrl;
 	}
-
 	/* find the irq */
 	ret = platform_get_irq(pdev, 0);
 	if (ret < 0) {
@@ -1101,6 +1130,7 @@ static int nxp_fspi_probe(struct platform_device *pdev)
 	ctlr->bus_num = -1;
 	ctlr->num_chipselect = NXP_FSPI_MAX_CHIPSELECT;
 	ctlr->mem_ops = &nxp_fspi_mem_ops;
+	ACPI_COMPANION_SET(&ctlr->dev, ACPI_COMPANION(&pdev->dev));
 
 	nxp_fspi_default_setup(f);
 
@@ -1159,6 +1189,12 @@ static const struct of_device_id nxp_fspi_dt_ids[] = {
 };
 MODULE_DEVICE_TABLE(of, nxp_fspi_dt_ids);
 
+static const struct acpi_device_id nxp_fspi_acpi_ids[] = {
+	{ "NXP0009", .driver_data = (kernel_ulong_t)&lx2160a_data, },
+	{}
+};
+MODULE_DEVICE_TABLE(acpi, nxp_fspi_acpi_ids);
+
 static const struct dev_pm_ops nxp_fspi_pm_ops = {
 	.suspend	= nxp_fspi_suspend,
 	.resume		= nxp_fspi_resume,
@@ -1168,6 +1204,7 @@ static struct platform_driver nxp_fspi_driver = {
 	.driver = {
 		.name	= "nxp-fspi",
 		.of_match_table = nxp_fspi_dt_ids,
+		.acpi_match_table = ACPI_PTR(nxp_fspi_acpi_ids),
 		.pm =   &nxp_fspi_pm_ops,
 	},
 	.probe          = nxp_fspi_probe,

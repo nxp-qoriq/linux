@@ -75,6 +75,7 @@ struct enetc_bdr {
 	struct enetc_ring_stats stats;
 
 	dma_addr_t bd_dma_base;
+	bool ext_en; /* enable h/w descriptor extensions */
 } ____cacheline_aligned_in_smp;
 
 static inline void enetc_bdr_idx_inc(struct enetc_bdr *bdr, int *i)
@@ -109,7 +110,13 @@ struct enetc_cbdr {
 
 static inline union enetc_rx_bd *enetc_rxbd(struct enetc_bdr *rx_ring, int i)
 {
-	return &(((union enetc_rx_bd *)rx_ring->bd_base)[i]);
+	int hw_idx = i;
+
+#ifdef CONFIG_FSL_ENETC_PTP_CLOCK
+	if (rx_ring->ext_en)
+		hw_idx = 2 * i;
+#endif
+	return &(((union enetc_rx_bd *)rx_ring->bd_base)[hw_idx]);
 }
 
 static inline union enetc_rx_bd *enetc_rxbd_next(struct enetc_bdr *rx_ring,
@@ -117,10 +124,19 @@ static inline union enetc_rx_bd *enetc_rxbd_next(struct enetc_bdr *rx_ring,
 						 int i)
 {
 	rxbd++;
+#ifdef CONFIG_FSL_ENETC_PTP_CLOCK
+	if (rx_ring->ext_en)
+		rxbd++;
+#endif
 	if (unlikely(++i == rx_ring->bd_count))
 		rxbd = rx_ring->bd_base;
 
 	return rxbd;
+}
+
+static inline union enetc_rx_bd *enetc_rxbd_ext(union enetc_rx_bd *rxbd)
+{
+	return ++rxbd;
 }
 
 struct enetc_msg_swbd {

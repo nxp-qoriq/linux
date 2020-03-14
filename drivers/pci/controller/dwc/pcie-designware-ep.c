@@ -449,6 +449,20 @@ int dw_pcie_ep_raise_msi_irq(struct dw_pcie_ep *ep, u8 func_no,
 	return 0;
 }
 
+int dw_pcie_ep_raise_msix_irq_doorbell(struct dw_pcie_ep *ep, u8 func_no,
+				       u16 interrupt_num)
+{
+	struct dw_pcie *pci = to_dw_pcie_from_ep(ep);
+	u32 msg_data;
+
+	msg_data = (func_no << PCIE_MSIX_DOORBELL_PF_SHIFT) |
+		   (interrupt_num - 1);
+
+	dw_pcie_writel_dbi(pci, PCIE_MSIX_DOORBELL, msg_data);
+
+	return 0;
+}
+
 int dw_pcie_ep_raise_msix_irq(struct dw_pcie_ep *ep, u8 func_no,
 			      u16 interrupt_num)
 {

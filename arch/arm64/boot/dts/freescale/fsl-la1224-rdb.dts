@@ -435,16 +435,3 @@
 	phy-handle = <&rgmii_phy1>;
 	phy-connection-type = "rgmii-id";
 };
-
-&modem_wdog {
-	status = "okay";
-};
-
-&modem_tti1 {
-	status = "okay";
-};
-
-&modem_tti2 {
-	status = "okay";
-};
-

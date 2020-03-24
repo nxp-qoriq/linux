@@ -1,4 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright 2020 NXP
+ * Copyright 2020 Puresoftware Ltd
+ *
+ */
 #if defined(CONFIG_SERIAL_8250_CONSOLE) && defined(CONFIG_MAGIC_SYSRQ)
 #define SUPPORT_SYSRQ
 #endif
@@ -6,7 +11,29 @@
 #include <linux/serial_reg.h>
 #include <linux/serial_8250.h>
 
+#include <linux/delay.h>
+#include <linux/device.h>
+#include <linux/io.h>
+#include <linux/module.h>
+#include <linux/serial_8250.h>
+#include <linux/serial_reg.h>
+#include <linux/of.h>
+#include <linux/of_irq.h>
+#include <linux/of_platform.h>
+#include <linux/platform_device.h>
+#include <linux/slab.h>
+#include <linux/acpi.h>
+#include <linux/clk.h>
+#include <linux/reset.h>
+#include <linux/pm_runtime.h>
+
+#include <asm/byteorder.h>
+
 #include "8250.h"
+
+struct fsl8250_data {
+	int			line;
+};
 
 /*
  * Freescale 16550 UART "driver", Copyright (C) 2011 Paul Gortmaker.
@@ -92,3 +119,94 @@ int fsl8250_handle_irq(struct uart_port *port)
 	return 1;
 }
 EXPORT_SYMBOL_GPL(fsl8250_handle_irq);
+
+int fsl8250_acpi_probe(struct platform_device *pdev)
+{
+	int ret;
+	struct fsl8250_data *data;
+	struct uart_8250_port port8250;
+	struct device *dev = &pdev->dev;
+	int irq = platform_get_irq(pdev, 0);
+	struct resource *regs = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+
+	if (!regs) {
+		dev_err(dev, "no registers defined\n");
+		return -EINVAL;
+	}
+
+	if (irq < 0) {
+		if (irq != -EPROBE_DEFER)
+			dev_err(dev, "cannot get irq\n");
+		return irq;
+	}
+	memset(&port8250, 0, sizeof(port8250));
+
+	ret = device_property_read_u32(dev, "clock-frequency",
+					&port8250.port.uartclk);
+	if (ret)
+		goto err;
+
+	spin_lock_init(&port8250.port.lock);
+
+	port8250.port.mapbase = regs->start;
+	port8250.port.irq = irq;
+	port8250.port.handle_irq = fsl8250_handle_irq;
+	port8250.port.type = PORT_16550A;
+	port8250.port.flags = UPF_SHARE_IRQ | UPF_BOOT_AUTOCONF | UPF_FIXED_PORT
+				| UPF_FIXED_TYPE | UPF_IOREMAP;
+	port8250.port.dev = dev;
+	port8250.port.mapsize = resource_size(regs);
+	port8250.port.iotype = UPIO_MEM;
+	port8250.port.irqflags = IRQF_SHARED;
+
+	port8250.port.membase = devm_ioremap(dev,  port8250.port.mapbase,
+						port8250.port.mapsize);
+	if (!port8250.port.membase)
+		return -ENOMEM;
+
+	data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
+	if (!data)
+		return -ENOMEM;
+
+	data->line = serial8250_register_8250_port(&port8250);
+	if (data->line < 0) {
+		ret = data->line;
+		goto err;
+	}
+
+	platform_set_drvdata(pdev, data);
+	return 0;
+err:
+	return ret;
+}
+
+static int fsl8250_acpi_remove(struct platform_device *pdev)
+{
+	struct fsl8250_data *data = platform_get_drvdata(pdev);
+
+	serial8250_unregister_port(data->line);
+
+	return 0;
+}
+
+static const struct acpi_device_id fsl8250_acpi_match[] = {
+	{ "NXP0018", 0 },
+	{ },
+};
+MODULE_DEVICE_TABLE(acpi, fsl8250_acpi_match);
+
+static struct platform_driver fsl8250_platform_driver = {
+	.driver = {
+		.name		= "fsl-16550-uart",
+		.acpi_match_table = ACPI_PTR(fsl8250_acpi_match),
+	},
+	.probe			= fsl8250_acpi_probe,
+	.remove			= fsl8250_acpi_remove,
+};
+
+module_platform_driver(fsl8250_platform_driver);
+
+MODULE_AUTHOR("Manish Jaggi");
+MODULE_LICENSE("GPL");
+MODULE_DESCRIPTION("FSL 8250 serial port driver");
+MODULE_ALIAS("platform:fsl-ns16550-uart");

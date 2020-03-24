@@ -658,11 +658,21 @@ void cnstr_shdsc_tls_encap(u32 * const desc, struct alginfo *cdata,
 	 * Compute the index (in bytes) for the LOAD with destination of
 	 * Class 1 Data Size Register and for the LOAD that generates padding
 	 */
-	if (adata->key_inline) {
+	if (adata->key_inline && cdata->key_inline) {
 		idx_ld_datasz = DESC_TLS10_ENC_LEN + adata->keylen_pad +
 				cdata->keylen - 4 * CAAM_CMD_SZ;
 		idx_ld_pad = DESC_TLS10_ENC_LEN + adata->keylen_pad +
 			     cdata->keylen - 2 * CAAM_CMD_SZ;
+	} else if (adata->key_inline && !cdata->key_inline) {
+		idx_ld_datasz = DESC_TLS10_ENC_LEN + adata->keylen_pad +
+				CAAM_PTR_SZ - 4 * CAAM_CMD_SZ;
+		idx_ld_pad = DESC_TLS10_ENC_LEN + adata->keylen_pad +
+			     CAAM_PTR_SZ - 2 * CAAM_CMD_SZ;
+	} else if (adata->key_inline && !cdata->key_inline) {
+		idx_ld_datasz = DESC_TLS10_ENC_LEN + cdata->keylen +
+				CAAM_PTR_SZ - 4 * CAAM_CMD_SZ;
+		idx_ld_pad = DESC_TLS10_ENC_LEN + cdata->keylen +
+			     CAAM_PTR_SZ - 2 * CAAM_CMD_SZ;
 	} else {
 		idx_ld_datasz = DESC_TLS10_ENC_LEN + 2 * CAAM_PTR_SZ -
 				4 * CAAM_CMD_SZ;

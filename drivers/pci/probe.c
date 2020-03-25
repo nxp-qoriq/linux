@@ -1767,13 +1767,6 @@ static void pci_configure_mps(struct pci_dev *dev)
 		return;
 	}
 
-	/*
-	 * Fancier MPS configuration is done later by
-	 * pcie_bus_configure_settings()
-	 */
-	if (pcie_bus_config != PCIE_BUS_DEFAULT)
-		return;
-
 	mpss = 128 << dev->pcie_mpss;
 	if (mpss < p_mps && pci_pcie_type(bridge) == PCI_EXP_TYPE_ROOT_PORT) {
 		pcie_set_mps(bridge, mpss);

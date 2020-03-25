@@ -63,11 +63,13 @@ static struct mcfg_fixup mcfg_quirks[] = {
 	QCOM_ECAM32(5),
 	QCOM_ECAM32(6),
 	QCOM_ECAM32(7),
-#define NXP_ECAM32(seg) \
-	{ "NXP   ", "LX2160  ", 0, seg, MCFG_BUS_ANY, &ls_g4_acpi_pcie_ops }
+#define NXP_ECAM32(table_id, rev, seg, ops) \
+	{ "NXP   ", table_id, rev, seg, MCFG_BUS_ANY, ops }
 
-	NXP_ECAM32(0),
-	NXP_ECAM32(1),
+	NXP_ECAM32("LX2160  ", 0, 0, &ls_g4_acpi_pcie_ops),
+	NXP_ECAM32("LX2160  ", 0, 1, &ls_g4_acpi_pcie_ops),
+	NXP_ECAM32("LX2160  ", 1, 0, &ls_acpi_pcie_ops),
+	NXP_ECAM32("LX2160  ", 1, 1, &ls_acpi_pcie_ops),
 
 #define HISI_QUAD_DOM(table_id, seg, ops) \
 	{ "HISI  ", table_id, 0, (seg) + 0, MCFG_BUS_ANY, ops }, \

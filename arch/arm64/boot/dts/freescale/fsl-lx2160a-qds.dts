@@ -15,6 +15,7 @@
 	aliases {
 		crypto = &crypto;
 		serial0 = &uart0;
+		serial1 = &uart1;
 	};
 
 	chosen {

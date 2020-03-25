@@ -1,21 +1,23 @@
 // SPDX-License-Identifier: (GPL-2.0 OR MIT)
 //
-// Device Tree file for LX2160ARDB
+// Device Tree file for LA1224RDB
 //
-// Copyright 2018-2019 NXP
+// Copyright 2020 NXP
 
 /dts-v1/;
 
 #include "fsl-lx2160a.dtsi"
 
 / {
-	model = "NXP Layerscape LX2160ARDB";
-	compatible = "fsl,lx2160a-rdb", "fsl,lx2160a";
+	model = "NXP Layerscape LA1224RDB";
+	compatible = "nxp,la1224-rdb", "fsl,lx2160a";
 
 	aliases {
 		crypto = &crypto;
 		serial0 = &uart0;
 		serial1 = &uart1;
+		serial2 = &uart2;
+		serial3 = &uart3;
 	};
 
 	chosen {
@@ -29,22 +31,6 @@
 		regulator-max-microvolt = <3300000>;
 		regulator-boot-on;
 		regulator-always-on;
-	};
-};
-
-&can0 {
-	status = "okay";
-
-	can-transceiver {
-		max-bitrate = <5000000>;
-	};
-};
-
-&can1 {
-	status = "okay";
-
-	can-transceiver {
-		max-bitrate = <5000000>;
 	};
 };
 
@@ -106,24 +92,23 @@
 				reg = <0x4c>;
 				vcc-supply = <&sb_3v3>;
 			};
-
-			temperature-sensor@4d {
-				compatible = "nxp,sa56004";
-				reg = <0x4d>;
-				vcc-supply = <&sb_3v3>;
-			};
 		};
 	};
 };
 
-&i2c4 {
+&i2c3 {
 	status = "okay";
 
 	rtc@51 {
 		compatible = "nxp,pcf2129";
 		reg = <0x51>;
-		// IRQ10_B
 		interrupts = <0 150 0x4>;
+	};
+
+	temperature-sensor@4c {
+		compatible = "nxp,sa56004";
+		reg = <0x4c>;
+		vcc-supply = <&sb_3v3>;
 	};
 };
 
@@ -158,6 +143,14 @@
 };
 
 &uart1 {
+	status = "okay";
+};
+
+&uart2 {
+	status = "okay";
+};
+
+&uart3 {
 	status = "okay";
 };
 
@@ -229,20 +222,4 @@
 &dpmac18 {
 	phy-handle = <&rgmii_phy2>;
 	phy-connection-type = "rgmii-id";
-};
-
-&sata0 {
-	status = "okay";
-};
-
-&sata1 {
-	status = "okay";
-};
-
-&sata2 {
-	status = "okay";
-};
-
-&sata3 {
-	status = "okay";
 };

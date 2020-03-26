@@ -682,7 +682,7 @@ static netdev_tx_t flexcan_start_xmit(struct sk_buff *skb, struct net_device *de
 			ctrl |= FLEXCAN_MB_CNT_RTR;
 	}
 
-	for (i = 0; i < can_len2dlc(cfd->len); i += sizeof(u32)) {
+	for (i = 0; i < cfd->len; i += sizeof(u32)) {
 		data = be32_to_cpup((__be32 *)&cfd->data[i]);
 		priv->write(data, &priv->tx_mb->data[i / sizeof(u32)]);
 	}

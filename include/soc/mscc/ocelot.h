@@ -555,6 +555,11 @@ struct ocelot {
 	spinlock_t			ptp_clock_lock;
 };
 
+struct ocelot_policer {
+	u32 rate; /* kilobit per second */
+	u32 burst; /* bytes */
+};
+
 #define ocelot_read_ix(ocelot, reg, gi, ri) __ocelot_read_ix(ocelot, reg, reg##_GSZ * (gi) + reg##_RSZ * (ri))
 #define ocelot_read_gix(ocelot, reg, gi) __ocelot_read_ix(ocelot, reg, reg##_GSZ * (gi))
 #define ocelot_read_rix(ocelot, reg, ri) __ocelot_read_ix(ocelot, reg, reg##_RSZ * (ri))
@@ -672,6 +677,9 @@ int ocelot_dscp_set(struct ocelot *ocelot, int port,
 void ocelot_preempt_irq_clean(struct ocelot *ocelot);
 void ocelot_port_set_maxlen(struct ocelot *ocelot, int port, size_t sdu);
 int ocelot_get_max_mtu(struct ocelot *ocelot, int port);
+int ocelot_port_policer_add(struct ocelot *ocelot, int port,
+			    struct ocelot_policer *pol);
+int ocelot_port_policer_del(struct ocelot *ocelot, int port);
 int ocelot_cls_flower_replace(struct ocelot *ocelot, int port,
 			      struct flow_cls_offload *f, bool ingress);
 int ocelot_cls_flower_destroy(struct ocelot *ocelot, int port,

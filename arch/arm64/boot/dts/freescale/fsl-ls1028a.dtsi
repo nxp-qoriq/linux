@@ -907,7 +907,7 @@
 					mscc_felix_port4: port@4 {
 						reg = <4>;
 						ethernet = <&enetc_port2>;
-						phy-mode = "gmii";
+						phy-mode = "internal";
 
 						fixed-link {
 							speed = <2500>;
@@ -917,7 +917,7 @@
 
 					mscc_felix_port5: port@5 {
 						reg = <5>;
-						phy-mode = "gmii";
+						phy-mode = "internal";
 						status = "disabled";
 
 						fixed-link {

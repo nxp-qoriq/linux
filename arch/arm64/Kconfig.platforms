@@ -149,6 +149,12 @@ config LS1028A_BAREMETAL
 	help
 	  This enables support for NXP LS1028A baremetal.
 
+config LX2160A_BAREMETAL
+        bool "NXP LX2160A baremetal support"
+        select BAREMETAL
+        help
+          This enables support for NXP LX2160A baremetal.
+
 config ARCH_LG1K
 	bool "LG Electronics LG1K SoC Family"
 	help

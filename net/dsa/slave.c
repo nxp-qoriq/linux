@@ -1577,7 +1577,8 @@ void dsa_port_phylink_mac_change(struct dsa_switch *ds, int port, bool up)
 {
 	const struct dsa_port *dp = dsa_to_port(ds, port);
 
-	phylink_mac_change(dp->pl, up);
+	if (dp->pl)
+		phylink_mac_change(dp->pl, up);
 }
 EXPORT_SYMBOL_GPL(dsa_port_phylink_mac_change);
 

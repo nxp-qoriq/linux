@@ -7,6 +7,7 @@
  * Copyright (C) 2018 Bootlin
  * Copyright (C) 2018 exceet electronics GmbH
  * Copyright (C) 2018 Kontron Electronics GmbH
+ * Copyright (C) 2020 Puresoftware Ltd
  *
  * Transition to SPI MEM interface:
  * Authors:
@@ -38,6 +39,7 @@
 #include <linux/platform_device.h>
 #include <linux/pm_qos.h>
 #include <linux/sizes.h>
+#include <linux/acpi.h>
 
 #include <linux/spi/spi.h>
 #include <linux/spi/spi-mem.h>
@@ -197,6 +199,10 @@
  */
 #define QUADSPI_QUIRK_USE_TDH_SETTING	BIT(5)
 
+/* Memory Resource index*/
+#define QUADSPI_BASE           0
+#define QUADSPI_MMAP           1
+
 struct fsl_qspi_devtype_data {
 	unsigned int rxfifo;
 	unsigned int txfifo;
@@ -273,6 +279,7 @@ struct fsl_qspi {
 	struct mutex lock;
 	struct pm_qos_request pm_qos_req;
 	int selected;
+	bool is_acpi_node;
 };
 
 static inline int needs_swap_endian(struct fsl_qspi *q)
@@ -473,19 +480,20 @@ static int fsl_qspi_clk_prep_enable(struct fsl_qspi *q)
 {
 	int ret;
 
-	ret = clk_prepare_enable(q->clk_en);
-	if (ret)
-		return ret;
+	if (!q->is_acpi_node) {
+		ret = clk_prepare_enable(q->clk_en);
+		if (ret)
+			return ret;
 
-	ret = clk_prepare_enable(q->clk);
-	if (ret) {
-		clk_disable_unprepare(q->clk_en);
-		return ret;
+		ret = clk_prepare_enable(q->clk);
+		if (ret) {
+			clk_disable_unprepare(q->clk_en);
+			return ret;
+		}
+
 	}
-
 	if (needs_wakeup_wait_mode(q))
 		pm_qos_add_request(&q->pm_qos_req, PM_QOS_CPU_DMA_LATENCY, 0);
-
 	return 0;
 }
 
@@ -493,9 +501,11 @@ static void fsl_qspi_clk_disable_unprep(struct fsl_qspi *q)
 {
 	if (needs_wakeup_wait_mode(q))
 		pm_qos_remove_request(&q->pm_qos_req);
+	if (!q->is_acpi_node) {
 
-	clk_disable_unprepare(q->clk);
-	clk_disable_unprepare(q->clk_en);
+		clk_disable_unprepare(q->clk);
+		clk_disable_unprepare(q->clk_en);
+	}
 }
 
 /*
@@ -858,7 +868,16 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 
 	q = spi_controller_get_devdata(ctlr);
 	q->dev = dev;
-	q->devtype_data = of_device_get_match_data(dev);
+	if (has_acpi_companion(&pdev->dev))
+		q->is_acpi_node = true;
+	else
+		q->is_acpi_node = false;
+
+	if (q->is_acpi_node) {
+		q->devtype_data = device_get_match_data(dev);
+	} else {
+		q->devtype_data = of_device_get_match_data(dev);
+	}
 	if (!q->devtype_data) {
 		ret = -ENODEV;
 		goto err_put_ctrl;
@@ -867,15 +886,24 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, q);
 
 	/* find the resources */
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "QuadSPI");
+	if (q->is_acpi_node) {
+		res = platform_get_resource(pdev, IORESOURCE_MEM, QUADSPI_BASE);
+	} else {
+		res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
+								"QuadSPI");
+	}
 	q->iobase = devm_ioremap_resource(dev, res);
 	if (IS_ERR(q->iobase)) {
 		ret = PTR_ERR(q->iobase);
 		goto err_put_ctrl;
 	}
 
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
-					"QuadSPI-memory");
+	if (q->is_acpi_node) {
+		res = platform_get_resource(pdev, IORESOURCE_MEM, QUADSPI_MMAP);
+	} else {
+		res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
+						"QuadSPI-memory");
+	}
 	q->ahb_addr = devm_ioremap_resource(dev, res);
 	if (IS_ERR(q->ahb_addr)) {
 		ret = PTR_ERR(q->ahb_addr);
@@ -885,18 +913,19 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 	q->memmap_phy = res->start;
 
 	/* find the clocks */
-	q->clk_en = devm_clk_get(dev, "qspi_en");
-	if (IS_ERR(q->clk_en)) {
-		ret = PTR_ERR(q->clk_en);
-		goto err_put_ctrl;
-	}
+	if (!q->is_acpi_node) {
+		q->clk_en = devm_clk_get(dev, "qspi_en");
+		if (IS_ERR(q->clk_en)) {
+			ret = PTR_ERR(q->clk_en);
+			goto err_put_ctrl;
+		}
 
-	q->clk = devm_clk_get(dev, "qspi");
-	if (IS_ERR(q->clk)) {
-		ret = PTR_ERR(q->clk);
-		goto err_put_ctrl;
+		q->clk = devm_clk_get(dev, "qspi");
+		if (IS_ERR(q->clk)) {
+			ret = PTR_ERR(q->clk);
+			goto err_put_ctrl;
+		}
 	}
-
 	ret = fsl_qspi_clk_prep_enable(q);
 	if (ret) {
 		dev_err(dev, "can not enable the clock\n");
@@ -920,6 +949,7 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 	ctlr->bus_num = -1;
 	ctlr->num_chipselect = 4;
 	ctlr->mem_ops = &fsl_qspi_mem_ops;
+	ACPI_COMPANION_SET(&ctlr->dev, ACPI_COMPANION(&pdev->dev));
 
 	fsl_qspi_default_setup(q);
 
@@ -984,6 +1014,12 @@ static const struct of_device_id fsl_qspi_dt_ids[] = {
 };
 MODULE_DEVICE_TABLE(of, fsl_qspi_dt_ids);
 
+static const struct acpi_device_id fsl_qspi_acpi_ids[] = {
+	{ "NXP0020", .driver_data = (kernel_ulong_t)&ls1021a_data, },
+	{}
+};
+MODULE_DEVICE_TABLE(acpi, fsl_qspi_acpi_ids);
+
 static const struct dev_pm_ops fsl_qspi_pm_ops = {
 	.suspend	= fsl_qspi_suspend,
 	.resume		= fsl_qspi_resume,
@@ -993,6 +1029,7 @@ static struct platform_driver fsl_qspi_driver = {
 	.driver = {
 		.name	= "fsl-quadspi",
 		.of_match_table = fsl_qspi_dt_ids,
+		.acpi_match_table = ACPI_PTR(fsl_qspi_acpi_ids),
 		.pm =   &fsl_qspi_pm_ops,
 	},
 	.probe          = fsl_qspi_probe,

@@ -32,6 +32,28 @@
 		regulator-boot-on;
 		regulator-always-on;
 	};
+
+	modem_wdog {
+		compatible = "modem_wdog";
+		reg = <0x0 0x0 0x0 0x0>;
+		interrupt-cells = <3>;
+		interrupts = <GIC_SPI 9 IRQ_TYPE_EDGE_RISING>,
+			     <GIC_SPI 5 IRQ_TYPE_EDGE_RISING>;
+		modem-reset-gpio = <&pcal6416_1 7 GPIO_ACTIVE_LOW>,
+				   <&pcal6416_1 6 GPIO_ACTIVE_LOW>;
+		status = "okay";
+	};
+
+	modem_tti {
+		compatible = "modem_tti1";
+		reg = <0x0 0x0 0x0 0x0>;
+		interrupt-cells = <3>;
+		interrupts = <GIC_SPI 1 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 8 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 10 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 11 IRQ_TYPE_LEVEL_HIGH>;
+		status = "okay";
+	};
 };
 
 &crypto {
@@ -63,7 +85,7 @@
 
 &i2c0 {
 	status = "okay";
-	pcal6416@20 {
+	pcal6416_1: pcal6416@20 {
 		compatible = "nxp,pcal6416";
 		reg = <0x20>;
 		gpio-controller;
@@ -108,20 +130,6 @@
 			gpios = <5 GPIO_ACTIVE_LOW>;
 			output-low;
 			line-name = "i2c_lea_6t_rst_b";
-		};
-
-		P06 {
-			gpio-hog;
-			gpios = <6 GPIO_ACTIVE_LOW>;
-			output-low;
-			line-name = "i2c_modem_rst_b";
-		};
-
-		P07 {
-			gpio-hog;
-			gpios = <7 GPIO_ACTIVE_LOW>;
-			output-low;
-			line-name = "i2c_la1224_rst_b";
 		};
 
 		P10 {
@@ -180,7 +188,7 @@
 			line-name = "board_revision[1]";
 		};
 	};
-	pcal6416@21 {
+	pcal6416_2: pcal6416@21 {
 		compatible = "nxp,pcal6416";
 		reg = <0x21>;
 		gpio-controller;

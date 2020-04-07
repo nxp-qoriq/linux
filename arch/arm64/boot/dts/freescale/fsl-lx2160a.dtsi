@@ -1364,34 +1364,6 @@
 			num-ob-windows = <256>;
 			status = "disabled";
 		};
-
-		modem_wdog: modem_wdog@0 {
-			compatible = "modem_wdog";
-			reg = <0x0 0x0 0x0 0x0>;
-			interrupt-cells = <3>;
-			interrupts = <GIC_SPI 9 IRQ_TYPE_LEVEL_HIGH>,
-				<GIC_SPI 5 IRQ_TYPE_LEVEL_HIGH>;
-			status = "disabled";
-		};
-
-		modem_tti1: modem_tti1@0 {
-			compatible = "modem_tti1";
-			reg = <0x0 0x0 0x0 0x0>;
-			interrupt-cells = <3>;
-			interrupts = <GIC_SPI 1 IRQ_TYPE_LEVEL_HIGH>,
-				<GIC_SPI 8 IRQ_TYPE_LEVEL_HIGH>;
-			status = "disabled";
-		};
-
-		modem_tti2: modem_tti2@0 {
-			compatible = "modem_tti2";
-			reg = <0x0 0x0 0x0 0x0>;
-			interrupt-cells = <3>;
-			interrupts = <GIC_SPI 10 IRQ_TYPE_LEVEL_HIGH>,
-				<GIC_SPI 11 IRQ_TYPE_LEVEL_HIGH>;
-			status = "disabled";
-		};
-
 	};
 
 	firmware {

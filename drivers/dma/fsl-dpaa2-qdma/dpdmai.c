@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
-// Copyright 2019 NXP
+// Copyright 2019-2020 NXP
 
+#include <linux/module.h>
 #include <linux/types.h>
 #include <linux/io.h>
 #include <linux/fsl/mc.h>
@@ -36,10 +37,8 @@ struct dpdmai_rsp_get_tx_queue {
 	((_cmd).params[_param] |= mc_enc((_offset), (_width), _arg))
 
 /* cmd, param, offset, width, type, arg_name */
-#define DPDMAI_CMD_CREATE(_cmd, _cfg) \
+#define DPDMAI_CMD_CREATE(cmd, cfg) \
 do { \
-	typeof(_cmd) (cmd) = (_cmd); \
-	typeof(_cfg) (cfg) = (_cfg); \
 	MC_CMD_OP(cmd, 0, 8,  8,  u8,  (cfg)->priorities[0]);\
 	MC_CMD_OP(cmd, 0, 16, 8,  u8,  (cfg)->priorities[1]);\
 } while (0)
@@ -90,6 +89,7 @@ int dpdmai_open(struct fsl_mc_io *mc_io, u32 cmd_flags,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(dpdmai_open);
 
 /**
  * dpdmai_close() - Close the control session of the object
@@ -113,6 +113,7 @@ int dpdmai_close(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token)
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
+EXPORT_SYMBOL_GPL(dpdmai_close);
 
 /**
  * dpdmai_create() - Create the DPDMAI object
@@ -159,6 +160,27 @@ int dpdmai_create(struct fsl_mc_io *mc_io, u32 cmd_flags,
 }
 
 /**
+ * dpdmai_destroy() - Destroy the DPDMAI object and release all its resources.
+ * @mc_io:      Pointer to MC portal's I/O object
+ * @cmd_flags:  Command flags; one or more of 'MC_CMD_FLAG_'
+ * @token:      Token of DPDMAI object
+ *
+ * Return:      '0' on Success; error code otherwise.
+ */
+int dpdmai_destroy(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token)
+{
+	struct fsl_mc_command cmd = { 0 };
+
+	/* prepare command */
+	cmd.header = mc_encode_cmd_header(DPDMAI_CMDID_DESTROY,
+					  cmd_flags, token);
+
+	/* send command to mc*/
+	return mc_send_command(mc_io, &cmd);
+}
+EXPORT_SYMBOL_GPL(dpdmai_destroy);
+
+/**
  * dpdmai_enable() - Enable the DPDMAI, allow sending and receiving frames.
  * @mc_io:	Pointer to MC portal's I/O object
  * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
@@ -177,6 +199,7 @@ int dpdmai_enable(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token)
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
+EXPORT_SYMBOL_GPL(dpdmai_enable);
 
 /**
  * dpdmai_disable() - Disable the DPDMAI, stop sending and receiving frames.
@@ -197,6 +220,7 @@ int dpdmai_disable(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token)
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
+EXPORT_SYMBOL_GPL(dpdmai_disable);
 
 /**
  * dpdmai_reset() - Reset the DPDMAI, returns the object to initial state.
@@ -217,6 +241,7 @@ int dpdmai_reset(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token)
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
+EXPORT_SYMBOL_GPL(dpdmai_reset);
 
 /**
  * dpdmai_get_attributes() - Retrieve DPDMAI attributes.
@@ -252,6 +277,7 @@ int dpdmai_get_attributes(struct fsl_mc_io *mc_io, u32 cmd_flags,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(dpdmai_get_attributes);
 
 /**
  * dpdmai_set_rx_queue() - Set Rx queue configuration
@@ -285,6 +311,7 @@ int dpdmai_set_rx_queue(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
 	/* send command to mc*/
 	return mc_send_command(mc_io, &cmd);
 }
+EXPORT_SYMBOL_GPL(dpdmai_set_rx_queue);
 
 /**
  * dpdmai_get_rx_queue() - Retrieve Rx queue attributes.
@@ -325,6 +352,7 @@ int dpdmai_get_rx_queue(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(dpdmai_get_rx_queue);
 
 /**
  * dpdmai_get_tx_queue() - Retrieve Tx queue attributes.
@@ -364,3 +392,6 @@ int dpdmai_get_tx_queue(struct fsl_mc_io *mc_io, u32 cmd_flags,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(dpdmai_get_tx_queue);
+
+MODULE_LICENSE("GPL v2");

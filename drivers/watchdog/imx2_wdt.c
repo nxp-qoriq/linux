@@ -4,6 +4,8 @@
  *
  *  Copyright (C) 2010 Wolfram Sang, Pengutronix e.K. <w.sang@pengutronix.de>
  *  Copyright (C) 2014 Freescale Semiconductor, Inc.
+ *  Copyright 2020 NXP
+ *  Copyright 2020 Puresoftware Ltd
  *
  * some parts adapted by similar drivers from Darius Augulis and Vladimir
  * Zapolskiy, additional improvements by Wim Van Sebroeck.
@@ -30,6 +32,7 @@
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/watchdog.h>
+#include <linux/acpi.h>
 
 #define DRIVER_NAME "imx2-wdt"
 
@@ -270,10 +273,12 @@ static int __init imx2_wdt_probe(struct platform_device *pdev)
 		return PTR_ERR(wdev->regmap);
 	}
 
-	wdev->clk = devm_clk_get(&pdev->dev, NULL);
-	if (IS_ERR(wdev->clk)) {
-		dev_err(&pdev->dev, "can't get Watchdog clock\n");
-		return PTR_ERR(wdev->clk);
+	if (!is_acpi_node(pdev->dev.fwnode)) {
+		wdev->clk = devm_clk_get(&pdev->dev, NULL);
+		if (IS_ERR(wdev->clk)) {
+			dev_err(&pdev->dev, "can't get Watchdog clock\n");
+			return PTR_ERR(wdev->clk);
+		}
 	}
 
 	wdog			= &wdev->wdog;
@@ -290,15 +295,21 @@ static int __init imx2_wdt_probe(struct platform_device *pdev)
 				      dev_name(&pdev->dev), wdog))
 			wdog->info = &imx2_wdt_pretimeout_info;
 
-	ret = clk_prepare_enable(wdev->clk);
-	if (ret)
-		return ret;
+	if (!is_acpi_node(pdev->dev.fwnode)) {
+		ret = clk_prepare_enable(wdev->clk);
+		if (ret)
+			return ret;
+	}
 
 	regmap_read(wdev->regmap, IMX2_WDT_WRSR, &val);
 	wdog->bootstatus = val & IMX2_WDT_WRSR_TOUT ? WDIOF_CARDRESET : 0;
 
-	wdev->ext_reset = of_property_read_bool(pdev->dev.of_node,
+	if (!is_acpi_node(pdev->dev.fwnode)) {
+		wdev->ext_reset = of_property_read_bool(
+						pdev->dev.of_node,
 						"fsl,ext-reset-output");
+	}
+
 	platform_set_drvdata(pdev, wdog);
 	watchdog_set_drvdata(wdog, wdev);
 	watchdog_set_nowayout(wdog, nowayout);
@@ -327,9 +338,9 @@ static int __init imx2_wdt_probe(struct platform_device *pdev)
 		 wdog->timeout, nowayout);
 
 	return 0;
-
 disable_clk:
-	clk_disable_unprepare(wdev->clk);
+	if (!is_acpi_node(pdev->dev.fwnode))
+		clk_disable_unprepare(wdev->clk);
 	return ret;
 }
 
@@ -422,17 +433,26 @@ static const struct of_device_id imx2_wdt_dt_ids[] = {
 };
 MODULE_DEVICE_TABLE(of, imx2_wdt_dt_ids);
 
+static const struct acpi_device_id imx2_wdt_acpi_match[] = {
+	{ "NXP0019", 0 },
+	{ },
+};
+MODULE_DEVICE_TABLE(acpi, imx2_wdt_acpi_match);
+
+
 static struct platform_driver imx2_wdt_driver = {
+	.probe		= imx2_wdt_probe,
 	.remove		= __exit_p(imx2_wdt_remove),
 	.shutdown	= imx2_wdt_shutdown,
 	.driver		= {
 		.name	= DRIVER_NAME,
 		.pm     = &imx2_wdt_pm_ops,
 		.of_match_table = imx2_wdt_dt_ids,
+		.acpi_match_table = ACPI_PTR(imx2_wdt_acpi_match),
 	},
 };
 
-module_platform_driver_probe(imx2_wdt_driver, imx2_wdt_probe);
+module_platform_driver(imx2_wdt_driver);
 
 MODULE_AUTHOR("Wolfram Sang");
 MODULE_DESCRIPTION("Watchdog driver for IMX2 and later");

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0+
 //
 // Copyright 2013 Freescale Semiconductor, Inc.
-// Copyright 2018 NXP
+// Copyright 2018, 2020 NXP
+// Copyright 2020 Puresoftware Ltd
 //
 // Freescale DSPI driver
 // This file contains a driver for the Freescale DSPI
@@ -28,6 +29,7 @@
 #include <linux/spi/spi-fsl-dspi.h>
 #include <linux/spi/spi_bitbang.h>
 #include <linux/time.h>
+#include <linux/acpi.h>
 
 #define DRIVER_NAME "fsl-dspi"
 
@@ -880,6 +882,12 @@ static irqreturn_t dspi_interrupt(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+static const struct acpi_device_id fsl_dspi_acpi_ids[] = {
+	{ "NXP0005", .driver_data = (kernel_ulong_t)&ls2085a_data, },
+	{},
+};
+MODULE_DEVICE_TABLE(acpi, fsl_dspi_acpi_ids);
+
 static const struct of_device_id fsl_dspi_dt_ids[] = {
 	{ .compatible = "fsl,vf610-dspi", .data = &vf610_data, },
 	{ .compatible = "fsl,ls1021a-v1.0-dspi", .data = &ls1021a_v1_data, },
@@ -981,6 +989,11 @@ static void dspi_init(struct fsl_dspi *dspi)
 
 static int dspi_probe(struct platform_device *pdev)
 {
+	const struct of_device_id *of_id = of_match_device(fsl_dspi_dt_ids,
+								&pdev->dev);
+	const struct acpi_device_id *acpi_id =
+					acpi_match_device(fsl_dspi_acpi_ids,
+								&pdev->dev);
 	struct device_node *np = pdev->dev.of_node;
 	struct spi_master *master;
 	struct fsl_dspi *dspi;
@@ -988,7 +1001,7 @@ static int dspi_probe(struct platform_device *pdev)
 	const struct regmap_config *regmap_config;
 	void __iomem *base;
 	struct fsl_dspi_platform_data *pdata;
-	int ret = 0, cs_num, bus_num;
+	int ret = 0, cs_num, bus_num, input_clk;
 
 	master = spi_alloc_master(&pdev->dev, sizeof(struct fsl_dspi));
 	if (!master)
@@ -1002,33 +1015,57 @@ static int dspi_probe(struct platform_device *pdev)
 	master->setup = dspi_setup;
 	master->transfer_one_message = dspi_transfer_one_message;
 	master->dev.of_node = pdev->dev.of_node;
-
 	master->cleanup = dspi_cleanup;
 	master->mode_bits = SPI_CPOL | SPI_CPHA | SPI_LSB_FIRST;
+	ACPI_COMPANION_SET(&master->dev, ACPI_COMPANION(&pdev->dev));
 
 	pdata = dev_get_platdata(&pdev->dev);
 	if (pdata) {
 		master->num_chipselect = pdata->cs_num;
 		master->bus_num = pdata->bus_num;
-
 		dspi->devtype_data = &coldfire_data;
 	} else {
-
-		ret = of_property_read_u32(np, "spi-num-chipselects", &cs_num);
-		if (ret < 0) {
-			dev_err(&pdev->dev, "can't get spi-num-chipselects\n");
-			goto out_master_put;
+		if (acpi_id) {
+			ret = device_property_read_u32(&pdev->dev,
+						"spi-num-chipselects", &cs_num);
+			if (ret < 0) {
+				dev_err(&pdev->dev, "can't fetch spi-num-chipselects\n");
+				goto out_master_put;
+			}
+		} else {
+			ret = of_property_read_u32(np,
+						"spi-num-chipselects", &cs_num);
+			if (ret < 0) {
+				dev_err(&pdev->dev, "can't get spi-num-chipselects\n");
+				goto out_master_put;
+			}
 		}
+
 		master->num_chipselect = cs_num;
-
-		ret = of_property_read_u32(np, "bus-num", &bus_num);
-		if (ret < 0) {
-			dev_err(&pdev->dev, "can't get bus-num\n");
-			goto out_master_put;
+		if (acpi_id) {
+			ret = device_property_read_u32(&pdev->dev, "bus-num",
+								&bus_num);
+			if (ret < 0) {
+				dev_err(&pdev->dev, "can't get bus-num\n");
+				goto out_master_put;
+			}
+		} else {
+			ret = of_property_read_u32(np, "bus-num", &bus_num);
+			if (ret < 0) {
+				dev_err(&pdev->dev, "can't get bus-num\n");
+				goto out_master_put;
+			}
 		}
-		master->bus_num = bus_num;
 
-		dspi->devtype_data = of_device_get_match_data(&pdev->dev);
+		master->bus_num = bus_num;
+		if (acpi_id) {
+			dspi->devtype_data = (struct fsl_dspi_devtype_data *)
+							acpi_id->driver_data;
+		} else {
+			dspi->devtype_data =
+					of_device_get_match_data(&pdev->dev);
+		}
+
 		if (!dspi->devtype_data) {
 			dev_err(&pdev->dev, "can't get devtype_data\n");
 			ret = -EFAULT;
@@ -1073,15 +1110,18 @@ static int dspi_probe(struct platform_device *pdev)
 		}
 	}
 
-	dspi->clk = devm_clk_get(&pdev->dev, "dspi");
-	if (IS_ERR(dspi->clk)) {
-		ret = PTR_ERR(dspi->clk);
-		dev_err(&pdev->dev, "unable to get clock\n");
-		goto out_master_put;
+	if (of_id) {
+		dspi->clk = devm_clk_get(&pdev->dev, "dspi");
+		if (IS_ERR(dspi->clk)) {
+			ret = PTR_ERR(dspi->clk);
+			dev_err(&pdev->dev, "unable to get clock\n");
+			goto out_master_put;
+		}
+
+		ret = clk_prepare_enable(dspi->clk);
+		if (ret)
+			goto out_master_put;
 	}
-	ret = clk_prepare_enable(dspi->clk);
-	if (ret)
-		goto out_master_put;
 
 	dspi_init(dspi);
 	dspi->irq = platform_get_irq(pdev, 0);
@@ -1106,8 +1146,22 @@ static int dspi_probe(struct platform_device *pdev)
 		}
 	}
 
-	master->max_speed_hz =
-		clk_get_rate(dspi->clk) / dspi->devtype_data->max_clock_factor;
+	if (of_id) {
+		master->max_speed_hz = clk_get_rate(dspi->clk)
+					/ dspi->devtype_data->max_clock_factor;
+	}
+
+	if (acpi_id) {
+		ret = device_property_read_u32(&pdev->dev,
+						"clock-frequency", &input_clk);
+		if (ret < 0) {
+			dev_err(&pdev->dev, "can't get clock-frequency\n");
+			goto out_master_put;
+		}
+
+		master->max_speed_hz = input_clk
+					/ dspi->devtype_data->max_clock_factor;
+	}
 
 	init_waitqueue_head(&dspi->waitq);
 	platform_set_drvdata(pdev, master);
@@ -1144,6 +1198,7 @@ static int dspi_remove(struct platform_device *pdev)
 static struct platform_driver fsl_dspi_driver = {
 	.driver.name    = DRIVER_NAME,
 	.driver.of_match_table = fsl_dspi_dt_ids,
+	.driver.acpi_match_table = ACPI_PTR(fsl_dspi_acpi_ids),
 	.driver.owner   = THIS_MODULE,
 	.driver.pm = &dspi_pm,
 	.probe          = dspi_probe,

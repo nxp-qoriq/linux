@@ -370,26 +370,8 @@ static void ocelot_port_adjust_link(struct net_device *dev)
 	u8 p = port->chip_port;
 	int speed, atop_wm, mode = 0;
 
-	switch (dev->phydev->speed) {
-	case SPEED_10:
-		speed = OCELOT_SPEED_10;
-		break;
-	case SPEED_100:
-		speed = OCELOT_SPEED_100;
-		break;
-	case SPEED_1000:
-		speed = OCELOT_SPEED_1000;
-		mode = DEV_MAC_MODE_CFG_GIGA_MODE_ENA;
-		break;
-	case SPEED_2500:
-		speed = OCELOT_SPEED_2500;
-		mode = DEV_MAC_MODE_CFG_GIGA_MODE_ENA;
-		break;
-	default:
-		netdev_err(dev, "Unsupported PHY speed: %d\n",
-			   dev->phydev->speed);
-		return;
-	}
+	speed = OCELOT_SPEED_1000;
+	mode = DEV_MAC_MODE_CFG_GIGA_MODE_ENA;
 
 	phy_print_status(dev->phydev);
 

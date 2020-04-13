@@ -369,6 +369,8 @@ static void felix_release_ports(struct ocelot *ocelot)
 		if (!ocelot_port || !ocelot_port->phy || !ocelot_port->dev)
 			continue;
 
+		skb_queue_purge(&ocelot_port->tx_skbs);
+
 		phydev = ocelot_port->phy;
 #ifdef CONFIG_MSCC_FELIX_SWITCH_TSN
 		tsn_port_unregister(ocelot_port->dev);

@@ -597,6 +597,10 @@ static int felix_setup(struct dsa_switch *ds)
 	 * In-band AN may take a few ms to complete, so we need to poll.
 	 */
 	ds->pcs_poll = true;
+	/* Accept VLAN configuration from bridge core irrespective of VLAN
+	 * filtering state.
+	 */
+	ds->vlan_bridge_vtu = true;
 
 	return 0;
 }

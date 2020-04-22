@@ -52,7 +52,6 @@
 #define DEV_CREATE_FLAG_MASK \
 	(BPF_F_NUMA_NODE | BPF_F_RDONLY | BPF_F_WRONLY)
 
-#define DEV_MAP_BULK_SIZE 16
 struct bpf_dtab_netdev;
 
 struct xdp_bulk_queue {

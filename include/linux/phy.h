@@ -1175,10 +1175,6 @@ static inline int genphy_config_aneg(struct phy_device *phydev)
 	return __genphy_config_aneg(phydev, false);
 }
 
-static inline int genphy_no_soft_reset(struct phy_device *phydev)
-{
-	return 0;
-}
 static inline int genphy_no_ack_interrupt(struct phy_device *phydev)
 {
 	return 0;

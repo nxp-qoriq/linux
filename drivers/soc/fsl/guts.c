@@ -241,7 +241,7 @@ static const struct of_device_id fsl_guts_of_match[] = {
 MODULE_DEVICE_TABLE(of, fsl_guts_of_match);
 
 static const struct acpi_device_id fsl_guts_acpi_match[] = {
-	{"NXP0018", 0 },
+	{"NXP0030", 0 },
 	{ }
 };
 MODULE_DEVICE_TABLE(acpi, fsl_guts_acpi_match);

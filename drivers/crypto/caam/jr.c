@@ -83,7 +83,8 @@ static int caam_jr_stop_processing(struct device *dev, u32 jrcr_bits)
 	unsigned int timeout = 100000;
 
 	/* Check the current status */
-	if (rd_reg32(&jrp->rregs->jrintstatus) & JRINT_ERR_HALT_INPROGRESS)
+	if ((rd_reg32(&jrp->rregs->jrintstatus) & JRINT_ERR_HALT_MASK) ==
+	    JRINT_ERR_HALT_INPROGRESS)
 		goto wait_quiesce_completion;
 
 	/* Reset the field */
@@ -735,6 +736,9 @@ static int caam_jr_suspend(struct device *dev)
 		enable_irq_wake(jrpriv->irq);
 	}
 
+	tasklet_disable(&jrpriv->irqtask);
+	clrsetbits_32(&jrpriv->rregs->rconfig_lo, 0, JRCFG_IMSK);
+
 	return 0;
 }
 
@@ -791,6 +795,9 @@ static int caam_jr_resume(struct device *dev)
 	} else if (device_may_wakeup(&pdev->dev)) {
 		disable_irq_wake(jrpriv->irq);
 	}
+
+	tasklet_enable(&jrpriv->irqtask);
+	clrsetbits_32(&jrpriv->rregs->rconfig_lo, JRCFG_IMSK, 0);
 
 	return 0;
 }

@@ -9,6 +9,7 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include <linux/acpi.h>
 #include <linux/kernel.h>
 #include <linux/string.h>
 #include <linux/errno.h>
@@ -813,6 +814,27 @@ static int get_phy_id(struct mii_bus *bus, int addr, u32 *phy_id,
 
 	return 0;
 }
+
+/* Extract the phy ID from the compatible string of the form
+ * ethernet-phy-idAAAA.BBBB.
+ */
+int fwnode_get_phy_id(struct fwnode_handle *fwnode, u32 *phy_id)
+{
+	unsigned int upper, lower;
+	const char *cp;
+	int ret;
+
+	ret = fwnode_property_read_string(fwnode, "compatible", &cp);
+	if (ret)
+		return ret;
+
+	if (sscanf(cp, "ethernet-phy-id%4x.%4x", &upper, &lower) == 2) {
+		*phy_id = ((upper & 0xFFFF) << 16) | (lower & 0xFFFF);
+		return 0;
+	}
+	return -EINVAL;
+}
+EXPORT_SYMBOL(fwnode_get_phy_id);
 
 /**
  * get_phy_device - reads the specified PHY device and returns its @phy_device
@@ -2192,8 +2214,8 @@ static bool phy_drv_supports_irq(struct phy_driver *phydrv)
  */
 struct phy_device *fwnode_phy_find_device(struct fwnode_handle *phy_fwnode)
 {
-	struct device *d;
 	struct mdio_device *mdiodev;
+	struct device *d;
 
 	if (!phy_fwnode)
 		return NULL;
@@ -2230,7 +2252,15 @@ EXPORT_SYMBOL_GPL(device_phy_find_device);
  */
 struct fwnode_handle *fwnode_get_phy_node(struct fwnode_handle *fwnode)
 {
-	return fwnode_find_reference(fwnode, "phy-handle", 0);
+	struct fwnode_handle *phy_node;
+
+	phy_node = fwnode_find_reference(fwnode, "phy-handle", 0);
+	if (is_acpi_node(fwnode) || !IS_ERR(phy_node))
+		return phy_node;
+	phy_node = fwnode_find_reference(fwnode, "phy", 0);
+	if (IS_ERR(phy_node))
+		phy_node = fwnode_find_reference(fwnode, "phy-device", 0);
+	return phy_node;
 }
 EXPORT_SYMBOL_GPL(fwnode_get_phy_node);
 

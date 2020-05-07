@@ -197,6 +197,12 @@ static int dsa_master_get_phys_port_name(struct net_device *dev,
 	return 0;
 }
 
+static netdev_features_t dsa_master_fix_features(struct net_device *dev,
+						 netdev_features_t features)
+{
+	return features & ~NETIF_F_HW_VLAN_CTAG_RX;
+}
+
 static int dsa_master_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 {
 	struct dsa_port *cpu_dp = dev->dsa_ptr;
@@ -278,6 +284,7 @@ static int dsa_master_ndo_setup(struct net_device *dev)
 		memcpy(ops, cpu_dp->orig_ndo_ops, sizeof(*ops));
 
 	ops->ndo_get_phys_port_name = dsa_master_get_phys_port_name;
+	ops->ndo_fix_features = dsa_master_fix_features;
 	ops->ndo_do_ioctl = dsa_master_ioctl;
 
 	dev->netdev_ops  = ops;

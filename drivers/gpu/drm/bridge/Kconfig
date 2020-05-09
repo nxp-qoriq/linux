@@ -210,6 +210,18 @@ config DRM_LVDS_CODEC
 	  Support for transparent LVDS encoders and decoders that don't
 	  require any configuration.
 
+config DRM_ITE_IT6251
+	tristate "ITE IT6251 LVDS/eDP bridge"
+	depends on OF
+	select DRM_KMS_HELPER
+	select DRM_PANEL
+	select REGMAP_I2C
+	help
+	  Driver for ITE IT6251 LVDS-eDP bridge chip driver. This is used
+	  in Novena open-hardware laptop with eDP based panel.
+	  IT6251 supports LVDS input and DisplayPort 1.1a output,
+	  resolution up to 1080P and 10-bit color depth.
+
 config DRM_MAX96752_LVDS
 	tristate "Analog Devices MAX96752 deserializer LVDS bridge"
 	depends on DRM && OF && MFD_MAX96752

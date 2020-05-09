@@ -1,0 +1,97 @@
+# SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/display/bridge/ite,it6251.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: ITE IT6251 LVDS-to-eDP bridge bindings
+
+maintainers:
+  - Marek Vasut <marex@denx.de>
+  - Richard Marko <srk@48.io>
+
+description: |
+  The IT6251 is a high-performance single-chip
+  De-SSC LVDS to DisplayPort converter.
+  Combined with LVDS receiver and DisplayPort Transmitter,
+  the IT6251 supports LVDS input and DisplayPort 1.1a
+  output by conversion function.
+
+properties:
+  compatible:
+    const: ite,it6251
+
+  reg:
+    items:
+      - description: I2C address of the bridge
+      - description: I2C address of the LVDS part
+
+  reg-names:
+    items:
+      - const: bridge
+      - const: lvds
+
+  ports:
+    type: object
+
+    properties:
+      "#address-cells":
+        const: 1
+
+      "#size-cells":
+        const: 0
+
+      port@0:
+        type: object
+        description: |
+         Video port for eDP output (typically panel).
+
+      port@1:
+        type: object
+        description: |
+          Video port for LVDS input.
+
+    required:
+      - port@0
+      - port@1
+
+    additionalProperties: false
+
+  power-supply: true
+
+required:
+  - compatible
+  - reg
+  - reg-names
+  - power-supply
+  - ports
+
+additionalProperties: false
+
+examples:
+  - |
+    it6251@5c {
+      compatible = "ite,it6251";
+      reg = <0x5c>, <0x5e>;
+      reg-names = "bridge", "lvds";
+      power-supply = <&reg_display>;
+
+      ports {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        port@0 {
+          reg = <0>;
+          bridge_out_edp0: endpoint {
+            remote-endpoint = <&panel_in_edp0>;
+          };
+        };
+
+        port@1 {
+          reg = <1>;
+          bridge_in_lvds0: endpoint {
+            remote-endpoint = <&lvds0_out>;
+          };
+        };
+      };
+    };

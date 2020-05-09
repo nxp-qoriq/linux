@@ -5,6 +5,7 @@ obj-$(CONFIG_DRM_CHIPONE_ICN6211) += chipone-icn6211.o
 obj-$(CONFIG_DRM_CHRONTEL_CH7033) += chrontel-ch7033.o
 obj-$(CONFIG_DRM_CROS_EC_ANX7688) += cros-ec-anx7688.o
 obj-$(CONFIG_DRM_DISPLAY_CONNECTOR) += display-connector.o
+obj-$(CONFIG_DRM_ITE_IT6251) += ite-it6251.o
 obj-$(CONFIG_DRM_FSL_LDB) += fsl-ldb.o
 
 tda998x-y := tda998x_drv.o

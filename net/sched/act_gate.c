@@ -280,7 +280,7 @@ release_list:
 static int tcf_gate_init(struct net *net, struct nlattr *nla,
 			 struct nlattr *est, struct tc_action **a,
 			 int ovr, int bind, bool rtnl_held,
-			 struct tcf_proto *tp, u32 flags,
+			 struct tcf_proto *tp,
 			 struct netlink_ext_ack *extack)
 {
 	struct tc_action_net *tn = net_generic(net, gate_net_id);
@@ -320,7 +320,7 @@ static int tcf_gate_init(struct net *net, struct nlattr *nla,
 
 	if (!err) {
 		ret = tcf_idr_create(tn, index, est, a,
-				     &act_gate_ops, bind, false, 0);
+				     &act_gate_ops, bind, false);
 		if (ret) {
 			tcf_idr_cleanup(tn, index);
 			return ret;
@@ -571,7 +571,8 @@ static void tcf_gate_stats_update(struct tc_action *a, u64 bytes, u32 packets,
 	struct tcf_gate *gact = to_gate(a);
 	struct tcf_t *tm = &gact->tcf_tm;
 
-	tcf_action_update_stats(a, bytes, packets, false, hw);
+	gact->tcf_qstats.drops++;
+
 	tm->lastuse = max_t(u64, tm->lastuse, lastuse);
 }
 

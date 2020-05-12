@@ -2855,6 +2855,7 @@ static int sja1105_probe(struct spi_device *spi)
 		struct sja1105_port *sp = &priv->ports[port];
 		struct dsa_port *dp = dsa_to_port(ds, port);
 		struct net_device *slave;
+		int subvlan;
 
 		if (!dsa_is_user_port(ds, port))
 			continue;
@@ -2875,6 +2876,9 @@ static int sja1105_probe(struct spi_device *spi)
 		}
 		skb_queue_head_init(&sp->xmit_queue);
 		sp->xmit_tpid = ETH_P_SJA1105;
+
+		for (subvlan = 0; subvlan < DSA_8021Q_N_SUBVLAN; subvlan++)
+			sp->subvlan_map[subvlan] = VLAN_N_VID;
 	}
 
 	return 0;

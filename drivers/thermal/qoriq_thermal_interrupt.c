@@ -41,3 +41,12 @@ int8_t ctd_program_threshold(struct ctd_thermal_threshold *thermal_threshold)
 }
 EXPORT_SYMBOL_GPL(ctd_program_threshold);
 
+int ctd_program_hysteresis(int hysteresis_val)
+{
+	int ret;
+
+	ret = qoriq_tmu_update_threshold(pdev_tmu, hysteresis_val);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(ctd_program_hysteresis);

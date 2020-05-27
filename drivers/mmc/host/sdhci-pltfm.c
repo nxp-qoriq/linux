@@ -4,6 +4,7 @@
  *
  * Copyright (c) 2007, 2011 Freescale Semiconductor, Inc.
  * Copyright (c) 2009 MontaVista Software, Inc.
+ * Copyright 2020 NXP
  *
  * Authors: Xiaobo Xie <X.Xie@freescale.com>
  *	    Anton Vorontsov <avorontsov@ru.mvista.com>
@@ -73,21 +74,21 @@ void sdhci_get_of_property(struct platform_device *pdev)
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
 	u32 bus_width;
 
-	if (of_get_property(np, "sdhci,auto-cmd12", NULL))
+	if (device_property_read_bool(&pdev->dev, "sdhci,auto-cmd12"))
 		host->quirks |= SDHCI_QUIRK_MULTIBLOCK_READ_ACMD12;
 
-	if (of_get_property(np, "sdhci,1-bit-only", NULL) ||
-	    (of_property_read_u32(np, "bus-width", &bus_width) == 0 &&
-	    bus_width == 1))
+	if (device_property_read_bool(&pdev->dev, "sdhci,1-bit-only") ||
+	    (device_property_read_u32(&pdev->dev, "bus-width",
+	    &bus_width) == 0 && bus_width == 1))
 		host->quirks |= SDHCI_QUIRK_FORCE_1_BIT_DATA;
 
 	if (sdhci_of_wp_inverted(np))
 		host->quirks |= SDHCI_QUIRK_INVERTED_WRITE_PROTECT;
 
-	if (of_get_property(np, "broken-cd", NULL))
+	if (device_property_read_bool(&pdev->dev, "broken-cd"))
 		host->quirks |= SDHCI_QUIRK_BROKEN_CARD_DETECTION;
 
-	if (of_get_property(np, "no-1-8-v", NULL))
+	if (device_property_read_bool(&pdev->dev, "no-1-8-v"))
 		host->quirks2 |= SDHCI_QUIRK2_NO_1_8_V;
 
 	if (of_device_is_compatible(np, "fsl,p2020-rev1-esdhc"))
@@ -99,7 +100,8 @@ void sdhci_get_of_property(struct platform_device *pdev)
 	    of_device_is_compatible(np, "fsl,mpc8536-esdhc"))
 		host->quirks |= SDHCI_QUIRK_BROKEN_TIMEOUT_VAL;
 
-	of_property_read_u32(np, "clock-frequency", &pltfm_host->clock);
+	device_property_read_u32(&pdev->dev, "clock-frequency",
+				 &pltfm_host->clock);
 
 	if (of_find_property(np, "keep-power-in-suspend", NULL))
 		host->mmc->pm_caps |= MMC_PM_KEEP_POWER;

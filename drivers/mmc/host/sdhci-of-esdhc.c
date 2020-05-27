@@ -14,6 +14,7 @@
  * your option) any later version.
  */
 
+#include <linux/acpi.h>
 #include <linux/err.h>
 #include <linux/io.h>
 #include <linux/of.h>
@@ -74,6 +75,14 @@ static const struct of_device_id sdhci_esdhc_of_match[] = {
 	{ }
 };
 MODULE_DEVICE_TABLE(of, sdhci_esdhc_of_match);
+
+#ifdef CONFIG_ACPI
+static const struct acpi_device_id sdhci_esdhc_ids[] = {
+	{"NXP0003" },
+	{ }
+};
+MODULE_DEVICE_TABLE(acpi, sdhci_esdhc_ids);
+#endif
 
 struct sdhci_esdhc {
 	u8 vendor_ver;
@@ -1026,22 +1035,28 @@ static void esdhc_init(struct platform_device *pdev, struct sdhci_host *host)
 	if (match)
 		esdhc->clk_fixup = match->data;
 	np = pdev->dev.of_node;
-	clk = of_clk_get(np, 0);
-	if (!IS_ERR(clk)) {
-		/*
-		 * esdhc->peripheral_clock would be assigned with a value
-		 * which is eSDHC base clock when use periperal clock.
-		 * For some platforms, the clock value got by common clk
-		 * API is peripheral clock while the eSDHC base clock is
-		 * 1/2 peripheral clock.
-		 */
-		if (of_device_is_compatible(np, "fsl,ls1046a-esdhc") ||
-		    of_device_is_compatible(np, "fsl,ls1028a-esdhc"))
-			esdhc->peripheral_clock = clk_get_rate(clk) / 2;
-		else
-			esdhc->peripheral_clock = clk_get_rate(clk);
+	/* in case of device tree, get clock from framework */
+	if (np) {
+		clk = of_clk_get(np, 0);
+		if (!IS_ERR(clk)) {
+			/*
+			 * esdhc->peripheral_clock would be assigned with a
+			 * value which is eSDHC base clock when use periperal
+			 * clock. For some platforms, the clock value got by
+			 * common clk API is peripheral clock while the eSDHC
+			 * base clock is 1/2 peripheral clock.
+			 */
+			if (of_device_is_compatible(np, "fsl,ls1046a-esdhc") ||
+			    of_device_is_compatible(np, "fsl,ls1028a-esdhc"))
+				esdhc->peripheral_clock = clk_get_rate(clk) / 2;
+			else
+				esdhc->peripheral_clock = clk_get_rate(clk);
 
-		clk_put(clk);
+			clk_put(clk);
+		}
+	} else {
+		device_property_read_u32(&pdev->dev, "clock-frequency",
+					 &esdhc->peripheral_clock);
 	}
 
 	if (esdhc->peripheral_clock) {
@@ -1069,7 +1084,7 @@ static int sdhci_esdhc_probe(struct platform_device *pdev)
 
 	np = pdev->dev.of_node;
 
-	if (of_property_read_bool(np, "little-endian"))
+	if (device_property_read_bool(&pdev->dev, "little-endian"))
 		host = sdhci_pltfm_init(pdev, &sdhci_esdhc_le_pdata,
 					sizeof(struct sdhci_esdhc));
 	else
@@ -1130,7 +1145,7 @@ static int sdhci_esdhc_probe(struct platform_device *pdev)
 	if (ret)
 		goto err;
 
-	mmc_of_parse_voltage(np, &host->ocr_mask);
+	mmc_of_parse_voltage(pdev, &host->ocr_mask);
 
 	ret = sdhci_add_host(host);
 	if (ret)
@@ -1146,6 +1161,7 @@ static struct platform_driver sdhci_esdhc_driver = {
 	.driver = {
 		.name = "sdhci-esdhc",
 		.of_match_table = sdhci_esdhc_of_match,
+		.acpi_match_table = sdhci_esdhc_ids,
 		.pm = &esdhc_of_dev_pm_ops,
 	},
 	.probe = sdhci_esdhc_probe,

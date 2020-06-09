@@ -93,7 +93,7 @@
 	/* NAND Flashe */
 	ranges = <0x0 0x0 0x0 0x7e800000 0x00010000
 		  0x2 0x0 0x0 0x7fb00000 0x00000100>;
-	status = "okay";
+	status = "disabled";
 
 	nand@0,0 {
 		compatible = "fsl,ifc-nand";

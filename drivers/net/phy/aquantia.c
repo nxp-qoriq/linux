@@ -33,6 +33,7 @@
 				 SUPPORTED_1000baseT_Full | \
 				 SUPPORTED_2500baseX_Full | \
 				 SUPPORTED_100baseT_Full | \
+				 SUPPORTED_5000baseT_Full | \
 				 PHY_DEFAULT_FEATURES)
 
 #define MDIO_PMA_CTRL1_AQ_SPEED10	0
@@ -190,6 +191,9 @@ static int aquantia_config_advert(struct phy_device *phydev)
 		adv |= 0x1000;
 	if (advertise &  ADVERTISED_2500baseX_Full)
 		adv1 |= 0x400;
+	if (advertise &  ADVERTISED_5000baseT_Full) {
+		adv1 |= 0x800;
+	}
 
 	if (adv != oldadv) {
 		err = aquantia_write_reg(phydev, MDIO_MMD_AN,
@@ -371,7 +375,12 @@ static int aquantia_read_advert(struct phy_device *phydev)
 		phydev->advertising |= ADVERTISED_2500baseX_Full;
 	else
 		phydev->advertising &= ~ADVERTISED_2500baseX_Full;
+	if (adv1 & 0x800)
+		phydev->advertising |= ADVERTISED_5000baseT_Full;
+	else
+		phydev->advertising &= ~ADVERTISED_5000baseT_Full;
 	return 0;
+
 }
 
 static int aquantia_read_lp_advert(struct phy_device *phydev)
@@ -409,6 +418,10 @@ static int aquantia_read_lp_advert(struct phy_device *phydev)
 		phydev->lp_advertising |= ADVERTISED_2500baseX_Full;
 	else
 		phydev->lp_advertising &= ~ADVERTISED_2500baseX_Full;
+	if (adv1 & 0x800)
+		phydev->lp_advertising |= ADVERTISED_5000baseT_Full;
+	else
+		phydev->lp_advertising &= ~ADVERTISED_5000baseT_Full;
 
 	return 0;
 }

@@ -47,7 +47,9 @@ struct dpa_proxy_priv_s {
 static inline struct device *get_dev_ptr(char *if_name);
 static void phy_link_updates(struct net_device *net_dev);
 /* IOCTL handlers */
-static inline int ioctl_usdpaa_get_link_status(char *if_name);
+static inline int
+ioctl_usdpaa_get_link_status(struct usdpaa_ioctl_link_status_args *input);
+
 static int ioctl_en_if_link_status(struct usdpaa_ioctl_link_status *args);
 static int ioctl_disable_if_link_status(char *if_name);
 
@@ -1725,22 +1727,29 @@ static int ioctl_set_link_status(struct usdpaa_ioctl_update_link_status *args)
  * if_name: Interface node name
  *
  */
-static inline int ioctl_usdpaa_get_link_status(char *if_name)
+static inline int
+ioctl_usdpaa_get_link_status(struct usdpaa_ioctl_link_status_args *input)
 {
 	struct net_device *net_dev = NULL;
 	struct device *dev;
 
-	dev = get_dev_ptr(if_name);
+	dev = get_dev_ptr(input->if_name);
 	if (dev == NULL)
 		return -ENODEV;
 	net_dev = dev->platform_data;
 	if (net_dev == NULL)
 		return -ENODEV;
 
-	if (test_bit(__LINK_STATE_NOCARRIER, &net_dev->state))
-		return 0; /* Link is DOWN */
+	input->link_status = netif_carrier_ok(net_dev);
+	input->link_autoneg = net_dev->phydev->autoneg;
+	input->link_duplex = net_dev->phydev->duplex;
+
+	if (input->link_status)
+		input->link_speed = net_dev->phydev->speed;
 	else
-		return 1; /* Link is UP */
+		input->link_speed = 0;
+
+	return 0;
 }
 
 
@@ -1755,7 +1764,7 @@ static void phy_link_updates(struct net_device *net_dev)
 
 	pr_debug("%s: Link '%s': Speed '%d-Mbps': Autoneg '%d': Duplex '%d'\n",
 		net_dev->name,
-		ioctl_usdpaa_get_link_status(net_dev->name)?"UP":"DOWN",
+		netif_carrier_ok(net_dev) ? "UP" : "DOWN",
 		net_dev->phydev->speed,
 		net_dev->phydev->autoneg,
 		net_dev->phydev->duplex);
@@ -2007,18 +2016,20 @@ static long usdpaa_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
 	}
 	case USDPAA_IOCTL_GET_LINK_STATUS:
 	{
+		int ret;
 		struct usdpaa_ioctl_link_status_args input;
 
 		if (copy_from_user(&input, a, sizeof(input)))
 			return -EFAULT;
 
-		input.link_status = ioctl_usdpaa_get_link_status(input.if_name);
-		if (input.link_status < 0)
-			return input.link_status;
+		ret = ioctl_usdpaa_get_link_status(&input);
+		if (ret)
+			return ret;
+
 		if (copy_to_user(a, &input, sizeof(input)))
 			return -EFAULT;
 
-		return 0;
+		return ret;
 	}
 	case USDPAA_IOCTL_UPDATE_LINK_STATUS:
 	{

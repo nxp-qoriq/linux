@@ -1720,6 +1720,25 @@ static int ioctl_set_link_status(struct usdpaa_ioctl_update_link_status *args)
 	return 0;
 }
 
+static int ioctl_set_link_speed(struct usdpaa_ioctl_update_link_speed *args)
+{
+	struct device *dev;
+	struct mac_device *mac_dev;
+	struct proxy_device *proxy_dev;
+
+	dev = get_dev_ptr(args->if_name);
+	if (!dev)
+		return -ENODEV;
+	proxy_dev = dev_get_drvdata(dev);
+	mac_dev = proxy_dev->mac_dev;
+
+	mac_dev->phy_dev->speed = args->link_speed;
+	mac_dev->phy_dev->duplex = args->link_duplex;
+	mac_dev->phy_dev->autoneg = AUTONEG_DISABLE;
+
+	return phy_start_aneg(mac_dev->phy_dev);
+}
+
 /* This function will return Current link status of the device
  * '1' if Link is UP, '0' otherwise.
  *
@@ -2042,6 +2061,20 @@ static long usdpaa_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
 		ret = ioctl_set_link_status(&input);
 		if (ret)
 			pr_err("Error(%d) updating link status:IF: %s\n",
+			       ret, input.if_name);
+		return ret;
+	}
+	case USDPAA_IOCTL_UPDATE_LINK_SPEED:
+	{
+		struct usdpaa_ioctl_update_link_speed input;
+		int ret;
+
+		if (copy_from_user(&input, a, sizeof(input)))
+			return -EFAULT;
+
+		ret = ioctl_set_link_speed(&input);
+		if (ret)
+			pr_err("Error(%d) updating link speed:IF: %s\n",
 			       ret, input.if_name);
 		return ret;
 	}

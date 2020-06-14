@@ -421,6 +421,9 @@ struct usdpaa_ioctl_update_link_speed {
 #define USDPAA_IOCTL_UPDATE_LINK_SPEED \
 	_IOW(USDPAA_IOCTL_MAGIC, 0x12, struct usdpaa_ioctl_update_link_speed)
 
+#define USDPAA_IOCTL_RESTART_LINK_AUTONEG \
+	_IOW(USDPAA_IOCTL_MAGIC, 0x13, char *)
+
 #ifdef __cplusplus
 }
 #endif

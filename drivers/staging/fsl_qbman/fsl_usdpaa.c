@@ -1739,6 +1739,23 @@ static int ioctl_set_link_speed(struct usdpaa_ioctl_update_link_speed *args)
 	return phy_start_aneg(mac_dev->phy_dev);
 }
 
+static int ioctl_link_restart_autoneg(char *if_name)
+{
+	struct device *dev;
+	struct mac_device *mac_dev;
+	struct proxy_device *proxy_dev;
+
+	dev = get_dev_ptr(if_name);
+	if (!dev)
+		return -ENODEV;
+	proxy_dev = dev_get_drvdata(dev);
+	mac_dev = proxy_dev->mac_dev;
+
+	mac_dev->phy_dev->autoneg = AUTONEG_ENABLE;
+
+	return phy_restart_aneg(mac_dev->phy_dev);
+}
+
 /* This function will return Current link status of the device
  * '1' if Link is UP, '0' otherwise.
  *
@@ -2076,6 +2093,20 @@ static long usdpaa_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
 		if (ret)
 			pr_err("Error(%d) updating link speed:IF: %s\n",
 			       ret, input.if_name);
+		return ret;
+	}
+	case USDPAA_IOCTL_RESTART_LINK_AUTONEG:
+	{
+		char *input;
+		int ret;
+
+		if (copy_from_user(&input, a, sizeof(input)))
+			return -EFAULT;
+
+		ret = ioctl_link_restart_autoneg(input);
+		if (ret)
+			pr_err("Error(%d) restarting autoneg:IF: %s\n",
+			       ret, input);
 		return ret;
 	}
 	}

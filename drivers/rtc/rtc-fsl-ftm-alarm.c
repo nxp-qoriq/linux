@@ -250,6 +250,7 @@ static const struct rtc_class_ops ftm_rtc_ops = {
 static int ftm_rtc_probe(struct platform_device *pdev)
 {
 	struct resource *r;
+	struct device_node *np = pdev->dev.of_node;
 	int irq;
 	int ret;
 	struct ftm_rtc *rtc;
@@ -291,8 +292,14 @@ static int ftm_rtc_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	rtc->big_endian =
-		device_property_read_bool(&pdev->dev, "big-endian");
+	enable_irq_wake(irq);
+
+	if (!is_acpi_node(pdev->dev.fwnode)) {
+		rtc->big_endian = of_property_read_bool(np, "big-endian");
+	} else {
+		rtc->big_endian =
+			device_property_read_bool(&pdev->dev, "big-endian");
+	}
 
 	rtc->alarm_freq = (u32)FIXED_FREQ_CLK / (u32)MAX_FREQ_DIV;
 	rtc->rtc_dev->ops = &ftm_rtc_ops;

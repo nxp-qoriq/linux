@@ -51,10 +51,16 @@ static int rcpm_pm_prepare(struct device *dev)
 				"fsl,rcpm-wakeup", value, rcpm->wakeup_cells + 1);
 
 		/*  Wakeup source should refer to current rcpm device */
-		if (ret || (np->phandle != value[0])) {
-			dev_info(dev, "%s doesn't refer to this rcpm\n",
+
+		if (!is_acpi_node(dev->fwnode)) {
+			if (ret || (np->phandle != value[0])) {
+				dev_info(dev, "%s doesn't refer to this rcpm\n",
 					ws->name);
-			continue;
+				continue;
+			} else {
+				if (ret)
+					continue;
+			}
 		}
 
 		for (i = 0; i < rcpm->wakeup_cells; i++) {

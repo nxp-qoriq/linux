@@ -140,6 +140,7 @@ struct qoriq_prv_data {
 };
 
 int no_of_threshold;
+int ctd_hysteresis_val;
 struct task_struct *ts_temp_monitoring_task;
 ctd_event_id_t qoriq_thermal_event;
 #endif
@@ -177,9 +178,8 @@ irqreturn_t qoriq_tmu_irq_handler_avg_temp(int irq, void *data)
 	u32 tmr;
 	struct qoriq_prv_data *qoriq_prv_data = (struct qoriq_prv_data *)data;
 
-	qdata = qoriq_prv_data->qdata;
-
 	if (qoriq_prv_data) {
+		qdata = qoriq_prv_data->qdata;
 		qoriq_thermal_event = CTD_HIGH_AVG_TEMP_EVENT;
 		tidr = tmu_read(qdata, &qdata->regs->tidr);
 		tmr = tmu_read(qdata, &qdata->regs->tmr);
@@ -373,14 +373,18 @@ static int thread_monitoring_low_temp(void *arg)
 		high_temp_threshold = (tmu_read(data, &data->regs->tmhtactr) &
 					0xFF);
 		curent_temp = ctd_get_temp();
-		if ((curent_temp < high_temp_threshold) &&
+
+		/* Programmed high threshold = Original threshold + hysteresis 
+		Subtracting hysteresis value twice to get low temp threshold.
+		where, programmed low threshold = Original threshold - hysteresis */
+		if ((curent_temp < (high_temp_threshold - (2 * ctd_hysteresis_val))) &&
 			(qoriq_thermal_event == CTD_HIGH_CRITICAL_TEMP_EVENT)) {
 			tmu_write(data, TIER_CRITICAL_THRESHOLD_ENABLED,
 				&data->regs->tier);
 			qoriq_thermal_event = CTD_LOW_AVG_TEMP_EVENT;
 			send_call_back(qoriq_thermal_event);
 		}
-		if ((curent_temp < low_temp_threshold) &&
+		if ((curent_temp < (low_temp_threshold - (2 * ctd_hysteresis_val))) &&
 			((qoriq_thermal_event == CTD_HIGH_AVG_TEMP_EVENT) ||
 			(qoriq_thermal_event == CTD_LOW_AVG_TEMP_EVENT))) {
 			if (no_of_threshold == MAX_THRESHOLD) {
@@ -483,8 +487,11 @@ int qoriq_tmu_register_interrupt(struct platform_device *pdev,
 	}
 
 	no_of_threshold = thermal_threshold->theshold_cnt;
-	low_threshold = thermal_threshold->threshold[0];
-	high_threshold = thermal_threshold->threshold[1];
+	/* Adding hysteresis value with the threshold and programmed the
+	updated thresold value in thermal register for interrupt 
+	Programmed high threshold = Original threshold + hysteresis */
+	low_threshold = thermal_threshold->threshold[0] + ctd_hysteresis_val;
+	high_threshold = thermal_threshold->threshold[1] + ctd_hysteresis_val;
 	if (thermal_threshold->theshold_cnt == MAX_THRESHOLD) {
 		if (data->ver == TMU_VER1) {
 			tmr = tmu_read(data, &data->regs->tmr);
@@ -528,6 +535,32 @@ int qoriq_tmu_register_interrupt(struct platform_device *pdev,
 
 err:
 	return ret;
+}
+int qoriq_tmu_update_threshold(struct platform_device *pdev, int hysteresis_val)
+{
+	u32 tmr, threshold, val;
+	struct qoriq_tmu_data *data = platform_get_drvdata(pdev);
+
+	ctd_hysteresis_val = hysteresis_val;
+	tmr = tmu_read(data, &data->regs->tmr);
+	tmu_write(data, tmr & ~TMR_ME, &data->regs->tmr);
+
+	/* Adding hysteresis value with the threshold and programmed the
+	updated thresold value in thermal register for interrupt
+	Programmed high threshold = Original threshold + hysteresis */
+	threshold = tmu_read(data, &data->regs->tmhtatr);
+	val = threshold & 0xFF;
+	if (threshold & THRESHOLD_VALID)
+		tmu_write(data, ((val + ctd_hysteresis_val) | THRESHOLD_VALID),
+                                &data->regs->tmhtatr);
+	threshold = tmu_read(data, &data->regs->tmhtactr);
+	val = threshold & 0xFF;
+	if (threshold & THRESHOLD_VALID)
+		tmu_write(data, ((val + ctd_hysteresis_val) | THRESHOLD_VALID),
+                                &data->regs->tmhtactr);
+	tmu_write(data, (tmr | TMR_ME), &data->regs->tmr);
+
+	return 0;
 }
 #endif
 

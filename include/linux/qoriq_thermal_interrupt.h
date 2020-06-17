@@ -44,7 +44,6 @@ typedef void (*ctd_thermal_handler_t) (struct ctd_thermal_event *);
 typedef void (*ctd_thermal_temp_t) (int *);
 
 extern ctd_thermal_handler_t ctd_tvd_callback;
-extern int ctd_curent_temp[MAX_CTD_MONITORING_SITE];
 extern struct platform_device *pdev_tmu;
 /**
  * @brief : Function to register callback to get notification for thermal
@@ -86,4 +85,17 @@ int qoriq_tmu_register_interrupt(struct platform_device *pdev,
  * @return : Max temp of all monitoring site
  */
 int ctd_get_temp(void);
+/**
+ * @brief : Function to update hystesis value
+ * @param hysteresis_val : Value to be updated
+ *
+ * @return : On success return 0, else return -1
+ */
+int ctd_program_hysteresis(int hysteresis_val);
+/**
+ * @brief : Function to update CTD programmed threshold
+ *
+ * @return : On success return 0, else return -1
+ */
+int qoriq_tmu_update_threshold(struct platform_device *pdev, int hysteresis_val);
 #endif

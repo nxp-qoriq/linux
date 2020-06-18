@@ -292,12 +292,6 @@
 				vcc-supply = <&sb_3v3>;
 			};
 
-			temperature-sensor@4d {
-				compatible = "nxp,sa56004";
-				reg = <0x4d>;
-				vcc-supply = <&sb_3v3>;
-			};
-
 			rtc@51 {
 				compatible = "nxp,pcf2129";
 				reg = <0x51>;

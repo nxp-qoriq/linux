@@ -184,6 +184,9 @@ void fsl_mc_msi_domain_free_irqs(struct device *dev);
 
 bool fsl_mc_is_root_dprc(struct device *dev);
 
+void fsl_mc_get_root_dprc(struct device *dev,
+			 struct device **root_dprc_dev);
+
 #ifdef CONFIG_FSL_MC_UAPI_SUPPORT
 
 int fsl_mc_uapi_create_device_file(struct fsl_mc_bus *mc_bus);

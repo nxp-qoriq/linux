@@ -1022,8 +1022,7 @@ int __must_check fsl_create_mc_io(struct device *dev,
 
 void fsl_destroy_mc_io(struct fsl_mc_io *mc_io);
 
-int fsl_mc_find_msi_domain(struct device *mc_platform_dev,
-			   struct irq_domain **mc_msi_domain);
+struct irq_domain *fsl_mc_find_msi_domain(struct device *dev);
 
 int fsl_mc_populate_irq_pool(struct fsl_mc_bus *mc_bus,
 			     unsigned int irq_count);

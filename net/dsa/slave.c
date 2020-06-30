@@ -1775,7 +1775,8 @@ int dsa_slave_create(struct dsa_port *port)
 
 	ret = dsa_slave_phy_setup(slave_dev);
 	if (ret) {
-		netdev_err(master, "error %d setting up slave phy\n", ret);
+		netdev_err(master, "error %d setting up slave PHY for %s\n",
+			   ret, slave_dev->name);
 		goto out_gcells;
 	}
 

@@ -24,6 +24,7 @@
 #define PHY_ID_AQR405	0x03a1b4b0
 #define PHY_ID_AQR112	0x03a1b662
 #define PHY_ID_AQR412	0x03a1b712
+#define PHY_ID_AQR113C  0x31c31c12
 
 /* PCS counters */
 #define MDIO_C45_PCS_STAT_XFI_TX_GOOD_FRAMES	0xc860
@@ -800,6 +801,19 @@ static struct phy_driver aqr_driver[] = {
 	.get_strings	= aqr107_get_strings,
 	.get_stats	= aqr107_get_stats,
 },
+{
+	PHY_ID_MATCH_MODEL(PHY_ID_AQR113C),
+	.name		= "Aquantia AQR113C",
+	.probe		= aqr107_probe,
+	.config_aneg    = aqr_config_aneg_set_prot,
+	.config_intr	= aqr_config_intr,
+	.ack_interrupt	= aqr_ack_interrupt,
+	.read_status	= aqr_read_status,
+	.get_sset_count	= aqr107_get_sset_count,
+	.get_strings	= aqr107_get_strings,
+	.get_stats	= aqr107_get_stats,
+
+},
 };
 
 module_phy_driver(aqr_driver);
@@ -814,6 +828,7 @@ static struct mdio_device_id __maybe_unused aqr_tbl[] = {
 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR405) },
 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR112) },
 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR412) },
+	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR113C) },
 	{ }
 };
 

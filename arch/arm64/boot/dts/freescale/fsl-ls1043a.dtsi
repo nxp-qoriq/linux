@@ -708,6 +708,7 @@
 				snps,host-vbus-glitches;
 				configure-gfladj;
 				dma-coherent;
+				status = "disabled";
 			};
 
 			usb1: usb3@3000000 {
@@ -723,6 +724,7 @@
 				snps,host-vbus-glitches;
 				configure-gfladj;
 				dma-coherent;
+				status = "disabled";
 			};
 
 			usb2: usb3@3100000 {
@@ -738,6 +740,7 @@
 				snps,host-vbus-glitches;
 				configure-gfladj;
 				dma-coherent;
+				status = "disabled";
 			};
 
 			sata: sata@3200000 {

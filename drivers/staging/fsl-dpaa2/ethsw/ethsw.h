@@ -3,7 +3,7 @@
  * DPAA2 Ethernet Switch declarations
  *
  * Copyright 2014-2016 Freescale Semiconductor Inc.
- * Copyright 2017-2018 NXP
+ * Copyright 2017-2018, 2020 NXP
  *
  */
 
@@ -61,6 +61,7 @@ struct ethsw_core {
 	struct fsl_mc_io		*mc_io;
 	u16				dpsw_handle;
 	struct dpsw_attr		sw_attr;
+	u16				major, minor;
 	int				dev_id;
 	struct ethsw_port_priv		**ports;
 

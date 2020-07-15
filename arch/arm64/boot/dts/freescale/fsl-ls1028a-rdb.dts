@@ -98,6 +98,10 @@
 	status = "okay";
 };
 
+&ftm_alarm1 {
+	status = "okay";
+};
+
 &usb1 {
 	dr_mode = "otg";
 };

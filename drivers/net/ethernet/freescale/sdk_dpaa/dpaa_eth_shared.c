@@ -702,8 +702,23 @@ dpaa_eth_shared_probe(struct platform_device *_of_dev)
 	if (IS_ERR(dpa_bp))
 		return PTR_ERR(dpa_bp);
 
+#ifndef CONFIG_PPC
+	/* Support shared interfaces on LS DPDK.
+	 * Default pool is used for kernel interface
+	 * which is filled with kernel skb buffers.
+	 * VSP pools will be filled with DPDK mbufs
+	 * by DPDK program.
+	 */
+	for (i = 0; i < count; i++) {
+		dpa_bp[i].seed_cb = dpa_bp_priv_seed;
+		dpa_bp[i].percpu_count =
+			devm_alloc_percpu(dev,
+			 *dpa_bp[i].percpu_count);
+	}
+#else
 	for (i = 0; i < count; i++)
 		dpa_bp[i].seed_cb = dpa_bp_shared_port_seed;
+#endif
 
 	/* Allocate this early, so we can store relevant information in
 	 * the private area (needed by 1588 code in dpa_mac_probe)

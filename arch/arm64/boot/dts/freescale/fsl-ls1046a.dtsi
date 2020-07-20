@@ -524,7 +524,8 @@
 			interrupts = <GIC_SPI 48 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clockgen 4 0>;
 			clock-names = "ipg";
-			status = "disabled";
+//#			status = "disabled";
+			status = "ok";
 		};
 
 		lpuart1: serial@2960000 {
@@ -533,7 +534,8 @@
 			interrupts = <GIC_SPI 49 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clockgen 4 1>;
 			clock-names = "ipg";
-			status = "disabled";
+//#			status = "disabled";
+			status = "ok";
 		};
 
 		lpuart2: serial@2970000 {

@@ -634,6 +634,8 @@ static int enetc_get_coalesce(struct net_device *ndev,
 	ic->tx_max_coalesced_frames = ENETC_TXIC_PKTTHR;
 	ic->rx_max_coalesced_frames = ENETC_RXIC_PKTTHR;
 
+	ic->use_adaptive_rx_coalesce = priv->ic_mode & ENETC_IC_RX_ADAPTIVE;
+
 	return 0;
 }
 
@@ -655,11 +657,17 @@ static int enetc_set_coalesce(struct net_device *ndev,
 		return -EOPNOTSUPP;
 
 	ic_mode = ENETC_IC_NONE;
+	if (ic->use_adaptive_rx_coalesce) {
+		ic_mode |= ENETC_IC_RX_ADAPTIVE;
+		rx_ictt = 0x1;
+	} else {
+		ic_mode |= rx_ictt ? ENETC_IC_RX_MANUAL : 0;
+	}
+
 	ic_mode |= tx_ictt ? ENETC_IC_TX_MANUAL : 0;
-	ic_mode |= rx_ictt ? ENETC_IC_RX_MANUAL : 0;
 
 	/* commit the settings */
-	changed = (ic_mode != priv->ic_mode);
+	changed = (ic_mode != priv->ic_mode) || (priv->tx_ictt != tx_ictt);
 
 	priv->ic_mode = ic_mode;
 	priv->tx_ictt = tx_ictt;
@@ -668,6 +676,7 @@ static int enetc_set_coalesce(struct net_device *ndev,
 		struct enetc_int_vector *v = priv->int_vector[i];
 
 		v->rx_ictt = rx_ictt;
+		v->rx_dim_en = !!(ic_mode & ENETC_IC_RX_ADAPTIVE);
 	}
 
 	if (netif_running(ndev) && changed) {
@@ -711,8 +720,6 @@ static int enetc_get_ts_info(struct net_device *ndev,
 }
 
 static const struct ethtool_ops enetc_pf_ethtool_ops = {
-	.supported_coalesce_params = ETHTOOL_COALESCE_USECS |
-				     ETHTOOL_COALESCE_MAX_FRAMES,
 	.get_regs_len = enetc_get_reglen,
 	.get_regs = enetc_get_regs,
 	.get_sset_count = enetc_get_sset_count,
@@ -734,8 +741,6 @@ static const struct ethtool_ops enetc_pf_ethtool_ops = {
 };
 
 static const struct ethtool_ops enetc_vf_ethtool_ops = {
-	.supported_coalesce_params = ETHTOOL_COALESCE_USECS |
-				     ETHTOOL_COALESCE_MAX_FRAMES,
 	.get_regs_len = enetc_get_reglen,
 	.get_regs = enetc_get_regs,
 	.get_sset_count = enetc_get_sset_count,

@@ -1829,6 +1829,13 @@ static int ioctl_en_if_link_status(struct usdpaa_ioctl_link_status *args)
 			pr_err(KBUILD_MODNAME "get eventfd context failed\n");
 			return -EINVAL;
 		}
+
+		/* Since there will be NO PHY update as link is already setup,
+		 * wake user context once so that current PHY status can
+		 * be fetched.
+		 */
+		phy_link_updates(net_dev);
+
 	} else if (of_device_is_compatible(dev->of_node, "fsl,dpa-ethernet-init")) {
 		struct proxy_device *proxy_dev;
 

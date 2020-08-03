@@ -265,7 +265,7 @@ static irqreturn_t enetc_msix(int irq, void *data)
 
 	read_unlock(&enetc_mdio_lock);
 
-	napi_schedule_irqoff(&v->napi);
+	napi_schedule(&v->napi);
 
 	return IRQ_HANDLED;
 }

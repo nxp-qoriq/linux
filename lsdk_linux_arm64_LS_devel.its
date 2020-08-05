@@ -1,0 +1,85 @@
+/*
+ * Copyright 2020 NXP
+ *
+ */
+
+
+/dts-v1/;
+
+/ {
+	description = "arm64 kernel, ramdisk and FDT blob";
+	#address-cells = <1>;
+
+	images {
+		kernel {
+			description = "ARM64 Kernel";
+			data = /incbin/("./arch/arm64/boot/Image.gz");
+			type = "kernel";
+			arch = "arm64";
+			os = "linux";
+			compression = "gzip";
+			load = <0x80080000>;
+			entry = <0x80080000>;
+		};
+
+		initrd {
+			description = "initrd for arm64";
+			data = /incbin/("./rootfs_yocto_arm64_devel.cpio.gz");
+			type = "ramdisk";
+			arch = "arm64";
+			os = "linux";
+			compression = "gzip";
+		};
+
+		la1246rdb-dtb {
+			description = "la1246rdb-dtb";
+			data = /incbin/("./arch/arm64/boot/dts/freescale/fsl-la1246-rdb-sdk.dtb");
+			type = "flat_dt";
+			arch = "arm64";
+			compression = "none";
+			load = <0x90000000>;
+		};
+
+		ls1046aabdn-dtb {
+			description = "ls1046aabdn-dtb";
+			data = /incbin/("./arch/arm64/boot/dts/freescale/fsl-ls1046a-abdn-sdk.dtb");
+			type = "flat_dt";
+			arch = "arm64";
+			compression = "none";
+			load = <0x90000000>;
+		};
+	
+		ls1046atp1-dtb {
+			description = "ls1046atp1-dtb";
+			data = /incbin/("./arch/arm64/boot/dts/freescale/fsl-ls1046a-tp1-sdk.dtb");
+			type = "flat_dt";
+			arch = "arm64";
+			compression = "none";
+			load = <0x90000000>;
+		};
+
+	};
+
+	configurations {
+		la1246rdb {
+			description = "config for la1246rdb";
+			kernel = "kernel";
+			ramdisk = "initrd";
+			fdt = "la1246rdb-dtb";
+		};
+
+		ls1046aabdn {
+			description = "config for ls1046aabdn";
+			kernel = "kernel";
+			ramdisk = "initrd";
+			fdt = "ls1046aabdn-dtb";
+		};
+
+		ls1046atp1 {
+			description = "config for ls1046atp1";
+			kernel = "kernel";
+			ramdisk = "initrd";
+			fdt = "ls1046atp1-dtb";
+		};
+	};
+};

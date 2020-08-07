@@ -1310,6 +1310,33 @@ static int fsl_qspi_remove(struct platform_device *pdev)
 
 static int fsl_qspi_suspend(struct platform_device *pdev, pm_message_t state)
 {
+	struct fsl_qspi *q = platform_get_drvdata(pdev);
+	u32 tmp = 0, rbsr = 0, tbsr = 0;
+
+	rbsr = qspi_readl(q, q->iobase + QUADSPI_RBSR);
+	tbsr = qspi_readl(q, q->iobase + QUADSPI_TBSR);
+
+	dev_dbg(q->dev, "QUADSPI_RBSR : %#x\n", rbsr);
+	dev_dbg(q->dev, "QUADSPI_TBSR : %#x\n", tbsr);
+	dev_dbg(q->dev, "QUADSPI_MCR : %#x\n", qspi_readl(q, q->iobase + QUADSPI_MCR));
+
+	if (rbsr || tbsr) {
+		tmp = qspi_readl(q, q->iobase + QUADSPI_MCR);
+		dev_dbg(q->dev, "Trying value for CLR_TXF : %#x\n",
+			tmp | QUADSPI_MCR_CLR_TXF_MASK);
+		qspi_writel(q, tmp | QUADSPI_MCR_CLR_TXF_MASK, q->iobase + QUADSPI_MCR);
+
+		tmp = qspi_readl(q, q->iobase + QUADSPI_MCR);
+		dev_dbg(q->dev, "Trying value for CLR_RXF : %#x\n",
+			tmp | QUADSPI_MCR_CLR_RXF_MASK);
+		qspi_writel(q, tmp | QUADSPI_MCR_CLR_RXF_MASK, q->iobase + QUADSPI_MCR);
+
+		tmp = qspi_readl(q, q->iobase + QUADSPI_MCR);
+		dev_dbg(q->dev, "Trying value in QUADSPI_MCR : %#x\n\n\n",
+			tmp | QUADSPI_MCR_MDIS_MASK);
+		qspi_writel(q, tmp | QUADSPI_MCR_MDIS_MASK, q->iobase + QUADSPI_MCR);
+	}
+
 	return 0;
 }
 

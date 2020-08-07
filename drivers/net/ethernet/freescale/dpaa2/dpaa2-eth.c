@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
 /* Copyright 2014-2016 Freescale Semiconductor Inc.
  * Copyright 2016-2017 NXP
+ * Copyright 2020 NXP
  */
 #include <linux/init.h>
 #include <linux/module.h>
@@ -15,6 +16,7 @@
 #include <linux/fsl/mc.h>
 #include <linux/bpf.h>
 #include <linux/bpf_trace.h>
+#include <linux/fsl/ptp_qoriq.h>
 #include <net/sock.h>
 
 #include "dpaa2-eth.h"
@@ -29,6 +31,9 @@
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_AUTHOR("Freescale Semiconductor, Inc");
 MODULE_DESCRIPTION("Freescale DPAA2 Ethernet Driver");
+
+struct ptp_qoriq *dpaa2_ptp;
+EXPORT_SYMBOL(dpaa2_ptp);
 
 static void *dpaa2_iova_to_virt(struct iommu_domain *domain,
 				dma_addr_t iova_addr)

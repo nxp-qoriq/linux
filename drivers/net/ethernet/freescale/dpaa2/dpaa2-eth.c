@@ -641,7 +641,8 @@ static void enable_tx_tstamp(struct dpaa2_fd *fd, void *buf_start)
 /* Create a frame descriptor based on a fragmented skb */
 static int build_sg_fd(struct dpaa2_eth_priv *priv,
 		       struct sk_buff *skb,
-		       struct dpaa2_fd *fd)
+		       struct dpaa2_fd *fd,
+		       void **swa_addr)
 {
 	struct device *dev = priv->net_dev->dev.parent;
 	void *sgt_buf = NULL;
@@ -710,6 +711,7 @@ static int build_sg_fd(struct dpaa2_eth_priv *priv,
 	 * skb backpointer in the software annotation area. We'll need
 	 * all of them on Tx Conf.
 	 */
+	*swa_addr = (void *)sgt_buf;
 	swa = (struct dpaa2_eth_swa *)sgt_buf;
 	swa->type = DPAA2_ETH_SWA_SG;
 	swa->sg.skb = skb;
@@ -728,9 +730,6 @@ static int build_sg_fd(struct dpaa2_eth_priv *priv,
 	dpaa2_fd_set_addr(fd, addr);
 	dpaa2_fd_set_len(fd, skb->len);
 	dpaa2_fd_set_ctrl(fd, FD_CTRL_PTA);
-
-	if (priv->tx_tstamp && skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)
-		enable_tx_tstamp(fd, sgt_buf);
 
 	return 0;
 
@@ -751,7 +750,8 @@ dma_map_sg_failed:
  */
 static int build_sg_fd_single_buf(struct dpaa2_eth_priv *priv,
 				  struct sk_buff *skb,
-				  struct dpaa2_fd *fd)
+				  struct dpaa2_fd *fd,
+				  void **swa_addr)
 {
 	struct device *dev = priv->net_dev->dev.parent;
 	struct dpaa2_eth_sgt_cache *sgt_cache;
@@ -789,6 +789,7 @@ static int build_sg_fd_single_buf(struct dpaa2_eth_priv *priv,
 	dpaa2_sg_set_final(sgt, true);
 
 	/* Store the skb backpointer in the SGT buffer */
+	*swa_addr = (void *)sgt_buf;
 	swa = (struct dpaa2_eth_swa *)sgt_buf;
 	swa->type = DPAA2_ETH_SWA_SINGLE;
 	swa->single.skb = skb;
@@ -807,9 +808,6 @@ static int build_sg_fd_single_buf(struct dpaa2_eth_priv *priv,
 	dpaa2_fd_set_len(fd, skb->len);
 	dpaa2_fd_set_ctrl(fd, FD_CTRL_PTA);
 
-	if (priv->tx_tstamp && skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)
-		enable_tx_tstamp(fd, sgt_buf);
-
 	return 0;
 
 sgt_map_failed:
@@ -826,7 +824,8 @@ data_map_failed:
 /* Create a frame descriptor based on a linear skb */
 static int build_single_fd(struct dpaa2_eth_priv *priv,
 			   struct sk_buff *skb,
-			   struct dpaa2_fd *fd)
+			   struct dpaa2_fd *fd,
+			   void **swa_addr)
 {
 	struct device *dev = priv->net_dev->dev.parent;
 	u8 *buffer_start, *aligned_start;
@@ -847,6 +846,7 @@ static int build_single_fd(struct dpaa2_eth_priv *priv,
 	 * (in the private data area) such that we can release it
 	 * on Tx confirm
 	 */
+	*swa_addr = (void *)buffer_start;
 	swa = (struct dpaa2_eth_swa *)buffer_start;
 	swa->type = DPAA2_ETH_SWA_SINGLE;
 	swa->single.skb = skb;
@@ -862,9 +862,6 @@ static int build_single_fd(struct dpaa2_eth_priv *priv,
 	dpaa2_fd_set_len(fd, skb->len);
 	dpaa2_fd_set_format(fd, dpaa2_fd_single);
 	dpaa2_fd_set_ctrl(fd, FD_CTRL_PTA);
-
-	if (priv->tx_tstamp && skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)
-		enable_tx_tstamp(fd, buffer_start);
 
 	return 0;
 }
@@ -991,6 +988,7 @@ static netdev_tx_t dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 	u32 fd_len;
 	u8 prio = 0;
 	int err, i, ch_id = 0;
+	void *swa;
 
 	percpu_stats = this_cpu_ptr(priv->percpu_stats);
 	percpu_extras = this_cpu_ptr(priv->percpu_extras);
@@ -1011,23 +1009,26 @@ static netdev_tx_t dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 	memset(&fd, 0, sizeof(fd));
 
 	if (skb_is_nonlinear(skb)) {
-		err = build_sg_fd(priv, skb, &fd);
+		err = build_sg_fd(priv, skb, &fd, &swa);
 		percpu_extras->tx_sg_frames++;
 		percpu_extras->tx_sg_bytes += skb->len;
 	} else if (skb_headroom(skb) < needed_headroom) {
-		err = build_sg_fd_single_buf(priv, skb, &fd);
+		err = build_sg_fd_single_buf(priv, skb, &fd, &swa);
 		percpu_extras->tx_sg_frames++;
 		percpu_extras->tx_sg_bytes += skb->len;
 		percpu_extras->tx_converted_sg_frames++;
 		percpu_extras->tx_converted_sg_bytes += skb->len;
 	} else {
-		err = build_single_fd(priv, skb, &fd);
+		err = build_single_fd(priv, skb, &fd, &swa);
 	}
 
 	if (unlikely(err)) {
 		percpu_stats->tx_dropped++;
 		goto err_build_fd;
 	}
+
+	if (priv->tx_tstamp && skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)
+		enable_tx_tstamp(&fd, swa);
 
 	/* Tracing point */
 	trace_dpaa2_tx_fd(net_dev, &fd);

@@ -1662,6 +1662,12 @@ static void dpaa2_eth_set_rx_mode(struct net_device *net_dev)
 			    "mac_filter_entries=%d, DPNI_OPT_NO_MAC_FILTER option must be disabled\n",
 			    max_mac);
 
+	if (options & DPNI_OPT_NO_MAC_FILTER) {
+		netdev_info(net_dev,
+			    "DPNI_OPT_NO_MAC_FILTER enabled, forcing promisc\n");
+		goto force_promisc;
+	}
+
 	/* Force promiscuous if the uc or mc counts exceed our capabilities. */
 	if (uc_count > max_mac) {
 		netdev_info(net_dev,
@@ -3598,12 +3604,17 @@ static int netdev_init(struct net_device *net_dev)
 	if (err)
 		return err;
 
-	/* Explicitly add the broadcast address to the MAC filtering table */
-	eth_broadcast_addr(bcast_addr);
-	err = dpni_add_mac_addr(priv->mc_io, 0, priv->mc_token, bcast_addr);
-	if (err) {
-		dev_err(dev, "dpni_add_mac_addr() failed\n");
-		return err;
+	/* Explicitly add the broadcast address to the MAC filtering table
+	 * only if the NO_MAC_FILTER option is not setup (the DPNI supports
+	 * MAC filtering)
+	 */
+	if (!(options & DPNI_OPT_NO_MAC_FILTER)) {
+		eth_broadcast_addr(bcast_addr);
+		err = dpni_add_mac_addr(priv->mc_io, 0, priv->mc_token, bcast_addr);
+		if (err) {
+			dev_err(dev, "dpni_add_mac_addr() failed\n");
+			return err;
+		}
 	}
 
 	/* Set MTU upper limit; lower limit is 68B (default value) */

@@ -11,7 +11,6 @@
 #include <linux/msi.h>
 #include <linux/kthread.h>
 #include <linux/iommu.h>
-#include <linux/net_tstamp.h>
 #include <linux/fsl/mc.h>
 #include <linux/bpf.h>
 #include <linux/bpf_trace.h>
@@ -832,7 +831,7 @@ static int build_single_fd(struct dpaa2_eth_priv *priv,
 	struct dpaa2_eth_swa *swa;
 	dma_addr_t addr;
 
-	buffer_start = skb->data - dpaa2_eth_needed_headroom(priv, skb);
+	buffer_start = skb->data - dpaa2_eth_needed_headroom(skb);
 
 	/* If there's enough room to align the FD address, do it.
 	 * It will help hardware optimize accesses.
@@ -946,7 +945,7 @@ static void free_tx_fd(const struct dpaa2_eth_priv *priv,
 	}
 
 	/* Get the timestamp value */
-	if (priv->tx_tstamp && skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP) {
+	if (skb->cb[0] == TX_TSTAMP) {
 		struct skb_shared_hwtstamps shhwtstamps;
 		__le64 *ts = dpaa2_get_ts(buffer_start, true);
 		u64 ns;
@@ -990,10 +989,17 @@ static netdev_tx_t dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 	int err, i, ch_id = 0;
 	void *swa;
 
+	/* Utilize skb->cb[0] for timestamping request per skb */
+	skb->cb[0] = 0;
+
+	if (priv->tx_tstamp_type == HWTSTAMP_TX_ON &&
+	    skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)
+		skb->cb[0] = TX_TSTAMP;
+
 	percpu_stats = this_cpu_ptr(priv->percpu_stats);
 	percpu_extras = this_cpu_ptr(priv->percpu_extras);
 
-	needed_headroom = dpaa2_eth_needed_headroom(priv, skb);
+	needed_headroom = dpaa2_eth_needed_headroom(skb);
 
 	/* We'll be holding a back-reference to the skb until Tx Confirmation;
 	 * we don't want that overwritten by a concurrent Tx with a cloned skb.
@@ -1027,7 +1033,7 @@ static netdev_tx_t dpaa2_eth_tx(struct sk_buff *skb, struct net_device *net_dev)
 		goto err_build_fd;
 	}
 
-	if (priv->tx_tstamp && skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)
+	if (skb->cb[0] == TX_TSTAMP)
 		enable_tx_tstamp(&fd, swa);
 
 	/* Tracing point */
@@ -1951,10 +1957,8 @@ static int dpaa2_eth_ts_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 
 	switch (config.tx_type) {
 	case HWTSTAMP_TX_OFF:
-		priv->tx_tstamp = false;
-		break;
 	case HWTSTAMP_TX_ON:
-		priv->tx_tstamp = true;
+		priv->tx_tstamp_type = config.tx_type;
 		break;
 	default:
 		return -ERANGE;
@@ -2152,7 +2156,6 @@ static int dpaa2_eth_xdp_create_fd(struct net_device *net_dev,
 				   struct xdp_frame *xdpf,
 				   struct dpaa2_fd *fd)
 {
-	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 	struct device *dev = net_dev->dev.parent;
 	unsigned int needed_headroom;
 	struct dpaa2_eth_swa *swa;
@@ -2162,7 +2165,7 @@ static int dpaa2_eth_xdp_create_fd(struct net_device *net_dev,
 	/* We require a minimum headroom to be able to transmit the frame.
 	 * Otherwise return an error and let the original net_device handle it
 	 */
-	needed_headroom = dpaa2_eth_needed_headroom(priv, NULL);
+	needed_headroom = dpaa2_eth_needed_headroom(NULL);
 	if (xdpf->headroom < needed_headroom)
 		return -EINVAL;
 
@@ -4199,6 +4202,9 @@ static int dpaa2_eth_probe(struct fsl_mc_device *dpni_dev)
 	priv->net_dev = net_dev;
 
 	priv->iommu_domain = iommu_get_domain_for_dev(dev);
+
+	priv->tx_tstamp_type = HWTSTAMP_TX_OFF;
+	priv->rx_tstamp = false;
 
 	/* Obtain a MC portal */
 	err = fsl_mc_portal_allocate(dpni_dev, FSL_MC_IO_ATOMIC_CONTEXT_PORTAL,

@@ -31,6 +31,10 @@ static bool mobiveil_pcie_valid_device(struct pci_bus *bus, unsigned int devfn)
 {
 	struct mobiveil_pcie *pcie = bus->sysdata;
 
+	/* If there is no link, then there is no device */
+	if (bus->number > pcie->rp.root_bus_nr && !mobiveil_pcie_link_up(pcie))
+		return false;
+
 	/* Only one device down on each root port */
 	if ((bus->number == pcie->rp.root_bus_nr) && (devfn > 0))
 		return false;
@@ -61,6 +65,12 @@ static void __iomem *mobiveil_pcie_map_bus(struct pci_bus *bus,
 	/* RC config access */
 	if (bus->number == pcie->rp.root_bus_nr)
 		return pcie->csr_axi_slave_base + where;
+
+	/* Make sure the Master Enable bit not cleared */
+	value = csr_readl(pcie, PCI_COMMAND);
+	if (!(value & PCI_COMMAND_MASTER))
+		csr_writel(pcie, value | PCI_COMMAND_MASTER,
+				    PCI_COMMAND);
 
 	/*
 	 * EP config access (in Config/APIO space)
@@ -119,7 +129,8 @@ static void mobiveil_pcie_isr(struct irq_desc *desc)
 
 	/* Handle INTx */
 	if (intr_status & PAB_INTP_INTX_MASK) {
-		shifted_status = csr_readl(pcie, PAB_INTP_AMBA_MISC_STAT);
+		shifted_status = csr_readl(pcie,
+						    PAB_INTP_AMBA_MISC_STAT);
 		shifted_status &= PAB_INTP_INTX_MASK;
 		shifted_status >>= PAB_INTX_START;
 		do {
@@ -133,12 +144,13 @@ static void mobiveil_pcie_isr(struct irq_desc *desc)
 							    bit);
 
 				/* clear interrupt handled */
-				csr_writel(pcie, 1 << (PAB_INTX_START + bit),
-					   PAB_INTP_AMBA_MISC_STAT);
+				csr_writel(pcie,
+						    1 << (PAB_INTX_START + bit),
+						    PAB_INTP_AMBA_MISC_STAT);
 			}
 
 			shifted_status = csr_readl(pcie,
-						   PAB_INTP_AMBA_MISC_STAT);
+							    PAB_INTP_AMBA_MISC_STAT);
 			shifted_status &= PAB_INTP_INTX_MASK;
 			shifted_status >>= PAB_INTX_START;
 		} while (shifted_status != 0);
@@ -606,10 +618,8 @@ int mobiveil_pcie_host_probe(struct mobiveil_pcie *pcie)
 	bridge->swizzle_irq = pci_common_swizzle;
 
 	ret = mobiveil_bringup_link(pcie);
-	if (ret) {
+	if (ret)
 		dev_info(dev, "link bring-up failed\n");
-		return ret;
-	}
 
 	/* setup the kernel resources for the newly added PCIe root bus */
 	ret = pci_scan_root_bus_bridge(bridge);

@@ -191,13 +191,6 @@
 #define QUADSPI_QUIRK_BASE_INTERNAL	BIT(4)
 
 /*
- * Use flash size for imx platforms and not for LS platforms. Define a
- * quirk which enables it only on imx platforms.
- */
-#define QUADSPI_QUIRK_USE_FLASH_SIZE	BIT(6)
-
-#define QUADSPI_MIN_IOMAP		SZ_4M
-/*
  * Controller uses TDH bits in register QUADSPI_FLSHCR.
  * They need to be set in accordance with the DDR/SDR mode.
  */
@@ -217,7 +210,7 @@ static const struct fsl_qspi_devtype_data vybrid_data = {
 	.txfifo = SZ_64,
 	.invalid_mstrid = QUADSPI_BUFXCR_INVALID_MSTRID,
 	.ahb_buf_size = SZ_1K,
-	.quirks = QUADSPI_QUIRK_SWAP_ENDIAN | QUADSPI_QUIRK_USE_FLASH_SIZE,
+	.quirks = QUADSPI_QUIRK_SWAP_ENDIAN,
 	.little_endian = true,
 };
 
@@ -226,8 +219,7 @@ static const struct fsl_qspi_devtype_data imx6sx_data = {
 	.txfifo = SZ_512,
 	.invalid_mstrid = QUADSPI_BUFXCR_INVALID_MSTRID,
 	.ahb_buf_size = SZ_1K,
-	.quirks = QUADSPI_QUIRK_4X_INT_CLK | QUADSPI_QUIRK_TKT245618 |
-		  QUADSPI_QUIRK_USE_FLASH_SIZE,
+	.quirks = QUADSPI_QUIRK_4X_INT_CLK | QUADSPI_QUIRK_TKT245618,
 	.little_endian = true,
 };
 
@@ -237,7 +229,7 @@ static const struct fsl_qspi_devtype_data imx7d_data = {
 	.invalid_mstrid = QUADSPI_BUFXCR_INVALID_MSTRID,
 	.ahb_buf_size = SZ_1K,
 	.quirks = QUADSPI_QUIRK_TKT253890 | QUADSPI_QUIRK_4X_INT_CLK |
-		  QUADSPI_QUIRK_USE_TDH_SETTING | QUADSPI_QUIRK_USE_FLASH_SIZE,
+		  QUADSPI_QUIRK_USE_TDH_SETTING,
 	.little_endian = true,
 };
 
@@ -247,7 +239,7 @@ static const struct fsl_qspi_devtype_data imx6ul_data = {
 	.invalid_mstrid = QUADSPI_BUFXCR_INVALID_MSTRID,
 	.ahb_buf_size = SZ_1K,
 	.quirks = QUADSPI_QUIRK_TKT253890 | QUADSPI_QUIRK_4X_INT_CLK |
-		  QUADSPI_QUIRK_USE_TDH_SETTING | QUADSPI_QUIRK_USE_FLASH_SIZE,
+		  QUADSPI_QUIRK_USE_TDH_SETTING,
 	.little_endian = true,
 };
 
@@ -273,9 +265,6 @@ struct fsl_qspi {
 	void __iomem *iobase;
 	void __iomem *ahb_addr;
 	u32 memmap_phy;
-	u32 memmap_phy_size;
-	u32 memmap_start;
-	u32 memmap_len;
 	struct clk *clk, *clk_en;
 	struct device *dev;
 	struct completion c;
@@ -313,11 +302,6 @@ static inline int needs_amba_base_offset(struct fsl_qspi *q)
 static inline int needs_tdh_setting(struct fsl_qspi *q)
 {
 	return q->devtype_data->quirks & QUADSPI_QUIRK_USE_TDH_SETTING;
-}
-
-static inline int needs_flash_size(struct fsl_qspi *q)
-{
-	return q->devtype_data->quirks & QUADSPI_QUIRK_USE_FLASH_SIZE;
 }
 
 /*
@@ -425,7 +409,7 @@ static bool fsl_qspi_supports_op(struct spi_mem *mem,
 	    op->data.nbytes > q->devtype_data->txfifo)
 		return false;
 
-	return true;
+	return spi_mem_default_supports_op(mem, op);
 }
 
 static void fsl_qspi_prepare_lut(struct fsl_qspi *q,
@@ -564,42 +548,11 @@ static void fsl_qspi_select_mem(struct fsl_qspi *q, struct spi_device *spi)
 	fsl_qspi_invalidate(q);
 }
 
-static int fsl_qspi_read_ahb(struct fsl_qspi *q, const struct spi_mem_op *op)
+static void fsl_qspi_read_ahb(struct fsl_qspi *q, const struct spi_mem_op *op)
 {
-	if (!needs_flash_size(q)) {
-		u32 size = q->devtype_data->ahb_buf_size;
-		memcpy_fromio(op->data.buf.in,
-			      q->ahb_addr + q->selected * size,
-			      op->data.nbytes);
-		return 0;
-	}
-
-	u32 start = op->addr.val + q->selected * q->memmap_phy_size / 4;
-	u32 len = op->data.nbytes;
-
-	/* if necessary, ioremap before AHB read */
-	if ((!q->ahb_addr) || start < q->memmap_start ||
-	    start + len > q->memmap_start + q->memmap_len) {
-		if (q->ahb_addr) {
-			iounmap(q->ahb_addr);
-		}
-
-		q->memmap_start = start;
-		q->memmap_len = len > QUADSPI_MIN_IOMAP ?
-				len : QUADSPI_MIN_IOMAP;
-
-		q->ahb_addr = ioremap_wc(q->memmap_phy + q->memmap_start,
-					 q->memmap_len);
-		if (!q->ahb_addr) {
-			dev_err(q->dev, "failed to alloc memory\n");
-			return -ENOMEM;
-		}
-	}
-
 	memcpy_fromio(op->data.buf.in,
-		      q->ahb_addr + start - q->memmap_start, len);
-
-	return 0;
+		      q->ahb_addr + q->selected * q->devtype_data->ahb_buf_size,
+		      op->data.nbytes);
 }
 
 static void fsl_qspi_fill_txfifo(struct fsl_qspi *q,
@@ -692,7 +645,6 @@ static int fsl_qspi_exec_op(struct spi_mem *mem, const struct spi_mem_op *op)
 	u32 addr_offset = 0;
 	int err = 0;
 	int invalid_mstrid = q->devtype_data->invalid_mstrid;
-	u32 size = q->devtype_data->ahb_buf_size;
 
 	mutex_lock(&q->lock);
 
@@ -705,11 +657,8 @@ static int fsl_qspi_exec_op(struct spi_mem *mem, const struct spi_mem_op *op)
 	if (needs_amba_base_offset(q))
 		addr_offset = q->memmap_phy;
 
-	if (needs_flash_size(q))
-		size = q->memmap_phy_size / 4;
-
 	qspi_writel(q,
-		    q->selected * size + addr_offset,
+		    q->selected * q->devtype_data->ahb_buf_size + addr_offset,
 		    base + QUADSPI_SFAR);
 
 	qspi_writel(q, qspi_readl(q, base + QUADSPI_MCR) |
@@ -732,7 +681,7 @@ static int fsl_qspi_exec_op(struct spi_mem *mem, const struct spi_mem_op *op)
 	 */
 	if (op->data.nbytes > (q->devtype_data->rxfifo - 4) &&
 	    op->data.dir == SPI_MEM_DATA_IN) {
-		err = fsl_qspi_read_ahb(q, op);
+		fsl_qspi_read_ahb(q, op);
 	} else {
 		qspi_writel(q, QUADSPI_RBCT_WMRK_MASK |
 			    QUADSPI_RBCT_RXBRD_USEIPS, base + QUADSPI_RBCT);
@@ -773,7 +722,6 @@ static int fsl_qspi_default_setup(struct fsl_qspi *q)
 	void __iomem *base = q->iobase;
 	u32 reg, addr_offset = 0;
 	int ret;
-	u32 size = q->devtype_data->ahb_buf_size;
 
 	/* disable and unprepare clock to avoid glitch pass to controller */
 	fsl_qspi_clk_disable_unprep(q);
@@ -828,22 +776,19 @@ static int fsl_qspi_default_setup(struct fsl_qspi *q)
 		addr_offset = q->memmap_phy;
 
 	/*
-	 * In HW there can be a maximum of four chips on two buses with two
-	 * chip selects on each bus. We use four chip selects in SW to
-	 * differentiate between the four chips. We divide the total memory
-	 * region/ahb_buf_size size equally for each chip and set SFA1AD,
-	 * SFA2AD, SFB1AD, SFB2AD accordingly.
+	 * In HW there can be a maximum of four chips on two buses with
+	 * two chip selects on each bus. We use four chip selects in SW
+	 * to differentiate between the four chips.
+	 * We use ahb_buf_size for each chip and set SFA1AD, SFA2AD, SFB1AD,
+	 * SFB2AD accordingly.
 	 */
-	if (needs_flash_size(q))
-		size = q->memmap_phy_size / 4;
-
-	qspi_writel(q, size + addr_offset,
+	qspi_writel(q, q->devtype_data->ahb_buf_size + addr_offset,
 		    base + QUADSPI_SFA1AD);
-	qspi_writel(q, size * 2 + addr_offset,
+	qspi_writel(q, q->devtype_data->ahb_buf_size * 2 + addr_offset,
 		    base + QUADSPI_SFA2AD);
-	qspi_writel(q, size * 3 + addr_offset,
+	qspi_writel(q, q->devtype_data->ahb_buf_size * 3 + addr_offset,
 		    base + QUADSPI_SFB1AD);
-	qspi_writel(q, size * 4 + addr_offset,
+	qspi_writel(q, q->devtype_data->ahb_buf_size * 4 + addr_offset,
 		    base + QUADSPI_SFB2AD);
 
 	q->selected = -1;
@@ -930,17 +875,14 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
 					"QuadSPI-memory");
-
-	if (!needs_flash_size(q)) {
-		q->ahb_addr = devm_ioremap_resource(dev, res);
-		if (IS_ERR(q->ahb_addr)) {
-			ret = PTR_ERR(q->ahb_addr);
-			goto err_put_ctrl;
-		}
-	}
-
 	q->memmap_phy = res->start;
-	q->memmap_phy_size = resource_size(res);
+	/* Since there are 4 cs, map size required is 4 times ahb_buf_size */
+	q->ahb_addr = devm_ioremap(dev, q->memmap_phy,
+				   (q->devtype_data->ahb_buf_size * 4));
+	if (!q->ahb_addr) {
+		ret = -ENOMEM;
+		goto err_put_ctrl;
+	}
 
 	/* find the clocks */
 	q->clk_en = devm_clk_get(dev, "qspi_en");
@@ -1013,11 +955,6 @@ static int fsl_qspi_remove(struct platform_device *pdev)
 	fsl_qspi_clk_disable_unprep(q);
 
 	mutex_destroy(&q->lock);
-
-	if (needs_flash_size(q)) {
-		if (q->ahb_addr)
-			iounmap(q->ahb_addr);
-	}
 
 	return 0;
 }

@@ -30,6 +30,7 @@ static int pfe_get_gemac_if_properties(struct device_node *gem,
 	int phy_id = 0;
 	const u32 *addr;
 	const u8 *mac_addr;
+	int ret;
 
 	addr = of_get_property(gem, "reg", &size);
 	if (addr)
@@ -85,10 +86,12 @@ static int pfe_get_gemac_if_properties(struct device_node *gem,
 	}
 
 process_phynode:
-	pdata->ls1012a_eth_pdata[port].mii_config = of_get_phy_mode(gem);
-	if ((pdata->ls1012a_eth_pdata[port].mii_config) < 0)
+	ret = of_get_phy_mode(gem);
+	if (ret < 0)
 		pr_err("%s:%d Incorrect Phy mode....\n", __func__,
 		       __LINE__);
+	else
+		pdata->ls1012a_eth_pdata[port].mii_config = ret;
 
 	addr = of_get_property(gem, "fsl,mdio-mux-val", &size);
 	if (!addr) {
@@ -141,7 +144,11 @@ static int pfe_platform_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, pfe);
 
-	dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
+	if (dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32))) {
+		rc = -ENOMEM;
+		pr_err("unable to configure DMA mask.\n");
+		goto err_ddr;
+	}
 
 	if (of_address_to_resource(np, 1, &res)) {
 		rc = -ENOMEM;

@@ -308,7 +308,7 @@ static struct mxc_hs_info hs_setting[] = {
 	{1280, 720,  15, 0x16},
 
 	{1024, 768,  30, 0x11},
-	{1024, 768,  15, 0x16},
+	{1024, 768,  15, 0x23},
 
 	{720,  576,  30, 0x1E},
 	{720,  576,  15, 0x23},
@@ -347,6 +347,9 @@ static int calc_hs_settle(struct mxc_mipi_csi2_dev *csi2dev, u32 dphy_clk)
 	u32 rxhs_settle;
 
 	esc_rate = clk_get_rate(csi2dev->clk_esc) / 1000000;
+	if (!esc_rate)
+		return 0;
+
 	hs_settle = 140 + 8 * 1000 / dphy_clk;
 	rxhs_settle = hs_settle / (1000 / esc_rate) - 1;
 	return rxhs_settle;
@@ -435,11 +438,13 @@ static int mipi_sc_fw_init(struct mxc_mipi_csi2_dev *csi2dev, char enable)
 static uint16_t find_hs_configure(struct v4l2_subdev_format *sd_fmt)
 {
 	struct v4l2_mbus_framefmt *fmt = &sd_fmt->format;
-	u32 frame_rate = fmt->reserved[1];
+	u32 frame_rate;
 	int i;
 
 	if (!fmt)
 		return -EINVAL;
+
+	frame_rate = fmt->reserved[1];
 
 	for (i = 0; i < ARRAY_SIZE(hs_setting); i++) {
 		if (hs_setting[i].width  == fmt->width &&
@@ -846,7 +851,7 @@ static int mipi_csi2_s_stream(struct v4l2_subdev *sd, int enable)
 
 	if (enable) {
 		pm_runtime_get_sync(dev);
-		if (!csi2dev->running) {
+		if (!csi2dev->running++) {
 			mxc_csi2_get_sensor_fmt(csi2dev);
 			mxc_mipi_csi2_hc_config(csi2dev);
 			mxc_mipi_csi2_reset(csi2dev);
@@ -854,12 +859,10 @@ static int mipi_csi2_s_stream(struct v4l2_subdev *sd, int enable)
 			mxc_mipi_csi2_enable(csi2dev);
 			mxc_mipi_csi2_reg_dump(csi2dev);
 		}
-		csi2dev->running++;
 	} else {
-		if (csi2dev->running)
+		if (!--csi2dev->running)
 			mxc_mipi_csi2_disable(csi2dev);
 
-		csi2dev->running--;
 		pm_runtime_put(dev);
 	}
 
@@ -977,7 +980,7 @@ static int mipi_csi2_parse_dt(struct mxc_mipi_csi2_dev *csi2dev)
 
 	node = of_graph_get_next_endpoint(node, NULL);
 	if (!node) {
-		dev_err(dev, "No port node at %s\n", node->full_name);
+		dev_err(dev, "No port node\n");
 		return -EINVAL;
 	}
 

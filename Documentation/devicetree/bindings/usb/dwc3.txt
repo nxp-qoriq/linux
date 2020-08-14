@@ -84,6 +84,8 @@ Optional properties:
 			during HS transmit.
  - snps,disable_devinit_u1u2: when set, disable device-initiated U1/U2
 			LPM request in USB device mode.
+ - snps,parkmode-disable-ss-quirk: when set, all SuperSpeed bus instances in
+			park mode are disabled.
  - snps,dis_metastability_quirk: when set, disable metastability workaround.
 			CAUTION: use only if you are absolutely sure of it.
  - snps,is-utmi-l1-suspend: true when DWC3 asserts output signal

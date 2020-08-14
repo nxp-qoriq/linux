@@ -264,6 +264,12 @@ static int tb_switch_nvm_read(void *priv, unsigned int offset, void *val,
 	return ret;
 }
 
+static int tb_switch_nvm_no_read(void *priv, unsigned int offset, void *val,
+				 size_t bytes)
+{
+	return -EPERM;
+}
+
 static int tb_switch_nvm_write(void *priv, unsigned int offset, void *val,
 			       size_t bytes)
 {
@@ -309,6 +315,7 @@ static struct nvmem_device *register_nvmem(struct tb_switch *sw, int id,
 		config.read_only = true;
 	} else {
 		config.name = "nvm_non_active";
+		config.reg_read = tb_switch_nvm_no_read;
 		config.reg_write = tb_switch_nvm_write;
 		config.root_only = true;
 	}
@@ -655,24 +662,6 @@ int tb_switch_reset(struct tb *tb, u64 route)
 	if (res.err > 0)
 		return -EIO;
 	return res.err;
-}
-
-struct tb_switch *get_switch_at_route(struct tb_switch *sw, u64 route)
-{
-	u8 next_port = route; /*
-			       * Routes use a stride of 8 bits,
-			       * eventhough a port index has 6 bits at most.
-			       * */
-	if (route == 0)
-		return sw;
-	if (next_port > sw->config.max_port_number)
-		return NULL;
-	if (tb_is_upstream_port(&sw->ports[next_port]))
-		return NULL;
-	if (!sw->ports[next_port].remote)
-		return NULL;
-	return get_switch_at_route(sw->ports[next_port].remote->sw,
-				   route >> TB_ROUTE_SHIFT);
 }
 
 /**

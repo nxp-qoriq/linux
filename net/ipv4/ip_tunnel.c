@@ -98,9 +98,10 @@ struct ip_tunnel *ip_tunnel_lookup(struct ip_tunnel_net *itn,
 				   __be32 remote, __be32 local,
 				   __be32 key)
 {
-	unsigned int hash;
 	struct ip_tunnel *t, *cand = NULL;
 	struct hlist_head *head;
+	struct net_device *ndev;
+	unsigned int hash;
 
 	hash = ip_tunnel_hash(key, remote);
 	head = &itn->tunnels[hash];
@@ -155,11 +156,8 @@ struct ip_tunnel *ip_tunnel_lookup(struct ip_tunnel_net *itn,
 			cand = t;
 	}
 
-	if (flags & TUNNEL_NO_KEY)
-		goto skip_key_lookup;
-
 	hlist_for_each_entry_rcu(t, head, hash_node) {
-		if (t->parms.i_key != key ||
+		if ((!(flags & TUNNEL_NO_KEY) && t->parms.i_key != key) ||
 		    t->parms.iph.saddr != 0 ||
 		    t->parms.iph.daddr != 0 ||
 		    !(t->dev->flags & IFF_UP))
@@ -171,7 +169,6 @@ struct ip_tunnel *ip_tunnel_lookup(struct ip_tunnel_net *itn,
 			cand = t;
 	}
 
-skip_key_lookup:
 	if (cand)
 		return cand;
 
@@ -179,8 +176,9 @@ skip_key_lookup:
 	if (t && t->dev->flags & IFF_UP)
 		return t;
 
-	if (itn->fb_tunnel_dev && itn->fb_tunnel_dev->flags & IFF_UP)
-		return netdev_priv(itn->fb_tunnel_dev);
+	ndev = READ_ONCE(itn->fb_tunnel_dev);
+	if (ndev && ndev->flags & IFF_UP)
+		return netdev_priv(ndev);
 
 	return NULL;
 }
@@ -513,7 +511,7 @@ static int tnl_update_pmtu(struct net_device *dev, struct sk_buff *skb,
 	else
 		mtu = skb_dst(skb) ? dst_mtu(skb_dst(skb)) : dev->mtu;
 
-	skb_dst_update_pmtu(skb, mtu);
+	skb_dst_update_pmtu_no_confirm(skb, mtu);
 
 	if (skb->protocol == htons(ETH_P_IP)) {
 		if (!skb_is_gso(skb) &&
@@ -574,8 +572,9 @@ void ip_md_tunnel_xmit(struct sk_buff *skb, struct net_device *dev, u8 proto)
 		else if (skb->protocol == htons(ETH_P_IPV6))
 			tos = ipv6_get_dsfield((const struct ipv6hdr *)inner_iph);
 	}
-	ip_tunnel_init_flow(&fl4, proto, key->u.ipv4.dst, key->u.ipv4.src, 0,
-			    RT_TOS(tos), tunnel->parms.link, tunnel->fwmark);
+	ip_tunnel_init_flow(&fl4, proto, key->u.ipv4.dst, key->u.ipv4.src,
+			    tunnel_id_to_key32(key->tun_id), RT_TOS(tos),
+			    0, skb->mark);
 	if (tunnel->encap.type != TUNNEL_ENCAP_NONE)
 		goto tx_error;
 	rt = ip_route_output_key(tunnel->net, &fl4);
@@ -1202,10 +1201,8 @@ int ip_tunnel_init(struct net_device *dev)
 	iph->version		= 4;
 	iph->ihl		= 5;
 
-	if (tunnel->collect_md) {
-		dev->features |= NETIF_F_NETNS_LOCAL;
+	if (tunnel->collect_md)
 		netif_keep_dst(dev);
-	}
 	return 0;
 }
 EXPORT_SYMBOL_GPL(ip_tunnel_init);
@@ -1217,9 +1214,9 @@ void ip_tunnel_uninit(struct net_device *dev)
 	struct ip_tunnel_net *itn;
 
 	itn = net_generic(net, tunnel->ip_tnl_net_id);
-	/* fb_tunnel_dev will be unregisted in net-exit call. */
-	if (itn->fb_tunnel_dev != dev)
-		ip_tunnel_del(itn, netdev_priv(dev));
+	ip_tunnel_del(itn, netdev_priv(dev));
+	if (itn->fb_tunnel_dev == dev)
+		WRITE_ONCE(itn->fb_tunnel_dev, NULL);
 
 	dst_cache_reset(&tunnel->dst_cache);
 }

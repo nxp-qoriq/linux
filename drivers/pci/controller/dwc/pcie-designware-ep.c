@@ -712,7 +712,8 @@ int dw_pcie_ep_init(struct dw_pcie_ep *ep)
 	ep->epc = epc;
 	epc_set_drvdata(epc, ep);
 
-	hdr_type = dw_pcie_readb_dbi(pci, PCI_HEADER_TYPE);
+	hdr_type = dw_pcie_readb_dbi(pci, PCI_HEADER_TYPE) &
+		   PCI_HEADER_TYPE_MASK;
 	if (hdr_type != PCI_HEADER_TYPE_NORMAL) {
 		dev_err(pci->dev, "PCIe controller is not set to EP mode (hdr_type:0x%x)!\n",
 			hdr_type);

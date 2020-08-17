@@ -155,6 +155,7 @@ void enetc_pspeed_set(struct net_device *ndev)
 		      & (~ENETC_PMR_PSPEED_MASK))
 		      | pspeed);
 }
+EXPORT_SYMBOL_GPL(enetc_pspeed_set);
 
 /* CBD Class 5: Time Gated Scheduling Gate Control List configuration
  * Descriptor - Long Format

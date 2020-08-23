@@ -693,9 +693,6 @@ static int pci_endpoint_test_probe(struct pci_dev *pdev,
 	if (!pci_endpoint_test_alloc_irq_vectors(test, irq_type))
 		goto err_disable_irq;
 
-	if (!pci_endpoint_test_request_irq(test))
-		goto err_disable_irq;
-
 	for (bar = BAR_0; bar <= BAR_5; bar++) {
 		if (pci_resource_flags(pdev, bar) & IORESOURCE_MEM) {
 			base = pci_ioremap_bar(pdev, bar);
@@ -724,13 +721,16 @@ static int pci_endpoint_test_probe(struct pci_dev *pdev,
 		goto err_iounmap;
 	}
 
+	if (!pci_endpoint_test_request_irq(test))
+		goto err_ida_remove;
+
 	snprintf(name, sizeof(name), DRV_MODULE_NAME ".%d", id);
 	misc_device = &test->miscdev;
 	misc_device->minor = MISC_DYNAMIC_MINOR;
 	misc_device->name = kstrdup(name, GFP_KERNEL);
 	if (!misc_device->name) {
 		err = -ENOMEM;
-		goto err_ida_remove;
+		goto err_release_irq;
 	}
 	misc_device->fops = &pci_endpoint_test_fops,
 
@@ -745,6 +745,9 @@ static int pci_endpoint_test_probe(struct pci_dev *pdev,
 err_kfree_name:
 	kfree(misc_device->name);
 
+err_release_irq:
+	pci_endpoint_test_release_irq(test);
+
 err_ida_remove:
 	ida_simple_remove(&pci_endpoint_test_ida, id);
 
@@ -753,7 +756,6 @@ err_iounmap:
 		if (test->bar[bar])
 			pci_iounmap(pdev, test->bar[bar]);
 	}
-	pci_endpoint_test_release_irq(test);
 
 err_disable_irq:
 	pci_endpoint_test_free_irq_vectors(test);

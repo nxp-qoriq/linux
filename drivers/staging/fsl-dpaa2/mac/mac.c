@@ -148,15 +148,18 @@ static void dpaa2_mac_link_changed(struct net_device *netdev)
 		if (phydev->autoneg)
 			state.options |= DPMAC_LINK_OPT_AUTONEG;
 
-		if (phydev->pause && linkmode_test_bit(ETHTOOL_LINK_MODE_Pause_BIT, phydev->advertising))
-			state.options |= DPMAC_LINK_OPT_PAUSE;
-		if (phydev->pause && linkmode_test_bit(ETHTOOL_LINK_MODE_Asym_Pause_BIT, phydev->advertising))
-			state.options |= DPMAC_LINK_OPT_ASYM_PAUSE;
-
 		netif_carrier_on(netdev);
 	} else {
 		netif_carrier_off(netdev);
 	}
+
+	/* We do not support for the moment pause frame
+	 * autonegotiation, just take the value that came from MC previously
+	 */
+	state.options &= ~DPMAC_LINK_OPT_PAUSE;
+	state.options &= ~DPMAC_LINK_OPT_ASYM_PAUSE;
+	state.options |= priv->old_state.options & DPMAC_LINK_OPT_PAUSE;
+	state.options |= priv->old_state.options & DPMAC_LINK_OPT_ASYM_PAUSE;
 
 	/* Call the dpmac_set_link_state() only if there is a change in the
 	 * link configuration
@@ -411,7 +414,8 @@ static const struct ethtool_ops dpaa2_mac_ethtool_ops = {
 #endif /* CONFIG_FSL_DPAA2_MAC_NETDEVS */
 
 static void configure_link(struct dpaa2_mac_priv *priv,
-			   struct dpmac_link_cfg *cfg)
+			   struct dpmac_link_cfg *cfg,
+			   int restart_aneg)
 {
 	struct phy_device *phydev = priv->netdev->phydev;
 
@@ -427,17 +431,23 @@ static void configure_link(struct dpaa2_mac_priv *priv,
 	}
 
 	if (linkmode_test_bit(ETHTOOL_LINK_MODE_Pause_BIT, phydev->supported)) {
-		if (cfg->options & DPMAC_LINK_OPT_PAUSE)
+		if (cfg->options & DPMAC_LINK_OPT_PAUSE) {
+			priv->old_state.options |= DPMAC_LINK_OPT_PAUSE;
 			linkmode_set_bit(ETHTOOL_LINK_MODE_Pause_BIT, phydev->advertising);
-		else
+		} else {
 			linkmode_clear_bit(ETHTOOL_LINK_MODE_Pause_BIT, phydev->advertising);
+			priv->old_state.options &= ~DPMAC_LINK_OPT_PAUSE;
+		}
 	}
 
 	if (linkmode_test_bit(ETHTOOL_LINK_MODE_Asym_Pause_BIT, phydev->supported)) {
-		if (cfg->options & DPMAC_LINK_OPT_ASYM_PAUSE)
+		if (cfg->options & DPMAC_LINK_OPT_ASYM_PAUSE) {
+			priv->old_state.options |= DPMAC_LINK_OPT_ASYM_PAUSE;
 			linkmode_set_bit(ETHTOOL_LINK_MODE_Asym_Pause_BIT, phydev->advertising);
-		else
+		} else {
+			priv->old_state.options &= ~DPMAC_LINK_OPT_ASYM_PAUSE;
 			linkmode_clear_bit(ETHTOOL_LINK_MODE_Asym_Pause_BIT, phydev->advertising);
+		}
 	}
 
 	if (cfg->options & DPMAC_LINK_OPT_AUTONEG) {
@@ -448,11 +458,13 @@ static void configure_link(struct dpaa2_mac_priv *priv,
 		linkmode_clear_bit(ETHTOOL_LINK_MODE_Autoneg_BIT, phydev->advertising);
 	}
 
-	phy_start_aneg(phydev);
+	if (restart_aneg)
+		phy_start_aneg(phydev);
 }
 
 static irqreturn_t dpaa2_mac_irq_handler(int irq_num, void *arg)
 {
+	struct dpmac_link_state	state = { 0 };
 	struct device *dev = (struct device *)arg;
 	struct fsl_mc_device *mc_dev = to_fsl_mc_device(dev);
 	struct dpaa2_mac_priv *priv = dev_get_drvdata(dev);
@@ -479,14 +491,29 @@ static irqreturn_t dpaa2_mac_irq_handler(int irq_num, void *arg)
 		if (unlikely(err))
 			goto out;
 
-		configure_link(priv, &link_cfg);
+		configure_link(priv, &link_cfg,1);
 	}
 
 	if (status & DPMAC_IRQ_EVENT_LINK_DOWN_REQ)
 		phy_stop(ndev->phydev);
 
-	if (status & DPMAC_IRQ_EVENT_LINK_UP_REQ)
+	if (status & DPMAC_IRQ_EVENT_LINK_UP_REQ) {
+		err = dpmac_get_link_cfg(mc_dev->mc_io, 0,
+					 mc_dev->mc_handle,
+					 &link_cfg);
+		if (err)
+			goto out;
+
+		state.up = 0;
+		state.state_valid = 1;
+		state.options = 0;
+
+		err = dpmac_set_link_state_v2(priv->mc_dev->mc_io, 0,
+					      priv->mc_dev->mc_handle, &state);
+
+		configure_link(priv, &link_cfg, 0);
 		phy_start(ndev->phydev);
+	}
 out:
 	dpmac_clear_irq_status(mc_dev->mc_io, 0, mc_dev->mc_handle,
 			       DPMAC_IRQ_INDEX, status);

@@ -1613,18 +1613,8 @@ static int dpaa2_eth_open(struct net_device *net_dev)
 		goto enable_err;
 	}
 
-	/* If the DPMAC object has already processed the link up interrupt,
-	 * we have to learn the link state ourselves.
-	 */
-	err = link_state_update(priv);
-	if (err < 0) {
-		netdev_err(net_dev, "Can't update link state\n");
-		goto link_state_err;
-	}
-
 	return 0;
 
-link_state_err:
 enable_err:
 	disable_ch_napi(priv);
 	drain_pool(priv);

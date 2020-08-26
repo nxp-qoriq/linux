@@ -1027,6 +1027,76 @@ static void evb_ethtool_get_stats(struct net_device *netdev,
 	}
 }
 
+static void evb_ethtool_get_pauseparam(struct net_device *netdev,
+				      struct ethtool_pauseparam *pause)
+{
+	struct evb_port_priv *port_priv = netdev_priv(netdev);
+	struct dpdmux_link_state state = {0};
+	int err = 0;
+
+	dpdmux_if_get_link_state(port_priv->evb_priv->mc_io, 0,
+				 port_priv->evb_priv->mux_handle,
+				 port_priv->port_index,
+				 &state);
+	if (err) {
+		netdev_err(netdev, "dpdmux_if_get_link_state err %d\n", err);
+		return;
+	}
+
+	pause->rx_pause = !!(state.options & DPDMUX_LINK_OPT_PAUSE);
+	pause->tx_pause = !!(state.options & DPDMUX_LINK_OPT_PAUSE);
+
+	pause->autoneg = AUTONEG_DISABLE;
+}
+
+static int evb_ethtool_set_pauseparam(struct net_device *netdev,
+				      struct ethtool_pauseparam *pause)
+{
+	struct evb_port_priv *port_priv = netdev_priv(netdev);
+	struct dpdmux_link_state state = {0};
+	struct dpdmux_link_cfg cfg = {0};
+	int err = 0;
+
+	if (pause->autoneg)
+		return -EOPNOTSUPP;
+
+	if (!!pause->rx_pause ^ !!pause->tx_pause)
+		return -EOPNOTSUPP;
+
+	err = dpdmux_if_get_link_state(port_priv->evb_priv->mc_io, 0,
+				       port_priv->evb_priv->mux_handle,
+				       port_priv->port_index,
+				       &state);
+	if (err)
+		return err;
+
+	/* Due to a temporary MC limitation, the DPDMUX port must be down
+	 * in order to be able to change link settings. Taking steps to let
+	 * the user know that.
+	 */
+	if (netif_running(netdev)) {
+		netdev_info(netdev,
+			    "Sorry, interface must be brought down first.\n");
+		return -EACCES;
+	}
+
+	cfg.rate = state.rate;
+	cfg.options = state.options;
+	if (pause->rx_pause && pause->tx_pause)
+		cfg.options |= DPDMUX_LINK_OPT_PAUSE;
+	else
+		cfg.options &= ~DPDMUX_LINK_OPT_PAUSE;
+
+	err = dpdmux_if_set_link_cfg(port_priv->evb_priv->mc_io, 0,
+				     port_priv->evb_priv->mux_handle,
+				     port_priv->port_index,
+				     &cfg);
+	if (err)
+		return err;
+
+	return 0;
+}
+
 static const struct ethtool_ops evb_port_ethtool_ops = {
 	.get_drvinfo		= &evb_get_drvinfo,
 	.get_link		= &ethtool_op_get_link,
@@ -1035,6 +1105,8 @@ static const struct ethtool_ops evb_port_ethtool_ops = {
 	.get_strings		= &evb_ethtool_get_strings,
 	.get_ethtool_stats	= &evb_ethtool_get_stats,
 	.get_sset_count		= &evb_ethtool_get_sset_count,
+	.get_pauseparam		= &evb_ethtool_get_pauseparam,
+	.set_pauseparam		= &evb_ethtool_set_pauseparam,
 };
 
 static int evb_open(struct net_device *netdev)

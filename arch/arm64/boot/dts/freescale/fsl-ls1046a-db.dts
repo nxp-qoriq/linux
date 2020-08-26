@@ -109,6 +109,23 @@
 #include "fsl-ls1046-post.dtsi"
 
 &fman0 {
+	ethernet@e4000 {
+			status = "disabled";
+	};
+
+	ethernet@e8000 {
+			status = "disabled";
+	};
+
+	ethernet@ea000 {
+			status = "disabled";
+	};
+
+	ethernet@f0000 { /* 10GEC1 */
+		fixed-link = <0 1 1000 0 0>;
+		phy-connection-type = "xgmii";
+	};
+
 
 	ethernet@f2000 {
 		phy-handle = <&aqr113c_phy1>;

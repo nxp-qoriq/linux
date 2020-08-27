@@ -2852,6 +2852,9 @@ static int set_pause(struct dpaa2_eth_priv *priv)
 
 	priv->link_state.options = link_cfg.options;
 
+	/* Disable taildrop (we enable by default generation of Tx pause) */
+	dpaa2_eth_set_rx_taildrop(priv, true, priv->pfc_enabled);
+
 	return 0;
 }
 

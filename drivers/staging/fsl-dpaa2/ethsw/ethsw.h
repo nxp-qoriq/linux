@@ -77,4 +77,6 @@ struct ethsw_core {
 	struct workqueue_struct		*workqueue;
 };
 
+bool ethsw_port_is_up(struct ethsw_port_priv *port_priv);
+
 #endif	/* __ETHSW_H */

@@ -175,6 +175,87 @@ static void ethsw_ethtool_get_stats(struct net_device *netdev,
 	}
 }
 
+static void ethsw_ethtool_get_pauseparam(struct net_device *netdev,
+					 struct ethtool_pauseparam *pause)
+{
+	struct ethsw_port_priv *port_priv = netdev_priv(netdev);
+	struct dpsw_link_state state = {0};
+	int err = 0;
+
+	err = dpsw_if_get_link_state(port_priv->ethsw_data->mc_io, 0,
+				     port_priv->ethsw_data->dpsw_handle,
+				     port_priv->idx,
+				     &state);
+	if (err) {
+		netdev_err(netdev, "dpsw_if_get_link_state err %d\n", err);
+		return;
+	}
+
+	pause->tx_pause = !!(state.options & DPSW_LINK_OPT_PAUSE);
+	pause->rx_pause = !!(state.options & DPSW_LINK_OPT_PAUSE);
+
+	pause->autoneg = AUTONEG_DISABLE;
+}
+
+static int ethsw_ethtool_set_pauseparam(struct net_device *netdev,
+					struct ethtool_pauseparam *pause)
+{
+	struct ethsw_port_priv *port_priv = netdev_priv(netdev);
+	struct dpsw_link_state state = {0};
+	struct dpsw_link_cfg cfg = {0};
+	bool up;
+	int err = 0;
+
+	if (pause->autoneg)
+		return -EOPNOTSUPP;
+
+	if (!!pause->rx_pause ^ !!pause->tx_pause)
+		return -EOPNOTSUPP;
+
+	err = dpsw_if_get_link_state(port_priv->ethsw_data->mc_io, 0,
+				     port_priv->ethsw_data->dpsw_handle,
+				     port_priv->idx,
+				     &state);
+	if (err)
+		return err;
+
+	/* Interface needs to be down to change link settings */
+	up = ethsw_port_is_up(port_priv);
+	if (up) {
+		err = dpsw_if_disable(port_priv->ethsw_data->mc_io, 0,
+				      port_priv->ethsw_data->dpsw_handle,
+				      port_priv->idx);
+		if (err) {
+			netdev_err(netdev, "dpsw_if_disable err %d\n", err);
+			return err;
+		}
+	}
+
+	cfg.rate = state.rate;
+	cfg.options = state.options;
+	if (pause->tx_pause && pause->rx_pause)
+		cfg.options |= DPSW_LINK_OPT_PAUSE;
+	else
+		cfg.options &= ~DPSW_LINK_OPT_PAUSE;
+
+	err = dpsw_if_set_link_cfg(port_priv->ethsw_data->mc_io, 0,
+				   port_priv->ethsw_data->dpsw_handle,
+				   port_priv->idx,
+				   &cfg);
+
+	if (up) {
+		err = dpsw_if_enable(port_priv->ethsw_data->mc_io, 0,
+				     port_priv->ethsw_data->dpsw_handle,
+				     port_priv->idx);
+		if (err) {
+			netdev_err(netdev, "dpsw_if_enable err %d\n", err);
+			return err;
+		}
+	}
+
+	return err;
+}
+
 const struct ethtool_ops ethsw_port_ethtool_ops = {
 	.get_drvinfo		= ethsw_get_drvinfo,
 	.get_link		= ethtool_op_get_link,
@@ -183,4 +264,6 @@ const struct ethtool_ops ethsw_port_ethtool_ops = {
 	.get_strings		= ethsw_ethtool_get_strings,
 	.get_ethtool_stats	= ethsw_ethtool_get_stats,
 	.get_sset_count		= ethsw_ethtool_get_sset_count,
+	.get_pauseparam		= ethsw_ethtool_get_pauseparam,
+	.set_pauseparam		= ethsw_ethtool_set_pauseparam,
 };

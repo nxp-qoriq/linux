@@ -43,7 +43,7 @@ static int ethsw_add_vlan(struct ethsw_core *ethsw, u16 vid)
 	return 0;
 }
 
-static bool ethsw_port_is_up(struct ethsw_port_priv *port_priv)
+bool ethsw_port_is_up(struct ethsw_port_priv *port_priv)
 {
 	struct net_device *netdev = port_priv->netdev;
 	struct dpsw_link_state state;

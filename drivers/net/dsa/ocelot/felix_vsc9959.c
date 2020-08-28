@@ -332,10 +332,8 @@ static const u32 *vsc9959_regmap[] = {
 	[GCB]	= vsc9959_gcb_regmap,
 };
 
-/* Addresses are relative to the PCI device's base address and
- * will be fixed up at ioremap time.
- */
-static struct resource vsc9959_target_io_res[] = {
+/* Addresses are relative to the PCI device's base address */
+static const struct resource vsc9959_target_io_res[] = {
 	[ANA] = {
 		.start	= 0x0280000,
 		.end	= 0x028ffff,
@@ -378,7 +376,7 @@ static struct resource vsc9959_target_io_res[] = {
 	},
 };
 
-static struct resource vsc9959_port_io_res[] = {
+static const struct resource vsc9959_port_io_res[] = {
 	{
 		.start	= 0x0100000,
 		.end	= 0x010ffff,
@@ -414,7 +412,7 @@ static struct resource vsc9959_port_io_res[] = {
 /* Port MAC 0 Internal MDIO bus through which the SerDes acting as an
  * SGMII/QSGMII MAC PCS can be found.
  */
-static struct resource vsc9959_imdio_res = {
+static const struct resource vsc9959_imdio_res = {
 	.start		= 0x8030,
 	.end		= 0x8040,
 	.name		= "imdio",
@@ -599,42 +597,6 @@ static int vsc9959_reset(struct ocelot *ocelot)
 	return 0;
 }
 
-static void vsc9959_pcs_an_restart_sgmii(struct phy_device *pcs)
-{
-	phy_set_bits(pcs, MII_BMCR, BMCR_ANRESTART);
-}
-
-static void vsc9959_pcs_an_restart_usxgmii(struct phy_device *pcs)
-{
-	phy_write_mmd(pcs, MDIO_MMD_VEND2, MII_BMCR,
-		      USXGMII_BMCR_RESET |
-		      USXGMII_BMCR_AN_EN |
-		      USXGMII_BMCR_RST_AN);
-}
-
-static void vsc9959_pcs_an_restart(struct ocelot *ocelot, int port)
-{
-	struct felix *felix = ocelot_to_felix(ocelot);
-	struct phy_device *pcs = felix->pcs[port];
-
-	if (!pcs)
-		return;
-
-	switch (pcs->interface) {
-	case PHY_INTERFACE_MODE_SGMII:
-	case PHY_INTERFACE_MODE_QSGMII:
-		vsc9959_pcs_an_restart_sgmii(pcs);
-		break;
-	case PHY_INTERFACE_MODE_USXGMII:
-		vsc9959_pcs_an_restart_usxgmii(pcs);
-		break;
-	default:
-		dev_err(ocelot->dev, "Invalid PCS interface type %s\n",
-			phy_modes(pcs->interface));
-		break;
-	}
-}
-
 /* We enable SGMII AN only when the PHY has managed = "in-band-status" in the
  * device tree. If we are in MLO_AN_PHY mode, we program directly state->speed
  * into the PCS, which is retrieved out-of-band over MDIO. This also has the
@@ -680,14 +642,11 @@ static void vsc9959_pcs_init_sgmii(struct phy_device *pcs,
 		phy_write(pcs, ENETC_PCS_LINK_TIMER2,
 			  ENETC_PCS_LINK_TIMER2_VAL);
 
-		phy_write(pcs, MII_BMCR, BMCR_ANRESTART | BMCR_ANENABLE);
+		phy_set_bits(pcs, MII_BMCR, BMCR_ANENABLE);
 	} else {
+		u16 if_mode = ENETC_PCS_IF_MODE_SGMII_EN;
 		int speed;
 
-		if (state->duplex == DUPLEX_HALF) {
-			phydev_err(pcs, "Half duplex not supported\n");
-			return;
-		}
 		switch (state->speed) {
 		case SPEED_1000:
 			speed = ENETC_PCS_SPEED_1000;
@@ -706,14 +665,11 @@ static void vsc9959_pcs_init_sgmii(struct phy_device *pcs,
 			return;
 		}
 
-		phy_write(pcs, ENETC_PCS_IF_MODE,
-			  ENETC_PCS_IF_MODE_SGMII_EN |
-			  ENETC_PCS_IF_MODE_SGMII_SPEED(speed));
+		if_mode |= ENETC_PCS_IF_MODE_SGMII_SPEED(speed);
+		if (state->duplex == DUPLEX_HALF)
+			if_mode |= ENETC_PCS_IF_MODE_DUPLEX_HALF;
 
-		/* Yes, not a mistake: speed is given by IF_MODE. */
-		phy_write(pcs, MII_BMCR, BMCR_RESET |
-					 BMCR_SPEED1000 |
-					 BMCR_FULLDPLX);
+		phy_clear_bits(pcs, MII_BMCR, BMCR_ANENABLE);
 	}
 }
 
@@ -738,18 +694,19 @@ static void vsc9959_pcs_init_2500basex(struct phy_device *pcs,
 				       unsigned int link_an_mode,
 				       const struct phylink_link_state *state)
 {
+	u16 if_mode = ENETC_PCS_IF_MODE_SGMII_SPEED(ENETC_PCS_SPEED_2500) |
+		      ENETC_PCS_IF_MODE_SGMII_EN;
+
 	if (link_an_mode == MLO_AN_INBAND) {
 		phydev_err(pcs, "AN not supported on 3.125GHz SerDes lane\n");
 		return;
 	}
 
-	phy_write(pcs, ENETC_PCS_IF_MODE,
-		  ENETC_PCS_IF_MODE_SGMII_EN |
-		  ENETC_PCS_IF_MODE_SGMII_SPEED(ENETC_PCS_SPEED_2500));
+	if (state->duplex == DUPLEX_HALF)
+		if_mode |= ENETC_PCS_IF_MODE_DUPLEX_HALF;
 
-	phy_write(pcs, MII_BMCR, BMCR_SPEED1000 |
-				 BMCR_FULLDPLX |
-				 BMCR_RESET);
+	phy_write(pcs, ENETC_PCS_IF_MODE, if_mode);
+	phy_clear_bits(pcs, MII_BMCR, BMCR_ANENABLE);
 }
 
 static void vsc9959_pcs_init_usxgmii(struct phy_device *pcs,
@@ -789,8 +746,11 @@ static void vsc9959_pcs_init(struct ocelot *ocelot, int port,
 	linkmode_set_bit_array(phy_basic_ports_array,
 			       ARRAY_SIZE(phy_basic_ports_array),
 			       pcs->supported);
+	linkmode_set_bit(ETHTOOL_LINK_MODE_10baseT_Half_BIT, pcs->supported);
 	linkmode_set_bit(ETHTOOL_LINK_MODE_10baseT_Full_BIT, pcs->supported);
+	linkmode_set_bit(ETHTOOL_LINK_MODE_100baseT_Half_BIT, pcs->supported);
 	linkmode_set_bit(ETHTOOL_LINK_MODE_100baseT_Full_BIT, pcs->supported);
+	linkmode_set_bit(ETHTOOL_LINK_MODE_1000baseT_Half_BIT, pcs->supported);
 	linkmode_set_bit(ETHTOOL_LINK_MODE_1000baseT_Full_BIT, pcs->supported);
 	if (pcs->interface == PHY_INTERFACE_MODE_2500BASEX ||
 	    pcs->interface == PHY_INTERFACE_MODE_USXGMII)
@@ -982,7 +942,7 @@ static int vsc9959_mdio_bus_alloc(struct ocelot *ocelot)
 	struct device *dev = ocelot->dev;
 	resource_size_t imdio_base;
 	void __iomem *imdio_regs;
-	struct resource *res;
+	struct resource res;
 	struct enetc_hw *hw;
 	struct mii_bus *bus;
 	int port;
@@ -999,12 +959,12 @@ static int vsc9959_mdio_bus_alloc(struct ocelot *ocelot)
 	imdio_base = pci_resource_start(felix->pdev,
 					felix->info->imdio_pci_bar);
 
-	res = felix->info->imdio_res;
-	res->flags = IORESOURCE_MEM;
-	res->start += imdio_base;
-	res->end += imdio_base;
+	memcpy(&res, felix->info->imdio_res, sizeof(res));
+	res.flags = IORESOURCE_MEM;
+	res.start += imdio_base;
+	res.end += imdio_base;
 
-	imdio_regs = devm_ioremap_resource(dev, res);
+	imdio_regs = devm_ioremap_resource(dev, &res);
 	if (IS_ERR(imdio_regs)) {
 		dev_err(dev, "failed to map internal MDIO registers\n");
 		return PTR_ERR(imdio_regs);
@@ -1094,7 +1054,6 @@ struct felix_info felix_info_vsc9959 = {
 	.mdio_bus_alloc		= vsc9959_mdio_bus_alloc,
 	.mdio_bus_free		= vsc9959_mdio_bus_free,
 	.pcs_init		= vsc9959_pcs_init,
-	.pcs_an_restart		= vsc9959_pcs_an_restart,
 	.pcs_link_state		= vsc9959_pcs_link_state,
 	.prevalidate_phy_mode	= vsc9959_prevalidate_phy_mode,
 };

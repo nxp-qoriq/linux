@@ -8,9 +8,9 @@
 
 /* Platform-specific information */
 struct felix_info {
-	struct resource			*target_io_res;
-	struct resource			*port_io_res;
-	struct resource			*imdio_res;
+	const struct resource		*target_io_res;
+	const struct resource		*port_io_res;
+	const struct resource		*imdio_res;
 	const struct reg_field		*regfields;
 	const u32 *const		*map;
 	const struct ocelot_ops		*ops;
@@ -25,7 +25,6 @@ struct felix_info {
 	void	(*pcs_init)(struct ocelot *ocelot, int port,
 			    unsigned int link_an_mode,
 			    const struct phylink_link_state *state);
-	void	(*pcs_an_restart)(struct ocelot *ocelot, int port);
 	void	(*pcs_link_state)(struct ocelot *ocelot, int port,
 				  struct phylink_link_state *state);
 	int	(*prevalidate_phy_mode)(struct ocelot *ocelot, int port,

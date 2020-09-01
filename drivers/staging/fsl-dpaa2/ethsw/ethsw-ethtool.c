@@ -13,17 +13,18 @@ static struct {
 	enum dpsw_counter id;
 	char name[ETH_GSTRING_LEN];
 } ethsw_ethtool_counters[] =  {
-	{DPSW_CNT_ING_FRAME,		"rx frames"},
-	{DPSW_CNT_ING_BYTE,		"rx bytes"},
-	{DPSW_CNT_ING_FLTR_FRAME,	"rx filtered frames"},
-	{DPSW_CNT_ING_FRAME_DISCARD,	"rx discarded frames"},
-	{DPSW_CNT_ING_BCAST_FRAME,	"rx b-cast frames"},
-	{DPSW_CNT_ING_BCAST_BYTES,	"rx b-cast bytes"},
-	{DPSW_CNT_ING_MCAST_FRAME,	"rx m-cast frames"},
-	{DPSW_CNT_ING_MCAST_BYTE,	"rx m-cast bytes"},
-	{DPSW_CNT_EGR_FRAME,		"tx frames"},
-	{DPSW_CNT_EGR_BYTE,		"tx bytes"},
-	{DPSW_CNT_EGR_FRAME_DISCARD,	"tx discarded frames"},
+	{DPSW_CNT_ING_FRAME,			"rx frames"},
+	{DPSW_CNT_ING_BYTE,			"rx bytes"},
+	{DPSW_CNT_ING_FLTR_FRAME,		"rx filtered frames"},
+	{DPSW_CNT_ING_FRAME_DISCARD,		"rx discarded frames"},
+	{DPSW_CNT_ING_BCAST_FRAME,		"rx b-cast frames"},
+	{DPSW_CNT_ING_BCAST_BYTES,		"rx b-cast bytes"},
+	{DPSW_CNT_ING_MCAST_FRAME,		"rx m-cast frames"},
+	{DPSW_CNT_ING_MCAST_BYTE,		"rx m-cast bytes"},
+	{DPSW_CNT_EGR_FRAME,			"tx frames"},
+	{DPSW_CNT_EGR_BYTE,			"tx bytes"},
+	{DPSW_CNT_EGR_FRAME_DISCARD,		"tx discarded frames"},
+	{DPDMUX_CNT_ING_NO_BUFFER_DISCARD, 	"rx discarded no buffer frames"},
 
 };
 

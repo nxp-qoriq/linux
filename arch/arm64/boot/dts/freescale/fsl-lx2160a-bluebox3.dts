@@ -9,7 +9,7 @@
 #include "fsl-lx2160a.dtsi"
 
 / {
-	model = "NXP Layerscape LX2160A BLUEBOX3";
+	model = "NXP Layerscape LX2160ABLUEBOX3";
 	compatible = "fsl,lx2160a-rdb", "fsl,lx2160a";
 
 	aliases {

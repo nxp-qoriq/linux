@@ -1428,10 +1428,10 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req, bool encrypt)
 	int src_nents, mapped_src_nents, dst_nents = 0, mapped_dst_nents = 0;
 	struct tls_edesc *edesc;
 	dma_addr_t qm_sg_dma, iv_dma = 0;
-	int ivsize = 0;
+	int ivsize = crypto_aead_ivsize(aead);
 	u8 *iv;
 	int qm_sg_index, qm_sg_ents = 0, qm_sg_bytes;
-	int in_len, out_len;
+	int src_len, dst_len, data_len;
 	struct qm_sg_entry *sg_table, *fd_sgt;
 	struct caam_drv_ctx *drv_ctx;
 	struct scatterlist *dst;
@@ -1455,14 +1455,16 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req, bool encrypt)
 		return ERR_PTR(-ENOMEM);
 	}
 
+	data_len = req->assoclen + req->cryptlen;
+	dst_len = req->cryptlen + (encrypt ? authsize : 0);
+
 	if (likely(req->src == req->dst)) {
-		src_nents = sg_nents_for_len(req->src, req->assoclen +
-					     req->cryptlen +
-					     (encrypt ? authsize : 0));
+		src_len = req->assoclen + dst_len;
+
+		src_nents = sg_nents_for_len(req->src, src_len);
 		if (unlikely(src_nents < 0)) {
 			dev_err(qidev, "Insufficient bytes (%d) in src S/G\n",
-				req->assoclen + req->cryptlen +
-				(encrypt ? authsize : 0));
+				src_len);
 			qi_cache_free(edesc);
 			return ERR_PTR(src_nents);
 		}
@@ -1476,22 +1478,22 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req, bool encrypt)
 		}
 		dst = req->dst;
 	} else {
-		src_nents = sg_nents_for_len(req->src, req->assoclen +
-					     req->cryptlen);
+		src_len = data_len;
+
+		src_nents = sg_nents_for_len(req->src, src_len);
 		if (unlikely(src_nents < 0)) {
 			dev_err(qidev, "Insufficient bytes (%d) in src S/G\n",
-				req->assoclen + req->cryptlen);
+				src_len);
 			qi_cache_free(edesc);
 			return ERR_PTR(src_nents);
 		}
 
 		dst = scatterwalk_ffwd(edesc->tmp, req->dst, req->assoclen);
-		dst_nents = sg_nents_for_len(dst, req->cryptlen +
-					     (encrypt ? authsize : 0));
+
+		dst_nents = sg_nents_for_len(dst, dst_len);
 		if (unlikely(dst_nents < 0)) {
 			dev_err(qidev, "Insufficient bytes (%d) in dst S/G\n",
-				req->cryptlen +
-				(encrypt ? authsize : 0));
+				dst_len);
 			qi_cache_free(edesc);
 			return ERR_PTR(dst_nents);
 		}
@@ -1527,7 +1529,6 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req, bool encrypt)
 	sg_table = &edesc->sgt[0];
 	qm_sg_bytes = qm_sg_ents * sizeof(*sg_table);
 
-	ivsize = crypto_aead_ivsize(aead);
 	iv = (u8 *)(sg_table + qm_sg_ents);
 	/* Make sure IV is located in a DMAable area */
 	memcpy(iv, req->iv, ivsize);
@@ -1551,12 +1552,11 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req, bool encrypt)
 	dma_to_qm_sg_one(sg_table, iv_dma, ivsize, 0);
 	qm_sg_index = 1;
 
-	sg_to_qm_sg_last(req->src, mapped_src_nents, sg_table + qm_sg_index, 0);
+	sg_to_qm_sg_last(req->src, src_len, sg_table + qm_sg_index, 0);
 	qm_sg_index += mapped_src_nents;
 
 	if (mapped_dst_nents > 1)
-		sg_to_qm_sg_last(dst, mapped_dst_nents, sg_table +
-				 qm_sg_index, 0);
+		sg_to_qm_sg_last(dst, dst_len, sg_table + qm_sg_index, 0);
 
 	qm_sg_dma = dma_map_single(qidev, sg_table, qm_sg_bytes, DMA_TO_DEVICE);
 	if (dma_mapping_error(qidev, qm_sg_dma)) {
@@ -1570,22 +1570,19 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req, bool encrypt)
 	edesc->qm_sg_dma = qm_sg_dma;
 	edesc->qm_sg_bytes = qm_sg_bytes;
 
-	out_len = req->cryptlen + (encrypt ? authsize : 0);
-	in_len = ivsize + req->assoclen + req->cryptlen;
-
 	fd_sgt = &edesc->drv_req.fd_sgt[0];
 
-	dma_to_qm_sg_one_last_ext(&fd_sgt[1], qm_sg_dma, in_len, 0);
+	dma_to_qm_sg_one_last_ext(&fd_sgt[1], qm_sg_dma, ivsize + data_len, 0);
 
 	if (req->dst == req->src)
 		dma_to_qm_sg_one_ext(&fd_sgt[0], qm_sg_dma +
 				    (sg_nents_for_len(req->src, req->assoclen) +
-				     1) * sizeof(*sg_table), out_len, 0);
+				     1) * sizeof(*sg_table), dst_len, 0);
 	else if (mapped_dst_nents == 1)
-		dma_to_qm_sg_one(&fd_sgt[0], sg_dma_address(dst), out_len, 0);
+		dma_to_qm_sg_one(&fd_sgt[0], sg_dma_address(dst), dst_len, 0);
 	else
 		dma_to_qm_sg_one_ext(&fd_sgt[0], qm_sg_dma + sizeof(*sg_table) *
-				     qm_sg_index, out_len, 0);
+				     qm_sg_index, dst_len, 0);
 
 	return edesc;
 }

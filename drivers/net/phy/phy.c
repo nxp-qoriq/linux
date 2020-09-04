@@ -857,6 +857,7 @@ void phy_stop(struct phy_device *phydev)
 		phy_disable_interrupts(phydev);
 
 	phydev->state = PHY_HALTED;
+	phy_suspend(phydev);
 
 out_unlock:
 	mutex_unlock(&phydev->lock);
@@ -1059,10 +1060,10 @@ void phy_state_machine(struct work_struct *work)
 		}
 		break;
 	case PHY_HALTED:
+		do_suspend = true;
 		if (phydev->link) {
 			phydev->link = 0;
 			phy_link_down(phydev, true);
-			do_suspend = true;
 		}
 		break;
 	case PHY_RESUMING:

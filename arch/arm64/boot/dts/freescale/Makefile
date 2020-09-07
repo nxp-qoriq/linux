@@ -44,6 +44,7 @@ dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1046a-abdn-usdpaa-sdk.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1046a-tp1.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1046a-tp1-sdk.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1046a-tp1-usdpaa.dtb
+dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1046a-tp1-sdk-shared-usdpaa.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-la1246-rdb.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-la1246-rdb-sdk.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-la1246-rdb-usdpaa.dtb

@@ -969,7 +969,7 @@
 			reg = <0x00 0x03400000 0x0 0x00100000
 			       0x80 0x00000000 0x8 0x00000000>;
 			reg-names = "regs", "addr_space";
-			num-ob-windows = <256>;
+			apio-wins = <8>;
 			status = "disabled";
 		};
 
@@ -1006,7 +1006,7 @@
 			reg = <0x00 0x03500000 0x0 0x00100000
 			       0x88 0x00000000 0x8 0x00000000>;
 			reg-names = "regs", "addr_space";
-			num-ob-windows = <256>;
+			apio-wins = <8>;
 			status = "disabled";
 		};
 
@@ -1043,7 +1043,7 @@
 			reg = <0x00 0x03600000 0x0 0x00100000
 			       0x90 0x00000000 0x8 0x00000000>;
 			reg-names = "regs", "addr_space";
-			num-ob-windows = <256>;
+			apio-wins = <256>;
 			max-functions = /bits/ 8 <2>;
 			status = "disabled";
 		};
@@ -1081,7 +1081,7 @@
 			reg = <0x00 0x03700000 0x0 0x00100000
 			       0x98 0x00000000 0x8 0x00000000>;
 			reg-names = "regs", "addr_space";
-			num-ob-windows = <256>;
+			apio-wins = <8>;
 			status = "disabled";
 		};
 
@@ -1118,7 +1118,7 @@
 			reg = <0x00 0x03800000 0x0 0x00100000
 			       0xa0 0x00000000 0x8 0x00000000>;
 			reg-names = "regs", "addr_space";
-			num-ob-windows = <256>;
+			apio-wins = <256>;
 			max-functions = /bits/ 8 <2>;
 			status = "disabled";
 		};
@@ -1156,7 +1156,7 @@
 			reg = <0x00 0x03900000 0x0 0x00100000
 			       0xa8 0x00000000 0x8 0x00000000>;
 			reg-names = "regs", "addr_space";
-			num-ob-windows = <256>;
+			apio-wins = <8>;
 			status = "disabled";
 		};
 

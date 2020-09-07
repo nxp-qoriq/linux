@@ -4,6 +4,7 @@
  *
  * Copyright (c) 2007, 2010, 2012 Freescale Semiconductor, Inc.
  * Copyright (c) 2009 MontaVista Software, Inc.
+ * Copyright 2020 NXP
  *
  * Authors: Xiaobo Xie <X.Xie@freescale.com>
  *	    Anton Vorontsov <avorontsov@ru.mvista.com>
@@ -81,6 +82,7 @@ struct sdhci_esdhc {
 	bool quirk_tuning_erratum_type2;
 	bool quirk_ignore_data_inhibit;
 	bool in_sw_tuning;
+	bool hs400_init_req;
 	unsigned int peripheral_clock;
 	const struct esdhc_clk_fixup *clk_fixup;
 	u32 div_ratio;
@@ -620,6 +622,7 @@ static void esdhc_of_set_clock(struct sdhci_host *host, unsigned int clock)
 {
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
 	struct sdhci_esdhc *esdhc = sdhci_pltfm_priv(pltfm_host);
+	unsigned int clk = clock;
 	int pre_div = 1;
 	int div = 1;
 	int division;
@@ -647,6 +650,11 @@ static void esdhc_of_set_clock(struct sdhci_host *host, unsigned int clock)
 	if (fixup && clock > fixup)
 		clock = fixup;
 
+	if (esdhc->hs400_init_req &&
+	    host->mmc->ios.timing == MMC_TIMING_MMC_HS400 &&
+	    clk == MMC_HS200_MAX_DTR)
+		esdhc_tuning_block_enable(host, true);
+
 	temp = sdhci_readl(host, ESDHC_SYSTEM_CONTROL);
 	temp &= ~(ESDHC_CLOCK_SDCLKEN | ESDHC_CLOCK_IPGEN | ESDHC_CLOCK_HCKEN |
 		  ESDHC_CLOCK_PEREN | ESDHC_CLOCK_MASK);
@@ -659,7 +667,7 @@ static void esdhc_of_set_clock(struct sdhci_host *host, unsigned int clock)
 		div++;
 
 	if (esdhc->quirk_limited_clk_division &&
-	    clock == MMC_HS200_MAX_DTR &&
+	    clk == MMC_HS200_MAX_DTR &&
 	    (host->mmc->ios.timing == MMC_TIMING_MMC_HS400 ||
 	     host->flags & SDHCI_HS400_TUNING)) {
 		division = pre_div * div;
@@ -691,8 +699,11 @@ static void esdhc_of_set_clock(struct sdhci_host *host, unsigned int clock)
 		| (pre_div << ESDHC_PREDIV_SHIFT));
 	sdhci_writel(host, temp, ESDHC_SYSTEM_CONTROL);
 
-	if (host->mmc->ios.timing == MMC_TIMING_MMC_HS400 &&
-	    clock == MMC_HS200_MAX_DTR) {
+	if (esdhc->hs400_init_req &&
+	    host->mmc->ios.timing == MMC_TIMING_MMC_HS400 &&
+	    clk == MMC_HS200_MAX_DTR) {
+		esdhc->hs400_init_req = false;
+
 		temp = sdhci_readl(host, ESDHC_TBCTL);
 		sdhci_writel(host, temp | ESDHC_HS400_MODE, ESDHC_TBCTL);
 		temp = sdhci_readl(host, ESDHC_SDCLKCTL);
@@ -1078,8 +1089,22 @@ static int esdhc_execute_tuning(struct mmc_host *mmc, u32 opcode)
 static void esdhc_set_uhs_signaling(struct sdhci_host *host,
 				   unsigned int timing)
 {
+	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
+	struct sdhci_esdhc *esdhc = sdhci_pltfm_priv(pltfm_host);
+
+	esdhc->hs400_init_req = false;
+
+	/*
+	 * MMC stack configures HS400 timing and frequency by,
+	 * - mmc_set_timing(host, MMC_TIMING_MMC_HS400)
+	 * - mmc_set_bus_speed(card)
+	 *
+	 * However eSDHC's procedure to configure HS400 is done
+	 * during clock setting. So we only enable a flag here,
+	 * and all configurations are done when set clock later.
+	 */
 	if (timing == MMC_TIMING_MMC_HS400)
-		esdhc_tuning_block_enable(host, true);
+		esdhc->hs400_init_req = true;
 	else
 		sdhci_set_uhs_signaling(host, timing);
 }

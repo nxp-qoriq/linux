@@ -83,6 +83,7 @@ struct sdhci_esdhc {
 	bool quirk_ignore_data_inhibit;
 	bool in_sw_tuning;
 	bool hs400_init_req;
+	bool hs400es_init_req;
 	unsigned int peripheral_clock;
 	const struct esdhc_clk_fixup *clk_fixup;
 	u32 div_ratio;
@@ -618,6 +619,23 @@ static void esdhc_flush_async_fifo(struct sdhci_host *host)
 	}
 }
 
+static void esdhc_tuning_block_enable(struct sdhci_host *host, bool enable)
+{
+	u32 val;
+
+	esdhc_clock_enable(host, false);
+	esdhc_flush_async_fifo(host);
+
+	val = sdhci_readl(host, ESDHC_TBCTL);
+	if (enable)
+		val |= ESDHC_TB_EN;
+	else
+		val &= ~ESDHC_TB_EN;
+	sdhci_writel(host, val, ESDHC_TBCTL);
+
+	esdhc_clock_enable(host, true);
+}
+
 static void esdhc_of_set_clock(struct sdhci_host *host, unsigned int clock)
 {
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
@@ -736,10 +754,35 @@ static void esdhc_of_set_clock(struct sdhci_host *host, unsigned int clock)
 		}
 		udelay(10);
 	}
+	esdhc_clock_enable(host, true);
 
-	temp = sdhci_readl(host, ESDHC_SYSTEM_CONTROL);
-	temp |= ESDHC_CLOCK_SDCLKEN;
-	sdhci_writel(host, temp, ESDHC_SYSTEM_CONTROL);
+	if (esdhc->hs400es_init_req &&
+	    host->mmc->ios.timing == MMC_TIMING_MMC_HS400 &&
+	    clk == MMC_HS200_MAX_DTR) {
+		esdhc->hs400es_init_req = false;
+
+		temp = sdhci_readl(host, ESDHC_SDTIMNGCTL);
+		sdhci_writel(host, temp | ESDHC_FLW_CTL_BG, ESDHC_SDTIMNGCTL);
+		temp = sdhci_readl(host, ESDHC_TBCTL);
+		sdhci_writel(host, temp | ESDHC_HS400_MODE, ESDHC_TBCTL);
+		temp = sdhci_readl(host, ESDHC_SDCLKCTL);
+		sdhci_writel(host, temp | ESDHC_CMD_CLK_CTL, ESDHC_SDCLKCTL);
+
+		esdhc_tuning_block_enable(host, true);
+
+		temp = sdhci_readl(host, ESDHC_DLLCFG0);
+		temp |= ESDHC_DLL_ENABLE;
+		if (host->mmc->actual_clock > 133000000)
+			temp |= ESDHC_DLL_FREQ_SEL;
+		else
+			temp &= ~ESDHC_DLL_FREQ_SEL;
+		sdhci_writel(host, temp, ESDHC_DLLCFG0);
+
+		temp = sdhci_readl(host, ESDHC_TBCTL);
+		temp &= ~ESDHC_HS400_WNDW_ADJUST;
+		temp |= ESDHC_SAMPL_CMD_RSP_DQS;
+		sdhci_writel(host, temp, ESDHC_TBCTL);
+	}
 }
 
 static void esdhc_pltfm_set_bus_width(struct sdhci_host *host, int width)
@@ -878,23 +921,6 @@ static struct soc_device_attribute soc_tuning_erratum_type2[] = {
 	{ .family = "QorIQ LA1575A", },
 	{ },
 };
-
-static void esdhc_tuning_block_enable(struct sdhci_host *host, bool enable)
-{
-	u32 val;
-
-	esdhc_clock_enable(host, false);
-	esdhc_flush_async_fifo(host);
-
-	val = sdhci_readl(host, ESDHC_TBCTL);
-	if (enable)
-		val |= ESDHC_TB_EN;
-	else
-		val &= ~ESDHC_TB_EN;
-	sdhci_writel(host, val, ESDHC_TBCTL);
-
-	esdhc_clock_enable(host, true);
-}
 
 static void esdhc_tuning_window_ptr(struct sdhci_host *host, u8 *window_start,
 				    u8 *window_end)
@@ -1103,10 +1129,13 @@ static void esdhc_set_uhs_signaling(struct sdhci_host *host,
 	 * during clock setting. So we only enable a flag here,
 	 * and all configurations are done when set clock later.
 	 */
-	if (timing == MMC_TIMING_MMC_HS400)
+	if (timing == MMC_TIMING_MMC_HS400) {
+		if (host->mmc->ios.enhanced_strobe)
+			return;
 		esdhc->hs400_init_req = true;
-	else
+	} else {
 		sdhci_set_uhs_signaling(host, timing);
+	}
 }
 
 static u32 esdhc_irq(struct sdhci_host *host, u32 intmask)
@@ -1300,6 +1329,27 @@ static int esdhc_hs400_prepare_ddr(struct mmc_host *mmc)
 	return 0;
 }
 
+static void esdhc_hs400_enhanced_strobe(struct mmc_host *mmc,
+					struct mmc_ios *ios)
+{
+	struct sdhci_host *host = mmc_priv(mmc);
+	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
+	struct sdhci_esdhc *esdhc = sdhci_pltfm_priv(pltfm_host);
+
+	if (!ios->enhanced_strobe)
+		return;
+
+	/* Cancel controller HS400 init request for tuning mode */
+	esdhc->hs400_init_req = false;
+
+	/*
+	 * The eSDHC's procedure to configure HS400 is done
+	 * during clock setting. So we only enable a flag here,
+	 * and all configurations are done when set clock later.
+	 */
+	esdhc->hs400es_init_req = true;
+}
+
 static int sdhci_esdhc_probe(struct platform_device *pdev)
 {
 	struct sdhci_host *host;
@@ -1324,6 +1374,7 @@ static int sdhci_esdhc_probe(struct platform_device *pdev)
 		esdhc_signal_voltage_switch;
 	host->mmc_host_ops.execute_tuning = esdhc_execute_tuning;
 	host->mmc_host_ops.hs400_prepare_ddr = esdhc_hs400_prepare_ddr;
+	host->mmc_host_ops.hs400_enhanced_strobe = esdhc_hs400_enhanced_strobe;
 	host->tuning_delay = 1;
 
 	esdhc_init(pdev, host);

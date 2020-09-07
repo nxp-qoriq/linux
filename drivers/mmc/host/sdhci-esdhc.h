@@ -5,6 +5,7 @@
  * Copyright (c) 2007 Freescale Semiconductor, Inc.
  * Copyright (c) 2009 MontaVista Software, Inc.
  * Copyright (c) 2010 Pengutronix e.K.
+ * Copyright 2020 NXP
  *   Author: Wolfram Sang <w.sang@pengutronix.de>
  */
 
@@ -63,6 +64,7 @@
 /* Tuning Block Control Register */
 #define ESDHC_TBCTL			0x120
 #define ESDHC_HS400_WNDW_ADJUST		0x00000040
+#define ESDHC_SAMPL_CMD_RSP_DQS		0x00000020
 #define ESDHC_HS400_MODE		0x00000010
 #define ESDHC_TB_EN			0x00000004
 #define ESDHC_TB_MODE_MASK		0x00000003

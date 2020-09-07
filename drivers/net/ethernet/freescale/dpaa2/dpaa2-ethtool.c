@@ -664,7 +664,7 @@ static int do_cls_rule(struct net_device *net_dev,
 			err = dpni_remove_fs_entry(priv->mc_io, 0,
 						   priv->mc_token, i,
 						   &rule_cfg);
-		if (err)
+		if (err || priv->dpni_attrs.options & DPNI_OPT_SHARED_FS)
 			break;
 	}
 

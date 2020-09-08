@@ -2,7 +2,7 @@
 //
 // Device Tree file for LX2160AQDS
 //
-// Copyright 2018-2019 NXP
+// Copyright 2018-2020 NXP
 
 /dts-v1/;
 
@@ -216,6 +216,10 @@
 };
 
 &esdhc1 {
+	mmc-hs200-1_8v;
+	mmc-hs400-1_8v;
+	mmc-hs400-enhanced-strobe;
+	bus-width = <8>;
 	status = "okay";
 };
 

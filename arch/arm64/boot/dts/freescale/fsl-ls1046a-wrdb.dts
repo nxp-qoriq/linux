@@ -138,6 +138,11 @@
                 phy-connection-type = "sgmii";
         };
 
+	ethernet@f0000 { /* 10GEC1 */
+		fixed-link = <0 1 1000 0 0>;
+		phy-connection-type = "xgmii";
+	};
+
 	ethernet@f2000 {
 		phy-handle = <&aqr113c_phy1>;
 		phy-connection-type = "xfi";
@@ -152,7 +157,7 @@
                         reg = <0x2>;
                 };
 
-                sgmii_phy2: ethernet-phy@2 {
+                sgmii_phy2: ethernet-phy@3 {
                         reg = <0x3>;
                 };
         };

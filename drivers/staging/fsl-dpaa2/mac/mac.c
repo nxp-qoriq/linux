@@ -188,15 +188,16 @@ static void dpaa2_mac_link_changed(struct net_device *netdev)
 		dev_err(&priv->mc_dev->dev, "dpmac_set_link_state: %d\n", err);
 }
 
-#ifdef CONFIG_FSL_DPAA2_MAC_NETDEVS
 static int dpaa2_mac_open(struct net_device *netdev)
 {
 	/* start PHY state machine */
-	phy_start(netdev->phydev);
+	if (netdev->phydev->state == PHY_READY || netdev->phydev->state == PHY_HALTED)
+		phy_start(netdev->phydev);
+	else
+		phy_restart_aneg(netdev->phydev);
 
 	return 0;
 }
-#endif
 
 static int dpaa2_mac_stop(struct net_device *netdev)
 {
@@ -494,8 +495,10 @@ static irqreturn_t dpaa2_mac_irq_handler(int irq_num, void *arg)
 		configure_link(priv, &link_cfg,1);
 	}
 
-	if (status & DPMAC_IRQ_EVENT_LINK_DOWN_REQ)
-		phy_stop(ndev->phydev);
+	if (status & DPMAC_IRQ_EVENT_LINK_DOWN_REQ) {
+		if (phy_is_started(ndev->phydev))
+			phy_stop(ndev->phydev);
+	}
 
 	if (status & DPMAC_IRQ_EVENT_LINK_UP_REQ) {
 		err = dpmac_get_link_cfg(mc_dev->mc_io, 0,
@@ -512,7 +515,7 @@ static irqreturn_t dpaa2_mac_irq_handler(int irq_num, void *arg)
 					      priv->mc_dev->mc_handle, &state);
 
 		configure_link(priv, &link_cfg, 0);
-		phy_start(ndev->phydev);
+		dpaa2_mac_open(ndev);
 	}
 out:
 	dpmac_clear_irq_status(mc_dev->mc_io, 0, mc_dev->mc_handle,

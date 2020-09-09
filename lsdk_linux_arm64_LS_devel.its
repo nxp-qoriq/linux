@@ -1,6 +1,9 @@
 /*
- * Copyright 2020 NXP
+ * Copyright 2020-2022 NXP
  *
+ * This file is licensed under the terms of the GNU General Public
+ * License version 2.  This program is licensed "as is" without any
+ * warranty of any kind, whether express or implied.
  */
 
 
@@ -8,20 +11,21 @@
 
 / {
 	description = "arm64 kernel, ramdisk and FDT blob";
-	#address-cells = <1>;
 
 	images {
 		kernel {
-			description = "ARM64 Kernel";
+			description = "ARM64 Linux Kernel";
 			data = /incbin/("./arch/arm64/boot/Image.gz");
 			type = "kernel";
 			arch = "arm64";
 			os = "linux";
 			compression = "gzip";
-			load = <0x80080000>;
-			entry = <0x80080000>;
+			load = <0x81080000>;
+			entry = <0x81080000>;
+			hash {
+				algo = "crc32";
+			};
 		};
-
 		initrd {
 			description = "initrd for arm64";
 			data = /incbin/("./rootfs_yocto_arm64_devel.cpio.gz");
@@ -29,57 +33,233 @@
 			arch = "arm64";
 			os = "linux";
 			compression = "gzip";
+			load = <0x00000000>;
+			entry = <0x00000000>;
+			hash {
+				algo = "crc32";
+			};
 		};
-
-		la1246rdb-dtb {
-			description = "la1246rdb-dtb";
+		la1246rdb-sdk {
+			description = "la1246rdb-sdk dtb";
 			data = /incbin/("./arch/arm64/boot/dts/freescale/fsl-la1246-rdb-sdk.dtb");
 			type = "flat_dt";
 			arch = "arm64";
 			compression = "none";
 			load = <0x90000000>;
+			hash {
+				algo = "crc32";
+			};
 		};
-
-		ls1046aabdn-dtb {
-			description = "ls1046aabdn-dtb";
+		la1246rdb-sdk-shared-usdpaa {
+			description = "la1246rdb-sdk-shared-usdpaa dtb";
+			data = /incbin/("./arch/arm64/boot/dts/freescale/fsl-la1246-rdb-sdk-shared-usdpaa.dtb");
+			type = "flat_dt";
+			arch = "arm64";
+			compression = "none";
+			load = <0x90000000>;
+			hash {
+				algo = "crc32";
+			};
+		};
+		la1246rdb-usdpaa {
+			description = "la1246rdb-usdpaa dtb";
+			data = /incbin/("./arch/arm64/boot/dts/freescale/fsl-la1246-rdb-usdpaa.dtb");
+			type = "flat_dt";
+			arch = "arm64";
+			compression = "none";
+			load = <0x90000000>;
+			hash {
+				algo = "crc32";
+			};
+		};
+		la1246rdb-sdk-usdpaa {
+			description = "la1246rdb-sdk-usdpaa dtb";
+			data = /incbin/("./arch/arm64/boot/dts/freescale/fsl-la1246-rdb-sdk-usdpaa.dtb");
+			type = "flat_dt";
+			arch = "arm64";
+			compression = "none";
+			load = <0x90000000>;
+			hash {
+				algo = "crc32";
+			};
+		};
+		la1246rdb-usdpaa-sdk {
+			description = "la1246rdb-usdpaa-sdk dtb";
+			data = /incbin/("./arch/arm64/boot/dts/freescale/fsl-la1246-rdb-usdpaa-sdk.dtb");
+			type = "flat_dt";
+			arch = "arm64";
+			compression = "none";
+			load = <0x90000000>;
+			hash {
+				algo = "crc32";
+			};
+		};
+		ls1046aabdn-sdk {
+			description = "ls1046aabdn-sdk dtb";
 			data = /incbin/("./arch/arm64/boot/dts/freescale/fsl-ls1046a-abdn-sdk.dtb");
 			type = "flat_dt";
 			arch = "arm64";
 			compression = "none";
 			load = <0x90000000>;
+			hash {
+				algo = "crc32";
+			};
 		};
-	
-		ls1046atp1-dtb {
-			description = "ls1046atp1-dtb";
+		ls1046aabdn-usdpaa {
+			description = "ls1046aabdn-usdpaa dtb";
+			data = /incbin/("./arch/arm64/boot/dts/freescale/fsl-ls1046a-abdn-usdpaa.dtb");
+			type = "flat_dt";
+			arch = "arm64";
+			compression = "none";
+			load = <0x90000000>;
+			hash {
+				algo = "crc32";
+			};
+		};
+		ls1046aabdn-sdk-usdpaa {
+			description = "ls1046aabdn-sdk-usdpaa dtb";
+			data = /incbin/("./arch/arm64/boot/dts/freescale/fsl-ls1046a-abdn-sdk-usdpaa.dtb");
+			type = "flat_dt";
+			arch = "arm64";
+			compression = "none";
+			load = <0x90000000>;
+			hash {
+				algo = "crc32";
+			};
+		};
+		ls1046aabdn-usdpaa-sdk {
+			description = "ls1046aabdn-usdpaa-sdk dtb";
+			data = /incbin/("./arch/arm64/boot/dts/freescale/fsl-ls1046a-abdn-usdpaa-sdk.dtb");
+			type = "flat_dt";
+			arch = "arm64";
+			compression = "none";
+			load = <0x90000000>;
+			hash {
+				algo = "crc32";
+			};
+		};
+		ls1046atp1-sdk {
+			description = "ls1046atp1-sdk dtb";
 			data = /incbin/("./arch/arm64/boot/dts/freescale/fsl-ls1046a-tp1-sdk.dtb");
 			type = "flat_dt";
 			arch = "arm64";
 			compression = "none";
 			load = <0x90000000>;
+			hash {
+				algo = "crc32";
+			};
 		};
-
+		ls1046atp1-usdpaa {
+			description = "ls1046atp1-usdpaa dtb";
+			data = /incbin/("./arch/arm64/boot/dts/freescale/fsl-ls1046a-tp1-usdpaa.dtb");
+			type = "flat_dt";
+			arch = "arm64";
+			compression = "none";
+			load = <0x90000000>;
+			hash {
+				algo = "crc32";
+			};
+		};
 	};
-
 	configurations {
 		la1246rdb {
 			description = "config for la1246rdb";
 			kernel = "kernel";
 			ramdisk = "initrd";
-			fdt = "la1246rdb-dtb";
+			fdt = "la1246rdb-sdk";
+			hash {
+				algo = "crc32";
+			};
 		};
-
+		la1246rdb-sdk-shared-usdpaa {
+			description = "config for la1246rdb-sdk-shared-usdpaa";
+			kernel = "kernel";
+			ramdisk = "initrd";
+			fdt = "la1246rdb-sdk-shared-usdpaa";
+			hash {
+				algo = "crc32";
+			};
+		};
+		la1246rdb-usdpaa {
+			description = "config for la1246rdb-usdpaa";
+			kernel = "kernel";
+			ramdisk = "initrd";
+			fdt = "la1246rdb-usdpaa";
+			hash {
+				algo = "crc32";
+			};
+		};
+		la1246rdb-sdk-usdpaa {
+			description = "config for la1246rdb-sdk-usdpaa";
+			kernel = "kernel";
+			ramdisk = "initrd";
+			fdt = "la1246rdb-sdk-usdpaa";
+			hash {
+				algo = "crc32";
+			};
+		};
+		la1246rdb-usdpaa-sdk {
+			description = "config for la1246rdb-usdpaa-sdk";
+			kernel = "kernel";
+			ramdisk = "initrd";
+			fdt = "la1246rdb-usdpaa-sdk";
+			hash {
+				algo = "crc32";
+			};
+		};
 		ls1046aabdn {
 			description = "config for ls1046aabdn";
 			kernel = "kernel";
 			ramdisk = "initrd";
-			fdt = "ls1046aabdn-dtb";
+			fdt = "ls1046aabdn-sdk";
+			hash {
+				algo = "crc32";
+			};
 		};
-
+		ls1046aabdn-usdpaa {
+			description = "config for ls1046aabdn-usdpaa";
+			kernel = "kernel";
+			ramdisk = "initrd";
+			fdt = "ls1046aabdn-usdpaa";
+			hash {
+				algo = "crc32";
+			};
+		};
+		ls1046aabdn-sdk-usdpaa {
+			description = "config for ls1046aabdn-sdk-usdpaa";
+			kernel = "kernel";
+			ramdisk = "initrd";
+			fdt = "ls1046aabdn-sdk-usdpaa";
+			hash {
+				algo = "crc32";
+			};
+		};
+		ls1046aabdn-usdpaa-sdk {
+			description = "config for ls1046aabdn-usdpaa-sdk";
+			kernel = "kernel";
+			ramdisk = "initrd";
+			fdt = "ls1046aabdn-usdpaa-sdk";
+			hash {
+				algo = "crc32";
+			};
+		};
 		ls1046atp1 {
 			description = "config for ls1046atp1";
 			kernel = "kernel";
 			ramdisk = "initrd";
-			fdt = "ls1046atp1-dtb";
+			fdt = "ls1046atp1-sdk";
+			hash {
+				algo = "crc32";
+			};
+		};
+		ls1046atp1-usdpaa {
+			description = "config for ls1046atp1-usdpaa";
+			kernel = "kernel";
+			ramdisk = "initrd";
+			fdt = "ls1046atp1-usdpaa";
+			hash {
+				algo = "crc32";
+			};
 		};
 	};
 };

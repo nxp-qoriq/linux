@@ -1055,6 +1055,7 @@ static int evb_ethtool_set_pauseparam(struct net_device *netdev,
 {
 	struct evb_port_priv *port_priv = netdev_priv(netdev);
 	struct dpdmux_link_state state = {0};
+	struct dpdmux_if_attr attr = {0};
 	struct dpdmux_link_cfg cfg = {0};
 	int err = 0;
 
@@ -1071,14 +1072,24 @@ static int evb_ethtool_set_pauseparam(struct net_device *netdev,
 	if (err)
 		return err;
 
-	/* Due to a temporary MC limitation, the DPDMUX port must be down
-	 * in order to be able to change link settings. Taking steps to let
-	 * the user know that.
-	 */
-	if (netif_running(netdev)) {
-		netdev_info(netdev,
-			    "Sorry, interface must be brought down first.\n");
-		return -EACCES;
+	err = dpdmux_if_get_attributes(port_priv->evb_priv->mc_io, 0,
+				       port_priv->evb_priv->mux_handle,
+				       port_priv->port_index,
+				       &attr);
+	if (err) {
+		netdev_err(netdev, "dpdmux_if_get_attributes() = %d\n", err);
+		return err;
+	}
+
+	if (attr.enabled) {
+		err = dpdmux_if_disable(port_priv->evb_priv->mc_io, 0,
+					port_priv->evb_priv->mux_handle,
+					port_priv->port_index);
+		if (err) {
+			netdev_err(netdev, "dpdmux_if_disable(%d) = %d\n",
+				   port_priv->port_index, err);
+			return err;
+		}
 	}
 
 	cfg.rate = state.rate;
@@ -1093,7 +1104,18 @@ static int evb_ethtool_set_pauseparam(struct net_device *netdev,
 				     port_priv->port_index,
 				     &cfg);
 	if (err)
-		return err;
+		netdev_err(netdev, "dpdmux_if_set_link_cfg = %d\n", err);
+
+	if (attr.enabled) {
+		err = dpdmux_if_enable(port_priv->evb_priv->mc_io, 0,
+				       port_priv->evb_priv->mux_handle,
+				       port_priv->port_index);
+		if (err) {
+			netdev_err(netdev, "dpdmux_if_enable(%d) = %d\n",
+				   port_priv->port_index, err);
+			return err;
+		}
+	}
 
 	return 0;
 }

@@ -203,8 +203,8 @@ static int ethsw_ethtool_set_pauseparam(struct net_device *netdev,
 {
 	struct ethsw_port_priv *port_priv = netdev_priv(netdev);
 	struct dpsw_link_state state = {0};
+	struct dpsw_if_attr attr = {0};
 	struct dpsw_link_cfg cfg = {0};
-	bool up;
 	int err = 0;
 
 	if (pause->autoneg)
@@ -221,13 +221,22 @@ static int ethsw_ethtool_set_pauseparam(struct net_device *netdev,
 		return err;
 
 	/* Interface needs to be down to change link settings */
-	up = ethsw_port_is_up(port_priv);
-	if (up) {
+	err = dpsw_if_get_attributes(port_priv->ethsw_data->mc_io, 0,
+				     port_priv->ethsw_data->dpsw_handle,
+				     port_priv->idx,
+				     &attr);
+	if (err) {
+		netdev_err(netdev, "dpsw_if_get_attributes() = %d\n", err);
+		return err;
+	}
+
+	if (attr.enabled) {
 		err = dpsw_if_disable(port_priv->ethsw_data->mc_io, 0,
 				      port_priv->ethsw_data->dpsw_handle,
 				      port_priv->idx);
 		if (err) {
-			netdev_err(netdev, "dpsw_if_disable err %d\n", err);
+			netdev_err(netdev, "dpsw_if_disable(%d) = %d\n",
+				   port_priv->idx, err);
 			return err;
 		}
 	}
@@ -243,13 +252,16 @@ static int ethsw_ethtool_set_pauseparam(struct net_device *netdev,
 				   port_priv->ethsw_data->dpsw_handle,
 				   port_priv->idx,
 				   &cfg);
+	if (err)
+		netdev_err(netdev, "dpsw_if_set_link_cfg = %d\n", err);
 
-	if (up) {
+	if (attr.enabled) {
 		err = dpsw_if_enable(port_priv->ethsw_data->mc_io, 0,
 				     port_priv->ethsw_data->dpsw_handle,
 				     port_priv->idx);
 		if (err) {
-			netdev_err(netdev, "dpsw_if_enable err %d\n", err);
+			netdev_err(netdev, "dpsw_if_enable(%d) = %d\n",
+				   port_priv->idx, err);
 			return err;
 		}
 	}

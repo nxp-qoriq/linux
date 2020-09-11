@@ -4,6 +4,7 @@
  *
  * Copyright (c) 2007, 2010, 2012 Freescale Semiconductor, Inc.
  * Copyright (c) 2009 MontaVista Software, Inc.
+ * Copyright 2020 NXP
  *
  * Authors: Xiaobo Xie <X.Xie@freescale.com>
  *	    Anton Vorontsov <avorontsov@ru.mvista.com>
@@ -1411,7 +1412,7 @@ static int sdhci_esdhc_probe(struct platform_device *pdev)
 	if (ret)
 		goto err;
 
-	mmc_of_parse_voltage(np, &host->ocr_mask);
+	mmc_parse_voltage(&pdev->dev, &host->ocr_mask);
 
 	ret = sdhci_add_host(host);
 	if (ret)

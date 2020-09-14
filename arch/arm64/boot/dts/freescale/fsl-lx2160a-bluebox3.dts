@@ -195,18 +195,62 @@
 };
 
 &emdio1 {
+	aquantia_phy1: ethernet-phy@0 {
+		compatible = "ethernet-phy-ieee802.3-c45";
+		reg = <0x0>;
+	};
+
+	aquantia_phy2: ethernet-phy@8 {
+		compatible = "ethernet-phy-ieee802.3-c45";
+		reg = <0x8>;
+	};
+
 	rgmii_phy1: ethernet-phy@1 {
 		/* AR8035 PHY - "compatible" property not strictly needed */
 		compatible = "ethernet-phy-id004d.d072";
 		reg = <0x1>;
 		/* Poll mode - no "interrupts" property defined */
 	};
+
 	rgmii_phy2: ethernet-phy@2 {
 		/* AR8035 PHY - "compatible" property not strictly needed */
 		compatible = "ethernet-phy-id004d.d072";
 		reg = <0x2>;
 		/* Poll mode - no "interrupts" property defined */
 	};
+};
+
+&emdio2 {
+	aquantia_phy3: ethernet-phy@0 {
+		compatible = "ethernet-phy-ieee802.3-c45";
+		reg = <0x0>;
+	};
+
+	aquantia_phy4: ethernet-phy@8 {
+		compatible = "ethernet-phy-ieee802.3-c45";
+		reg = <0x8>;
+	};
+};
+
+&dpmac5 {
+	phy-handle = <&aquantia_phy2>;
+	phy-connection-type = "usxgmii";
+};
+
+&dpmac6 {
+	phy-handle = <&aquantia_phy1>;
+	phy-connection-type = "usxgmii";
+};
+
+
+&dpmac9 {
+	phy-handle = <&aquantia_phy4>;
+	phy-connection-type = "usxgmii";
+};
+
+&dpmac10 {
+	phy-handle = <&aquantia_phy3>;
+	phy-connection-type = "usxgmii";
 };
 
 &dpmac17 {

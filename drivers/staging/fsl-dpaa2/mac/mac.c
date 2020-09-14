@@ -134,6 +134,7 @@ static void dpaa2_mac_link_changed(struct net_device *netdev)
 	struct phy_device	*phydev;
 	struct dpmac_link_state	state = { 0 };
 	struct dpaa2_mac_priv	*priv = netdev_priv(netdev);
+	struct dpmac_link_cfg link_cfg = { 0 };
 	int			err;
 
 	/* the PHY just notified us of link state change */
@@ -148,18 +149,22 @@ static void dpaa2_mac_link_changed(struct net_device *netdev)
 		if (phydev->autoneg)
 			state.options |= DPMAC_LINK_OPT_AUTONEG;
 
+		/* We do not support for the moment pause frame
+		 * autonegotiation, just take the value that came from MC previously
+		 */
+		state.options &= ~DPMAC_LINK_OPT_PAUSE;
+		state.options &= ~DPMAC_LINK_OPT_ASYM_PAUSE;
+		state.options |= priv->old_state.options & DPMAC_LINK_OPT_PAUSE;
+		state.options |= priv->old_state.options & DPMAC_LINK_OPT_ASYM_PAUSE;
+
 		netif_carrier_on(netdev);
 	} else {
+		err = dpmac_get_link_cfg_v2(priv->mc_dev->mc_io, 0,
+					    priv->mc_dev->mc_handle,
+					    &link_cfg);
+		state.options = link_cfg.options;
 		netif_carrier_off(netdev);
 	}
-
-	/* We do not support for the moment pause frame
-	 * autonegotiation, just take the value that came from MC previously
-	 */
-	state.options &= ~DPMAC_LINK_OPT_PAUSE;
-	state.options &= ~DPMAC_LINK_OPT_ASYM_PAUSE;
-	state.options |= priv->old_state.options & DPMAC_LINK_OPT_PAUSE;
-	state.options |= priv->old_state.options & DPMAC_LINK_OPT_ASYM_PAUSE;
 
 	/* Call the dpmac_set_link_state() only if there is a change in the
 	 * link configuration
@@ -454,9 +459,11 @@ static void configure_link(struct dpaa2_mac_priv *priv,
 	if (cfg->options & DPMAC_LINK_OPT_AUTONEG) {
 		phydev->autoneg = AUTONEG_ENABLE;
 		linkmode_set_bit(ETHTOOL_LINK_MODE_Autoneg_BIT, phydev->advertising);
+		priv->old_state.options |= DPMAC_LINK_OPT_AUTONEG;
 	} else {
 		phydev->autoneg = AUTONEG_DISABLE;
 		linkmode_clear_bit(ETHTOOL_LINK_MODE_Autoneg_BIT, phydev->advertising);
+		priv->old_state.options &= ~DPMAC_LINK_OPT_AUTONEG;
 	}
 
 	if (restart_aneg)
@@ -479,20 +486,20 @@ static irqreturn_t dpaa2_mac_irq_handler(int irq_num, void *arg)
 	if (unlikely(err || !status))
 		return IRQ_NONE;
 
+	if (cmp_dpmac_ver(priv, DPMAC_LINK_AUTONEG_VER_MAJOR,
+			  DPMAC_LINK_AUTONEG_VER_MINOR) < 0)
+		err = dpmac_get_link_cfg(mc_dev->mc_io, 0,
+					 mc_dev->mc_handle, &link_cfg);
+	else
+		err = dpmac_get_link_cfg_v2(mc_dev->mc_io, 0,
+					    mc_dev->mc_handle,
+					    &link_cfg);
+	if (unlikely(err))
+		goto out;
+
 	/* DPNI-initiated link configuration; 'ifconfig up' also calls this */
 	if (status & DPMAC_IRQ_EVENT_LINK_CFG_REQ) {
-		if (cmp_dpmac_ver(priv, DPMAC_LINK_AUTONEG_VER_MAJOR,
-				  DPMAC_LINK_AUTONEG_VER_MINOR) < 0)
-			err = dpmac_get_link_cfg(mc_dev->mc_io, 0,
-						 mc_dev->mc_handle, &link_cfg);
-		else
-			err = dpmac_get_link_cfg_v2(mc_dev->mc_io, 0,
-						    mc_dev->mc_handle,
-						    &link_cfg);
-		if (unlikely(err))
-			goto out;
-
-		configure_link(priv, &link_cfg,1);
+		configure_link(priv, &link_cfg, 1);
 	}
 
 	if (status & DPMAC_IRQ_EVENT_LINK_DOWN_REQ) {
@@ -501,15 +508,9 @@ static irqreturn_t dpaa2_mac_irq_handler(int irq_num, void *arg)
 	}
 
 	if (status & DPMAC_IRQ_EVENT_LINK_UP_REQ) {
-		err = dpmac_get_link_cfg(mc_dev->mc_io, 0,
-					 mc_dev->mc_handle,
-					 &link_cfg);
-		if (err)
-			goto out;
-
 		state.up = 0;
 		state.state_valid = 1;
-		state.options = 0;
+		state.options = link_cfg.options;
 
 		err = dpmac_set_link_state_v2(priv->mc_dev->mc_io, 0,
 					      priv->mc_dev->mc_handle, &state);

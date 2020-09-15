@@ -1663,10 +1663,6 @@ static struct sk_buff *dpaa_cleanup_tx_fd(const struct dpaa_priv *priv,
 		}
 	}
 
-#ifndef CONFIG_PPC
-	if (dpaa_errata_a010022)
-		return skb;
-#endif
 	if (qm_fd_get_format(fd) == qm_fd_sg)
 		/* Free the page frag that we allocated on Tx */
 		skb_free_frag(phys_to_virt(addr));

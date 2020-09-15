@@ -1449,7 +1449,9 @@ static struct platform_driver sdhci_esdhc_driver = {
 	.driver = {
 		.name = "sdhci-esdhc",
 		.of_match_table = sdhci_esdhc_of_match,
+#ifdef CONFIG_ACPI
 		.acpi_match_table = sdhci_esdhc_ids,
+#endif
 		.pm = &esdhc_of_dev_pm_ops,
 	},
 	.probe = sdhci_esdhc_probe,

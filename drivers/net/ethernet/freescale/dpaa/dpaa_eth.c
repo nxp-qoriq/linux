@@ -2173,7 +2173,7 @@ static struct sk_buff *dpaa_errata_a010022_prevent(struct sk_buff *skb,
 	 * aligned to 256.
 	 */
 	headroom = DPAA_A010022_HEADROOM;
-	nsize = ALIGN(headroom + skb->len, SMP_CACHE_BYTES) +
+	nsize = headroom + skb->len +
 		SKB_DATA_ALIGN(sizeof(struct skb_shared_info));
 
 	/* Reserve enough memory to accommodate Jumbo frames */

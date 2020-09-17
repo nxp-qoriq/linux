@@ -141,6 +141,7 @@
 	ethernet@f0000 { /* 10GEC1 */
 		fixed-link = <0 1 1000 0 0>;
 		phy-connection-type = "xgmii";
+		status = "disabled";
 	};
 
 	ethernet@f2000 {

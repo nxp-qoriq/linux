@@ -226,7 +226,7 @@
 			description = "config for ls1046aabdn-sdk-usdpaa";
 			kernel = "kernel";
 			ramdisk = "initrd";
-			fdt = "la1246rdb-sdk-usdpaa";
+			fdt = "ls1046aabdn-sdk-usdpaa";
 			hash {
 				algo = "crc32";
 			};
@@ -235,7 +235,7 @@
 			description = "config for ls1046aabdn-usdpaa-sdk";
 			kernel = "kernel";
 			ramdisk = "initrd";
-			fdt = "la1246rdb-usdpaa-sdk";
+			fdt = "ls1046aabdn-usdpaa-sdk";
 			hash {
 				algo = "crc32";
 			};

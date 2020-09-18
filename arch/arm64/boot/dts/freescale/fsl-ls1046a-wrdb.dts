@@ -8,6 +8,7 @@
 
 /dts-v1/;
 
+#include <dt-bindings/gpio/gpio.h>
 #include "fsl-ls1046a.dtsi"
 
 / {
@@ -69,6 +70,13 @@
 				compatible = "atmel,24c02";
 				reg = <0x57>;
 			};
+
+			pca6416: gpio@20 {
+				compatible = "nxp,pcal6416";
+				reg = <0x20>;
+				gpio-controller;
+				#gpio-cells = <2>;
+			};
 		};
 
 		i2c@1 {
@@ -93,6 +101,20 @@
 				reg = <0x51>;
 			};
 		};
+	};
+};
+
+&i2c3 {
+	status = "okay";
+
+	pn7150: pn7150@28 {
+		compatible = "nxp,pn7150", "nxp,pn547";
+		reg = <0x28>;
+		clock-frequency = <400000>;
+		//interrupt-gpios = <&gpio0 23 GPIO_ACTIVE_HIGH>;
+		//irq-trigger-level = <IRQ_TYPE_LEVEL_HIGH>;
+		poll-mode;
+		enable-gpios = <&pca6416 1 GPIO_ACTIVE_HIGH>;
 	};
 };
 

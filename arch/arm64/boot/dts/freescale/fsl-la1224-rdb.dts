@@ -302,7 +302,7 @@
 		P17 {
 			gpio-hog;
 			gpios = <15 GPIO_ACTIVE_LOW>;
-			output-high;
+			output-low;
 			line-name = "si5341_lol_b";
 		};
 	};

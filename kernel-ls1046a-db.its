@@ -33,7 +33,7 @@
 		};
 		ramdisk@1 {
 			description = "LS1046 Ramdisk";
-            data = /incbin/("./rootfs_lsdk2004_yocto_tiny_arm64.cpio.gz");
+            data = /incbin/("./openwrt-layerscape-armv8_64b-rootfs.cpio.gz");
 			type = "ramdisk";
 			arch = "arm64";
 			os = "linux";

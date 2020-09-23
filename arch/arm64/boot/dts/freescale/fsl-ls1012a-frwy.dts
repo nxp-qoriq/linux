@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Device Tree file for Freescale LS1012A FRWY Board.
+ * Device Tree file for NXP LS1012A FRWY Board.
  *
- * Copyright 2018 NXP
+ * Copyright 2018, 2020 NXP
  *
  * Pramod Kumar <pramod.kumar_1@nxp.com>
  *
@@ -64,7 +64,7 @@
 	};
 };
 
-&pcie {
+&pcie1 {
 	status = "okay";
 };
 

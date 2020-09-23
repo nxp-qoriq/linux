@@ -1,7 +1,8 @@
 /*
- * Device Tree Include file for Freescale Layerscape-1043A family SoC.
+ * Device Tree Include file for NXP Layerscape-1043A family SoC.
  *
  * Copyright (C) 2014-2015, Freescale Semiconductor
+ * Copyright 2020 NXP
  *
  * This file is licensed under the terms of the GNU General Public
  * License version 2.  This program is licensed "as is" without any
@@ -97,20 +98,21 @@
 		};
 	};
 
-	pcie@3400000 {
-	       /delete-property/ iommu-map;
-	};
-
-	pcie@3500000 {
-	       /delete-property/ iommu-map;
-	};
-
-	pcie@3600000 {
-	       /delete-property/ iommu-map;
-	};
-
 	/delete-node/ iommu@9000000;
 };
+
+&pcie1 {
+	/delete-property/ iommu-map;
+};
+
+&pcie2 {
+	/delete-property/ iommu-map;
+};
+
+&pcie3 {
+	/delete-property/ iommu-map;
+};
+
 / {
 	reserved-memory {
 		#address-cells = <2>;

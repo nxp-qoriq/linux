@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Device Tree file for Freescale LS1012A RDB Board.
+ * Device Tree file for NXP LS1012A RDB Board.
  *
  * Copyright 2016 Freescale Semiconductor, Inc.
+ * Copyright 2020 NXP
  *
  */
 /dts-v1/;
@@ -19,7 +20,7 @@
 	};
 };
 
-&pcie {
+&pcie1 {
 	status = "okay";
 };
 

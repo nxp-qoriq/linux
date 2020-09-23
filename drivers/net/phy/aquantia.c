@@ -622,11 +622,13 @@ static struct phy_driver aquantia_driver[] = {
 	.name		= "Aquantia AQR113C",
 	.features	= PHY_AQUANTIA_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
-	.aneg_done	= aquantia_aneg_done,
+	.aneg_done	= genphy_c45_aneg_done,
 	.config_aneg    = aquantia_config_aneg,
 	.config_intr	= aquantia_config_intr,
 	.ack_interrupt	= aquantia_ack_interrupt,
 	.read_status	= aquantia_read_status,
+	.suspend	= aqr107_suspend,
+	.resume		= aqr107_resume,
 },
 
 };

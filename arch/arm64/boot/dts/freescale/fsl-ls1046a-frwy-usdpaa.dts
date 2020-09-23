@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Device Tree Include file for Freescale Layerscape-1046A family SoC.
+ * Device Tree Include file for NXP Layerscape-1046A family SoC.
  *
- * Copyright 2019 NXP.
+ * Copyright 2019-2020 NXP.
  *
  */
 
@@ -73,21 +73,21 @@
 			fsl,fman-oh-port = <&fman0_oh2>;
 		};
 	};
-
-	pcie@3400000 {
-		/delete-property/ iommu-map;
-	};
-
-	pcie@3500000 {
-		/delete-property/ iommu-map;
-	};
-
-	pcie@3600000 {
-		/delete-property/ iommu-map;
-	};
-
 	/delete-node/ iommu@9000000;
 };
+
+&pcie1 {
+	/delete-property/ iommu-map;
+};
+
+&pcie2 {
+	/delete-property/ iommu-map;
+};
+
+&pcie3 {
+	/delete-property/ iommu-map;
+};
+
 / {
 	reserved-memory {
 		#address-cells = <2>;

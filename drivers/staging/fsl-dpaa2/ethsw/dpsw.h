@@ -622,4 +622,43 @@ int dpsw_if_get_primary_mac_addr(struct fsl_mc_io *mc_io, u32 cmd_flags,
 int dpsw_if_set_primary_mac_addr(struct fsl_mc_io *mc_io, u32 cmd_flags,
 				 u16 token, u16 if_id, u8 mac_addr[6]);
 
+/**
+ * struct dpsw_acl_cfg - ACL Configuration
+ * @max_entries: Number of FDB entries
+ */
+struct dpsw_acl_cfg {
+	u16 max_entries;
+};
+
+int dpsw_acl_add(struct fsl_mc_io *mc_io,
+		 u32 cmd_flags,
+		 u16 token,
+		 u16 *acl_id,
+		 const struct dpsw_acl_cfg *cfg);
+int dpsw_acl_remove(struct fsl_mc_io *mc_io,
+		    u32 cmd_flags,
+		    u16 token,
+		    u16 acl_id);
+
+/**
+ * struct dpsw_acl_if_cfg - List of interfaces to Associate with ACL
+ * @num_ifs: Number of interfaces
+ * @if_id: List of interfaces
+ */
+struct dpsw_acl_if_cfg {
+	u16 num_ifs;
+	u16 if_id[DPSW_MAX_IF];
+};
+
+int dpsw_acl_add_if(struct fsl_mc_io *mc_io,
+		    u32 cmd_flags,
+		    u16 token,
+		    u16 acl_id,
+		    const struct dpsw_acl_if_cfg *cfg);
+
+int dpsw_acl_remove_if(struct fsl_mc_io *mc_io,
+		       u32 cmd_flags,
+		       u16 token,
+		       u16 acl_id,
+		       const struct dpsw_acl_if_cfg *cfg);
 #endif /* __FSL_DPSW_H */

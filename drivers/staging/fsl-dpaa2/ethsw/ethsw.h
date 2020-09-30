@@ -75,6 +75,8 @@ struct ethsw_core {
 	struct notifier_block		port_switchdev_nb;
 	struct notifier_block		port_switchdevb_nb;
 	struct workqueue_struct		*workqueue;
+
+	u16 acl_id;
 };
 
 bool ethsw_port_is_up(struct ethsw_port_priv *port_priv);

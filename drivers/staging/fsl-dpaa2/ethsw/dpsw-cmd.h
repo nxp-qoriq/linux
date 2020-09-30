@@ -77,6 +77,11 @@
 #define DPSW_CMDID_IF_GET_PRIMARY_MAC_ADDR  DPSW_CMD_ID(0x0A8)
 #define DPSW_CMDID_IF_SET_PRIMARY_MAC_ADDR  DPSW_CMD_ID(0x0A9)
 
+#define DPSW_CMDID_ACL_ADD                  DPSW_CMD_ID(0x090)
+#define DPSW_CMDID_ACL_REMOVE               DPSW_CMD_ID(0x091)
+#define DPSW_CMDID_ACL_ADD_IF               DPSW_CMD_ID(0x094)
+#define DPSW_CMDID_ACL_REMOVE_IF            DPSW_CMD_ID(0x095)
+
 /* Macros for accessing command fields smaller than 1byte */
 #define DPSW_MASK(field)        \
 	GENMASK(DPSW_##field##_SHIFT + DPSW_##field##_SIZE - 1, \
@@ -407,6 +412,28 @@ struct dpsw_rsp_if_get_mac_addr {
 struct dpsw_cmd_if_set_mac_addr {
 	__le16 if_id;
 	u8 mac_addr[6];
+};
+
+struct dpsw_cmd_acl_add {
+	u16 pad;
+	u16 max_entries;
+};
+
+struct dpsw_rsp_acl_add {
+	u16 acl_id;
+};
+
+struct dpsw_cmd_acl_remove {
+	u16 acl_id;
+};
+
+struct dpsw_cmd_acl_if {
+	/* cmd word 0 */
+	u16 acl_id;
+	u16 num_ifs;
+	u32 pad;
+	/* cmd word 1 */
+	u64 if_id[4];
 };
 
 #endif /* __FSL_DPSW_CMD_H */

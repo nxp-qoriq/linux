@@ -1748,6 +1748,8 @@ err_port_probe:
 static int ethsw_probe(struct fsl_mc_device *sw_dev)
 {
 	struct device *dev = &sw_dev->dev;
+	struct dpsw_acl_if_cfg acl_if_cfg;
+	struct dpsw_acl_cfg acl_cfg;
 	struct ethsw_core *ethsw;
 	int i, err;
 
@@ -1787,16 +1789,35 @@ static int ethsw_probe(struct fsl_mc_device *sw_dev)
 		goto err_takedown;
 	}
 
+	/* This is only a hack so that the broadcast entry in the ACL is working properly */
+	acl_cfg.max_entries = 1;
+	err = dpsw_acl_add(ethsw->mc_io, 0, ethsw->dpsw_handle,
+			   &ethsw->acl_id, &acl_cfg);
+	if (err) {
+		dev_err(ethsw->dev, "dpsw_acl_add err %d\n", err);
+		goto err_free_ports;
+	}
+
+	acl_if_cfg.num_ifs = ethsw->sw_attr.num_ifs;
+	for (i = 0; i < ethsw->sw_attr.num_ifs; i++)
+		acl_if_cfg.if_id[i] = i;
+	err = dpsw_acl_add_if(ethsw->mc_io, 0, ethsw->dpsw_handle,
+			      ethsw->acl_id, &acl_if_cfg);
+	if (err) {
+		dev_err(dev, "dpsw_acl_add_if() = %d\n", err);
+		goto err_acl_remove;
+	}
+
 	for (i = 0; i < ethsw->sw_attr.num_ifs; i++) {
 		err = ethsw_probe_port(ethsw, i);
 		if (err)
-			goto err_free_ports;
+			goto err_acl_if_remove;
 	}
 
 	err = dpsw_enable(ethsw->mc_io, 0, ethsw->dpsw_handle);
 	if (err) {
 		dev_err(ethsw->dev, "dpsw_enable err %d\n", err);
-		goto err_free_ports;
+		goto err_ports_remove;
 	}
 
 	/* Make sure the switch ports are disabled at probe time */
@@ -1814,12 +1835,18 @@ static int ethsw_probe(struct fsl_mc_device *sw_dev)
 err_stop:
 	dpsw_disable(ethsw->mc_io, 0, ethsw->dpsw_handle);
 
-err_free_ports:
+err_ports_remove:
 	/* Cleanup registered ports only */
 	for (i--; i >= 0; i--) {
 		unregister_netdev(ethsw->ports[i]->netdev);
 		free_netdev(ethsw->ports[i]->netdev);
 	}
+err_acl_if_remove:
+	dpsw_acl_remove_if(ethsw->mc_io, 0, ethsw->dpsw_handle,
+			   ethsw->acl_id, &acl_if_cfg);
+err_acl_remove:
+	dpsw_acl_remove(ethsw->mc_io, 0, ethsw->dpsw_handle, ethsw->acl_id);
+err_free_ports:
 	kfree(ethsw->ports);
 
 err_takedown:

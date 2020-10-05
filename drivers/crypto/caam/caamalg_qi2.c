@@ -601,10 +601,10 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req,
 	int src_nents, mapped_src_nents, dst_nents = 0, mapped_dst_nents = 0;
 	struct tls_edesc *edesc;
 	dma_addr_t qm_sg_dma, iv_dma = 0;
-	int ivsize = 0;
+	int ivsize = crypto_aead_ivsize(tls);
 	u8 *iv;
 	int qm_sg_index, qm_sg_ents = 0, qm_sg_bytes;
-	int in_len, out_len;
+	int src_len, dst_len, data_len;
 	struct dpaa2_sg_entry *sg_table;
 	struct scatterlist *dst;
 
@@ -623,14 +623,16 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req,
 		return ERR_PTR(-ENOMEM);
 	}
 
+	data_len = req->assoclen + req->cryptlen;
+	dst_len = req->cryptlen + (encrypt ? authsize : 0);
+
 	if (likely(req->src == req->dst)) {
-		src_nents = sg_nents_for_len(req->src, req->assoclen +
-					     req->cryptlen +
-					     (encrypt ? authsize : 0));
+		src_len = req->assoclen + dst_len;
+
+		src_nents = sg_nents_for_len(req->src, src_len);
 		if (unlikely(src_nents < 0)) {
 			dev_err(dev, "Insufficient bytes (%d) in src S/G\n",
-				req->assoclen + req->cryptlen +
-				(encrypt ? authsize : 0));
+				src_len);
 			qi_cache_free(edesc);
 			return ERR_PTR(src_nents);
 		}
@@ -644,22 +646,22 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req,
 		}
 		dst = req->dst;
 	} else {
-		src_nents = sg_nents_for_len(req->src, req->assoclen +
-					     req->cryptlen);
+		src_len = data_len;
+
+		src_nents = sg_nents_for_len(req->src, src_len);
 		if (unlikely(src_nents < 0)) {
 			dev_err(dev, "Insufficient bytes (%d) in src S/G\n",
-				req->assoclen + req->cryptlen);
+				src_len);
 			qi_cache_free(edesc);
 			return ERR_PTR(src_nents);
 		}
 
 		dst = scatterwalk_ffwd(edesc->tmp, req->dst, req->assoclen);
-		dst_nents = sg_nents_for_len(dst, req->cryptlen +
-					     (encrypt ? authsize : 0));
+
+		dst_nents = sg_nents_for_len(dst, dst_len);
 		if (unlikely(dst_nents < 0)) {
 			dev_err(dev, "Insufficient bytes (%d) in dst S/G\n",
-				req->cryptlen +
-				(encrypt ? authsize : 0));
+				dst_len);
 			qi_cache_free(edesc);
 			return ERR_PTR(dst_nents);
 		}
@@ -695,7 +697,6 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req,
 	sg_table = &edesc->sgt[0];
 	qm_sg_bytes = qm_sg_ents * sizeof(*sg_table);
 
-	ivsize = crypto_aead_ivsize(tls);
 	iv = (u8 *)(sg_table + qm_sg_ents);
 	/* Make sure IV is located in a DMAable area */
 	memcpy(iv, req->iv, ivsize);
@@ -716,12 +717,11 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req,
 	dma_to_qm_sg_one(sg_table, iv_dma, ivsize, 0);
 	qm_sg_index = 1;
 
-	sg_to_qm_sg_last(req->src, mapped_src_nents, sg_table + qm_sg_index, 0);
+	sg_to_qm_sg_last(req->src, src_len, sg_table + qm_sg_index, 0);
 	qm_sg_index += mapped_src_nents;
 
 	if (mapped_dst_nents > 1)
-		sg_to_qm_sg_last(dst, mapped_dst_nents, sg_table +
-				 qm_sg_index, 0);
+		sg_to_qm_sg_last(dst, dst_len, sg_table + qm_sg_index, 0);
 
 	qm_sg_dma = dma_map_single(dev, sg_table, qm_sg_bytes, DMA_TO_DEVICE);
 	if (dma_mapping_error(dev, qm_sg_dma)) {
@@ -735,14 +735,11 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req,
 	edesc->qm_sg_dma = qm_sg_dma;
 	edesc->qm_sg_bytes = qm_sg_bytes;
 
-	out_len = req->cryptlen + (encrypt ? authsize : 0);
-	in_len = ivsize + req->assoclen + req->cryptlen;
-
 	memset(&req_ctx->fd_flt, 0, sizeof(req_ctx->fd_flt));
 	dpaa2_fl_set_final(in_fle, true);
 	dpaa2_fl_set_format(in_fle, dpaa2_fl_sg);
 	dpaa2_fl_set_addr(in_fle, qm_sg_dma);
-	dpaa2_fl_set_len(in_fle, in_len);
+	dpaa2_fl_set_len(in_fle, ivsize + data_len);
 
 	if (req->dst == req->src) {
 		dpaa2_fl_set_format(out_fle, dpaa2_fl_sg);
@@ -758,7 +755,7 @@ static struct tls_edesc *tls_edesc_alloc(struct aead_request *req,
 				  sizeof(*sg_table));
 	}
 
-	dpaa2_fl_set_len(out_fle, out_len);
+	dpaa2_fl_set_len(out_fle, dst_len);
 
 	return edesc;
 }

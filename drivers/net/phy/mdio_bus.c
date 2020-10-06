@@ -8,6 +8,7 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include <linux/acpi.h>
 #include <linux/kernel.h>
 #include <linux/string.h>
 #include <linux/errno.h>
@@ -119,8 +120,8 @@ int fwnode_mdiobus_register_phy(struct mii_bus *bus,
 				struct fwnode_handle *child, u32 addr)
 {
 	struct phy_device *phy;
-	bool is_c45;
 	const char *cp;
+	bool is_c45;
 	u32 phy_id;
 	int rc;
 
@@ -391,6 +392,55 @@ static int mdiobus_create_device(struct mii_bus *bus,
 
 	return ret;
 }
+
+/**
+ * fwnode_mdiobus_register - Register mii_bus and create PHYs from fwnode
+ * @mdio: pointer to mii_bus structure
+ * @fwnode: pointer to fwnode of MDIO bus.
+ *
+ * This function registers the mii_bus structure and registers a phy_device
+ * for each child node of @fwnode.
+ */
+int fwnode_mdiobus_register(struct mii_bus *mdio, struct fwnode_handle *fwnode)
+{
+	struct fwnode_handle *child;
+	unsigned long long addr;
+	acpi_status status;
+	int ret;
+
+	if (is_of_node(fwnode)) {
+		return of_mdiobus_register(mdio, to_of_node(fwnode));
+	} else if (is_acpi_node(fwnode)) {
+		/* Mask out all PHYs from auto probing. */
+		mdio->phy_mask = ~0;
+		ret = mdiobus_register(mdio);
+		if (ret)
+			return ret;
+
+		mdio->dev.fwnode = fwnode;
+	/* Loop over the child nodes and register a phy_device for each PHY */
+		fwnode_for_each_child_node(fwnode, child) {
+			status = acpi_evaluate_integer(ACPI_HANDLE_FWNODE(child),
+						       "_ADR", NULL, &addr);
+			if (ACPI_FAILURE(status)) {
+				pr_debug("_ADR returned %d\n", status);
+				continue;
+			}
+
+			if (addr < 0 || addr >= PHY_MAX_ADDR)
+				continue;
+
+			ret = fwnode_mdiobus_register_phy(mdio, child, addr);
+			if (ret == -ENODEV)
+				dev_err(&mdio->dev,
+					"MDIO device at address %lld is missing.\n",
+					addr);
+		}
+		return 0;
+	}
+	return -EINVAL;
+}
+EXPORT_SYMBOL(fwnode_mdiobus_register);
 
 /**
  * __mdiobus_register - bring up all the PHYs on a given bus and attach them to bus

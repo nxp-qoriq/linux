@@ -5,7 +5,7 @@
  * Author: Andy Fleming
  *
  * Copyright (c) 2004 Freescale Semiconductor, Inc.
- * Copyright 2017 NXP
+ * Copyright 2017,2020 NXP
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the terms of  the GNU General  Public License as published by the
@@ -49,6 +49,8 @@
 #define PHY_GBIT_FEATURES	(PHY_BASIC_FEATURES | \
 				 PHY_1000BT_FEATURES)
 
+#define SUPPORTED_5000baseT_Full	SUPPORTED_BNC
+#define ADVERTISED_5000baseT_Full	ADVERTISED_BNC
 
 /*
  * Set phydev->irq to PHY_POLL if interrupts are not supported,

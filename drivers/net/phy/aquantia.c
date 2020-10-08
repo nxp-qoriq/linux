@@ -4,7 +4,7 @@
  * Author: Shaohui Xie <Shaohui.Xie@freescale.com>
  *
  * Copyright 2015 Freescale Semiconductor, Inc.
- * Copyright 2018-2019 NXP
+ * Copyright 2018-2020 NXP
  *
  * This file is licensed under the terms of the GNU General Public License
  * version 2.  This program is licensed "as is" without any warranty of any
@@ -27,11 +27,13 @@
 #define PHY_ID_AQR405	0x03a1b4b0
 #define PHY_ID_AQR112	0x03a1b662
 #define PHY_ID_AQR412	0x03a1b712
+#define PHY_ID_AQR113C	0x31c31c12
 
 #define PHY_AQUANTIA_FEATURES	(SUPPORTED_10000baseT_Full | \
 				 SUPPORTED_1000baseT_Full | \
 				 SUPPORTED_2500baseX_Full | \
 				 SUPPORTED_100baseT_Full | \
+				 SUPPORTED_5000baseT_Full | \
 				 PHY_DEFAULT_FEATURES)
 
 #define MDIO_PMA_CTRL1_AQ_SPEED10	0
@@ -189,6 +191,9 @@ static int aquantia_config_advert(struct phy_device *phydev)
 		adv |= 0x1000;
 	if (advertise &  ADVERTISED_2500baseX_Full)
 		adv1 |= 0x400;
+	if (advertise &  ADVERTISED_5000baseT_Full) {
+		adv1 |= 0x800;
+	}
 
 	if (adv != oldadv) {
 		err = aquantia_write_reg(phydev, MDIO_MMD_AN,
@@ -206,6 +211,30 @@ static int aquantia_config_advert(struct phy_device *phydev)
 	}
 
 	return changed;
+}
+
+static int phy_modify_mmd(struct phy_device *phydev, int devad, u32 regnum,
+			  u16 mask, u16 set)
+{
+	int ret;
+
+	ret = phy_read_mmd(phydev, devad, regnum);
+	if (ret >= 0)
+		ret = phy_write_mmd(phydev, devad, regnum, (ret & ~mask) | set);
+
+	return ret < 0 ? ret : 0;
+}
+
+static int phy_set_bits_mmd(struct phy_device *phydev, int devad,
+		u32 regnum, u16 val)
+{
+	return phy_modify_mmd(phydev, devad, regnum, 0, val);
+}
+
+static int phy_clear_bits_mmd(struct phy_device *phydev, int devad,
+		u32 regnum, u16 val)
+{
+	return phy_modify_mmd(phydev, devad, regnum, val, 0);
 }
 
 static int aquantia_config_aneg(struct phy_device *phydev)
@@ -346,7 +375,12 @@ static int aquantia_read_advert(struct phy_device *phydev)
 		phydev->advertising |= ADVERTISED_2500baseX_Full;
 	else
 		phydev->advertising &= ~ADVERTISED_2500baseX_Full;
+	if (adv1 & 0x800)
+		phydev->advertising |= ADVERTISED_5000baseT_Full;
+	else
+		phydev->advertising &= ~ADVERTISED_5000baseT_Full;
 	return 0;
+
 }
 
 static int aquantia_read_lp_advert(struct phy_device *phydev)
@@ -384,6 +418,10 @@ static int aquantia_read_lp_advert(struct phy_device *phydev)
 		phydev->lp_advertising |= ADVERTISED_2500baseX_Full;
 	else
 		phydev->lp_advertising &= ~ADVERTISED_2500baseX_Full;
+	if (adv1 & 0x800)
+		phydev->lp_advertising |= ADVERTISED_5000baseT_Full;
+	else
+		phydev->lp_advertising &= ~ADVERTISED_5000baseT_Full;
 
 	return 0;
 }
@@ -459,6 +497,18 @@ static int aquantia_resume(struct phy_device *phydev)
 	return phy_write_mmd(phydev, MDIO_MMD_VEND1, MDIO_CTRL1, reg);
 }
 
+static int aqr107_suspend(struct phy_device *phydev)
+{
+	return phy_set_bits_mmd(phydev, MDIO_MMD_VEND1, MDIO_CTRL1,
+				MDIO_CTRL1_LPOWER);
+}
+
+static int aqr107_resume(struct phy_device *phydev)
+{
+	return phy_clear_bits_mmd(phydev, MDIO_MMD_VEND1, MDIO_CTRL1,
+				  MDIO_CTRL1_LPOWER);
+}
+
 static struct phy_driver aquantia_driver[] = {
 {
 	.phy_id		= PHY_ID_AQ1202,
@@ -471,6 +521,8 @@ static struct phy_driver aquantia_driver[] = {
 	.config_intr	= aquantia_config_intr,
 	.ack_interrupt	= aquantia_ack_interrupt,
 	.read_status	= aquantia_read_status,
+	.suspend	= aqr107_suspend,
+	.resume		= aqr107_resume,
 },
 {
 	.phy_id		= PHY_ID_AQ2104,
@@ -495,6 +547,8 @@ static struct phy_driver aquantia_driver[] = {
 	.config_intr	= aquantia_config_intr,
 	.ack_interrupt	= aquantia_ack_interrupt,
 	.read_status	= aquantia_read_status,
+	.suspend	= aqr107_suspend,
+	.resume		= aqr107_resume,
 },
 {
 	.phy_id		= PHY_ID_AQR106,
@@ -507,6 +561,8 @@ static struct phy_driver aquantia_driver[] = {
 	.config_intr	= aquantia_config_intr,
 	.ack_interrupt	= aquantia_ack_interrupt,
 	.read_status	= aquantia_read_status,
+	.suspend	= aqr107_suspend,
+	.resume		= aqr107_resume,
 },
 {
 	.phy_id		= PHY_ID_AQR107,
@@ -560,6 +616,21 @@ static struct phy_driver aquantia_driver[] = {
 	.ack_interrupt	= aquantia_ack_interrupt,
 	.read_status	= aquantia_read_status,
 },
+{
+	.phy_id		= PHY_ID_AQR113C,
+	.phy_id_mask	= 0xfffffff0,
+	.name		= "Aquantia AQR113C",
+	.features	= PHY_AQUANTIA_FEATURES,
+	.flags		= PHY_HAS_INTERRUPT,
+	.aneg_done	= genphy_c45_aneg_done,
+	.config_aneg    = aquantia_config_aneg,
+	.config_intr	= aquantia_config_intr,
+	.ack_interrupt	= aquantia_ack_interrupt,
+	.read_status	= aquantia_read_status,
+	.suspend	= aqr107_suspend,
+	.resume		= aqr107_resume,
+},
+
 };
 
 module_phy_driver(aquantia_driver);
@@ -573,6 +644,7 @@ static struct mdio_device_id __maybe_unused aquantia_tbl[] = {
 	{ PHY_ID_AQR405, 0xfffffff0 },
 	{ PHY_ID_AQR112, 0xfffffff0 },
 	{ PHY_ID_AQR412, 0xfffffff0 },
+	{ PHY_ID_AQR113C, 0xfffffff0 },
 	{ }
 };
 

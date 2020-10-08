@@ -17,6 +17,8 @@ Clock Properties:
   - fsl,tmr-add      Frequency compensation value.
   - fsl,tmr-fiper1   Fixed interval period pulse generator.
   - fsl,tmr-fiper2   Fixed interval period pulse generator.
+  - fsl,tmr-fiper3   Fixed interval period pulse generator.
+                     Supported only on DPAA2 and ENETC hardware.
   - fsl,max-adj      Maximum frequency adjustment in parts per billion.
 
   These properties set the operational parameters for the PTP

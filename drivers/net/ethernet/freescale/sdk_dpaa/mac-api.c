@@ -1,5 +1,5 @@
 /* Copyright 2008-2012 Freescale Semiconductor, Inc.
- * Copyright 2017-2018 NXP
+ * Copyright 2017-2018,2020 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -499,6 +499,10 @@ static int xgmac_init_phy(struct net_device *net_dev,
 	return 0;
 }
 
+/* The Aquantia PHYs are capable of performing rate adaptation */
+#define PHY_VEND_AQUANTIA	0x03a1b400
+#define PHY_ID_AQR113C		0x31c31c12
+
 static int memac_init_phy(struct net_device *net_dev,
 			  struct mac_device *mac_dev)
 {
@@ -547,8 +551,13 @@ static int memac_init_phy(struct net_device *net_dev,
 		return phy_dev == NULL ? -ENODEV : PTR_ERR(phy_dev);
 	}
 
-	/* Remove any features not supported by the controller */
-	phy_dev->supported &= mac_dev->if_support;
+	/* Unless the PHY is capable of rate adaptation */
+	if (macdev2enetinterface(mac_dev) != e_ENET_MODE_XGMII_10000 ||
+	    ((phy_dev->drv->phy_id & GENMASK(31, 10)) != PHY_VEND_AQUANTIA &&
+	     phy_dev->drv->phy_id  != PHY_ID_AQR113C)) {
+		/* Remove any features not supported by the controller */
+		phy_dev->supported &= mac_dev->if_support;
+	}
 	/* Enable the symmetric and asymmetric PAUSE frame advertisements,
 	 * as most of the PHY drivers do not enable them by default.
 	 */

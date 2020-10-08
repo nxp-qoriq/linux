@@ -3,7 +3,7 @@
  * Device Tree Include file for Freescale Layerscape-1046A family SoC.
  *
  * Copyright 2016 Freescale Semiconductor, Inc.
- * Copyright 2017-2019 NXP
+ * Copyright 2017-2020 NXP
  *
  * Mingkai Hu <mingkai.hu@nxp.com>
  */
@@ -175,6 +175,20 @@
 			reg = <0x0 0x1530000 0x0 0x10000>;
 			big-endian;
 			interrupts = <GIC_SPI 43 IRQ_TYPE_LEVEL_HIGH>;
+		};
+
+		modem_tti: modem_tti@0 {
+			compatible = "modem_tti";
+			reg = <0x0 0x0 0x0 0x0>;
+			interrupts = <GIC_SPI 131 IRQ_TYPE_EDGE_RISING>,
+					<GIC_SPI 132 IRQ_TYPE_EDGE_RISING>;
+		};
+
+		modem_wdog: modem_wdog@0 {
+                        compatible = "modem_wdog";
+                        reg = <0x0 0x0 0x0 0x0>;
+                        interrupts = <GIC_SPI 150 IRQ_TYPE_EDGE_RISING>;
+                        modem-reset-gpio = <&gpio2 18 1>;
 		};
 
 		qspi: spi@1550000 {
@@ -510,7 +524,8 @@
 			interrupts = <GIC_SPI 48 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clockgen 4 0>;
 			clock-names = "ipg";
-			status = "disabled";
+//#			status = "disabled";
+			status = "ok";
 		};
 
 		lpuart1: serial@2960000 {
@@ -519,7 +534,8 @@
 			interrupts = <GIC_SPI 49 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clockgen 4 1>;
 			clock-names = "ipg";
-			status = "disabled";
+//#			status = "disabled";
+			status = "ok";
 		};
 
 		lpuart2: serial@2970000 {
@@ -707,7 +723,7 @@
 			iommu-map = <0 &smmu 0 1>;
 			bus-range = <0x0 0xff>;
 			ranges = <0x81000000 0x0 0x00000000 0x40 0x00010000 0x0 0x00010000   /* downstream I/O */
-				  0x82000000 0x0 0x40000000 0x40 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+				  0x82000000 0x0 0x40000000 0x40 0x40000000 0x0 0x80000000>; /* non-prefetchable memory */
 			msi-parent = <&msi1>, <&msi2>, <&msi3>;
 			#interrupt-cells = <1>;
 			interrupt-map-mask = <0 0 0 7>;
@@ -744,7 +760,7 @@
 			iommu-map = <0 &smmu 0 1>;
 			bus-range = <0x0 0xff>;
 			ranges = <0x81000000 0x0 0x00000000 0x48 0x00010000 0x0 0x00010000   /* downstream I/O */
-				  0x82000000 0x0 0x40000000 0x48 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+				  0x82000000 0x0 0x40000000 0x48 0x40000000 0x0 0x80000000>; /* non-prefetchable memory */
 			msi-parent = <&msi2>, <&msi3>, <&msi1>;
 			#interrupt-cells = <1>;
 			interrupt-map-mask = <0 0 0 7>;
@@ -781,7 +797,7 @@
 			iommu-map = <0 &smmu 0 1>;
 			bus-range = <0x0 0xff>;
 			ranges = <0x81000000 0x0 0x00000000 0x50 0x00010000 0x0 0x00010000   /* downstream I/O */
-				  0x82000000 0x0 0x40000000 0x50 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+				  0x82000000 0x0 0x40000000 0x50 0x40000000 0x0 0x80000000>; /* non-prefetchable memory */
 			msi-parent = <&msi3>, <&msi1>, <&msi2>;
 			#interrupt-cells = <1>;
 			interrupt-map-mask = <0 0 0 7>;

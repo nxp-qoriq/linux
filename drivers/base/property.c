@@ -557,6 +557,32 @@ int device_add_properties(struct device *dev,
 EXPORT_SYMBOL_GPL(device_add_properties);
 
 /**
+ * fwnode_get_id - Get the id of a fwnode.
+ * @fwnode: firmware node
+ * @id: id of the fwnode
+ *
+ * Returns 0 on success or a negative errno.
+ */
+int fwnode_get_id(struct fwnode_handle *fwnode, u32 *id)
+{
+	unsigned long long adr;
+	acpi_status status;
+
+	if (is_of_node(fwnode)) {
+		return of_property_read_u32(to_of_node(fwnode), "reg", id);
+	} else if (is_acpi_node(fwnode)) {
+		status = acpi_evaluate_integer(ACPI_HANDLE_FWNODE(fwnode),
+					       METHOD_NAME__ADR, NULL, &adr);
+		if (ACPI_FAILURE(status))
+			return -ENODATA;
+		*id = (u32)adr;
+		return 0;
+	}
+	return -EINVAL;
+}
+EXPORT_SYMBOL_GPL(fwnode_get_id);
+
+/**
  * fwnode_get_next_parent - Iterate to the node's parent
  * @fwnode: Firmware whose parent is retrieved
  *

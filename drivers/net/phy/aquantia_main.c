@@ -251,6 +251,8 @@ static int aqr_config_aneg(struct phy_device *phydev)
 	u16 reg;
 	int ret;
 
+	return 0;
+
 	if (phydev->autoneg == AUTONEG_DISABLE)
 		return genphy_c45_pma_setup_forced(phydev);
 

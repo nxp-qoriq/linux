@@ -30,6 +30,9 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <linux/acpi.h>
+#include <linux/property.h>
+
 #include <linux/module.h>
 
 #include <linux/netdevice.h>
@@ -551,27 +554,35 @@ static void teardown_irqs(struct fsl_mc_device *mc_dev)
 	fsl_mc_free_irqs(mc_dev);
 }
 
-static struct device_node *find_dpmac_node(struct device *dev, u16 dpmac_id)
+static struct fwnode_handle *find_dpmac_node(struct device *dev,
+					     u16 dpmac_id)
 {
-	struct device_node *dpmacs, *dpmac = NULL;
+	struct fwnode_handle *parent, *child  = NULL;
 	struct device_node *mc_node = dev->of_node;
-	u32 id;
+	struct device_node *dpmacs = NULL;
 	int err;
+	u32 id;
 
-	dpmacs = of_find_node_by_name(mc_node, "dpmacs");
-	if (!dpmacs) {
-		dev_err(dev, "No dpmacs subnode in device-tree\n");
-		return NULL;
+	if (is_of_node(dev->parent->fwnode)) {
+		dpmacs = of_find_node_by_name(NULL, "dpmacs");
+		if (!dpmacs)
+			return NULL;
+		parent = of_fwnode_handle(dpmacs);
+	} else if (is_acpi_node(dev->parent->fwnode)) {
+		parent = dev->parent->fwnode;
 	}
-
-	while ((dpmac = of_get_next_child(dpmacs, dpmac))) {
-		err = of_property_read_u32(dpmac, "reg", &id);
-		if (err)
+	fwnode_for_each_child_node(parent, child) {
+		err = fwnode_get_id(child, &id);
+		if (err) {
 			continue;
-		if (id == dpmac_id)
-			return dpmac;
+		} else if (id == dpmac_id) {
+			if (is_of_node(dev->parent->fwnode))
+				of_node_put(dpmacs);
+			return child;
+		}
 	}
-
+	if (is_of_node(dev->parent->fwnode))
+		of_node_put(dpmacs);
 	return NULL;
 }
 
@@ -579,10 +590,13 @@ static int dpaa2_mac_probe(struct fsl_mc_device *mc_dev)
 {
 	struct device		*dev;
 	struct dpaa2_mac_priv	*priv = NULL;
-	struct device_node	*phy_node, *dpmac_node;
+	struct device_node	*phy_node;
+	struct fwnode_handle	*dpmac_node = NULL;
 	struct net_device	*netdev;
 	int			if_mode;
 	int			err = 0;
+	struct phy_device	*phy_dev;
+	struct fwnode_handle *phy_fwnode;
 
 	dev = &mc_dev->dev;
 
@@ -645,7 +659,7 @@ static int dpaa2_mac_probe(struct fsl_mc_device *mc_dev)
 		goto err_close;
 	}
 
-	/* Look up the DPMAC node in the device-tree. */
+	/* Look up the DPMAC node in the device-tree or ACPI */
 	dpmac_node = find_dpmac_node(dev, priv->attr.id);
 	if (!dpmac_node) {
 		dev_err(dev, "No dpmac@%d subnode found.\n", priv->attr.id);
@@ -673,7 +687,7 @@ static int dpaa2_mac_probe(struct fsl_mc_device *mc_dev)
 #endif /* CONFIG_FSL_DPAA2_MAC_NETDEVS */
 
 	/* get the interface mode from the dpmac of node or from the MC attributes */
-	if_mode = of_get_phy_mode(dpmac_node);
+	if_mode = fwnode_get_phy_mode(dpmac_node);
 	if (if_mode >= 0) {
 		dev_dbg(dev, "\tusing if mode %s for eth_if %d\n",
 			phy_modes(if_mode), priv->attr.eth_if);
@@ -696,15 +710,36 @@ link_type:
 	if (priv->attr.link_type == DPMAC_LINK_TYPE_FIXED)
 		goto probe_fixed_link;
 
-	/* or if there's no phy-handle defined in the device tree */
-	phy_node = of_parse_phandle(dpmac_node, "phy-handle", 0);
-	if (!phy_node) {
-		goto probe_fixed_link;
+	if (is_of_node(dpmac_node)) {
+		/* or if there's no phy-handle defined in the device tree */
+		phy_node = of_parse_phandle(to_of_node(dpmac_node),
+					    "phy-handle", 0);
+		if (!phy_node)
+			goto probe_fixed_link;
+
+		/* try to connect to the PHY */
+		netdev->phydev = of_phy_connect(netdev, phy_node,
+						&dpaa2_mac_link_changed,
+						0, if_mode);
+	} else if (is_acpi_device_node(dpmac_node)) {
+		phy_fwnode = fwnode_get_phy_node(dpmac_node);
+		if (IS_ERR(phy_fwnode))
+			return 0;
+
+		phy_dev = fwnode_phy_find_device(phy_fwnode);
+		fwnode_handle_put(phy_fwnode);
+		if (!phy_dev)
+			return -ENODEV;
+
+		phy_dev->dev_flags |= 0;
+		err = phy_connect_direct(netdev, phy_dev,
+					 &dpaa2_mac_link_changed,
+					 if_mode);
+		/* refcount is held by phy_connect_direct() on success */
+		put_device(&phy_dev->mdio.dev);
+		netdev->phydev =  err ? NULL : phy_dev;
 	}
 
-	/* try to connect to the PHY */
-	netdev->phydev = of_phy_connect(netdev, phy_node,
-					&dpaa2_mac_link_changed, 0, if_mode);
 	if (!netdev->phydev) {
 		/* No need for dev_err(); the kernel's loud enough as it is. */
 		dev_dbg(dev, "Can't of_phy_connect() now.\n");

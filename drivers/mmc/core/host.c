@@ -387,9 +387,8 @@ int mmc_parse_voltage(struct device *dev, u32 *mask)
 		const int j = i * 2;
 		u32 ocr_mask;
 
-		ocr_mask = mmc_vddrange_to_ocrmask(
-				be32_to_cpu(voltage_ranges[j]),
-				be32_to_cpu(voltage_ranges[j + 1]));
+		ocr_mask = mmc_vddrange_to_ocrmask(voltage_ranges[j],
+						   voltage_ranges[j + 1]);
 		if (!ocr_mask) {
 			dev_err(dev, "voltage-range #%d is invalid\n", i);
 			kfree(voltage_ranges);

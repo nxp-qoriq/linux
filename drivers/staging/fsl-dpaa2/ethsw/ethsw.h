@@ -39,6 +39,8 @@
 
 #define ETHSW_FEATURE_MAC_ADDR	BIT(0)
 
+#define DPAA2_ETHSW_PORT_ACL_CMD_BUF_SIZE	256
+
 extern const struct ethtool_ops ethsw_port_ethtool_ops;
 
 struct ethsw_core;
@@ -77,6 +79,7 @@ struct ethsw_core {
 	struct workqueue_struct		*workqueue;
 
 	u16 acl_id;
+	u16 acl_max_entries;
 };
 
 bool ethsw_port_is_up(struct ethsw_port_priv *port_priv);

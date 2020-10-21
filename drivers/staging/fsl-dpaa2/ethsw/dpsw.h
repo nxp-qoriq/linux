@@ -661,4 +661,122 @@ int dpsw_acl_remove_if(struct fsl_mc_io *mc_io,
 		       u16 token,
 		       u16 acl_id,
 		       const struct dpsw_acl_if_cfg *cfg);
+
+/**
+ * Flag used while adding ACL entries to match on miss from FDB
+ */
+#define DPSW_ACL_MATCH_ON_FDB_MISS				0x80
+
+/**
+ * struct dpsw_acl_fields - ACL fields.
+ * @l2_dest_mac: Destination MAC address: BPDU, Multicast, Broadcast, Unicast,
+ *			slow protocols, MVRP, STP
+ * @l2_source_mac: Source MAC address
+ * @l2_tpid: Layer 2 (Ethernet) protocol type, used to identify the following
+ *		protocols: MPLS, PTP, PFC, ARP, Jumbo frames, LLDP, IEEE802.1ae,
+ *		Q-in-Q, IPv4, IPv6, PPPoE
+ * @l2_pcp_dei: indicate which protocol is encapsulated in the payload
+ * @l2_vlan_id: layer 2 VLAN ID
+ * @l2_ether_type: layer 2 Ethernet type
+ * @l3_dscp: Layer 3 differentiated services code point
+ * @l3_protocol: Tells the Network layer at the destination host, to which
+ *		Protocol this packet belongs to. The following protocol are
+ *		supported: ICMP, IGMP, IPv4 (encapsulation), TCP, IPv6
+ *		(encapsulation), GRE, PTP
+ * @l3_source_ip: Source IPv4 IP
+ * @l3_dest_ip: Destination IPv4 IP
+ * @l4_source_port: Source TCP/UDP Port
+ * @l4_dest_port: Destination TCP/UDP Port
+ * @frame_flags: Field used to pass frame flags. Supported values: DPSW_ACL_MATCH_ON_FDB_MISS
+ */
+struct dpsw_acl_fields {
+	u8 l2_dest_mac[6];
+	u8 l2_source_mac[6];
+	u16 l2_tpid;
+	u8 l2_pcp_dei;
+	u16 l2_vlan_id;
+	u16 l2_ether_type;
+	u8 l3_dscp;
+	u8 l3_protocol;
+	u32 l3_source_ip;
+	u32 l3_dest_ip;
+	u16 l4_source_port;
+	u16 l4_dest_port;
+	u8 frame_flags;
+};
+
+/**
+ * struct dpsw_acl_key - ACL key
+ * @match: Match fields
+ * @mask: Mask: b'1 - valid, b'0 don't care
+ */
+struct dpsw_acl_key {
+	struct dpsw_acl_fields match;
+	struct dpsw_acl_fields mask;
+};
+
+/**
+ * enum dpsw_acl_action
+ * @DPSW_ACL_ACTION_DROP: Drop frame
+ * @DPSW_ACL_ACTION_REDIRECT: Redirect to certain port
+ * @DPSW_ACL_ACTION_ACCEPT: Accept frame
+ * @DPSW_ACL_ACTION_REDIRECT_TO_CTRL_IF: Redirect to control interface
+ * @DPSW_ACL_ACTION_LOOKUP: Goto Lookup table
+ */
+enum dpsw_acl_action {
+	DPSW_ACL_ACTION_DROP,
+	DPSW_ACL_ACTION_REDIRECT,
+	DPSW_ACL_ACTION_ACCEPT,
+	DPSW_ACL_ACTION_REDIRECT_TO_CTRL_IF,
+	DPSW_ACL_ACTION_LOOKUP
+};
+
+/**
+ * enum dpsw_acl_lookup_table
+ * @DPSW_ACL_LOOKUP_TBL_BCAST: Broadcast table
+ * @DPSW_ACL_LOOKUP_TBL_MCAST: Multicast table
+ * @DPSW_ACL_LOOKUP_TBL_UCAST: Unknown Unicast table
+ */
+enum dpsw_acl_lookup_table {
+	DPSW_ACL_LOOKUP_TBL_BCAST,	/* Broadcast table */
+	DPSW_ACL_LOOKUP_TBL_MCAST,  /* Multicast table */
+	DPSW_ACL_LOOKUP_TBL_UCAST   /* Unknown Unicast table */
+};
+
+/**
+ * struct dpsw_acl_result - ACL action
+ * @action: Action should be taken when	ACL entry hit
+ * @if_id:  Interface IDs to redirect frame. Valid only if redirect selected for
+ *		 action
+ * @lookup_table: Lookup Table id - Valid only if lookup selected for action
+ */
+struct dpsw_acl_result {
+	enum dpsw_acl_action action;
+	u16 if_id;
+	enum dpsw_acl_lookup_table lookup_table;
+};
+
+/**
+ * struct dpsw_acl_entry_cfg - ACL entry
+ * @key_iova: I/O virtual address of DMA-able memory filled with key after call
+ *				to dpsw_acl_prepare_entry_cfg()
+ * @result: Required action when entry hit occurs
+ * @precedence: Precedence inside ACL 0 is lowest; This priority can not change
+ *		during the lifetime of a Policy. It is user responsibility to
+ *		space the priorities according to consequent rule additions.
+ */
+struct dpsw_acl_entry_cfg {
+	u64 key_iova;
+	struct dpsw_acl_result result;
+	int precedence;
+};
+
+void dpsw_acl_prepare_entry_cfg(const struct dpsw_acl_key *key,
+				u8 *entry_cfg_buf);
+
+int dpsw_acl_add_entry(struct fsl_mc_io *mc_io,
+		       u32 cmd_flags,
+		       u16 token,
+		       u16 acl_id,
+		       const struct dpsw_acl_entry_cfg *cfg);
 #endif /* __FSL_DPSW_H */

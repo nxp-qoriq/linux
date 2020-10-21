@@ -1745,6 +1745,129 @@ err_port_probe:
 	return err;
 }
 
+static int dpaa2_switch_add_flooding_acl_entry(struct ethsw_core *ethsw)
+{
+	struct ethsw_port_priv *port_priv = ethsw->ports[0];
+	const char bcast[ETH_ALEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+	struct net_device *netdev = port_priv->netdev;
+	struct dpsw_acl_entry_cfg acl_entry_cfg;
+	struct dpsw_acl_fields *acl_h;
+	struct dpsw_acl_fields *acl_m;
+	struct dpsw_acl_key acl_key;
+	struct device *dev;
+	u8 *cmd_buff;
+	int err;
+
+	dev = port_priv->netdev->dev.parent;
+	acl_h = &acl_key.match;
+	acl_m = &acl_key.mask;
+
+	cmd_buff = kzalloc(DPAA2_ETHSW_PORT_ACL_CMD_BUF_SIZE, GFP_KERNEL);
+	if (!cmd_buff)
+		return -ENOMEM;
+
+	/* Add ACL entry for broadcast frames */
+	memset(&acl_entry_cfg, 0, sizeof(acl_entry_cfg));
+	memset(&acl_key, 0, sizeof(acl_key));
+	ether_addr_copy(acl_h->l2_dest_mac, bcast);
+	eth_broadcast_addr(acl_m->l2_dest_mac);
+	dpsw_acl_prepare_entry_cfg(&acl_key, cmd_buff);
+
+	memset(&acl_entry_cfg, 0, sizeof(acl_entry_cfg));
+	acl_entry_cfg.precedence = ethsw->acl_max_entries - 3;
+	acl_entry_cfg.result.action = DPSW_ACL_ACTION_LOOKUP;
+	acl_entry_cfg.result.lookup_table = DPSW_ACL_LOOKUP_TBL_BCAST;
+
+	acl_entry_cfg.key_iova = dma_map_single(dev, cmd_buff,
+						DPAA2_ETHSW_PORT_ACL_CMD_BUF_SIZE,
+						DMA_TO_DEVICE);
+	if (unlikely(dma_mapping_error(dev, acl_entry_cfg.key_iova))) {
+		netdev_err(netdev, "DMA mapping failed\n");
+		return -EFAULT;
+	}
+
+	err = dpsw_acl_add_entry(ethsw->mc_io, 0,
+				 ethsw->dpsw_handle,
+				 ethsw->acl_id, &acl_entry_cfg);
+
+	dma_unmap_single(dev, acl_entry_cfg.key_iova, sizeof(cmd_buff),
+			 DMA_TO_DEVICE);
+	if (err) {
+		netdev_err(netdev, "dpsw_acl_add_entry() failed %d\n", err);
+		return err;
+	}
+
+	/* Add ACL entry for unknown multicast frames */
+	memset(&acl_entry_cfg, 0, sizeof(acl_entry_cfg));
+	memset(&acl_key, 0, sizeof(acl_key));
+	acl_h->l2_dest_mac[0] = 0x01;
+	acl_m->l2_dest_mac[0] = 0x01;
+	acl_h->frame_flags = DPSW_ACL_MATCH_ON_FDB_MISS;
+	acl_m->frame_flags = DPSW_ACL_MATCH_ON_FDB_MISS;
+	dpsw_acl_prepare_entry_cfg(&acl_key, cmd_buff);
+
+	memset(&acl_entry_cfg, 0, sizeof(acl_entry_cfg));
+	acl_entry_cfg.precedence = ethsw->acl_max_entries - 2;
+	acl_entry_cfg.result.action = DPSW_ACL_ACTION_LOOKUP;
+	acl_entry_cfg.result.lookup_table = DPSW_ACL_LOOKUP_TBL_MCAST;
+
+	acl_entry_cfg.key_iova = dma_map_single(dev, cmd_buff,
+						DPAA2_ETHSW_PORT_ACL_CMD_BUF_SIZE,
+						DMA_TO_DEVICE);
+	if (unlikely(dma_mapping_error(dev, acl_entry_cfg.key_iova))) {
+		netdev_err(netdev, "DMA mapping failed\n");
+		return -EFAULT;
+	}
+
+	err = dpsw_acl_add_entry(ethsw->mc_io, 0,
+				 ethsw->dpsw_handle,
+				 ethsw->acl_id, &acl_entry_cfg);
+
+	dma_unmap_single(dev, acl_entry_cfg.key_iova, sizeof(cmd_buff),
+			 DMA_TO_DEVICE);
+	if (err) {
+		netdev_err(netdev, "dpsw_acl_add_entry() failed %d\n", err);
+		return err;
+	}
+
+	/* Add ACL entry for unknown unicast frames */
+	memset(&acl_entry_cfg, 0, sizeof(acl_entry_cfg));
+	memset(&acl_key, 0, sizeof(acl_key));
+	acl_h->l2_dest_mac[0] = 0x00;
+	acl_m->l2_dest_mac[0] = 0x01;
+	acl_h->frame_flags = DPSW_ACL_MATCH_ON_FDB_MISS;
+	acl_m->frame_flags = DPSW_ACL_MATCH_ON_FDB_MISS;
+	dpsw_acl_prepare_entry_cfg(&acl_key, cmd_buff);
+
+	memset(&acl_entry_cfg, 0, sizeof(acl_entry_cfg));
+	acl_entry_cfg.precedence = ethsw->acl_max_entries - 1;
+	acl_entry_cfg.result.action = DPSW_ACL_ACTION_LOOKUP;
+	acl_entry_cfg.result.lookup_table = DPSW_ACL_LOOKUP_TBL_UCAST;
+
+	acl_entry_cfg.key_iova = dma_map_single(dev, cmd_buff,
+						DPAA2_ETHSW_PORT_ACL_CMD_BUF_SIZE,
+						DMA_TO_DEVICE);
+	if (unlikely(dma_mapping_error(dev, acl_entry_cfg.key_iova))) {
+		netdev_err(netdev, "DMA mapping failed\n");
+		return -EFAULT;
+	}
+
+	err = dpsw_acl_add_entry(ethsw->mc_io, 0,
+				 ethsw->dpsw_handle,
+				 ethsw->acl_id, &acl_entry_cfg);
+
+	dma_unmap_single(dev, acl_entry_cfg.key_iova, sizeof(cmd_buff),
+			 DMA_TO_DEVICE);
+	if (err) {
+		netdev_err(netdev, "dpsw_acl_add_entry() failed %d\n", err);
+		return err;
+	}
+
+	kfree(cmd_buff);
+
+	return 0;
+}
+
 static int ethsw_probe(struct fsl_mc_device *sw_dev)
 {
 	struct device *dev = &sw_dev->dev;
@@ -1790,13 +1913,14 @@ static int ethsw_probe(struct fsl_mc_device *sw_dev)
 	}
 
 	/* This is only a hack so that the broadcast entry in the ACL is working properly */
-	acl_cfg.max_entries = 1;
+	acl_cfg.max_entries = 10;
 	err = dpsw_acl_add(ethsw->mc_io, 0, ethsw->dpsw_handle,
 			   &ethsw->acl_id, &acl_cfg);
 	if (err) {
 		dev_err(ethsw->dev, "dpsw_acl_add err %d\n", err);
 		goto err_free_ports;
 	}
+	ethsw->acl_max_entries = 10;
 
 	acl_if_cfg.num_ifs = ethsw->sw_attr.num_ifs;
 	for (i = 0; i < ethsw->sw_attr.num_ifs; i++)
@@ -1813,6 +1937,10 @@ static int ethsw_probe(struct fsl_mc_device *sw_dev)
 		if (err)
 			goto err_acl_if_remove;
 	}
+
+	err = dpaa2_switch_add_flooding_acl_entry(ethsw);
+	if (err)
+		return err;
 
 	err = dpsw_enable(ethsw->mc_io, 0, ethsw->dpsw_handle);
 	if (err) {

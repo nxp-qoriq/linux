@@ -14,10 +14,12 @@
 
 #define DPSW_CMD_BASE_VERSION	1
 #define DPSW_CMD_VERSION_2	2
+#define DPSW_CMD_VERSION_3	3
 #define DPSW_CMD_ID_OFFSET	4
 
 #define DPSW_CMD_ID(id)	(((id) << DPSW_CMD_ID_OFFSET) | DPSW_CMD_BASE_VERSION)
 #define DPSW_CMD_V2(id) (((id) << DPSW_CMD_ID_OFFSET) | DPSW_CMD_VERSION_2)
+#define DPSW_CMD_V3(id) (((id) << DPSW_CMD_ID_OFFSET) | DPSW_CMD_VERSION_3)
 
 /* Command IDs */
 #define DPSW_CMDID_CLOSE                    DPSW_CMD_ID(0x800)
@@ -79,6 +81,7 @@
 
 #define DPSW_CMDID_ACL_ADD                  DPSW_CMD_ID(0x090)
 #define DPSW_CMDID_ACL_REMOVE               DPSW_CMD_ID(0x091)
+#define DPSW_CMDID_ACL_ADD_ENTRY            DPSW_CMD_V3(0x092)
 #define DPSW_CMDID_ACL_ADD_IF               DPSW_CMD_ID(0x094)
 #define DPSW_CMDID_ACL_REMOVE_IF            DPSW_CMD_ID(0x095)
 
@@ -434,6 +437,58 @@ struct dpsw_cmd_acl_if {
 	u32 pad;
 	/* cmd word 1 */
 	u64 if_id[4];
+};
+
+struct dpsw_prep_acl_entry {
+	uint8_t match_l2_dest_mac[6];
+	uint16_t match_l2_tpid;
+
+	uint8_t match_l2_source_mac[6];
+	uint16_t match_l2_vlan_id;
+
+	uint32_t match_l3_dest_ip;
+	uint32_t match_l3_source_ip;
+
+	uint16_t match_l4_dest_port;
+	uint16_t match_l4_source_port;
+	uint16_t match_l2_ether_type;
+	uint8_t match_l2_pcp_dei;
+	uint8_t match_l3_dscp;
+
+	uint8_t mask_l2_dest_mac[6];
+	uint16_t mask_l2_tpid;
+
+	uint8_t mask_l2_source_mac[6];
+	uint16_t mask_l2_vlan_id;
+
+	uint32_t mask_l3_dest_ip;
+	uint32_t mask_l3_source_ip;
+
+	uint16_t mask_l4_dest_port;
+	uint16_t mask_l4_source_port;
+	uint16_t mask_l2_ether_type;
+	uint8_t mask_l2_pcp_dei;
+	uint8_t mask_l3_dscp;
+
+	uint8_t match_l3_protocol;
+	uint8_t mask_l3_protocol;
+
+	uint8_t match_frame_flags;
+	uint8_t mask_frame_flags;
+};
+
+#define DPSW_RESULT_ACTION_SHIFT	0
+#define DPSW_RESULT_ACTION_SIZE		4
+
+struct dpsw_cmd_acl_entry {
+	uint16_t acl_id;
+	uint16_t result_if_id;
+	uint32_t precedence;
+	/* from LSB only the first 4 bits */
+	uint8_t result_action;
+	uint8_t pad[7];
+	uint64_t pad2[4];
+	uint64_t key_iova;
 };
 
 #endif /* __FSL_DPSW_CMD_H */

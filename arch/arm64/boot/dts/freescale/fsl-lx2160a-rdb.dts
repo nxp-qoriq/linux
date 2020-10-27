@@ -38,6 +38,7 @@
 			fsl,tmr-add     = <0x80000000>;
 			fsl,tmr-fiper1  = <999999800>;
 			fsl,tmr-fiper2  = <99800>;
+			fsl,tmr-fiper3  = <999999800>;
 			fsl,max-adj     = <999999999>;
 		};
 	};

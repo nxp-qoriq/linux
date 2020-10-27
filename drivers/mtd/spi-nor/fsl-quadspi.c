@@ -293,6 +293,7 @@ struct fsl_qspi {
 	void __iomem *iobase;
 	void __iomem *ahb_addr;
 	u32 memmap_phy;
+	u32 memmap_phy_size;
 	u32 memmap_offs;
 	u32 memmap_len;
 	struct clk *clk, *clk_en;
@@ -715,17 +716,17 @@ static ssize_t fsl_qspi_nor_write(struct fsl_qspi *q, struct spi_nor *nor,
 
 static void fsl_qspi_set_map_addr(struct fsl_qspi *q)
 {
-	int nor_size = q->nor_size;
 	void __iomem *base = q->iobase;
 	u32 memmap_phyadd = q->memmap_phy;
+	u32 size_per_chip = q->memmap_phy_size / FSL_QSPI_MAX_CHIP;
 
 	if (need_address_remap(q))
 		memmap_phyadd = 0;
 
-	qspi_writel(q, nor_size + memmap_phyadd, base + QUADSPI_SFA1AD);
-	qspi_writel(q, nor_size * 2 + memmap_phyadd, base + QUADSPI_SFA2AD);
-	qspi_writel(q, nor_size * 3 + memmap_phyadd, base + QUADSPI_SFB1AD);
-	qspi_writel(q, nor_size * 4 + memmap_phyadd, base + QUADSPI_SFB2AD);
+	qspi_writel(q, size_per_chip + memmap_phyadd, base + QUADSPI_SFA1AD);
+	qspi_writel(q, size_per_chip * 2 + memmap_phyadd, base + QUADSPI_SFA2AD);
+	qspi_writel(q, size_per_chip * 3 + memmap_phyadd, base + QUADSPI_SFB1AD);
+	qspi_writel(q, size_per_chip * 4 + memmap_phyadd, base + QUADSPI_SFB2AD);
 }
 
 /*
@@ -892,7 +893,7 @@ MODULE_DEVICE_TABLE(of, fsl_qspi_dt_ids);
 
 static void fsl_qspi_set_base_addr(struct fsl_qspi *q, struct spi_nor *nor)
 {
-	q->chip_base_addr = q->nor_size * (nor - q->nor);
+	q->chip_base_addr = (q->memmap_phy_size / FSL_QSPI_MAX_CHIP) * (nor - q->nor);
 }
 
 static int fsl_qspi_read_reg(struct spi_nor *nor, u8 opcode, u8 *buf, int len)
@@ -1088,6 +1089,7 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 	}
 
 	q->memmap_phy = res->start;
+	q->memmap_phy_size = resource_size(res);
 
 	/* find the clocks */
 	q->clk_en = devm_clk_get(dev, "qspi_en");
@@ -1225,6 +1227,9 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 			}
 		}
 
+		/* Map the SPI NOR to accessiable address */
+		fsl_qspi_set_map_addr(q);
+
 		ret = spi_nor_scan(nor, NULL, &hwcaps);
 		if (ret)
 			goto mutex_failed;
@@ -1234,12 +1239,8 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 			goto mutex_failed;
 
 		/* Set the correct NOR size now. */
-		if (q->nor_size == 0) {
+		if (q->nor_size == 0)
 			q->nor_size = mtd->size;
-
-			/* Map the SPI NOR to accessiable address */
-			fsl_qspi_set_map_addr(q);
-		}
 
 		/*
 		 * The TX FIFO is 64 bytes in the Vybrid, but the Page Program

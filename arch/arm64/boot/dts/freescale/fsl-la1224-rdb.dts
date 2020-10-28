@@ -54,6 +54,18 @@
 			     <GIC_SPI 11 IRQ_TYPE_LEVEL_HIGH>;
 		status = "okay";
 	};
+
+	soc {
+		ptp-timer@8b95000 {
+			fsl,cksel       = <0>;
+			fsl,tclk-period = <10>;
+			fsl,tmr-prsc    = <2>;
+			fsl,tmr-add     = <0xd0555556>;
+			fsl,tmr-fiper1  = <999999990>;
+			fsl,tmr-fiper2  = <99990>;
+			fsl,max-adj     = <228799999>;
+		};
+	};
 };
 
 &crypto {
@@ -274,7 +286,7 @@
 		P13 {
 			gpio-hog;
 			gpios = <11 GPIO_ACTIVE_HIGH>;
-			output-low;
+			output-high;
 			line-name = "cfg_ieee_src[1]";
 		};
 

@@ -63,6 +63,7 @@
 			fsl,tmr-add     = <0xd0555556>;
 			fsl,tmr-fiper1  = <999999990>;
 			fsl,tmr-fiper2  = <99990>;
+			fsl,tmr-fiper3  = <999999990>;
 			fsl,max-adj     = <228799999>;
 		};
 	};

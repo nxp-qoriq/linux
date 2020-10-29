@@ -417,7 +417,7 @@ static int thread_cb(void *arg)
 	while (1) {
 		raw_spin_lock_irqsave(&qoriq_prv_data->qoriq_tmu_wq_lock,
 					flags);
-		prepare_to_swait(&qoriq_prv_data->qoriq_tmu_wq,
+		prepare_to_swait_exclusive(&qoriq_prv_data->qoriq_tmu_wq,
 				&qoriq_tmu_wait, TASK_INTERRUPTIBLE);
 		raw_spin_unlock_irqrestore(&qoriq_prv_data->qoriq_tmu_wq_lock,
 						flags);

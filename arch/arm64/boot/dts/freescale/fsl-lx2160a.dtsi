@@ -740,7 +740,7 @@
 		tmu: tmu@1f80000 {
 			compatible = "fsl,qoriq-tmu";
 			reg = <0x0 0x1f80000 0x0 0x10000>;
-			interrupts = <0 23 0x4>;
+			interrupts = <0 23 0x4>, <0 24 0x4>;
 			fsl,tmu-range = <0x800000E6 0x8001017D>;
 			fsl,tmu-calibration =
 				/* Calibration data group 1 */

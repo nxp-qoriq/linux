@@ -565,12 +565,15 @@ EXPORT_SYMBOL_GPL(device_add_properties);
  */
 int fwnode_get_id(struct fwnode_handle *fwnode, u32 *id)
 {
+#ifdef CONFIG_ACPI
 	unsigned long long adr;
 	acpi_status status;
+#endif
 
-	if (is_of_node(fwnode)) {
+	if (is_of_node(fwnode))
 		return of_property_read_u32(to_of_node(fwnode), "reg", id);
-	} else if (is_acpi_node(fwnode)) {
+#ifdef CONFIG_ACPI
+	if (is_acpi_node(fwnode)) {
 		status = acpi_evaluate_integer(ACPI_HANDLE_FWNODE(fwnode),
 					       METHOD_NAME__ADR, NULL, &adr);
 		if (ACPI_FAILURE(status))
@@ -578,6 +581,7 @@ int fwnode_get_id(struct fwnode_handle *fwnode, u32 *id)
 		*id = (u32)adr;
 		return 0;
 	}
+#endif
 	return -EINVAL;
 }
 EXPORT_SYMBOL_GPL(fwnode_get_id);

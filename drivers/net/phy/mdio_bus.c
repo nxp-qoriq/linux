@@ -403,14 +403,18 @@ static int mdiobus_create_device(struct mii_bus *bus,
  */
 int fwnode_mdiobus_register(struct mii_bus *mdio, struct fwnode_handle *fwnode)
 {
+#ifdef CONFIG_ACPI
 	struct fwnode_handle *child;
 	unsigned long long addr;
 	acpi_status status;
 	int ret;
+#endif
 
 	if (is_of_node(fwnode)) {
 		return of_mdiobus_register(mdio, to_of_node(fwnode));
-	} else if (is_acpi_node(fwnode)) {
+	}
+#ifdef CONFIG_ACPI
+	if (is_acpi_node(fwnode)) {
 		/* Mask out all PHYs from auto probing. */
 		mdio->phy_mask = ~0;
 		ret = mdiobus_register(mdio);
@@ -438,6 +442,7 @@ int fwnode_mdiobus_register(struct mii_bus *mdio, struct fwnode_handle *fwnode)
 		}
 		return 0;
 	}
+#endif
 	return -EINVAL;
 }
 EXPORT_SYMBOL(fwnode_mdiobus_register);

@@ -892,8 +892,7 @@
 			reg-names = "regs", "addr_space";
 			interrupts = <GIC_SPI 117 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "pme";
-			num-ib-windows = <6>;
-			num-ob-windows = <8>;
+			apio-wins = <8>;
 			big-endian;
 			status = "disabled";
 		};
@@ -932,8 +931,7 @@
 			reg-names = "regs", "addr_space";
 			interrupts = <GIC_SPI 127 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "pme";
-			num-ib-windows = <6>;
-			num-ob-windows = <8>;
+			apio-wins = <8>;
 			big-endian;
 			status = "disabled";
 		};
@@ -972,8 +970,7 @@
 			reg-names = "regs", "addr_space";
 			interrupts = <GIC_SPI 161 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "pme";
-			num-ib-windows = <6>;
-			num-ob-windows = <8>;
+			apio-wins = <8>;
 			big-endian;
 			status = "disabled";
 		};

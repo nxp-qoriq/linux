@@ -766,6 +766,35 @@
 					};
 				};
 			};
+
+			ddr-controller {
+				polling-delay-passive = <1000>;
+				polling-delay = <5000>;
+				thermal-sensors = <&tmu 1>;
+
+				trips {
+					ddr_controller_alert: ddr-controller-alert {
+						temperature = <85000>;
+						hysteresis = <2000>;
+						type = "passive";
+					};
+
+					ddr_controller_crit: ddr-controller-crit {
+						temperature = <95000>;
+						hysteresis = <2000>;
+						type = "critical";
+					};
+				};
+
+				cooling-maps {
+					map0 {
+						trip = <&ddr_controller_alert>;
+						cooling-device =
+							<&cpu0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							<&cpu1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+					};
+				};
+			};
 		};
 
 		pcie1: pcie@3400000 {

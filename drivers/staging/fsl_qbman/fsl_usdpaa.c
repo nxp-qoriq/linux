@@ -1782,20 +1782,27 @@ static void phy_link_updates(struct net_device *net_dev)
 	struct mac_device *mac_dev;
 	struct phy_device *phy_dev;
 
-	if (!net_dev->phydev) {
-		npriv = netdev_priv(net_dev);
-		mac_dev =  npriv->mac_dev;
-		phy_dev = of_phy_find_device(mac_dev->phy_node);
-	} else {
-		phy_dev = net_dev->phydev;
-	}
+	if (of_device_is_compatible(net_dev->dev.of_node, "fsl,dpa-ethernet")) {
+		if (!net_dev->phydev) {
+			npriv = netdev_priv(net_dev);
+			mac_dev =  npriv->mac_dev;
+			phy_dev = of_phy_find_device(mac_dev->phy_node);
+		} else {
+			phy_dev = net_dev->phydev;
+		}
 
-	if (phy_dev->priv == NULL) {
+		if (phy_dev->priv == NULL) {
+			pr_err(KBUILD_MODNAME "get eventfd context failed\n");
+			return;
+		}
+		eventfd_signal((struct eventfd_ctx *)phy_dev->priv, 1);
+	} else if (of_device_is_compatible(net_dev->dev.of_node, "fsl,dpa-ethernet-init")) {
 		struct dpa_proxy_priv_s *priv = NULL;
 		priv = netdev_priv(net_dev);
 		eventfd_signal(priv->efd_ctx, 1);
 	} else {
-		eventfd_signal((struct eventfd_ctx *)phy_dev->priv, 1);
+		pr_err(KBUILD_MODNAME "Not supported device\n");
+		return;
 	}
 
 	pr_debug("%s: Link '%s': Speed '%d-Mbps': Autoneg '%d': Duplex '%d'\n",
@@ -1849,6 +1856,7 @@ static int ioctl_en_if_link_status(struct usdpaa_ioctl_link_status *args)
 			pr_err(KBUILD_MODNAME "get eventfd context failed\n");
 			return -EINVAL;
 		}
+		net_dev->dev.of_node = dev->of_node;
 
 		/* Since there will be NO PHY update as link is already setup,
 		 * wake user context once so that current PHY status can
@@ -1887,6 +1895,7 @@ static int ioctl_en_if_link_status(struct usdpaa_ioctl_link_status *args)
 				free_netdev(net_dev);
 				return -EINVAL;
 			}
+			net_dev->dev.of_node = dev->of_node;
 			/* Since there will be NO PHY update as link is already setup,
 			 * wake user context once so that current PHY status can
 			 * be fetched.
@@ -1922,6 +1931,7 @@ static int ioctl_en_if_link_status(struct usdpaa_ioctl_link_status *args)
 			free_netdev(net_dev);
 			return -EINVAL;
 		}
+		net_dev->dev.of_node = dev->of_node;
 		strncpy(net_dev->name, args->if_name, IF_NAME_MAX_LEN);
 		dev->platform_data = net_dev;
 

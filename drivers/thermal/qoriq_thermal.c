@@ -146,6 +146,8 @@ int ctd_hysteresis_val;
 struct task_struct *ts_crit_temp_monitoring_task;
 struct task_struct *ts_avg_temp_monitoring_task;
 uint32_t qoriq_thermal_event;
+int avg_thread_running;
+int crit_thread_running;
 #endif
 
 static void tmu_write(struct qoriq_tmu_data *p, u32 val, void __iomem *addr)
@@ -384,11 +386,12 @@ static int thread_monitoring_avg_low_temp(void *arg)
 			tmu_write(data, TIER_AVERAGE_THRESHOLD_ENABLED,
 				&data->regs->tier);
 			send_call_back(CTD_LOW_AVG_TEMP_EVENT);
+			avg_thread_running = 0;
 			kthread_stop(ts_avg_temp_monitoring_task);
+			continue;
 		}
 		msleep(TEMP_POLLING_DEFAULT_SLEEP_TIME);
 	}
-
 	return 0;
 }
 static int thread_monitoring_crit_low_temp(void *arg)
@@ -409,7 +412,9 @@ static int thread_monitoring_crit_low_temp(void *arg)
 			tmu_write(data, TIER_CRITICAL_THRESHOLD_ENABLED,
 				&data->regs->tier);
 			send_call_back(CTD_LOW_CRITICAL_TEMP_EVENT);
+			crit_thread_running = 0;
 			kthread_stop(ts_crit_temp_monitoring_task);
+			continue;
 		}
 		msleep(TEMP_POLLING_DEFAULT_SLEEP_TIME);
 	}
@@ -438,23 +443,32 @@ static int thread_cb(void *arg)
 		raw_spin_unlock_irqrestore(&qoriq_prv_data->qoriq_tmu_wq_lock,
 						flags);
 		if (qoriq_thermal_event & (1<<CTD_HIGH_AVG_TEMP_EVENT)) {
-			ts_avg_temp_monitoring_task = kthread_run(
-				thread_monitoring_avg_low_temp,
-				NULL, "Avg low temp monitoring thread");
-			if (IS_ERR(ts_avg_temp_monitoring_task))
-				dev_err(&pdev_tmu->dev,
-					"ERROR: Cannot create thread\n");
-			qoriq_thermal_event &= ~(1 << CTD_HIGH_AVG_TEMP_EVENT);
+			if (!avg_thread_running) {
+				ts_avg_temp_monitoring_task = kthread_run(
+					thread_monitoring_avg_low_temp,
+					NULL, "Avg low temp monitoring thread");
+				if (IS_ERR(ts_avg_temp_monitoring_task))
+					dev_err(&pdev_tmu->dev,
+						"ERROR: Cannot create thread\n");
+				avg_thread_running = 1;
+			}
 			send_call_back(CTD_HIGH_AVG_TEMP_EVENT);
-		} else if (qoriq_thermal_event & (1<<CTD_HIGH_CRITICAL_TEMP_EVENT)) {
-			ts_crit_temp_monitoring_task = kthread_run(
-				thread_monitoring_crit_low_temp,
-				NULL, "Crit low temp monitoring thread");
-			if (IS_ERR(ts_crit_temp_monitoring_task))
-				dev_err(&pdev_tmu->dev,
-					"ERROR: Cannot create thread\n");
-			qoriq_thermal_event &= ~(1 << CTD_HIGH_CRITICAL_TEMP_EVENT);
+			qoriq_thermal_event &= ~(1 << CTD_HIGH_AVG_TEMP_EVENT);
+			msleep(100);
+		}
+		if (qoriq_thermal_event & (1<<CTD_HIGH_CRITICAL_TEMP_EVENT)) {
+			if (!crit_thread_running) {
+				ts_crit_temp_monitoring_task = kthread_run(
+					thread_monitoring_crit_low_temp,
+					NULL, "Crit low temp monitoring thread");
+				if (IS_ERR(ts_crit_temp_monitoring_task))
+					dev_err(&pdev_tmu->dev,
+						"ERROR: Cannot create thread\n");
+				crit_thread_running = 1;
+			}
 			send_call_back(CTD_HIGH_CRITICAL_TEMP_EVENT);
+			qoriq_thermal_event &= ~(1 << CTD_HIGH_CRITICAL_TEMP_EVENT);
+			msleep(100);
 		}
 	}
 

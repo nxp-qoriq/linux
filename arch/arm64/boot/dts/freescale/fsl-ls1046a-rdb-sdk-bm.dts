@@ -86,3 +86,7 @@
 &optee {
 	status = "disabled";
 };
+
+&ifc {
+	status = "disabled";
+};

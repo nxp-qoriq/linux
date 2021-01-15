@@ -4,7 +4,7 @@
 
 ccflags-y +=  -I$(src)/include  -I$(src)
 
-obj-m += pfe.o
+obj-$(CONFIG_FSL_PPFE) += pfe.o
 
 pfe-y += pfe_mod.o \
 	pfe_hw.o \

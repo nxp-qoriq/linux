@@ -57,15 +57,21 @@
 
 	soc {
 		ptp-timer@8b95000 {
-			fsl,cksel       = <0>;
-			fsl,tclk-period = <10>;
-			fsl,tmr-prsc    = <2>;
-			fsl,tmr-add     = <0xd0555556>;
-			fsl,tmr-fiper1  = <999999990>;
-			fsl,tmr-fiper2  = <99990>;
-			fsl,tmr-fiper3  = <999999990>;
-			fsl,max-adj     = <228799999>;
+			clocks = <0x02 0x04 0x01>;
+			compatible = "fsl,dpaa2-ptp";
+			fsl,cksel = <0x00>;
+			fsl,extts-fifo;
+			fsl,max-adj = <0xda335ff>;
+			fsl,tclk-period = <0x0a>;
+			fsl,tmr-add = <0xd0555556>;
+			fsl,tmr-fiper1 = <0x3b9ac9f6>;
+			fsl,tmr-fiper2 = <0x3b9ac9f6>;
+			fsl,tmr-fiper3 = <0x3b9ac9f6>;
+			fsl,tmr-prsc = <0x02>;
+			little-endian;
+			reg = <0x00 0x8b95000 0x00 0x100>;
 		};
+
 	};
 };
 

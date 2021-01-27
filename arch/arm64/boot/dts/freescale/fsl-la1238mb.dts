@@ -1,0 +1,150 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+//
+// Device Tree file for LA1238MB
+//
+// Copyright 2021 NXP
+
+/dts-v1/;
+
+#include "fsl-lx2160a.dtsi"
+
+/ {
+	model = "NXP Layerscape LA1238MB";
+	compatible = "fsl,la1238mb", "fsl,lx2160a";
+
+	aliases {
+		crypto = &crypto;
+		serial0 = &uart0;
+		serial1 = &uart1;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+
+	sb_3v3: regulator-sb3v3 {
+		compatible = "regulator-fixed";
+		regulator-name = "3v3_vbus";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+};
+
+&crypto {
+	status = "okay";
+};
+
+&esdhc1 {
+	mmc-hs200-1_8v;
+	mmc-hs400-1_8v;
+	bus-width = <8>;
+	status = "okay";
+};
+
+&fspi {
+	status = "okay";
+
+	mt35xu512aba0: flash@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "jedec,spi-nor";
+		m25p,fast-read;
+		spi-max-frequency = <50000000>;
+		reg = <0>;
+		spi-rx-bus-width = <8>;
+		spi-tx-bus-width = <8>;
+	};
+};
+
+&i2c0 {
+	/* TBD */
+	status = "okay";
+};
+
+&i2c1 {
+	/* TBD */
+	status = "okay";
+};
+
+&i2c2 {
+	/* TBD */
+	status = "okay";
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&uart1 {
+	status = "okay";
+};
+
+&uart2 {
+	status = "okay";
+};
+
+/* TBD &dpmac3 */
+/* TBD &dpmac5 */
+/* TBD &emdio1 */
+/* TBD &dspi2 */
+/* TBD ptp-timer */
+/* TBD modem_tti */
+/* TBD modem_wdog */
+
+&pcie3 {
+	compatible = "fsl,ls2088a-pcie";
+	reg = <0x00 0x03600000 0x0 0x00100000   /* controller registers */
+	       0x90 0x00000000 0x0 0x00002000>; /* configuration space */
+	reg-names = "regs", "config";
+	interrupts = <GIC_SPI 118 IRQ_TYPE_LEVEL_HIGH>, /* AER interrupt */
+		     <GIC_SPI 118 IRQ_TYPE_LEVEL_HIGH>, /* PME interrupt */
+		     <GIC_SPI 118 IRQ_TYPE_LEVEL_HIGH>; /* controller interrupt */
+	interrupt-names = "aer", "pme", "intr";
+	#address-cells = <3>;
+	#size-cells = <2>;
+	device_type = "pci";
+	dma-coherent;
+	num-viewport = <256>;
+	bus-range = <0x0 0xff>;
+	ranges = <0x81000000 0x0 0x00000000 0x90 0x00010000 0x0 0x00010000
+		  0x82000000 0x0 0x40000000 0x90 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+	msi-parent = <&its>;
+	iommu-map = <0 &smmu 0 1>; /* This is fixed-up by u-boot */
+	#interrupt-cells = <1>;
+	interrupt-map-mask = <0 0 0 7>;
+	interrupt-map = <0000 0 0 1 &gic 0 0 GIC_SPI 119 IRQ_TYPE_LEVEL_HIGH>,
+			<0000 0 0 2 &gic 0 0 GIC_SPI 120 IRQ_TYPE_LEVEL_HIGH>,
+			<0000 0 0 3 &gic 0 0 GIC_SPI 121 IRQ_TYPE_LEVEL_HIGH>,
+			<0000 0 0 4 &gic 0 0 GIC_SPI 122 IRQ_TYPE_LEVEL_HIGH>;
+	status = "disabled";
+};
+
+&pcie4 {
+	compatible = "fsl,ls2088a-pcie";
+	reg = <0x00 0x03700000 0x0 0x00100000   /* controller registers */
+	       0x98 0x00000000 0x0 0x00002000>; /* configuration space */
+	reg-names = "regs", "config";
+	interrupts = <GIC_SPI 123 IRQ_TYPE_LEVEL_HIGH>, /* AER interrupt */
+		     <GIC_SPI 123 IRQ_TYPE_LEVEL_HIGH>, /* PME interrupt */
+		     <GIC_SPI 123 IRQ_TYPE_LEVEL_HIGH>; /* controller interrupt */
+	interrupt-names = "aer", "pme", "intr";
+	#address-cells = <3>;
+	#size-cells = <2>;
+	device_type = "pci";
+	dma-coherent;
+	num-viewport = <8>;
+	bus-range = <0x0 0xff>;
+	ranges = <0x81000000 0x0 0x00000000 0x98 0x00010000 0x0 0x00010000
+		  0x82000000 0x0 0x40000000 0x98 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+	msi-parent = <&its>;
+	iommu-map = <0 &smmu 0 1>; /* This is fixed-up by u-boot */
+	#interrupt-cells = <1>;
+	interrupt-map-mask = <0 0 0 7>;
+	interrupt-map = <0000 0 0 1 &gic 0 0 GIC_SPI 124 IRQ_TYPE_LEVEL_HIGH>,
+			<0000 0 0 2 &gic 0 0 GIC_SPI 125 IRQ_TYPE_LEVEL_HIGH>,
+			<0000 0 0 3 &gic 0 0 GIC_SPI 126 IRQ_TYPE_LEVEL_HIGH>,
+			<0000 0 0 4 &gic 0 0 GIC_SPI 127 IRQ_TYPE_LEVEL_HIGH>;
+	status = "disabled";
+};

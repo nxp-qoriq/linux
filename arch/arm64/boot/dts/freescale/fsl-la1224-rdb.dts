@@ -2,7 +2,7 @@
 //
 // Device Tree file for LA1224RDB
 //
-// Copyright 2020 NXP
+// Copyright 2020 - 2021 NXP
 
 /dts-v1/;
 
@@ -370,6 +370,17 @@
 		compatible = "nxp,sa56004";
 		reg = <0x4c>;
 		vcc-supply = <&sb_3v3>;
+	};
+};
+
+&dspi2 {
+	status = "okay";
+	dac: ltc2632@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "lltc,ltc2632-l12";
+		reg = <3>; /* CS3 */
+		spi-max-frequency = <4000000>;
 	};
 };
 

@@ -9,7 +9,7 @@
 #include "fsl-lx2160a.dtsi"
 
 / {
-	model = "NXP Layerscape LA1224RDB";
+	model = "NXP Layerscape LA1224-RDB";
 	compatible = "nxp,la1224-rdb", "fsl,lx2160a";
 
 	aliases {

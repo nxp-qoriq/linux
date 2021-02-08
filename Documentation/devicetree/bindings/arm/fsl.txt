@@ -235,9 +235,13 @@ LX2160A SoC
 Required root node properties:
     - compatible = "fsl,lx2160a";
 
-LX2160A ARMv8 based QDS Board
+LX2160A ARMv8 based QDS Boards
 Required root node properties:
     - compatible = "fsl,lx2160a-qds", "fsl,lx2160a";
+
+LX2160A ARMv8 based LX2162AQDS Boards
+Required root node properties:
+    - compatible = "fsl,lx2162a-qds", "fsl,lx2160a";
 
 LX2160A ARMv8 based RDB Board
 Required root node properties:
@@ -246,3 +250,7 @@ Required root node properties:
 LA1224 ARMv8 based RDB Board
 Required root node properties:
    - compatible = "nxp,la1224-rdb", "fsl,lx2160a";
+
+LX2160A ARMv8 based LA1238MB Boards
+Required root node properties:
+    - compatible = "fsl,la1238mb", "fsl,lx2160a";

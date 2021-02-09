@@ -742,7 +742,6 @@
 			reg-names = "regs", "addr_space";
 			num-ib-windows = <6>;
 			num-ob-windows = <8>;
-			num-lanes = <2>;
 			status = "disabled";
 		};
 
@@ -779,7 +778,6 @@
 			reg-names = "regs", "addr_space";
 			num-ib-windows = <6>;
 			num-ob-windows = <8>;
-			num-lanes = <2>;
 			status = "disabled";
 		};
 
@@ -816,7 +814,6 @@
 			reg-names = "regs", "addr_space";
 			num-ib-windows = <6>;
 			num-ob-windows = <8>;
-			num-lanes = <2>;
 			status = "disabled";
 		};
 

@@ -4,7 +4,7 @@
  * Author: Shaohui Xie <Shaohui.Xie@freescale.com>
  *
  * Copyright 2015 Freescale Semiconductor, Inc.
- * Copyright 2018-2020 NXP
+ * Copyright 2018-2021 NXP
  *
  * This file is licensed under the terms of the GNU General Public License
  * version 2.  This program is licensed "as is" without any warranty of any
@@ -28,6 +28,7 @@
 #define PHY_ID_AQR112	0x03a1b662
 #define PHY_ID_AQR412	0x03a1b712
 #define PHY_ID_AQR113C	0x31c31c12
+#define PHY_ID_AQR113	0x31c31c42
 
 #define PHY_AQUANTIA_FEATURES	(SUPPORTED_10000baseT_Full | \
 				 SUPPORTED_1000baseT_Full | \
@@ -630,6 +631,20 @@ static struct phy_driver aquantia_driver[] = {
 	.suspend	= aqr107_suspend,
 	.resume		= aqr107_resume,
 },
+{
+	.phy_id         = PHY_ID_AQR113,
+	.phy_id_mask    = 0xfffffff0,
+	.name           = "Aquantia AQR113",
+	.features       = PHY_AQUANTIA_FEATURES,
+	.flags          = PHY_HAS_INTERRUPT,
+	.aneg_done      = genphy_c45_aneg_done,
+	.config_aneg    = aquantia_config_aneg,
+	.config_intr    = aquantia_config_intr,
+	.ack_interrupt  = aquantia_ack_interrupt,
+	.read_status    = aquantia_read_status,
+	.suspend        = aqr107_suspend,
+	.resume         = aqr107_resume,
+},
 
 };
 
@@ -645,6 +660,7 @@ static struct mdio_device_id __maybe_unused aquantia_tbl[] = {
 	{ PHY_ID_AQR112, 0xfffffff0 },
 	{ PHY_ID_AQR412, 0xfffffff0 },
 	{ PHY_ID_AQR113C, 0xfffffff0 },
+	{ PHY_ID_AQR113, 0xfffffff0 },
 	{ }
 };
 

@@ -36,6 +36,10 @@
 	status = "okay";
 };
 
+&emdio1 {
+	status = "okay";
+};
+
 &esdhc1 {
 	mmc-hs200-1_8v;
 	mmc-hs400-1_8v;
@@ -133,9 +137,22 @@
 	status = "okay";
 };
 
-/* TBD &dpmac3 */
-/* TBD &dpmac5 */
-/* TBD &emdio1 */
+&emdio1 {
+	aquantia_phy: ethernet-phy@8 {
+		compatible = "ethernet-phy-ieee802.3-c45";
+		interrupts = <GIC_SPI 11 IRQ_TYPE_LEVEL_HIGH>;
+		reg = <0x8>;
+	};
+};
+
+&dpmac3 {
+	phy-handle = <&aquantia_phy>;
+	phy-connection-type = "usxgmii";
+};
+
+&dpmac5 {
+};
+
 /* TBD &dspi2 */
 /* TBD ptp-timer */
 /* TBD modem_tti */

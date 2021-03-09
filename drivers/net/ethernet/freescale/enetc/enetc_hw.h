@@ -224,6 +224,9 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PSIVHFR1(n)	(0x1e04 + (n) * 8) /* n = SI index */
 #define ENETC_MMCSR		0x1f00
 #define ENETC_MMCSR_ME		BIT(16)
+#define ENETC_MMCSR_RAFS_MASK	GENMASK(9, 8)
+#define ENETC_MMCSR_RAFS(x)	(((x) << 8) & ENETC_MMCSR_RAFS_MASK)
+#define ENETC_MMCSR_GET_RAFS(x)	(((x) & ENETC_MMCSR_RAFS_MASK) >> 8)
 #define ENETC_PTCMSDUR(n)	(0x2020 + (n) * 4) /* n = TC index [0..7] */
 
 #define ENETC_PM0_CMD_CFG	0x8008

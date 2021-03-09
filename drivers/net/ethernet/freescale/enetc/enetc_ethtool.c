@@ -822,10 +822,16 @@ static int enetc_set_preempt(struct net_device *ndev,
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	u32 preempt, temp;
+	int rafs;
 	int i;
 
 	if (!pt)
 		return -EINVAL;
+
+	if (pt->min_frag_size < 60 || pt->min_frag_size > 252)
+		return -EINVAL;
+
+	rafs = DIV_ROUND_UP((pt->min_frag_size + 4), 64) - 1;
 
 	if (!pt->fp_enabled)
 		preempt = 0x0;
@@ -850,6 +856,11 @@ static int enetc_set_preempt(struct net_device *ndev,
 				      ENETC_PTCFPR(i),
 				      temp & ~ENETC_FPE);
 	}
+
+	temp = enetc_port_rd(&priv->si->hw, ENETC_MMCSR);
+	temp &= ~ENETC_MMCSR_RAFS_MASK;
+	temp |= ENETC_MMCSR_RAFS(rafs);
+	enetc_port_wr(&priv->si->hw, ENETC_MMCSR, temp);
 
 	return 0;
 }
@@ -876,8 +887,8 @@ static int enetc_get_preempt(struct net_device *ndev,
 
 	pt->fp_supported = !!(priv->si->hw_features & ENETC_SI_F_QBU);
 	pt->supported_queues_mask = 0xff;
-	temp = (enetc_port_rd(&priv->si->hw, ENETC_MMCSR) & 0x18) >> 3;
-	pt->min_frag_size = (temp + 1) * 64;
+	temp = enetc_port_rd(&priv->si->hw, ENETC_MMCSR);
+	pt->min_frag_size = (ENETC_MMCSR_GET_RAFS(temp) + 1) * 64;
 
 	return 0;
 }

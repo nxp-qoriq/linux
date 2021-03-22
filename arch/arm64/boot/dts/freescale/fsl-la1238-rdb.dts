@@ -30,6 +30,16 @@
 		regulator-boot-on;
 		regulator-always-on;
 	};
+
+	modem_tti {
+		compatible = "modem_tti1";
+		reg = <0x0 0x0 0x0 0x0>;
+		interrupt-cells = <3>;
+		interrupts = <GIC_SPI 0 IRQ_TYPE_EDGE_RISING>,
+			     <GIC_SPI 1 IRQ_TYPE_EDGE_RISING>;
+		status = "okay";
+	};
+
 };
 
 &crypto {
@@ -155,7 +165,6 @@
 
 /* TBD &dspi2 */
 /* TBD ptp-timer */
-/* TBD modem_tti */
 /* TBD modem_wdog */
 
 &pcie1 {

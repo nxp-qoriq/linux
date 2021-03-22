@@ -1,0 +1,54 @@
+/*
+ * Copyright 2021-2022 NXP
+ *
+ * This file is licensed under the terms of the GNU General Public
+ * License version 2.  This program is licensed "as is" without any
+ * warranty of any kind, whether express or implied.
+ */
+
+/dts-v1/;
+
+/ {
+	description = "Image file for the LA1238(CPU side) Linux Kernel";
+	#address-cells = <1>;
+
+	images {
+		kernel@1 {
+			description = "ARM64 Linux kernel";
+			data = /incbin/("./arch/arm64/boot/Image.gz");
+			type = "kernel";
+			arch = "arm64";
+			os = "linux";
+			compression = "gzip";
+			load = <0x84080000>;
+			entry = <0x84080000>;
+		};
+		fdt@1 {
+			description = "Flattened Device Tree blob";
+			data = /incbin/("./arch/arm64/boot/dts/freescale/fsl-la1238-rdb.dtb");
+
+			type = "flat_dt";
+			arch = "arm64";
+			compression = "none";
+			load = <0x90000000>;
+		};
+		ramdisk@1 {
+			description = "LA1238 Ramdisk";
+                        data = /incbin/("./rootfs_lsdk2012_yocto_devel_arm64.cpio.gz");
+			type = "ramdisk";
+			arch = "arm64";
+			os = "linux";
+			compression = "gzip";
+		};
+	};
+
+	configurations {
+		default = "config@1";
+		config@1 {
+			description = "Boot Linux kernel";
+			kernel = "kernel@1";
+			fdt = "fdt@1";
+			ramdisk = "ramdisk@1";
+		};
+	};
+};

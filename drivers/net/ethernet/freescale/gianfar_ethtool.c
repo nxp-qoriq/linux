@@ -11,6 +11,7 @@
  *  Modifier: Sandeep Gopalpet <sandeep.kumar@freescale.com>
  *
  *  Copyright 2003-2006, 2008-2009, 2011 Freescale Semiconductor, Inc.
+ *  Copyright 2017-2023 NXP
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -164,6 +165,32 @@ static void gfar_gdrvinfo(struct net_device *dev,
 			  struct ethtool_drvinfo *drvinfo)
 {
 	strlcpy(drvinfo->driver, DRV_NAME, sizeof(drvinfo->driver));
+}
+
+static int gfar_get_eee(struct net_device *dev, struct ethtool_eee *et_eee)
+{
+	struct phy_device *phydev = dev->phydev;
+
+	if (!phydev)
+		return -ENODEV;
+
+	return phy_ethtool_get_eee(phydev, et_eee);
+}
+
+static int gfar_set_eee(struct net_device *dev, struct ethtool_eee *et_eee)
+{
+	struct phy_device *phydev = dev->phydev;
+
+	if (!phydev)
+		return -ENODEV;
+
+	if (et_eee->eee_enabled ||
+	    et_eee->tx_lpi_enabled ||
+	    et_eee->tx_lpi_timer) {
+		return -EOPNOTSUPP;
+	}
+
+	return phy_ethtool_set_eee(phydev, et_eee);
 }
 
 /* Return the length of the register structure */
@@ -1481,6 +1508,8 @@ static int gfar_get_ts_info(struct net_device *dev,
 const struct ethtool_ops gfar_ethtool_ops = {
 	.supported_coalesce_params = ETHTOOL_COALESCE_USECS |
 				     ETHTOOL_COALESCE_MAX_FRAMES,
+	.get_eee = gfar_get_eee,
+	.set_eee = gfar_set_eee,
 	.get_drvinfo = gfar_gdrvinfo,
 	.get_regs_len = gfar_reglen,
 	.get_regs = gfar_get_regs,

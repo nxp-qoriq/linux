@@ -31,6 +31,15 @@
 		regulator-always-on;
 	};
 
+	modem_wdog {
+		compatible = "modem_wdog";
+		reg = <0x0 0x0 0x0 0x0>;
+		interrupt-cells = <3>;
+		interrupts = <GIC_SPI 10 IRQ_TYPE_EDGE_RISING>;
+		modem-reset-gpio = <&gpio3 6 GPIO_ACTIVE_LOW>;
+		status = "okay";
+	};
+
 	modem_tti {
 		compatible = "modem_tti1";
 		reg = <0x0 0x0 0x0 0x0>;

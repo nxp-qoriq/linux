@@ -216,6 +216,11 @@ config SOC_LS1021A
 	help
 	  This enables support for Freescale LS1021A processor.
 
+config LS1021A_BAREMETAL
+	bool "NXP LS1021A baremetal support"
+	depends on SOC_LS1021A
+	select BAREMETAL
+
 endif
 
 if ARCH_MULTI_V7 || ARM_SINGLE_ARMV7M

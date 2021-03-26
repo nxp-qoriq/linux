@@ -221,6 +221,11 @@ config LS1021A_BAREMETAL
 	depends on SOC_LS1021A
 	select BAREMETAL
 
+config SOC_IMX6Q_BAREMETAL
+       bool "NXP IMX6Q baremetal support"
+       depends on SOC_IMX6Q
+       select BAREMETAL
+
 endif
 
 if ARCH_MULTI_V7 || ARM_SINGLE_ARMV7M

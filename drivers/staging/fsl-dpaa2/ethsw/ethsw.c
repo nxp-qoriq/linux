@@ -3,7 +3,7 @@
  * DPAA2 Ethernet Switch driver
  *
  * Copyright 2014-2016 Freescale Semiconductor Inc.
- * Copyright 2017-2020 NXP
+ * Copyright 2017-2021 NXP
  *
  */
 
@@ -180,17 +180,34 @@ static int ethsw_port_set_flood(struct ethsw_port_priv *port_priv, bool enable)
 	return 0;
 }
 
+static enum dpsw_stp_state br_stp_state_to_dpsw(u8 state)
+{
+	switch (state) {
+	case BR_STATE_DISABLED:
+		return DPSW_STP_STATE_DISABLED;
+	case BR_STATE_LISTENING:
+		return DPSW_STP_STATE_LISTENING;
+	case BR_STATE_LEARNING:
+		return DPSW_STP_STATE_LEARNING;
+	case BR_STATE_FORWARDING:
+		return DPSW_STP_STATE_FORWARDING;
+	case BR_STATE_BLOCKING:
+		return DPSW_STP_STATE_BLOCKING;
+	default:
+		return DPSW_STP_STATE_DISABLED;
+	}
+}
+
 static int ethsw_port_set_stp_state(struct ethsw_port_priv *port_priv, u8 state)
 {
-	struct dpsw_stp_cfg stp_cfg = {
-		.state = state,
-	};
+	struct dpsw_stp_cfg stp_cfg = {0};
 	int err;
 	u16 vid;
 
 	if (!netif_running(port_priv->netdev) || state == port_priv->stp_state)
 		return 0;	/* Nothing to do */
 
+	stp_cfg.state = br_stp_state_to_dpsw(state);
 	for (vid = 0; vid <= VLAN_VID_MASK; vid++) {
 		if (port_priv->vlans[vid] & ETHSW_VLAN_MEMBER) {
 			stp_cfg.vlan_id = vid;

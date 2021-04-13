@@ -191,8 +191,6 @@
 };
 
 /* TBD &dspi2 */
-/* TBD ptp-timer */
-/* TBD modem_wdog */
 
 &pcie1 {
 	compatible = "fsl,ls2088a-pcie";

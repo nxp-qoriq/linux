@@ -34,7 +34,7 @@
 		};
 		ramdisk@1 {
 			description = "LA1238 Ramdisk";
-                        data = /incbin/("./rootfs_yocto_arm64_devel.cpio.gz");
+                        data = /incbin/("./rootfs_lsdk2012_yocto_devel_arm64.cpio.gz");
 			type = "ramdisk";
 			arch = "arm64";
 			os = "linux";

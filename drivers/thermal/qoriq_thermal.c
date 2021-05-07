@@ -188,6 +188,7 @@ static void send_call_back(ctd_event_id_t thermal_event)
 	if (ctd_tvd_callback != NULL)
 		ctd_tvd_callback(&cbk_data);
 }
+
 irqreturn_t qoriq_tmu_irq_handler_avg_temp(int irq, void *data)
 {
 	struct qoriq_tmu_data *qdata;
@@ -215,6 +216,7 @@ irqreturn_t qoriq_tmu_irq_handler_avg_temp(int irq, void *data)
 
 	return IRQ_HANDLED;
 }
+
 irqreturn_t qoriq_tmu_irq_handler_crit_temp(int irq, void *data)
 {
 	struct qoriq_tmu_data *qdata;
@@ -424,6 +426,7 @@ static int thread_monitoring_avg_low_temp(void *arg)
 	}
 	return 0;
 }
+
 static int thread_monitoring_crit_low_temp(void *arg)
 {
 	int curent_temp;
@@ -452,6 +455,7 @@ static int thread_monitoring_crit_low_temp(void *arg)
 
 	return 0;
 }
+
 static int thread_cb(void *arg)
 {
 	struct qoriq_prv_data *qoriq_prv_data = (struct qoriq_prv_data *) arg;
@@ -505,6 +509,7 @@ static int thread_cb(void *arg)
 
 	return 0;
 }
+
 int qoriq_tmu_register_interrupt(struct platform_device *pdev,
 			struct ctd_thermal_threshold *thermal_threshold)
 {
@@ -521,8 +526,10 @@ int qoriq_tmu_register_interrupt(struct platform_device *pdev,
 	if (!irq_initialized) {
 		qoriq_prv_data = kmalloc(sizeof(struct qoriq_prv_data),
 					GFP_KERNEL);
-		if (!qoriq_prv_data)
-			return -ENOMEM;
+		if (!qoriq_prv_data) {
+			ret = -ENOMEM;
+			goto err;
+		}
 		qoriq_prv_data->qdata = data;
 		irq = of_irq_get(np, 1);
 		ret = request_irq(irq, qoriq_tmu_irq_handler_crit_temp,
@@ -530,23 +537,26 @@ int qoriq_tmu_register_interrupt(struct platform_device *pdev,
 			qoriq_prv_data);
 		if (ret < 0) {
 			dev_err(&pdev->dev, "Failed to register interrupt.\n");
-			goto err;
+			goto err_crit_tmp_irq_failed;
 		}
 		irq = of_irq_get(np, 0);
 		ret = request_irq(irq, qoriq_tmu_irq_handler_avg_temp,
 			IRQ_TYPE_EDGE_RISING, "TMU alarm", qoriq_prv_data);
 		if (ret < 0) {
 			dev_err(&pdev->dev, "Failed to register interrupt.\n");
-			goto err;
+			goto err_avg_tmp_irq_failed;
 		}
 
 		init_swait_queue_head(&qoriq_prv_data->qoriq_tmu_wq);
 		raw_spin_lock_init(&qoriq_prv_data->qoriq_tmu_wq_lock);
 		ts = kthread_run(thread_cb, (void *) qoriq_prv_data,
 					"call back thread");
-		if (IS_ERR(ts))
+		if (IS_ERR(ts)) {
 			dev_err(&pdev->dev,
 				"ERROR: Cannot create thread thread_cb\n");
+			ret = (int)PTR_ERR(ts);
+			goto err_thread_create;
+		}
 		irq_initialized = true;
 
 	}
@@ -665,9 +675,19 @@ int qoriq_tmu_register_interrupt(struct platform_device *pdev,
 
 	return 0;
 
+err_thread_create:
+	free_irq(of_irq_get(np, 0), qoriq_prv_data);
+
+err_avg_tmp_irq_failed:
+	free_irq(of_irq_get(np, 1), qoriq_prv_data);
+
+err_crit_tmp_irq_failed:
+	kfree(qoriq_prv_data);
+
 err:
 	return ret;
 }
+
 int qoriq_tmu_update_threshold(struct platform_device *pdev, int hysteresis_val)
 {
 	u32 tmr, threshold, val;

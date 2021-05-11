@@ -32,7 +32,6 @@ pcie@3400000 {
         /delete-property/ iommu-map;
        num-ib-windows = <6>;
        num-ob-windows = <6>;
-       num-lanes = <4>;
        status = "okay";
 };
 
@@ -40,7 +39,6 @@ pcie@3500000 {
         /delete-property/ iommu-map;
        num-ib-windows = <6>;
        num-ob-windows = <6>;
-       num-lanes = <2>;
        status = "okay";
 };
 
@@ -48,7 +46,6 @@ pcie@3600000 {
         /delete-property/ iommu-map;
        num-ib-windows = <6>;
        num-ob-windows = <6>;
-       num-lanes = <2>;
        status = "okay";
 };
 

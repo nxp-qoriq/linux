@@ -533,7 +533,7 @@ static int sja1105_init_general_params(struct sja1105_private *priv)
 		 * the switch that VLAN has a different EtherType.
 		 */
 		.tpid = ETH_P_SJA1105,
-		.tpid2 = ETH_P_SJA1105,
+		.tpid2 = ETH_P_SJA1105 + 1,
 	};
 	struct dsa_switch *ds = priv->ds;
 	struct sja1105_table *table;
@@ -1392,7 +1392,7 @@ int sja1105pqrs_fdb_add(struct dsa_switch *ds, int port,
 	/* Search for an existing entry in the FDB table */
 	l2_lookup.macaddr = ether_addr_to_u64(addr);
 	l2_lookup.vlanid = vid;
-	l2_lookup.iotag = SJA1105_S_TAG;
+	l2_lookup.iotag = SJA1105_C_TAG;
 	l2_lookup.mask_macaddr = GENMASK_ULL(ETH_ALEN * 8 - 1, 0);
 	if (priv->vlan_state != SJA1105_VLAN_UNAWARE) {
 		l2_lookup.mask_vlanid = VLAN_VID_MASK;
@@ -1455,7 +1455,7 @@ int sja1105pqrs_fdb_del(struct dsa_switch *ds, int port,
 
 	l2_lookup.macaddr = ether_addr_to_u64(addr);
 	l2_lookup.vlanid = vid;
-	l2_lookup.iotag = SJA1105_S_TAG;
+	l2_lookup.iotag = SJA1105_C_TAG;
 	l2_lookup.mask_macaddr = GENMASK_ULL(ETH_ALEN * 8 - 1, 0);
 	if (priv->vlan_state != SJA1105_VLAN_UNAWARE) {
 		l2_lookup.mask_vlanid = VLAN_VID_MASK;

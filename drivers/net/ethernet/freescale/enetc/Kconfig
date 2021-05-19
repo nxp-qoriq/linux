@@ -2,6 +2,7 @@
 config FSL_ENETC
 	tristate "ENETC PF driver"
 	depends on PCI && PCI_MSI
+	select FSL_ENETC_IERB
 	select FSL_ENETC_MDIO
 	select PHYLINK
 	select PCS_LYNX
@@ -24,6 +25,14 @@ config FSL_ENETC_VF
 	  virtual function (VF) devices enabled by the ENETC PF driver.
 
 	  If compiled as module (M), the module name is fsl-enetc-vf.
+
+config FSL_ENETC_IERB
+	tristate "ENETC IERB driver"
+	help
+	  This driver configures the Integrated Endpoint Register Block on NXP
+	  LS1028A.
+
+	  If compiled as module (M), the module name is fsl-enetc-ierb.
 
 config FSL_ENETC_MDIO
 	tristate "ENETC MDIO driver"
@@ -55,3 +64,13 @@ config FSL_ENETC_QOS
 	  enable/disable from user space via Qos commands(tc). In the kernel
 	  side, it can be loaded by Qos driver. Currently, it is only support
 	  taprio(802.1Qbv) and Credit Based Shaper(802.1Qbu).
+
+config ENETC_TSN
+	bool "TSN Support for NXP ENETC driver"
+	default n
+	depends on TSN && FSL_ENETC
+	help
+	  This driver supports TSN on Freescale ENETC driver. Provide
+	  interface to config the tsn capabilities of ENETC. The interface link
+	  to the /net/tsn/* and include/net/tsn.h. User space refer the
+	  include/uapi/linux/tsn.h.

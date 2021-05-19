@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
+// Copyright 2019-2020 NXP
 
 #define pr_fmt(fmt) "irq-ls-extirq: " fmt
 
@@ -64,7 +65,7 @@ static struct irq_chip ls_extirq_chip = {
 	.irq_set_type		= ls_extirq_set_type,
 	.irq_retrigger		= irq_chip_retrigger_hierarchy,
 	.irq_set_affinity	= irq_chip_set_affinity_parent,
-	.flags                  = IRQCHIP_SET_TYPE_MASKED,
+	.flags                  = IRQCHIP_SET_TYPE_MASKED | IRQCHIP_SKIP_SET_WAKE,
 };
 
 static int
@@ -183,6 +184,9 @@ ls_extirq_of_init(struct device_node *node, struct device_node *parent)
 		priv->bit_reverse = (revcr != 0);
 	}
 
+	if (of_device_is_compatible(node, "fsl,ls1043a-extirq"))
+		priv->bit_reverse = true;
+
 	domain = irq_domain_add_hierarchy(parent_domain, 0, priv->nirq, node,
 					  &extirq_domain_ops, priv);
 	if (!domain)
@@ -195,3 +199,5 @@ out:
 }
 
 IRQCHIP_DECLARE(ls1021a_extirq, "fsl,ls1021a-extirq", ls_extirq_of_init);
+IRQCHIP_DECLARE(ls1043a_extirq, "fsl,ls1043a-extirq", ls_extirq_of_init);
+IRQCHIP_DECLARE(ls1088a_extirq, "fsl,ls1088a-extirq", ls_extirq_of_init);

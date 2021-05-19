@@ -189,6 +189,21 @@ static const struct {
 	{ ENETC_PICDR(3),   "ICM DR3 discarded frames" },
 };
 
+static const struct {
+	int reg;
+	char name[ETH_GSTRING_LEN];
+} enetc_pmac_counters[] = {
+	{ ENETC_PM1_RFRM,   "PMAC rx frames" },
+	{ ENETC_PM1_RPKT,   "PMAC rx packets" },
+	{ ENETC_PM1_RDRP,   "PMAC rx dropped packets" },
+	{ ENETC_PM1_RFRG,   "PMAC rx fragment packets" },
+	{ ENETC_PM1_TFRM,   "PMAC tx frames" },
+	{ ENETC_PM1_TERR,   "PMAC tx error frames" },
+	{ ENETC_PM1_TPKT,   "PMAC tx packets" },
+	{ ENETC_MAC_MERGE_MMFCRXR,   "MAC merge fragment rx counter" },
+	{ ENETC_MAC_MERGE_MMFCTXR,   "MAC merge fragment tx counter"},
+};
+
 static const char rx_ring_stats[][ETH_GSTRING_LEN] = {
 	"Rx ring %2d frames",
 	"Rx ring %2d alloc errors",
@@ -196,6 +211,10 @@ static const char rx_ring_stats[][ETH_GSTRING_LEN] = {
 
 static const char tx_ring_stats[][ETH_GSTRING_LEN] = {
 	"Tx ring %2d frames",
+};
+
+static const char tx_windrop_stats[][ETH_GSTRING_LEN] = {
+	"Tx window drop %2d frames",
 };
 
 static int enetc_get_sset_count(struct net_device *ndev, int sset)
@@ -214,6 +233,12 @@ static int enetc_get_sset_count(struct net_device *ndev, int sset)
 		return len;
 
 	len += ARRAY_SIZE(enetc_port_counters);
+
+	if (priv->active_offloads & ENETC_F_QBU)
+		len += ARRAY_SIZE(enetc_pmac_counters);
+
+	if (priv->active_offloads & ENETC_F_QBV)
+		len += ARRAY_SIZE(tx_windrop_stats) * priv->num_tx_rings;
 
 	return len;
 }
@@ -253,6 +278,28 @@ static void enetc_get_strings(struct net_device *ndev, u32 stringset, u8 *data)
 				ETH_GSTRING_LEN);
 			p += ETH_GSTRING_LEN;
 		}
+
+		if (!(priv->active_offloads & ENETC_F_QBU))
+			break;
+
+		for (i = 0; i < ARRAY_SIZE(enetc_pmac_counters); i++) {
+			strlcpy(p, enetc_pmac_counters[i].name,
+				ETH_GSTRING_LEN);
+			p += ETH_GSTRING_LEN;
+		}
+
+		if (!((priv->active_offloads & ENETC_F_QBV)))
+			break;
+
+		for (i = 0; i < priv->num_tx_rings; i++) {
+			for (j = 0; j < ARRAY_SIZE(tx_windrop_stats); j++) {
+				snprintf(p, ETH_GSTRING_LEN,
+					 tx_windrop_stats[j],
+					 i);
+				p += ETH_GSTRING_LEN;
+			}
+		}
+
 		break;
 	}
 }
@@ -280,6 +327,18 @@ static void enetc_get_ethtool_stats(struct net_device *ndev,
 
 	for (i = 0; i < ARRAY_SIZE(enetc_port_counters); i++)
 		data[o++] = enetc_port_rd(hw, enetc_port_counters[i].reg);
+
+	if (!(priv->active_offloads & ENETC_F_QBU))
+		return;
+
+	for (i = 0; i < ARRAY_SIZE(enetc_pmac_counters); i++)
+		data[o++] = enetc_port_rd(hw, enetc_pmac_counters[i].reg);
+
+	if (!((priv->active_offloads & ENETC_F_QBV)))
+		return;
+
+	for (i = 0; i < priv->num_tx_rings; i++)
+		data[o++] = priv->tx_ring[i]->stats.win_drop;
 }
 
 #define ENETC_RSSHASH_L3 (RXH_L2DA | RXH_VLAN | RXH_L3_PROTO | RXH_IP_SRC | \
@@ -690,6 +749,22 @@ static int enetc_set_wol(struct net_device *dev,
 	return ret;
 }
 
+static void enetc_get_pauseparam(struct net_device *dev,
+				 struct ethtool_pauseparam *pause)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(dev);
+
+	phylink_ethtool_get_pauseparam(priv->phylink, pause);
+}
+
+static int enetc_set_pauseparam(struct net_device *dev,
+				struct ethtool_pauseparam *pause)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(dev);
+
+	return phylink_ethtool_set_pauseparam(priv->phylink, pause);
+}
+
 static int enetc_get_link_ksettings(struct net_device *dev,
 				    struct ethtool_link_ksettings *cmd)
 {
@@ -736,6 +811,8 @@ static const struct ethtool_ops enetc_pf_ethtool_ops = {
 	.get_ts_info = enetc_get_ts_info,
 	.get_wol = enetc_get_wol,
 	.set_wol = enetc_set_wol,
+	.get_pauseparam = enetc_get_pauseparam,
+	.set_pauseparam = enetc_set_pauseparam,
 };
 
 static const struct ethtool_ops enetc_vf_ethtool_ops = {

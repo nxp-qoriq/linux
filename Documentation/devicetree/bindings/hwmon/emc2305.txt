@@ -1,0 +1,32 @@
+EMC2305 (I2C)
+
+This device is a RPM-based PWM Fan Speed Controller for up to 5 fans.
+Each fan can be configured individually:
+
+ - The PWM mode:
+    0: Direct setting mode
+    3: Fan speed control mode
+
+ - The fan divisor (for Fan speed control mode)
+   1, 2 ,4 or 8
+
+ - The target RPM speed (for Fan speed control mode)
+   max 16000 (according to data sheet)
+
+ - The /emc2305 node
+
+   Required properties:
+
+   - compatible : must be "smsc,emc2305"
+   - reg : I2C bus address of the device
+   - #address-cells : must be <1>
+   - #size-cells : must be <0>
+
+   Example EMC2305 node:
+
+       emc2305@2C {
+	    compatible = "smsc,emc2305";
+	    reg = <0x2C>;
+	    #address-cells = <1>;
+	    #size-cells = <0>;
+       }

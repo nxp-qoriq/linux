@@ -188,16 +188,18 @@
 			#size-cells = <0>;
 			reg = <0x3>;
 
-			temperature-sensor@4c {
-				compatible = "nxp,sa56004";
-				reg = <0x4c>;
-				vcc-supply = <&sb_3v3>;
-			};
-
-			temperature-sensor@48 {
+			temp2: temperature-sensor@48 {
 				compatible = "nxp,sa56004";
 				reg = <0x48>;
 				vcc-supply = <&sb_3v3>;
+				#thermal-sensor-cells = <1>;
+			};
+
+			temp1: temperature-sensor@4c {
+				compatible = "nxp,sa56004";
+				reg = <0x4c>;
+				vcc-supply = <&sb_3v3>;
+				#thermal-sensor-cells = <1>;
 			};
 		};
 
@@ -315,4 +317,33 @@
 &dpmac18 {
 	phy-handle = <&rgmii_phy2>;
 	phy-connection-type = "rgmii-id";
+};
+
+&thermal_zones {
+	cpu-thermal {
+		polling-delay-passive = <1000>;
+		polling-delay = <5000>;
+		thermal-sensors = <&temp2 1>;
+
+		trips {
+			cpu_alert: cpu-alert {
+				temperature = <85000>;
+				hysteresis = <2000>;
+				type = "passive";
+			};
+
+			cpu_crit: cpu-crit {
+				temperature = <95000>;
+				hysteresis = <2000>;
+				type = "critical";
+			};
+		};
+
+		cooling-maps {
+			map0 {
+				trip = <&cpu_alert>;
+				cooling-device = <&fan5 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+			};
+		};
+	};
 };

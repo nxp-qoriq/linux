@@ -439,7 +439,7 @@
 		clock-output-names = "sysclk";
 	};
 
-	thermal-zones {
+	thermal_zones: thermal-zones {
 		cluster6-7 {
 			polling-delay-passive = <1000>;
 			polling-delay = <5000>;

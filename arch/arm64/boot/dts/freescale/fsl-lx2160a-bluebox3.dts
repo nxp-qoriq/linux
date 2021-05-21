@@ -113,8 +113,62 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x1>;
-			// TODO: Add entries for EMC2305
 
+			fan-controller@4c {
+				compatible = "smsc,emc2305";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x4c>;
+
+				fan6: fan@0 {
+					reg = <0>;
+				};
+
+				fan7: fan@1 {
+					reg = <1>;
+				};
+
+				fan8: fan@2 {
+					reg = <2>;
+				};
+
+				fan9: fan@3 {
+					reg = <3>;
+				};
+
+				fan10: fan@4 {
+					reg = <4>;
+				};
+			};
+
+			fan-controller@4d {
+				compatible = "smsc,emc2305";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x4d>;
+
+				fan1: fan@0 {
+					reg = <0>;
+				};
+
+				fan2: fan@1 {
+					reg = <1>;
+				};
+
+				fan3: fan@2 {
+					reg = <2>;
+				};
+
+				fan4: fan@3 {
+					reg = <3>;
+				};
+
+				fan5: fan@4 {
+					reg = <4>;
+					#cooling-cells = <2>;
+					cooling-levels = <0 25 128 255>;
+				};
+			};
 		};
 
 		i2c@2 {

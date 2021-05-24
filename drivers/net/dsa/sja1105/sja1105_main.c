@@ -3522,8 +3522,10 @@ static int sja1105_probe(struct spi_device *spi)
 		priv->cbs = devm_kcalloc(dev, priv->info->num_cbs_shapers,
 					 sizeof(struct sja1105_cbs_entry),
 					 GFP_KERNEL);
-		if (!priv->cbs)
-			return -ENOMEM;
+		if (!priv->cbs) {
+			rc = -ENOMEM;
+			goto out_unregister_switch;
+		}
 	}
 
 	/* Connections between dsa_port and sja1105_port */
@@ -3548,7 +3550,7 @@ static int sja1105_probe(struct spi_device *spi)
 			dev_err(ds->dev,
 				"failed to create deferred xmit thread: %d\n",
 				rc);
-			goto out;
+			goto out_destroy_workers;
 		}
 		skb_queue_head_init(&sp->xmit_queue);
 		sp->xmit_tpid = ETH_P_SJA1105;
@@ -3558,7 +3560,8 @@ static int sja1105_probe(struct spi_device *spi)
 	}
 
 	return 0;
-out:
+
+out_destroy_workers:
 	while (port-- > 0) {
 		struct sja1105_port *sp = &priv->ports[port];
 
@@ -3567,6 +3570,10 @@ out:
 
 		kthread_destroy_worker(sp->xmit_worker);
 	}
+
+out_unregister_switch:
+	dsa_unregister_switch(ds);
+
 	return rc;
 }
 

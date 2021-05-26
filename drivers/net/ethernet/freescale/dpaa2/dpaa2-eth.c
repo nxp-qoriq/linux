@@ -15,6 +15,8 @@
 #include <linux/fsl/mc.h>
 #include <linux/bpf.h>
 #include <linux/bpf_trace.h>
+#include <linux/acpi.h>
+#include <linux/property.h>
 #include <net/sock.h>
 
 #include "dpaa2-eth.h"
@@ -3665,6 +3667,64 @@ static int poll_link_state(void *arg)
 	return 0;
 }
 
+static struct device_node *find_dpmac_node(struct device *dev, u16 dpmac_id)
+{
+	struct device_node *dpmacs, *dpmac = NULL;
+	struct device_node *mc_node = dev->of_node;
+	u32 id;
+	int err;
+
+	dpmacs = of_find_node_by_name(mc_node, "dpmacs");
+	if (!dpmacs) {
+		dev_err(dev, "No dpmacs subnode in device-tree\n");
+		return NULL;
+	}
+
+	while ((dpmac = of_get_next_child(dpmacs, dpmac))) {
+		err = of_property_read_u32(dpmac, "reg", &id);
+		if (err)
+			continue;
+		if (id == dpmac_id)
+			return dpmac;
+	}
+
+	return NULL;
+}
+
+static void dpaa2_eth_setup_of_node(struct net_device *net_dev)
+{
+	struct device *dev = net_dev->dev.parent;
+	struct device_node *dpmac_node = NULL;
+	struct fsl_mc_device *dpmac_dev;
+	struct fsl_mc_device *dpni_dev;
+	u16 dpmac_id;
+
+	dpni_dev = to_fsl_mc_device(dev);
+	dpmac_dev = fsl_mc_get_endpoint(dpni_dev);
+
+	if (PTR_ERR(dpmac_dev) == -EPROBE_DEFER)
+		return;
+
+	if (IS_ERR(dpmac_dev) || dpmac_dev->dev.type != &fsl_mc_bus_dpmac_type) {
+		/* If we just disconnected from a DPMAC, invalidate the of_node */
+		if (net_dev->dev.of_node) {
+			of_node_put(net_dev->dev.of_node);
+			net_dev->dev.of_node = NULL;
+		}
+		return;
+	}
+
+	/* Get a reference to the DTS node of the attached DPMAC */
+	dpmac_id = dpmac_dev->obj_desc.id;
+	dpmac_node = find_dpmac_node(dev, dpmac_id);
+	if (!dpmac_node) {
+		netdev_err(net_dev, "could not find the DTS node for dpmac %u\n", dpmac_id);
+		return;
+	}
+
+	net_dev->dev.of_node = dpmac_node;
+}
+
 static irqreturn_t dpni_irq0_handler_thread(int irq_num, void *arg)
 {
 	u32 status = ~0;
@@ -3683,8 +3743,10 @@ static irqreturn_t dpni_irq0_handler_thread(int irq_num, void *arg)
 	if (status & DPNI_IRQ_EVENT_LINK_CHANGED)
 		link_state_update(netdev_priv(net_dev));
 
-	if (status & DPNI_IRQ_EVENT_ENDPOINT_CHANGED)
+	if (status & DPNI_IRQ_EVENT_ENDPOINT_CHANGED) {
 		set_mac_addr(netdev_priv(net_dev));
+		dpaa2_eth_setup_of_node(net_dev);
+	}
 
 	return IRQ_HANDLED;
 }
@@ -4095,6 +4157,8 @@ static int dpaa2_eth_probe(struct fsl_mc_device *dpni_dev)
 		}
 		priv->do_link_poll = true;
 	}
+
+	dpaa2_eth_setup_of_node(net_dev);
 
 	err = register_netdev(net_dev);
 	if (err < 0) {

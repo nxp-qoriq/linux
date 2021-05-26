@@ -1410,92 +1410,92 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 
-				dpmac1: dpmac@1 {
+				dpmac1: ethernet@1 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x1>;
 				};
 
-				dpmac2: dpmac@2 {
+				dpmac2: ethernet@2 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x2>;
 				};
 
-				dpmac3: dpmac@3 {
+				dpmac3: ethernet@3 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x3>;
 				};
 
-				dpmac4: dpmac@4 {
+				dpmac4: ethernet@4 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x4>;
 				};
 
-				dpmac5: dpmac@5 {
+				dpmac5: ethernet@5 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x5>;
 				};
 
-				dpmac6: dpmac@6 {
+				dpmac6: ethernet@6 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x6>;
 				};
 
-				dpmac7: dpmac@7 {
+				dpmac7: ethernet@7 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x7>;
 				};
 
-				dpmac8: dpmac@8 {
+				dpmac8: ethernet@8 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x8>;
 				};
 
-				dpmac9: dpmac@9 {
+				dpmac9: ethernet@9 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x9>;
 				};
 
-				dpmac10: dpmac@a {
+				dpmac10: ethernet@a {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0xa>;
 				};
 
-				dpmac11: dpmac@b {
+				dpmac11: ethernet@b {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0xb>;
 				};
 
-				dpmac12: dpmac@c {
+				dpmac12: ethernet@c {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0xc>;
 				};
 
-				dpmac13: dpmac@d {
+				dpmac13: ethernet@d {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0xd>;
 				};
 
-				dpmac14: dpmac@e {
+				dpmac14: ethernet@e {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0xe>;
 				};
 
-				dpmac15: dpmac@f {
+				dpmac15: ethernet@f {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0xf>;
 				};
 
-				dpmac16: dpmac@10 {
+				dpmac16: ethernet@10 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x10>;
 				};
 
-				dpmac17: dpmac@11 {
+				dpmac17: ethernet@11 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x11>;
 				};
 
-				dpmac18: dpmac@12 {
+				dpmac18: ethernet@12 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x12>;
 				};

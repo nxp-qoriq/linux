@@ -15019,6 +15019,14 @@ S:	Maintained
 F:	Documentation/hwmon/emc2103.rst
 F:	drivers/hwmon/emc2103.c
 
+SMSC EMC2305 HARDWARE MONITOR DRIVER
+M:	Biwen Li <biwen.li@nxp.com>
+L:	lm-sensors@lm-sensors.org
+S:	Maintained
+F:	Documentation/hwmon/emc2305
+F:	Documentation/devicetree/bindings/hwmon/emc2305.txt
+F:	drivers/hwmon/emc2305.c
+
 SMSC SCH5627 HARDWARE MONITOR DRIVER
 M:	Hans de Goede <hdegoede@redhat.com>
 L:	linux-hwmon@vger.kernel.org

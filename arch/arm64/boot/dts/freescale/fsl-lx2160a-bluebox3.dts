@@ -113,8 +113,62 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x1>;
-			// TODO: Add entries for EMC2305
 
+			fan-controller@4c {
+				compatible = "smsc,emc2305";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x4c>;
+
+				fan6: fan@0 {
+					reg = <0>;
+				};
+
+				fan7: fan@1 {
+					reg = <1>;
+				};
+
+				fan8: fan@2 {
+					reg = <2>;
+				};
+
+				fan9: fan@3 {
+					reg = <3>;
+				};
+
+				fan10: fan@4 {
+					reg = <4>;
+				};
+			};
+
+			fan-controller@4d {
+				compatible = "smsc,emc2305";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0x4d>;
+
+				fan1: fan@0 {
+					reg = <0>;
+				};
+
+				fan2: fan@1 {
+					reg = <1>;
+				};
+
+				fan3: fan@2 {
+					reg = <2>;
+				};
+
+				fan4: fan@3 {
+					reg = <3>;
+				};
+
+				fan5: fan@4 {
+					reg = <4>;
+					#cooling-cells = <2>;
+					cooling-levels = <0 25 128 255>;
+				};
+			};
 		};
 
 		i2c@2 {
@@ -134,16 +188,18 @@
 			#size-cells = <0>;
 			reg = <0x3>;
 
-			temperature-sensor@4c {
-				compatible = "nxp,sa56004";
-				reg = <0x4c>;
-				vcc-supply = <&sb_3v3>;
-			};
-
-			temperature-sensor@48 {
+			temp2: temperature-sensor@48 {
 				compatible = "nxp,sa56004";
 				reg = <0x48>;
 				vcc-supply = <&sb_3v3>;
+				#thermal-sensor-cells = <1>;
+			};
+
+			temp1: temperature-sensor@4c {
+				compatible = "nxp,sa56004";
+				reg = <0x4c>;
+				vcc-supply = <&sb_3v3>;
+				#thermal-sensor-cells = <1>;
 			};
 		};
 
@@ -576,5 +632,34 @@
 	fixed-link {
 		speed = <1000>;
 		full-duplex;
+	};
+};
+
+&thermal_zones {
+	cpu-thermal {
+		polling-delay-passive = <1000>;
+		polling-delay = <5000>;
+		thermal-sensors = <&temp2 1>;
+
+		trips {
+			cpu_alert: cpu-alert {
+				temperature = <85000>;
+				hysteresis = <2000>;
+				type = "passive";
+			};
+
+			cpu_crit: cpu-crit {
+				temperature = <95000>;
+				hysteresis = <2000>;
+				type = "critical";
+			};
+		};
+
+		cooling-maps {
+			map0 {
+				trip = <&cpu_alert>;
+				cooling-device = <&fan5 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+			};
+		};
 	};
 };

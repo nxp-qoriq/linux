@@ -1655,7 +1655,6 @@ fec_restart(struct net_device *ndev)
 	fec_enet_active_rxring(ndev);
 
 	if (fep->bufdesc_ex) {
-		fec_ptp_start_cyclecounter(ndev);
 		fec_ptp_restore_state(fep);
 	}
 

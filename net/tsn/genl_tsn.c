@@ -1163,12 +1163,11 @@ static int cmd_qci_sfi_get(struct genl_info *info)
 			return valid;
 		}
 
-		valid = tsnops->qci_sfi_counters_get(netdev, sfi_handle,
-						     &sficount);
-		if (valid < 0) {
+		ret = tsnops->qci_sfi_counters_get(netdev, sfi_handle, &sficount);
+		if (ret < 0) {
 			tsn_simple_reply(info, TSN_CMD_REPLY,
-					 netdev->name, valid);
-			return valid;
+					 netdev->name, ret);
+			return ret;
 		}
 	}
 
@@ -2188,6 +2187,9 @@ static int cmd_qbv_set(struct genl_info *info)
 
 	if (qbv[TSN_QBV_ATTR_CONFIGCHANGE])
 		qbvconfig.config_change = 1;
+
+	if (qbv[TSN_QBV_ATTR_MAXSDU])
+		qbvconfig.maxsdu = nla_get_u32(qbv[TSN_QBV_ATTR_MAXSDU]);
 
 	if (!qbv[TSN_QBV_ATTR_ADMINENTRY]) {
 		tsn_simple_reply(info, TSN_CMD_REPLY,

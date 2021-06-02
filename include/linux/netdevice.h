@@ -1368,6 +1368,7 @@ struct net_device_ops {
  * @IFF_PHONY_HEADROOM: the headroom value is controlled by an external
  *	entity (i.e. the master device for bridged veth)
  * @IFF_MACSEC: device is a MACsec device
+ * @IFF_L3MDEV_RX_HANDLER: only invoke the rx handler of L3 master device
  */
 enum netdev_priv_flags {
 	IFF_802_1Q_VLAN			= 1<<0,
@@ -1398,6 +1399,7 @@ enum netdev_priv_flags {
 	IFF_RXFH_CONFIGURED		= 1<<25,
 	IFF_PHONY_HEADROOM		= 1<<26,
 	IFF_MACSEC			= 1<<27,
+	IFF_L3MDEV_RX_HANDLER		= 1<<28,
 };
 
 #define IFF_802_1Q_VLAN			IFF_802_1Q_VLAN
@@ -1427,6 +1429,7 @@ enum netdev_priv_flags {
 #define IFF_TEAM			IFF_TEAM
 #define IFF_RXFH_CONFIGURED		IFF_RXFH_CONFIGURED
 #define IFF_MACSEC			IFF_MACSEC
+#define IFF_L3MDEV_RX_HANDLER		IFF_L3MDEV_RX_HANDLER
 
 /**
  *	struct net_device - The DEVICE structure.
@@ -1729,6 +1732,11 @@ struct net_device {
 	unsigned char		if_port;
 	unsigned char		dma;
 
+	/* Note : dev->mtu is often read without holding a lock.
+	 * Writers usually hold RTNL.
+	 * It is recommended to use READ_ONCE() to annotate the reads,
+	 * and to use WRITE_ONCE() to annotate the writes.
+	 */
 	unsigned int		mtu;
 	unsigned int		min_mtu;
 	unsigned int		max_mtu;
@@ -2478,7 +2486,7 @@ void synchronize_net(void);
 int init_dummy_netdev(struct net_device *dev);
 
 DECLARE_PER_CPU(int, xmit_recursion);
-#define XMIT_RECURSION_LIMIT	10
+#define XMIT_RECURSION_LIMIT	8
 
 static inline int dev_recursion_level(void)
 {
@@ -3568,7 +3576,7 @@ static inline u32 netif_msg_init(int debug_value, int default_msg_enable_bits)
 	if (debug_value == 0)	/* no output */
 		return 0;
 	/* set low N bits */
-	return (1 << debug_value) - 1;
+	return (1U << debug_value) - 1;
 }
 
 static inline void __netif_tx_lock(struct netdev_queue *txq, int cpu)
@@ -3699,6 +3707,7 @@ static inline void netif_tx_disable(struct net_device *dev)
 
 	local_bh_disable();
 	cpu = smp_processor_id();
+	spin_lock(&dev->tx_global_lock);
 	for (i = 0; i < dev->num_tx_queues; i++) {
 		struct netdev_queue *txq = netdev_get_tx_queue(dev, i);
 
@@ -3706,6 +3715,7 @@ static inline void netif_tx_disable(struct net_device *dev)
 		netif_tx_stop_queue(txq);
 		__netif_tx_unlock(txq);
 	}
+	spin_unlock(&dev->tx_global_lock);
 	local_bh_enable();
 }
 
@@ -4248,6 +4258,11 @@ static inline bool netif_is_bond_slave(const struct net_device *dev)
 static inline bool netif_supports_nofcs(struct net_device *dev)
 {
 	return dev->priv_flags & IFF_SUPP_NOFCS;
+}
+
+static inline bool netif_has_l3_rx_handler(const struct net_device *dev)
+{
+	return dev->priv_flags & IFF_L3MDEV_RX_HANDLER;
 }
 
 static inline bool netif_is_l3_master(const struct net_device *dev)

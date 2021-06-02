@@ -198,6 +198,9 @@ static int f2fs_do_sync_file(struct file *file, loff_t start, loff_t end,
 
 	trace_f2fs_sync_file_enter(inode);
 
+	if (S_ISDIR(inode->i_mode))
+		goto go_write;
+
 	/* if fdatasync is triggered, let's do in-place-update */
 	if (datasync || get_dirty_pages(inode) <= SM_I(sbi)->min_fsync_blocks)
 		set_inode_flag(inode, FI_NEED_IPU);
@@ -310,13 +313,13 @@ static pgoff_t __get_first_dirty_index(struct address_space *mapping,
 	return pgofs;
 }
 
-static bool __found_offset(block_t blkaddr, pgoff_t dirty, pgoff_t pgofs,
-							int whence)
+static bool __found_offset(struct f2fs_sb_info *sbi, block_t blkaddr,
+				pgoff_t dirty, pgoff_t pgofs, int whence)
 {
 	switch (whence) {
 	case SEEK_DATA:
 		if ((blkaddr == NEW_ADDR && dirty == pgofs) ||
-			(blkaddr != NEW_ADDR && blkaddr != NULL_ADDR))
+			is_valid_data_blkaddr(sbi, blkaddr))
 			return true;
 		break;
 	case SEEK_HOLE:
@@ -378,7 +381,15 @@ static loff_t f2fs_seek_block(struct file *file, loff_t offset, int whence)
 			block_t blkaddr;
 			blkaddr = datablock_addr(dn.node_page, dn.ofs_in_node);
 
-			if (__found_offset(blkaddr, dirty, pgofs, whence)) {
+			if (__is_valid_data_blkaddr(blkaddr) &&
+				!f2fs_is_valid_blkaddr(F2FS_I_SB(inode),
+						blkaddr, DATA_GENERIC)) {
+				f2fs_put_dnode(&dn);
+				goto fail;
+			}
+
+			if (__found_offset(F2FS_I_SB(inode), blkaddr, dirty,
+							pgofs, whence)) {
 				f2fs_put_dnode(&dn);
 				goto found;
 			}
@@ -481,6 +492,11 @@ int truncate_data_blocks_range(struct dnode_of_data *dn, int count)
 
 		dn->data_blkaddr = NULL_ADDR;
 		set_data_blkaddr(dn);
+
+		if (__is_valid_data_blkaddr(blkaddr) &&
+			!f2fs_is_valid_blkaddr(sbi, blkaddr, DATA_GENERIC))
+			continue;
+
 		invalidate_blocks(sbi, blkaddr);
 		if (dn->ofs_in_node == 0 && IS_INODE(dn->node_page))
 			clear_inode_flag(dn->inode, FI_FIRST_BLOCK_WRITTEN);
@@ -666,7 +682,8 @@ static void __setattr_copy(struct inode *inode, const struct iattr *attr)
 	if (ia_valid & ATTR_MODE) {
 		umode_t mode = attr->ia_mode;
 
-		if (!in_group_p(inode->i_gid) && !capable(CAP_FSETID))
+		if (!in_group_p(inode->i_gid) &&
+			!capable_wrt_inode_uidgid(inode, CAP_FSETID))
 			mode &= ~S_ISGID;
 		set_acl_inode(inode, mode);
 	}
@@ -964,7 +981,7 @@ static int __clone_blkaddrs(struct inode *src_inode, struct inode *dst_inode,
 				}
 				dn.ofs_in_node++;
 				i++;
-				new_size = (dst + i) << PAGE_SHIFT;
+				new_size = (loff_t)(dst + i) << PAGE_SHIFT;
 				if (dst_inode->i_size < new_size)
 					f2fs_i_size_write(dst_inode, new_size);
 			} while (--ilen && (do_replace[i] || blkaddr[i] == NULL_ADDR));
@@ -1758,31 +1775,16 @@ static bool uuid_is_nonzero(__u8 u[16])
 
 static int f2fs_ioc_set_encryption_policy(struct file *filp, unsigned long arg)
 {
-	struct fscrypt_policy policy;
 	struct inode *inode = file_inode(filp);
-
-	if (copy_from_user(&policy, (struct fscrypt_policy __user *)arg,
-							sizeof(policy)))
-		return -EFAULT;
 
 	f2fs_update_time(F2FS_I_SB(inode), REQ_TIME);
 
-	return fscrypt_process_policy(filp, &policy);
+	return fscrypt_ioctl_set_policy(filp, (const void __user *)arg);
 }
 
 static int f2fs_ioc_get_encryption_policy(struct file *filp, unsigned long arg)
 {
-	struct fscrypt_policy policy;
-	struct inode *inode = file_inode(filp);
-	int err;
-
-	err = fscrypt_get_policy(inode, &policy);
-	if (err)
-		return err;
-
-	if (copy_to_user((struct fscrypt_policy __user *)arg, &policy, sizeof(policy)))
-		return -EFAULT;
-	return 0;
+	return fscrypt_ioctl_get_policy(filp, (void __user *)arg);
 }
 
 static int f2fs_ioc_get_encryption_pwsalt(struct file *filp, unsigned long arg)

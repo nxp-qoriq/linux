@@ -1080,9 +1080,9 @@ __armv4_mmu_cache_off:
 __armv7_mmu_cache_off:
 		mrc	p15, 0, r0, c1, c0
 #ifdef CONFIG_MMU
-		bic	r0, r0, #0x000d
+		bic	r0, r0, #0x0005
 #else
-		bic	r0, r0, #0x000c
+		bic	r0, r0, #0x0004
 #endif
 		mcr	p15, 0, r0, c1, c0	@ turn MMU and cache off
 		mov	r12, lr
@@ -1383,7 +1383,21 @@ ENTRY(efi_stub_entry)
 
 		@ Preserve return value of efi_entry() in r4
 		mov	r4, r0
-		bl	cache_clean_flush
+
+		@ our cache maintenance code relies on CP15 barrier instructions
+		@ but since we arrived here with the MMU and caches configured
+		@ by UEFI, we must check that the CP15BEN bit is set in SCTLR.
+		@ Note that this bit is RAO/WI on v6 and earlier, so the ISB in
+		@ the enable path will be executed on v7+ only.
+		mrc	p15, 0, r1, c1, c0, 0	@ read SCTLR
+		tst	r1, #(1 << 5)		@ CP15BEN bit set?
+		bne	0f
+		orr	r1, r1, #(1 << 5)	@ CP15 barrier instructions
+		mcr	p15, 0, r1, c1, c0, 0	@ write SCTLR
+ ARM(		.inst	0xf57ff06f		@ v7+ isb	)
+ THUMB(		isb						)
+
+0:		bl	cache_clean_flush
 		bl	cache_off
 
 		@ Set parameters for booting zImage according to boot protocol

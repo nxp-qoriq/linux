@@ -1018,7 +1018,7 @@ static ssize_t show_trans_timeout(struct netdev_queue *queue,
 	trans_timeout = queue->trans_timeout;
 	spin_unlock_irq(&queue->_xmit_lock);
 
-	return sprintf(buf, "%lu", trans_timeout);
+	return sprintf(buf, fmt_ulong, trans_timeout);
 }
 
 static unsigned int get_netdev_queue_index(struct netdev_queue *queue)
@@ -1398,6 +1398,9 @@ static int register_queue_kobjects(struct net_device *dev)
 error:
 	netdev_queue_update_kobjects(dev, txq, 0);
 	net_rx_queue_update_kobjects(dev, rxq, 0);
+#ifdef CONFIG_SYSFS
+	kset_unregister(dev->queues_kset);
+#endif
 	return error;
 }
 

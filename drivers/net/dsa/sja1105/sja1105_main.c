@@ -55,14 +55,6 @@ sja1105_port_allow_traffic(struct sja1105_l2_forwarding_entry *l2_fwd,
 	}
 }
 
-/* Structure used to temporarily transport device tree
- * settings into sja1105_setup
- */
-struct sja1105_dt_port {
-	phy_interface_t phy_mode;
-	sja1105_mii_role_t role;
-};
-
 static int sja1105_init_mac_settings(struct sja1105_private *priv)
 {
 	struct sja1105_mac_config_entry default_mac = {
@@ -141,8 +133,7 @@ static int sja1105_init_mac_settings(struct sja1105_private *priv)
 	return 0;
 }
 
-static int sja1105_init_mii_settings(struct sja1105_private *priv,
-				     struct sja1105_dt_port *ports)
+static int sja1105_init_mii_settings(struct sja1105_private *priv)
 {
 	struct device *dev = &priv->spidev->dev;
 	struct sja1105_xmii_params_entry *mii;
@@ -169,10 +160,12 @@ static int sja1105_init_mii_settings(struct sja1105_private *priv,
 	mii = table->entries;
 
 	for (i = 0; i < ds->num_ports; i++) {
+		sja1105_mii_role_t role = XMII_MAC;
+
 		if (dsa_is_unused_port(priv->ds, i))
 			continue;
 
-		switch (ports[i].phy_mode) {
+		switch (priv->phy_mode[i]) {
 		case PHY_INTERFACE_MODE_INTERNAL:
 			if (priv->info->internal_phy[i] == SJA1105_NO_PHY)
 				goto unsupported;
@@ -182,12 +175,18 @@ static int sja1105_init_mii_settings(struct sja1105_private *priv,
 				mii->special[i] = true;
 
 			break;
+		case PHY_INTERFACE_MODE_REVMII:
+			role = XMII_PHY;
+			fallthrough;
 		case PHY_INTERFACE_MODE_MII:
 			if (!priv->info->supports_mii[i])
 				goto unsupported;
 
 			mii->xmii_mode[i] = XMII_MODE_MII;
 			break;
+		case PHY_INTERFACE_MODE_REVRMII:
+			role = XMII_PHY;
+			fallthrough;
 		case PHY_INTERFACE_MODE_RMII:
 			if (!priv->info->supports_rmii[i])
 				goto unsupported;
@@ -220,25 +219,11 @@ static int sja1105_init_mii_settings(struct sja1105_private *priv,
 unsupported:
 		default:
 			dev_err(dev, "Unsupported PHY mode %s on port %d!\n",
-				phy_modes(ports[i].phy_mode), i);
+				phy_modes(priv->phy_mode[i]), i);
 			return -EINVAL;
 		}
 
-		/* Even though the SerDes port is able to drive SGMII autoneg
-		 * like a PHY would, from the perspective of the XMII tables,
-		 * the SGMII port should always be put in MAC mode.
-		 * Similarly, RGMII is a symmetric protocol electrically
-		 * speaking, and the 'RGMII PHY' role does not mean anything to
-		 * hardware. Just keep the 'PHY role' notation relevant to the
-		 * driver to mean 'the switch port should apply RGMII delays',
-		 * but unconditionally put the port in the MAC role.
-		 */
-		if (ports[i].phy_mode == PHY_INTERFACE_MODE_SGMII ||
-		    ports[i].phy_mode == PHY_INTERFACE_MODE_2500BASEX ||
-		    phy_interface_mode_is_rgmii(ports[i].phy_mode))
-			mii->phy_mac[i] = XMII_MAC;
-		else
-			mii->phy_mac[i] = ports[i].role;
+		mii->phy_mac[i] = role;
 	}
 	return 0;
 }
@@ -821,8 +806,7 @@ static int sja1105_init_l2_policing(struct sja1105_private *priv)
 	return 0;
 }
 
-static int sja1105_static_config_load(struct sja1105_private *priv,
-				      struct sja1105_dt_port *ports)
+static int sja1105_static_config_load(struct sja1105_private *priv)
 {
 	int rc;
 
@@ -837,7 +821,7 @@ static int sja1105_static_config_load(struct sja1105_private *priv,
 	rc = sja1105_init_mac_settings(priv);
 	if (rc < 0)
 		return rc;
-	rc = sja1105_init_mii_settings(priv, ports);
+	rc = sja1105_init_mii_settings(priv);
 	if (rc < 0)
 		return rc;
 	rc = sja1105_init_static_fdb(priv);
@@ -897,7 +881,6 @@ static int sja1105_parse_rgmii_delays(struct sja1105_private *priv)
 }
 
 static int sja1105_parse_ports_node(struct sja1105_private *priv,
-				    struct sja1105_dt_port *ports,
 				    struct device_node *ports_node)
 {
 	struct device *dev = &priv->spidev->dev;
@@ -925,7 +908,6 @@ static int sja1105_parse_ports_node(struct sja1105_private *priv,
 			of_node_put(child);
 			return -ENODEV;
 		}
-		ports[index].phy_mode = phy_mode;
 
 		phy_node = of_parse_phandle(child, "phy-handle", 0);
 		if (!phy_node) {
@@ -939,18 +921,9 @@ static int sja1105_parse_ports_node(struct sja1105_private *priv,
 			 * So it's a fixed link. Default to PHY role.
 			 */
 			priv->fixed_link[index] = true;
-			ports[index].role = XMII_PHY;
 		} else {
-			/* phy-handle present => put port in MAC role */
-			ports[index].role = XMII_MAC;
 			of_node_put(phy_node);
 		}
-
-		/* The MAC/PHY role can be overridden with explicit bindings */
-		if (of_property_read_bool(child, "sja1105,role-mac"))
-			ports[index].role = XMII_MAC;
-		else if (of_property_read_bool(child, "sja1105,role-phy"))
-			ports[index].role = XMII_PHY;
 
 		priv->phy_mode[index] = phy_mode;
 	}
@@ -958,8 +931,7 @@ static int sja1105_parse_ports_node(struct sja1105_private *priv,
 	return 0;
 }
 
-static int sja1105_parse_dt(struct sja1105_private *priv,
-			    struct sja1105_dt_port *ports)
+static int sja1105_parse_dt(struct sja1105_private *priv)
 {
 	struct device *dev = &priv->spidev->dev;
 	struct device_node *switch_node = dev->of_node;
@@ -974,7 +946,7 @@ static int sja1105_parse_dt(struct sja1105_private *priv,
 		return -ENODEV;
 	}
 
-	rc = sja1105_parse_ports_node(priv, ports, ports_node);
+	rc = sja1105_parse_ports_node(priv, ports_node);
 	of_node_put(ports_node);
 
 	return rc;
@@ -3252,11 +3224,10 @@ static const struct dsa_8021q_ops sja1105_dsa_8021q_ops = {
  */
 static int sja1105_setup(struct dsa_switch *ds)
 {
-	struct sja1105_dt_port ports[SJA1105_MAX_NUM_PORTS];
 	struct sja1105_private *priv = ds->priv;
 	int rc;
 
-	rc = sja1105_parse_dt(priv, ports);
+	rc = sja1105_parse_dt(priv);
 	if (rc < 0) {
 		dev_err(ds->dev, "Failed to parse DT: %d\n", rc);
 		return rc;
@@ -3295,7 +3266,7 @@ static int sja1105_setup(struct dsa_switch *ds)
 	}
 
 	/* Create and send configuration down to device */
-	rc = sja1105_static_config_load(priv, ports);
+	rc = sja1105_static_config_load(priv);
 	if (rc < 0) {
 		dev_err(ds->dev, "Failed to load static config: %d\n", rc);
 		goto out_mdiobus_unregister;

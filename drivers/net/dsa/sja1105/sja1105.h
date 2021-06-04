@@ -243,6 +243,7 @@ struct sja1105_private {
 	bool rgmii_rx_delay[SJA1105_MAX_NUM_PORTS];
 	bool rgmii_tx_delay[SJA1105_MAX_NUM_PORTS];
 	phy_interface_t phy_mode[SJA1105_MAX_NUM_PORTS];
+	bool fixed_link[SJA1105_MAX_NUM_PORTS];
 	bool best_effort_vlan_filtering;
 	const struct sja1105_info *info;
 	size_t max_xfer_len;

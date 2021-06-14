@@ -3,7 +3,7 @@
  * Device Tree Include file for Freescale Layerscape-1043A family SoC.
  *
  * Copyright 2014-2016 Freescale Semiconductor, Inc.
- * Copyright 2017-2018 NXP
+ * Copyright 2017-2018, 2021 NXP
  *
  * Mingkai Hu <Mingkai.hu@freescale.com>
  */
@@ -24,6 +24,13 @@
 	chosen {
 		stdout-path = "serial0:115200n8";
 	};
+
+	/* TODO: NLM WDOG Node workaround */
+	la9310_wdog: la9310_wdog@0 {
+		compatible = "la9310_wdog";
+		la9310-reset-gpio = <&gpio3 9 1>;
+	};
+
 };
 
 &i2c0 {

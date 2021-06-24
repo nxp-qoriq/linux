@@ -341,7 +341,7 @@ static int sja1105_init_static_vlan(struct sja1105_private *priv)
 {
 	struct sja1105_table *table;
 	struct sja1105_vlan_lookup_entry pvid = {
-		.type_entry = SJA1110_VLAN_C_TAG,
+		.type_entry = SJA1110_VLAN_D_TAG,
 		.ving_mirr = 0,
 		.vegr_mirr = 0,
 		.vmemb_port = 0,
@@ -2481,7 +2481,7 @@ sja1105_build_bridge_vlans(struct sja1105_private *priv,
 		new_vlan[match].vlan_bc |= BIT(v->port);
 		if (!v->untagged)
 			new_vlan[match].tag_port |= BIT(v->port);
-		new_vlan[match].type_entry = SJA1110_VLAN_C_TAG;
+		new_vlan[match].type_entry = SJA1110_VLAN_D_TAG;
 	}
 
 	return 0;
@@ -2504,7 +2504,7 @@ sja1105_build_dsa_8021q_vlans(struct sja1105_private *priv,
 		new_vlan[match].vlan_bc |= BIT(v->port);
 		if (!v->untagged)
 			new_vlan[match].tag_port |= BIT(v->port);
-		new_vlan[match].type_entry = SJA1110_VLAN_C_TAG;
+		new_vlan[match].type_entry = SJA1110_VLAN_D_TAG;
 	}
 
 	return 0;
@@ -2565,7 +2565,7 @@ static int sja1105_build_subvlans(struct sja1105_private *priv,
 			new_vlan[match].tag_port |= BIT(v->port);
 		/* But it's always tagged towards the CPU */
 		new_vlan[match].tag_port |= BIT(upstream);
-		new_vlan[match].type_entry = SJA1110_VLAN_C_TAG;
+		new_vlan[match].type_entry = SJA1110_VLAN_D_TAG;
 
 		/* The Retagging Table generates packet *clones* with
 		 * the new VLAN. This is a very odd hardware quirk
@@ -2733,7 +2733,7 @@ sja1105_build_crosschip_subvlans(struct sja1105_private *priv,
 		if (!tmp->untagged)
 			new_vlan[match].tag_port |= BIT(tmp->port);
 		new_vlan[match].tag_port |= BIT(upstream);
-		new_vlan[match].type_entry = SJA1110_VLAN_C_TAG;
+		new_vlan[match].type_entry = SJA1110_VLAN_D_TAG;
 		/* Deny egress of @rx_vid towards our front-panel port.
 		 * This will force the switch to drop it, and we'll see
 		 * only the re-retagged packets (having the original,

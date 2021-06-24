@@ -1115,7 +1115,7 @@ const struct sja1105_dynamic_table_ops sja1110_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.max_entry_count = SJA1105_MAX_RETAGGING_COUNT,
 		.access = (OP_READ | OP_WRITE | OP_DEL),
 		.packed_size = SJA1105_SIZE_RETAGGING_DYN_CMD,
-		.addr = SJA1110_SPI_ADDR(0xdc0),
+		.addr = SJA1110_SPI_ADDR(0xdc),
 	},
 	[BLK_IDX_CBS] = {
 		.entry_packing = sja1110_cbs_entry_packing,

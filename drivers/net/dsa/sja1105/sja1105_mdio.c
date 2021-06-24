@@ -432,8 +432,8 @@ static int sja1105_mdiobus_pcs_register(struct sja1105_private *priv)
 		if (dsa_is_unused_port(ds, port))
 			continue;
 
-		if (!priv->info->supports_sgmii[port] &&
-		    !priv->info->supports_2500basex[port])
+		if (priv->phy_mode[port] != PHY_INTERFACE_MODE_SGMII &&
+		    priv->phy_mode[port] != PHY_INTERFACE_MODE_2500BASEX)
 			continue;
 
 		mdiodev = mdio_device_create(bus, port);
@@ -458,6 +458,7 @@ out_pcs_free:
 		priv->pcs[port] = NULL;
 	}
 
+	mdiobus_unregister(bus);
 	mdiobus_free(bus);
 
 	return rc;

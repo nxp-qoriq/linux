@@ -2,7 +2,7 @@
 //
 // Device Tree file for LX2160A BLUEBOX3
 //
-// Copyright 2020 NXP
+// Copyright 2020-2021 NXP
 
 /dts-v1/;
 
@@ -556,6 +556,10 @@
 };
 
 &usb0 {
+	status = "okay";
+};
+
+&usb1 {
 	status = "okay";
 };
 

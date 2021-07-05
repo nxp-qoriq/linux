@@ -573,13 +573,13 @@
 	sw1_mii3_phy: ethernet-phy@1 {
 		/* AR8035 */
 		compatible = "ethernet-phy-id004d.d072";
-		reg = <0x1>; /* FIXME: 0x5 for Rev. B and C boards */
+		reg = <0x5>;
 	};
 
 	sw2_mii3_phy: ethernet-phy@2 {
 		/* AR8035 */
 		compatible = "ethernet-phy-id004d.d072";
-		reg = <0x2>; /* FIXME: 0x6 for Rev. B and C boards */
+		reg = <0x6>;
 	};
 };
 

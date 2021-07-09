@@ -134,6 +134,7 @@ struct sja1105_info {
 	void (*pcs_config)(struct sja1105_private *priv, int port,
 			   bool an_enabled, bool an_master,
 			   phy_interface_t interface);
+	int (*disable_microcontroller)(struct sja1105_private *priv);
 	const char *name;
 	bool supports_mii[SJA1105_MAX_NUM_PORTS];
 	bool supports_rmii[SJA1105_MAX_NUM_PORTS];
@@ -359,7 +360,7 @@ int sja1105pqrs_setup_rgmii_delay(const void *ctx, int port);
 int sja1110_setup_rgmii_delay(const void *ctx, int port);
 int sja1105_clocking_setup_port(struct sja1105_private *priv, int port);
 int sja1105_clocking_setup(struct sja1105_private *priv);
-int sja1110_clocking_setup(struct sja1105_private *priv);
+int sja1110_disable_microcontroller(struct sja1105_private *priv);
 
 /* From sja1105_ethtool.c */
 void sja1105_get_ethtool_stats(struct dsa_switch *ds, int port, u64 *data);

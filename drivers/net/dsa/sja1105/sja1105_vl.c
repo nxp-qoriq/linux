@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright 2020, NXP Semiconductors
+/* Copyright 2020-2021 NXP
  */
 #include <net/tc_act/tc_gate.h>
 #include <linux/dsa/8021q.h>
@@ -779,8 +779,7 @@ int sja1105_vl_stats(struct sja1105_private *priv, int port,
 	pkts = timingerr + unreleased + lengtherr;
 
 	flow_stats_update(stats, 0, pkts - rule->vl.stats.pkts,
-			  jiffies - rule->vl.stats.lastused,
-			  FLOW_ACTION_HW_STATS_IMMEDIATE);
+			  jiffies - rule->vl.stats.lastused);
 
 	rule->vl.stats.pkts = pkts;
 	rule->vl.stats.lastused = jiffies;

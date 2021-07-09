@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
-/* Copyright (c) 2016-2018, NXP Semiconductors
+/* Copyright 2016-2018, 2021 NXP
  * Copyright (c) 2018-2019, Vladimir Oltean <olteanv@gmail.com>
  */
 #include "sja1105_static_config.h"
@@ -186,32 +186,32 @@ size_t sja1110_general_params_entry_packing(void *buf, void *entry_ptr,
 	struct sja1105_general_params_entry *entry = entry_ptr;
 	const size_t size = SJA1110_SIZE_GENERAL_PARAMS_ENTRY;
 
-	sja1105_packing(buf, &entry->vllupformat, 447, 447, size, op);
-	sja1105_packing(buf, &entry->mirr_ptacu,  446, 446, size, op);
-	sja1105_packing(buf, &entry->switchid,    445, 442, size, op);
-	sja1105_packing(buf, &entry->hostprio,    441, 439, size, op);
-	sja1105_packing(buf, &entry->mac_fltres1, 438, 391, size, op);
-	sja1105_packing(buf, &entry->mac_fltres0, 390, 343, size, op);
-	sja1105_packing(buf, &entry->mac_flt1,    342, 295, size, op);
-	sja1105_packing(buf, &entry->mac_flt0,    294, 247, size, op);
-	sja1105_packing(buf, &entry->incl_srcpt1, 246, 246, size, op);
-	sja1105_packing(buf, &entry->incl_srcpt0, 245, 245, size, op);
-	sja1105_packing(buf, &entry->send_meta1,  244, 244, size, op);
-	sja1105_packing(buf, &entry->send_meta0,  243, 243, size, op);
-	sja1105_packing(buf, &entry->casc_port,   242, 232, size, op);
-	sja1105_packing(buf, &entry->host_port,   231, 228, size, op);
-	sja1105_packing(buf, &entry->mirr_port,   227, 224, size, op);
-	sja1105_packing(buf, &entry->vlmarker,    223, 192, size, op);
-	sja1105_packing(buf, &entry->vlmask,      191, 160, size, op);
-	sja1105_packing(buf, &entry->tpid2,       159, 144, size, op);
-	sja1105_packing(buf, &entry->ignore2stf,  143, 143, size, op);
-	sja1105_packing(buf, &entry->tpid,        142, 127, size, op);
-	sja1105_packing(buf, &entry->queue_ts,    126, 126, size, op);
-	sja1105_packing(buf, &entry->egrmirrvid,  125, 114, size, op);
-	sja1105_packing(buf, &entry->egrmirrpcp,  113, 111, size, op);
-	sja1105_packing(buf, &entry->egrmirrdei,  110, 110, size, op);
-	sja1105_packing(buf, &entry->replay_port, 109, 106, size, op);
-	sja1105_packing(buf, &entry->tte_en,       16,  16, size, op);
+	sja1105_packing(buf, &entry->vllupformat,  447, 447, size, op);
+	sja1105_packing(buf, &entry->mirr_ptacu,   446, 446, size, op);
+	sja1105_packing(buf, &entry->switchid,     445, 442, size, op);
+	sja1105_packing(buf, &entry->hostprio,     441, 439, size, op);
+	sja1105_packing(buf, &entry->mac_fltres1,  438, 391, size, op);
+	sja1105_packing(buf, &entry->mac_fltres0,  390, 343, size, op);
+	sja1105_packing(buf, &entry->mac_flt1,     342, 295, size, op);
+	sja1105_packing(buf, &entry->mac_flt0,     294, 247, size, op);
+	sja1105_packing(buf, &entry->incl_srcpt1,  246, 246, size, op);
+	sja1105_packing(buf, &entry->incl_srcpt0,  245, 245, size, op);
+	sja1105_packing(buf, &entry->send_meta1,   244, 244, size, op);
+	sja1105_packing(buf, &entry->send_meta0,   243, 243, size, op);
+	sja1105_packing(buf, &entry->casc_port,    242, 232, size, op);
+	sja1105_packing(buf, &entry->host_port,    231, 228, size, op);
+	sja1105_packing(buf, &entry->mirr_port,    227, 224, size, op);
+	sja1105_packing(buf, &entry->vlmarker,     223, 192, size, op);
+	sja1105_packing(buf, &entry->vlmask,       191, 160, size, op);
+	sja1105_packing(buf, &entry->tpid2,        159, 144, size, op);
+	sja1105_packing(buf, &entry->ignore2stf,   143, 143, size, op);
+	sja1105_packing(buf, &entry->tpid,         142, 127, size, op);
+	sja1105_packing(buf, &entry->queue_ts,     126, 126, size, op);
+	sja1105_packing(buf, &entry->egrmirrvid,   125, 114, size, op);
+	sja1105_packing(buf, &entry->egrmirrpcp,   113, 111, size, op);
+	sja1105_packing(buf, &entry->egrmirrdei,   110, 110, size, op);
+	sja1105_packing(buf, &entry->replay_port,  109, 106, size, op);
+	sja1105_packing(buf, &entry->tte_en,        16,  16, size, op);
 	return size;
 }
 

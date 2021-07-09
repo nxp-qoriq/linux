@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright 2021, NXP Semiconductors
+/* Copyright 2021 NXP
  */
 #include <linux/of_mdio.h>
 #include "sja1105.h"
@@ -324,7 +324,7 @@ static int sja1105_mdiobus_base_tx_register(struct sja1105_private *priv,
 out_put_np:
 	of_node_put(np);
 
-	return 0;
+	return rc;
 }
 
 static void sja1105_mdiobus_base_tx_unregister(struct sja1105_private *priv)

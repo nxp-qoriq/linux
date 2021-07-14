@@ -122,22 +122,32 @@
 
 				fan6: fan@0 {
 					reg = <0>;
+					#cooling-cells = <2>;
+					cooling-levels = <0 25 128 255>;
 				};
 
 				fan7: fan@1 {
 					reg = <1>;
+					#cooling-cells = <2>;
+					cooling-levels = <0 25 128 255>;
 				};
 
 				fan8: fan@2 {
 					reg = <2>;
+					#cooling-cells = <2>;
+					cooling-levels = <0 25 128 255>;
 				};
 
 				fan9: fan@3 {
 					reg = <3>;
+					#cooling-cells = <2>;
+					cooling-levels = <0 25 128 255>;
 				};
 
 				fan10: fan@4 {
 					reg = <4>;
+					#cooling-cells = <2>;
+					cooling-levels = <0 25 128 255>;
 				};
 			};
 
@@ -149,23 +159,36 @@
 
 				fan1: fan@0 {
 					reg = <0>;
+					#cooling-cells = <2>;
+					cooling-levels = <0 25 128 255>;
 				};
 
 				fan2: fan@1 {
 					reg = <1>;
+					#cooling-cells = <2>;
+					cooling-levels = <0 25 128 255>;
 				};
 
 				fan3: fan@2 {
 					reg = <2>;
+					#cooling-cells = <2>;
+					cooling-levels = <0 25 128 255>;
 				};
 
 				fan4: fan@3 {
 					reg = <3>;
+					#cooling-cells = <2>;
+					cooling-levels = <0 25 128 255>;
 				};
 
 				fan5: fan@4 {
 					reg = <4>;
 					#cooling-cells = <2>;
+					// ducy cycle = (cooling-lveles[index] / 255) * 100%
+					// (0 / 255) * 100% = 0%
+					// (25 / 255) * 100% = 9.8%
+					// (128 / 255) * 100% = 50%
+					// (255 / 255) * 100% = 100%
 					cooling-levels = <0 25 128 255>;
 				};
 			};
@@ -646,10 +669,22 @@
 		thermal-sensors = <&temp2 1>;
 
 		trips {
-			cpu_alert: cpu-alert {
-				temperature = <85000>;
+			cpu_alert0: cpu-alert0 {
+				temperature = <35000>;
 				hysteresis = <2000>;
-				type = "passive";
+				type = "active";
+			};
+
+			cpu_alert1: cpu-alert1 {
+				temperature = <55000>;
+				hysteresis = <2000>;
+				type = "active";
+			};
+
+			cpu_alert2: cpu-alert2 {
+				temperature = <75000>;
+				hysteresis = <2000>;
+				type = "active";
 			};
 
 			cpu_crit: cpu-crit {
@@ -661,8 +696,16 @@
 
 		cooling-maps {
 			map0 {
-				trip = <&cpu_alert>;
-				cooling-device = <&fan5 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+				trip = <&cpu_alert0>;
+				cooling-device = <&fan5 1 1>;
+			};
+			map1 {
+				trip = <&cpu_alert1>;
+				cooling-device = <&fan5 2 2>;
+			};
+			map2 {
+				trip = <&cpu_alert2>;
+				cooling-device = <&fan5 3 3>;
 			};
 		};
 	};

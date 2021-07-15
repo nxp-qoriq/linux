@@ -709,10 +709,12 @@
 };
 
 &thermal_zones {
+	/* cpu-thermal is used to control LX2's temperature */
 	cpu-thermal {
 		polling-delay-passive = <1000>;
 		polling-delay = <5000>;
-		thermal-sensors = <&temp2 1>;
+		thermal-sensors = <&temp1 1>,
+				  <&temp2 1>;
 
 		trips {
 			cpu_alert0: cpu-alert0 {

@@ -757,4 +757,25 @@
 			};
 		};
 	};
+	/* cpu-compartment-thermal is used to control cpu compartment's temperature */
+	cpu-compartment-thermal {
+		polling-delay-passive = <1000>;
+		polling-delay = <5000>;
+		thermal-sensors = <&q13 1>;
+
+		trips {
+			cpu_compartment_alert: cpu-compartment-alert {
+				temperature = <70000>;
+				hysteresis = <2000>;
+				type = "active";
+			};
+		};
+
+		cooling-maps {
+			map0 {
+				trip = <&cpu_compartment_alert>;
+				cooling-device = <&fan1 3 3>, <&fan2 3 3>, <&fan6 3 3>, <&fan7 3 3>;
+			};
+		};
+	};
 };

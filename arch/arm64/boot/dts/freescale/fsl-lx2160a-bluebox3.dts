@@ -275,7 +275,53 @@
 		reg = <0x77>;
 		#address-cells = <1>;
 		#size-cells = <0>;
-		// TODO: Add entrier for device connected to mux
+		i2c@1 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x1>;
+			i2c-mux@70 {
+				/* The i2c multiplexer and temp sensors are on T6 riser card */
+				compatible = "nxp,pca9548";
+				reg = <0x70>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				i2c@6 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0x6>;
+					q12: temperature-sensor@4c {
+						compatible = "nxp,sa56004";
+						reg = <0x4c>;
+						vcc-supply = <&sb_3v3>;
+						#thermal-sensor-cells = <1>;
+					};
+				};
+				i2c@7 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0x7>;
+					q11: temperature-sensor@4c {
+						compatible = "nxp,sa56004";
+						reg = <0x4c>;
+						vcc-supply = <&sb_3v3>;
+						#thermal-sensor-cells = <1>;
+					};
+					q13: temperature-sensor@48 {
+						compatible = "nxp,sa56004";
+						reg = <0x48>;
+						vcc-supply = <&sb_3v3>;
+						#thermal-sensor-cells = <1>;
+					};
+					q14: temperature-sensor@4a {
+						compatible = "nxp,sa56004";
+						reg = <0x4a>;
+						vcc-supply = <&sb_3v3>;
+						#thermal-sensor-cells = <1>;
+					};
+				};
+			};
+		};
+
 	};
 };
 

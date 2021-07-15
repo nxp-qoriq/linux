@@ -778,4 +778,29 @@
 			};
 		};
 	};
+
+	/* pcie-switch-compartment-thermal is used to control pcie switch compartment's temperature */
+	pcie-switch-compartment-thermal {
+		polling-delay-passive = <1000>;
+		polling-delay = <5000>;
+		thermal-sensors = <&q11 1>,
+				  <&q12 1>,
+				  <&q14 1>;
+
+		trips {
+			pcie_switch_compartment_alert: pcie-switch-compartment-alert {
+				temperature = <70000>;
+				hysteresis = <2000>;
+				type = "active";
+			};
+		};
+
+		cooling-maps {
+			map0 {
+				trip = <&pcie_switch_compartment_alert>;
+				cooling-device = <&fan3 3 3>, <&fan4 3 3>, <&fan8 3 3>, <&fan9 3 3>;
+			};
+		};
+	};
+
 };

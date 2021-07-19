@@ -802,5 +802,50 @@
 			};
 		};
 	};
+	/* pex8780-thermal is used to control pcie switch pex8780's temperature, pex8780 is on T6 riser card */
+	pex8780-thermal {
+		polling-delay-passive = <1000>;
+		polling-delay = <5000>;
+		thermal-sensors = <&q12 1>; /* Assuming that the pex8780's temperature is from U57 */
 
+		trips {
+			pex8780_alert0: pex8780-alert0 {
+				temperature = <35000>;
+				hysteresis = <2000>;
+				type = "active";
+			};
+
+			pex8780_alert1: pex8780-alert1 {
+				temperature = <55000>;
+				hysteresis = <2000>;
+				type = "active";
+			};
+
+			pex8780_alert2: pex8780-alert2 {
+				temperature = <75000>;
+				hysteresis = <2000>;
+				type = "active";
+			};
+			pex8780_crit: pex8780-crit {
+				temperature = <95000>;
+				hysteresis = <2000>;
+				type = "critical";
+			};
+		};
+
+		cooling-maps {
+			map0 {
+				trip = <&pex8780_alert0>;
+				cooling-device = <&fan10 1 1>;
+			};
+			map1 {
+				trip = <&pex8780_alert1>;
+				cooling-device = <&fan10 2 2>;
+			};
+			map2 {
+				trip = <&pex8780_alert2>;
+				cooling-device = <&fan10 3 3>;
+			};
+		};
+	};
 };

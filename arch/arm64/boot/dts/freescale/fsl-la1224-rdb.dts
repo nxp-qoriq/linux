@@ -44,6 +44,13 @@
 		status = "okay";
 	};
 
+	modem_hsdcs {
+		compatible = "modem_hsdcs";
+		reg = <0x0 0x0 0x0 0x0>;
+		hsdcs-reset-gpio = <&gpio0 29 GPIO_ACTIVE_LOW>;
+		status = "okay";
+	};
+
 	modem_tti {
 		compatible = "modem_tti1";
 		reg = <0x0 0x0 0x0 0x0>;

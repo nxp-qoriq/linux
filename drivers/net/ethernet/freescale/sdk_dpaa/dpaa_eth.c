@@ -1177,7 +1177,8 @@ static int __init __cold dpa_load(void)
 
 #ifndef CONFIG_PPC
 	/* Detect if the current SoC requires the 4K alignment workaround */
-	dpaa_errata_a010022 = soc_has_errata_a010022();
+	//dpaa_errata_a010022 = soc_has_errata_a010022();
+	dpaa_errata_a010022 = false;
 #endif
 
 #ifdef CONFIG_FSL_DPAA_DBG_LOOP

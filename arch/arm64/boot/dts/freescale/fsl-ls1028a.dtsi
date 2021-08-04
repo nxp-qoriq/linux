@@ -743,6 +743,7 @@
 					     "fsl,sec-v4.0-job-ring";
 				reg	= <0x30000 0x10000>;
 				interrupts = <GIC_SPI 142 IRQ_TYPE_LEVEL_HIGH>;
+				status = "disabled";
 			};
 
 			sec_jr3: jr@40000 {

@@ -55,7 +55,8 @@ struct eventfd_list {
 static inline struct device *get_dev_ptr(char *if_name);
 static void phy_link_updates(struct net_device *net_dev);
 /* IOCTL handlers */
-static inline int ioctl_usdpaa_get_link_status(char *if_name);
+static inline int
+ioctl_usdpaa_get_link_status(struct usdpaa_ioctl_link_status_args *input);
 static int ioctl_en_if_link_status(struct usdpaa_ioctl_link_status *args);
 static int ioctl_disable_if_link_status(char *if_name);
 
@@ -1817,30 +1818,47 @@ static int ioctl_link_restart_autoneg(char *if_name)
  * if_name: Interface node name
  *
  */
-static inline int ioctl_usdpaa_get_link_status(char *if_name)
+static inline int
+ioctl_usdpaa_get_link_status(struct usdpaa_ioctl_link_status_args *input)
 {
 	struct net_device *net_dev = NULL;
+	struct mac_device *mac_dev;
 	struct device *dev;
 
-	dev = get_dev_ptr(if_name);
+	dev = get_dev_ptr(input->if_name);
 	if (dev == NULL)
 		return -ENODEV;
 
 	if (of_device_is_compatible(dev->of_node, "fsl,dpa-ethernet")) {
+		struct dpa_priv_s *npriv = NULL;
+
 		net_dev = dev_get_drvdata(dev);
-		if (test_bit(__LINK_STATE_START, &net_dev->state))
-			return 1;
-		else
-			return 0;
+		npriv = netdev_priv(net_dev);
+		mac_dev =  npriv->mac_dev;
 	} else {
+		struct proxy_device *proxy_dev;
+
+		proxy_dev = dev_get_drvdata(dev);
+		mac_dev =  proxy_dev->mac_dev;
 		net_dev = dev->platform_data;
-		if (net_dev == NULL)
-			return -ENODEV;
-		if (test_bit(__LINK_STATE_NOCARRIER, &net_dev->state))
-			return 0; /* Link is DOWN */
-		else
-			return 1; /* Link is UP */
 	}
+	if (net_dev == NULL)
+		return -ENODEV;
+
+	if (mac_dev->phy_dev == NULL) { /* Interface is down from kernel */
+		input->link_status = ETH_LINK_DOWN;
+	} else {
+		input->link_status = netif_carrier_ok(net_dev);
+		input->link_autoneg = mac_dev->phy_dev->autoneg;
+		input->link_duplex = mac_dev->phy_dev->duplex;
+	}
+
+	if (input->link_status)
+		input->link_speed = mac_dev->phy_dev->speed;
+	else
+		input->link_speed = 0;
+
+	return 0;
 }
 
 
@@ -1860,7 +1878,7 @@ static void phy_link_updates(struct net_device *net_dev)
 			eventfd_signal(ev_mem->efd_ctx, 1);
 			pr_debug("%s: Link '%s'\n",
 				net_dev->name,
-				ioctl_usdpaa_get_link_status(net_dev->name)?"UP":"DOWN");
+				netif_carrier_ok(net_dev)?"UP":"DOWN");
 			return;
 		}
 	}
@@ -2194,18 +2212,20 @@ static long usdpaa_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
 	}
 	case USDPAA_IOCTL_GET_LINK_STATUS:
 	{
+		int ret;
 		struct usdpaa_ioctl_link_status_args input;
 
 		if (copy_from_user(&input, a, sizeof(input)))
 			return -EFAULT;
 
-		input.link_status = ioctl_usdpaa_get_link_status(input.if_name);
-		if (input.link_status < 0)
-			return input.link_status;
+		ret = ioctl_usdpaa_get_link_status(&input);
+		if (ret)
+			return ret;
+
 		if (copy_to_user(a, &input, sizeof(input)))
 			return -EFAULT;
 
-		return 0;
+		return ret;
 	}
 	case USDPAA_IOCTL_UPDATE_LINK_STATUS:
 	{

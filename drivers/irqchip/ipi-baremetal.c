@@ -317,8 +317,7 @@ static int shd_mmap_mem(struct file *file, struct vm_area_struct *vma)
 {
 	size_t size = vma->vm_end - vma->vm_start;
 
-#if defined(CONFIG_LS1021A_BAREMETAL) || defined(CONFIG_SOC_IMX6Q_BAREMETAL) \
-    || defined(CONFIG_IMX8M_BAREMETAL)
+#if defined(CONFIG_LS1021A_BAREMETAL) || defined(CONFIG_SOC_IMX6Q_BAREMETAL)
 	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 #else
 	vma->vm_page_prot = pgprot_cached(vma->vm_page_prot);
@@ -384,8 +383,7 @@ static int __init ipi_baremetal_init(void)
 
 	pr_info("NXP inter-core communiction IRQ driver\n");
 #ifndef IPI_BAREMETAL_SIGNAL
-#if defined(CONFIG_LS1021A_BAREMETAL) || defined(CONFIG_SOC_IMX6Q_BAREMETAL) \
-    || defined(CONFIG_IMX8M_BAREMETAL)
+#if defined(CONFIG_LS1021A_BAREMETAL) || defined(CONFIG_SOC_IMX6Q_BAREMETAL)
 	share_base = ioremap((phys_addr_t)CONFIG_SYS_DDR_SDRAM_SHARE_BASE,
 				CONFIG_SYS_DDR_SDRAM_SHARE_SIZE);
 #else

@@ -74,7 +74,7 @@
 			fsl,tmr-fiper1 = <0x3b9ac9f6>;
 			fsl,tmr-fiper2 = <0x3b9ac9f6>;
 			fsl,tmr-fiper3 = <0x3b9ac9f6>;
-			fsl,tmr-prsc = <0x02>;
+			fsl,tmr-prsc = <0xA>;
 			little-endian;
 			reg = <0x00 0x8b95000 0x00 0x100>;
 		};

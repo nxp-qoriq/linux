@@ -4,6 +4,19 @@
 #include "imx8qm-mek-rpmsg.dts"
 
 / {
+	reserved-memory {
+		/delete-node/ dsp_reserved;
+		/delete-node/ dsp_reserved_heap;
+		/delete-node/ dsp_vdev0vring0;
+		/delete-node/ dsp_vdev0vring1;
+		/delete-node/ dsp_vdev0buffer;
+
+		dsp_reserved: dsp@92400000 {
+			reg = <0 0x92400000 0 0x2000000>;
+			no-map;
+		};
+	};
+
 	sound-cs42888 {
 		status = "disabled";
 	};
@@ -46,7 +59,8 @@
 
 &edma0 {
 	compatible = "fsl,imx8qm-edma";
-	reg = <0x59280000 0x10000>, /* spdif0 rx */
+	reg = <0x5a1f0000 0x10000>,
+		<0x59280000 0x10000>, /* spdif0 rx */
 		<0x59290000 0x10000>, /* spdif0 tx */
 		<0x592c0000 0x10000>, /* sai0 rx */
 		<0x592d0000 0x10000>, /* sai0 tx */
@@ -121,6 +135,8 @@
 		<&lsio_mu13 2 1>,
 		<&lsio_mu13 3 0>,
 		<&lsio_mu13 3 1>;
+	memory-region = <&dsp_reserved>;
+	/delete-property/ firmware-name;
 
 	tplg-name = "sof-imx8-cs42888.tplg";
 	machine-drv-name = "asoc-simple-card";

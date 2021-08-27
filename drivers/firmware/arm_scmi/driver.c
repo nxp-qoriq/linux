@@ -268,6 +268,10 @@ static void scmi_handle_response(struct scmi_chan_info *cinfo,
 		return;
 	}
 
+	/* rx.len could be shrunk in the sync do_xfer, so reset to maxsz */
+	if (msg_type == MSG_TYPE_DELAYED_RESP)
+		xfer->rx.len = info->desc->max_msg_size;
+
 	scmi_dump_header_dbg(dev, &xfer->hdr);
 
 	info->desc->ops->fetch_response(cinfo, xfer);
@@ -741,8 +745,9 @@ static struct scmi_prot_devnames devnames[] = {
 	{ SCMI_PROTOCOL_SYSTEM, { "syspower" },},
 	{ SCMI_PROTOCOL_PERF,   { "cpufreq" },},
 	{ SCMI_PROTOCOL_CLOCK,  { "clocks" },},
-	{ SCMI_PROTOCOL_SENSOR, { "hwmon" },},
+	{ SCMI_PROTOCOL_SENSOR, { "hwmon", "iiodev" },},
 	{ SCMI_PROTOCOL_RESET,  { "reset" },},
+	{ SCMI_PROTOCOL_VOLTAGE,  { "regulator" },},
 };
 
 static inline void
@@ -946,6 +951,7 @@ static int __init scmi_driver_init(void)
 	scmi_power_register();
 	scmi_reset_register();
 	scmi_sensors_register();
+	scmi_voltage_register();
 	scmi_system_register();
 
 	return platform_driver_register(&scmi_driver);
@@ -961,6 +967,7 @@ static void __exit scmi_driver_exit(void)
 	scmi_power_unregister();
 	scmi_reset_unregister();
 	scmi_sensors_unregister();
+	scmi_voltage_unregister();
 	scmi_system_unregister();
 
 	platform_driver_unregister(&scmi_driver);

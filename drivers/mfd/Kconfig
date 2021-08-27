@@ -465,6 +465,7 @@ config MFD_MP2629
 	tristate "Monolithic Power Systems MP2629 ADC and Battery charger"
 	depends on I2C
 	select REGMAP_I2C
+	select MFD_CORE
 	help
 	  Select this option to enable support for Monolithic Power Systems
 	  battery charger. This provides ADC, thermal and battery charger power
@@ -825,6 +826,14 @@ config MFD_MAX17135
 	help
 	  This is the MAX17135 PMIC support. It includes
 	  core support for communication with the MAX17135 chip.
+
+config MFD_FP9931
+	tristate "Fitipower FP9931 EPD PMIC Core"
+	depends on I2C && OF
+
+	help
+	  This is the FP9931 PMIC support. It includes
+	  core support for communication with the FP9931 chip.
 
 config MFD_MAX77620
 	bool "Maxim Semiconductor MAX77620 and MAX20024 PMIC Support"

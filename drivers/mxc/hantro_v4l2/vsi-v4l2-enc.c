@@ -871,6 +871,9 @@ static int vsi_v4l2_enc_s_ctrl(struct v4l2_ctrl *ctrl)
 		if (ctrl->p_new.p)
 			vsiv4l2_setIPCM(ctx, ctrl->p_new.p);
 		break;
+	case V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER:
+		ctx->mediacfg.encparams.specific.enc_h26x_cmd.idrHdr = ctrl->val;
+		break;
 	default:
 		return 0;
 	}
@@ -1226,6 +1229,14 @@ static struct v4l2_ctrl_config vsi_v4l2_encctrl_defs[] = {
 		.step = 90,
 		.def = 0,
 	},
+	{
+		.id = V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER,
+		.type = V4L2_CTRL_TYPE_BOOLEAN,
+		.min = 0,
+		.max = 1,
+		.step = 1,
+		.def = 1,
+	},
 };
 
 static int vsi_setup_enc_ctrls(struct v4l2_ctrl_handler *handler)
@@ -1338,6 +1349,7 @@ static int v4l2_enc_open(struct file *filp)
 		goto err_enc_dec_exit;
 	}
 	vsiv4l2_initcfg(ctx);
+	vsiv4l2_initfmt(ctx);
 	vsi_setup_enc_ctrls(&ctx->ctrlhdl);
 	vfh = (struct v4l2_fh *)filp->private_data;
 	vfh->ctrl_handler = &ctx->ctrlhdl;

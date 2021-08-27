@@ -574,9 +574,10 @@
 		reg = <0>;
 		#address-cells = <1>;
 		#size-cells = <1>;
-		compatible = "micron,mt35xu512aba";
+		compatible = "jedec,spi-nor";
 		spi-max-frequency = <133000000>;
-		spi-nor,ddr-quad-read-dummy = <8>;
+		spi-tx-bus-width = <1>;
+		spi-rx-bus-width = <8>;
 	};
 };
 
@@ -740,15 +741,6 @@
 };
 
 &cm40_intmux {
-	status = "okay";
-};
-
-&rpmsg{
-	/*
-	 * 64K for one rpmsg instance:
-	 */
-	vdev-nums = <1>;
-	reg = <0x0 0x90000000 0x0 0x10000>;
 	status = "okay";
 };
 

@@ -989,9 +989,8 @@ static int pca953x_probe(struct i2c_client *client,
 
 	reg = devm_regulator_get_optional(&client->dev, "vcc");
 	if (IS_ERR(reg)) {
-		ret = dev_err_probe(&client->dev, PTR_ERR(reg), "reg get err\n");
-		if (ret == -EPROBE_DEFER)
-			return ret;
+		if (PTR_ERR(reg) != -ENODEV)
+			return dev_err_probe(&client->dev, PTR_ERR(reg), "reg get err\n");
 		reg = NULL;
 	}
 
@@ -1258,6 +1257,7 @@ static const struct of_device_id pca953x_dt_ids[] = {
 
 	{ .compatible = "onnn,cat9554", .data = OF_953X( 8, PCA_INT), },
 	{ .compatible = "onnn,pca9654", .data = OF_953X( 8, PCA_INT), },
+	{ .compatible = "onnn,pca9655", .data = OF_953X(16, PCA_INT), },
 
 	{ .compatible = "exar,xra1202", .data = OF_953X( 8, 0), },
 	{ }

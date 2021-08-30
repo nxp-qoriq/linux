@@ -75,7 +75,6 @@
 };
 
 &dpmac11 {
-	phy-handle = <&aquantia_phy1>;
 	phy-connection-type = "sgmii";
 };
 

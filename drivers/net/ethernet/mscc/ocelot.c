@@ -1811,6 +1811,7 @@ int ocelot_hwstamp_set(struct ocelot *ocelot, int port, struct ifreq *ifr)
 	switch (cfg.tx_type) {
 	case HWTSTAMP_TX_ON:
 		ocelot_port->ptp_cmd = IFH_REW_OP_TWO_STEP_PTP;
+		skb_queue_purge(&ocelot_port->tx_skbs);
 		break;
 	case HWTSTAMP_TX_ONESTEP_SYNC:
 		/* IFH_REW_OP_ONE_STEP_PTP updates the correctional field, we

@@ -4197,9 +4197,11 @@ fec_enet_open(struct net_device *ndev)
 		return ret;
 
 	pinctrl_pm_select_default_state(&fep->pdev->dev);
+#ifndef CONFIG_AVB_SUPPORT
 	ret = fec_enet_clk_enable(ndev, true);
 	if (ret)
 		goto clk_enable;
+#endif
 
 	/* During the first fec_enet_open call the PHY isn't probed at this
 	 * point. Therefore the phy_reset_after_clk_enable() call within
@@ -4257,8 +4259,10 @@ fec_enet_open(struct net_device *ndev)
 err_enet_mii_probe:
 	fec_enet_free_buffers(ndev);
 err_enet_alloc:
+#ifndef CONFIG_AVB_SUPPORT
 	fec_enet_clk_enable(ndev, false);
 clk_enable:
+#endif
 	pm_runtime_mark_last_busy(&fep->pdev->dev);
 	pm_runtime_put_autosuspend(&fep->pdev->dev);
 	if (!fep->mii_bus_share)
@@ -4307,7 +4311,9 @@ fec_enet_close(struct net_device *ndev)
 
 	fec_enet_update_ethtool_stats(ndev);
 
+#ifndef CONFIG_AVB_SUPPORT
 	fec_enet_clk_enable(ndev, false);
+#endif
 	if (fep->quirks & FEC_QUIRK_HAS_PMQOS)
 		cpu_latency_qos_remove_request(&fep->pm_qos_req);
 	if (!fep->mii_bus_share)
@@ -5174,6 +5180,14 @@ fec_probe(struct platform_device *pdev)
 	pm_runtime_set_active(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
 
+#ifdef CONFIG_AVB_SUPPORT
+       /*
+        * Prevent runtime pm with avb module to keep all clocks
+	* running even on link down.
+        */
+	pm_runtime_forbid(&pdev->dev);
+#endif
+
 	ret = fec_reset_phy(pdev);
 	if (ret)
 		goto failed_reset;
@@ -5215,7 +5229,9 @@ fec_probe(struct platform_device *pdev)
 
 	/* Carrier starts down, phylib will bring it up */
 	netif_carrier_off(ndev);
+#ifndef CONFIG_AVB_SUPPORT
 	fec_enet_clk_enable(ndev, false);
+#endif
 	pinctrl_pm_select_sleep_state(&pdev->dev);
 
 	ndev->max_mtu = PKT_MAXBUF_SIZE - ETH_HLEN - ETH_FCS_LEN;

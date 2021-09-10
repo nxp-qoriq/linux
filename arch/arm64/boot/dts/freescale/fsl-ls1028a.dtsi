@@ -1021,7 +1021,7 @@
 			#thermal-sensor-cells = <1>;
 		};
 
-		pcie@1f0000000 { /* Integrated Endpoint Root Complex */
+		enetc_pcie: pcie@1f0000000 { /* Integrated Endpoint Root Complex */
 			compatible = "pci-host-ecam-generic";
 			reg = <0x01 0xf0000000 0x0 0x100000>;
 			#address-cells = <3>;

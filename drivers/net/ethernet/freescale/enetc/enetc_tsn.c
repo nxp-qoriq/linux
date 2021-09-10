@@ -1383,6 +1383,14 @@ static int enetc_qbu_set(struct net_device *ndev, u8 preemptible_tcs)
 
 	enetc_change_preemptible_tcs(priv, preemptible_tcs);
 
+	/* Set pMAC step lock */
+	val = enetc_port_rd(&priv->si->hw, ENETC_PFPMR);
+	enetc_port_wr(&priv->si->hw, ENETC_PFPMR,
+		      val | ENETC_PFPMR_PMACE);
+
+	val = enetc_port_rd(&priv->si->hw, ENETC_MMCSR);
+	enetc_port_wr(&priv->si->hw, ENETC_MMCSR, val | ENETC_MMCSR_ME);
+
 	return 0;
 }
 

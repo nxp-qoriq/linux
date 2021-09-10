@@ -1,0 +1,84 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * DTS file for NXP Layerscape baremetal
+ *
+ * Copyright 2018-2023 NXP
+ *
+ * Author: Changming Huang <jerry.huang@nxp.com>
+ *
+ */
+
+#include "fsl-ls1046a-rdb.dts"
+
+&bman_fbpr {
+	compatible = "fsl,bman-fbpr";
+	alloc-ranges = <0 0 0x10000 0>;
+};
+&qman_fqd {
+	compatible = "fsl,qman-fqd";
+	alloc-ranges = <0 0 0x10000 0>;
+};
+&qman_pfdr {
+	compatible = "fsl,qman-pfdr";
+	alloc-ranges = <0 0 0x10000 0>;
+};
+
+&soc {
+#include "qoriq-dpaa-eth.dtsi"
+#include "qoriq-fman3-0-6oh.dtsi"
+};
+
+&fsldpaa {
+	ethernet@9 {
+		compatible = "fsl,dpa-ethernet";
+		fsl,fman-mac = <&enet7>;
+	};
+	ethernet@0 {
+		compatible = "fsl,im-ethernet";
+		fsl,fman-mac = <&enet2>;
+		fpmevt-sel = <0>;
+	};
+	ethernet@1 {
+		compatible = "fsl,im-ethernet";
+		fsl,fman-mac = <&enet3>;
+		fpmevt-sel = <1>;
+	};
+	ethernet@2 {
+		compatible = "fsl,im-ethernet";
+		fsl,fman-mac = <&enet4>;
+		fpmevt-sel = <2>;
+	};
+	ethernet@3 {
+		compatible = "fsl,im-ethernet";
+		fsl,fman-mac = <&enet5>;
+		fpmevt-sel = <3>;
+	};
+};
+
+&fman0 {
+	compatible = "fsl,fman", "simple-bus";
+};
+
+&usb0 {
+	status = "disabled";
+};
+
+&usb1 {
+	status = "disabled";
+};
+
+&usb2 {
+	status = "disabled";
+};
+
+&pcie1 {
+	status = "okay";
+};
+
+&pcie2 {
+	status = "disabled";
+};
+
+&pcie3 {
+	status = "disabled";
+};

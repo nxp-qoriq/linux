@@ -1,0 +1,55 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Device Tree file for NXP LS1028A RDB Board Jailhouse case.
+ *
+ * Copyright 2018-2023 NXP
+ *
+ * Hongbo Wang <hongbo.wang@nxp.com>
+ *
+ */
+
+#include "fsl-ls1028a-rdb.dts"
+
+/ {
+       reserved-memory {
+               #address-cells = <2>;
+               #size-cells = <2>;
+               ranges;
+
+                /* Reserve 832MB for Jailhouse from 0xc000,0000 */
+                /* 4MB */
+                jh_reserved: jh@0xc0000000 {
+                        no-map;
+                        reg = <0x0 0xc0000000 0x0 0x400000>;
+                };
+                /* 1MB */
+                loader_reserved: loader@0xc0400000 {
+                        no-map;
+                        reg = <0x0 0xc0400000 0x0 0x00100000>;
+                };
+                /* 2MB */
+                ivshmem_reserved: ivshmem@0xc0500000 {
+                        no-map;
+                        reg = <0x0 0xc0500000 0x0 0x00200000>;
+                };
+                /* 2MB */
+                pci_reserved: pci@0xc0700000 {
+                        no-map;
+                        reg = <0x0 0xc0700000 0x0 0x00200000>;
+                };
+                /* 823MB */
+                inmate_reserved: inmate@0xc0900000 {
+                        no-map;
+                        reg = <0x0 0xc0900000 0x0 0x33700000>;
+                };
+       };
+};
+
+&duart0 {
+	status = "okay";
+	/delete-property/ interrupts;
+};
+
+&duart1 {
+	status = "disabled";
+};

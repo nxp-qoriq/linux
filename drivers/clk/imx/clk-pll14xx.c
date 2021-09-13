@@ -16,6 +16,7 @@
 #include <linux/jiffies.h>
 
 #include "clk.h"
+#include "clk-pll.h"
 
 #define GNRL_CTL	0x0
 #define DIV_CTL0	0x4
@@ -37,8 +38,13 @@
 struct clk_pll14xx {
 	struct clk_hw			hw;
 	void __iomem			*base;
+	u32				orig_mdiv;
+	u32				orig_pdiv;
+	u32				orig_sdiv;
+	short int			orig_kdiv;
 	enum imx_pll14xx_type		type;
 	const struct imx_pll14xx_rate_table *rate_table;
+	struct clk_imx_pll		imx_pll;
 	int rate_count;
 };
 
@@ -538,6 +544,113 @@ static const struct clk_ops clk_pll1443x_ops = {
 	.set_rate	= clk_pll1443x_set_rate,
 };
 
+/* This function fetches the original PLL parameters to use
+ * them later for ppb adjustment
+ */
+static void imx_pll1443x_init(struct clk_imx_pll *pll)
+{
+	struct clk_pll14xx *pll14xx;
+	u32 pll_div_ctl0, pll_div_ctl1;
+
+	pll14xx = (struct clk_pll14xx *) container_of(pll,
+					struct clk_pll14xx, imx_pll);
+
+	pll_div_ctl0 = readl_relaxed(pll14xx->base + DIV_CTL0);
+	pll_div_ctl1 = readl_relaxed(pll14xx->base + DIV_CTL1);
+
+	pll14xx->orig_kdiv = FIELD_GET(KDIV_MASK, pll_div_ctl1);
+	pll14xx->orig_mdiv = FIELD_GET(MDIV_MASK, pll_div_ctl0);
+	pll14xx->orig_pdiv = FIELD_GET(PDIV_MASK, pll_div_ctl0);
+	pll14xx->orig_sdiv = FIELD_GET(SDIV_MASK, pll_div_ctl0);
+}
+
+/**
+ * imx_pll1443x_adjust - Adjust the Audio pll by ppb.
+ *
+ * This function adjust the audio pll by ppb (part per billion) and returns
+ * the exact number of ppb adjusted.
+ * The adjustment is done by only modifying the delta-sigma modulator(DSM) part
+ * of the audio PLL.
+ * Since the pllout = (parent_rate * (m + k/65536)) / (p * 2^s)
+ * and the adjusted value is
+ *    pllout_new = pllout * (1 + ppb/1e9) which equals:
+ *    (parent_rate * (m + k_new/65536)) / (p * 2^s)
+ * The new DSM (k_new) is calculated as the following:
+ *    k_new = (1e9 * k + (m * 65536 + k) * ppb) / (1e9)
+ */
+
+static int imx_pll1443x_adjust(struct clk_imx_pll *pll, int *ppb)
+{
+	s64 temp64;
+	s64 applied_ppb;
+	struct clk_pll14xx *pll14xx;
+	int rc = IMX_CLK_PLL_SUCCESS;
+
+	int req_ppb = *ppb;
+
+	pll14xx = (struct clk_pll14xx *) container_of(pll,
+						struct clk_pll14xx, imx_pll);
+
+	/* Calcultate the new DSM value */
+	temp64 = ((s64) pll14xx->orig_kdiv * 1000000000)
+			+ ((s64) pll14xx->orig_mdiv * 65536 + (s64) pll14xx->orig_kdiv) * req_ppb;
+
+	temp64 = div_s64(temp64, 1000000000);
+
+	if (temp64 > KDIV_MAX || temp64 < KDIV_MIN) {
+		rc = -IMX_CLK_PLL_PREC_ERR;
+		goto exit;
+	}
+
+	/* Write the PLL control settings with the new DSM
+	*/
+
+	writel_relaxed(FIELD_PREP(KDIV_MASK, temp64), pll14xx->base + DIV_CTL1);
+
+	/* Calculate and return the actual applied ppb */
+	applied_ppb = div64_s64((s64) (temp64 - pll14xx->orig_kdiv) * 1000000000,
+			pll14xx->orig_kdiv + 65536 * (s64) pll14xx->orig_mdiv);
+
+	*ppb = (int) applied_ppb;
+
+ exit:
+	return rc;
+}
+
+static unsigned long imx_pll1443x_get_rate(struct clk_imx_pll *pll,
+					   unsigned long parent_rate)
+{
+	struct clk_pll14xx *pll14xx;
+
+	pll14xx = (struct clk_pll14xx *) container_of(pll,
+						struct clk_pll14xx, imx_pll);
+
+	return clk_pll14xx_recalc_rate(&pll14xx->hw, parent_rate);
+}
+
+static int imx_pll1443x_set_rate(struct clk_imx_pll *pll, unsigned long rate,
+				 unsigned long parent_rate)
+{
+	struct clk_pll14xx *pll14xx;
+	int rc = IMX_CLK_PLL_SUCCESS;
+
+	pll14xx = (struct clk_pll14xx *) container_of(pll,
+						struct clk_pll14xx, imx_pll);
+
+	if (clk_pll1443x_set_rate(&pll14xx->hw, rate, parent_rate) < 0)
+		rc = -IMX_CLK_PLL_INVALID_PARAM;
+
+	return rc;
+}
+
+static const struct clk_imx_pll_ops imx_clk_pll1443x_ops = {
+	.set_rate	= imx_pll1443x_set_rate,
+	.get_rate	= imx_pll1443x_get_rate,
+	.adjust		= imx_pll1443x_adjust,
+	.init		= imx_pll1443x_init,
+};
+
+
 struct clk_hw *imx_dev_clk_hw_pll14xx(struct device *dev, const char *name,
 				const char *parent_name, void __iomem *base,
 				const struct imx_pll14xx_clk *pll_clk)
@@ -590,6 +703,13 @@ struct clk_hw *imx_dev_clk_hw_pll14xx(struct device *dev, const char *name,
 		pr_err("failed to register pll %s %d\n", name, ret);
 		kfree(pll);
 		return ERR_PTR(ret);
+	}
+
+	if (pll_clk->type == PLL_1443X) {
+		pll->imx_pll.ops = &imx_clk_pll1443x_ops;
+
+		if (imx_pll_register(&pll->imx_pll, name) < 0)
+			pr_warn("Failed to register %s into imx pll\n", name);
 	}
 
 	return hw;

@@ -14,6 +14,7 @@
 #include <linux/err.h>
 #include <soc/imx/src.h>
 #include "clk.h"
+#include "clk-pll.h"
 
 #define PLL_NUM_OFFSET		0x10
 #define PLL_DENOM_OFFSET	0x20
@@ -47,6 +48,10 @@
  */
 struct clk_pllv3 {
 	struct clk_hw	hw;
+	struct clk_imx_pll	imx_pll;
+	u32 orig_num;
+	u32 orig_denom;
+	u32 orig_div;
 	void __iomem	*base;
 	u32		power_bit;
 	bool		powerup_set;
@@ -139,7 +144,6 @@ static int clk_pllv3_prepare(struct clk_hw *hw)
 
 	return 0;
 }
-
 static void clk_pllv3_unprepare(struct clk_hw *hw)
 {
 	clk_pllv3_do_shared_clks(hw, false);
@@ -440,6 +444,106 @@ static const struct clk_ops clk_pllv3_vf610_ops = {
 	.set_rate	= clk_pllv3_vf610_set_rate,
 };
 
+/**
+ * imx_pllv3_av_adjust - Adjust the Audio pll by ppb.
+ *
+ * This function adjust the audio pll by ppb (part per billion) and returns
+ * the exact number of ppb adjusted.
+ * The adjustment is done by only modifying the Audio PLL Numerator.
+ * Since the pllout = parent * (div + num/denom) and the adjusted Value is
+ *     pllout_new = PLL_out * (1 + ppb/1e9)
+ *     Also pllout_new = parent * (div + new_num/denom)
+ * The new numerator is calculated as the following:
+ *     new_num = (div * ppb * denom + num * 1e9 + num * ppb) / (1e9)
+ */
+
+static int imx_pllv3_av_adjust(struct clk_imx_pll *pll, int *ppb)
+{
+	struct clk_pllv3 *av_pll;
+	u64 temp64;
+	s32 applied_ppb;
+	int rc = IMX_CLK_PLL_SUCCESS;
+
+	int req_ppb = *ppb;
+
+	av_pll = (struct clk_pllv3 *) container_of(pll, struct clk_pllv3,
+						   imx_pll);
+
+	/*Calcultate the new PLL Numerator*/
+	temp64 = (u64) av_pll->orig_denom * av_pll->orig_div * req_ppb
+			+ (u64) av_pll->orig_num * 1000000000
+			+ (u64) av_pll->orig_num * req_ppb;
+
+	do_div(temp64, 1000000000);
+
+	if (temp64 >= av_pll->orig_denom) {
+		rc = -IMX_CLK_PLL_PREC_ERR;
+		goto exit;
+	}
+
+	/*Write the new PLL num*/
+	writel_relaxed((u32) temp64, av_pll->base + av_pll->num_offset);
+
+	/*Calculate and return the actual applied ppb*/
+	applied_ppb = div64_s64((s64) (temp64 - av_pll->orig_num) * 1000000000,
+			av_pll->orig_num
+			+ (s64) av_pll->orig_denom * av_pll->orig_div);
+
+	*ppb = (int) applied_ppb;
+
+exit:
+	return rc;
+
+}
+
+/* This function fetches the original PLL parameters to use
+ * them later for ppb adjustment
+ */
+static void imx_pllv3_av_init(struct clk_imx_pll *pll)
+{
+	struct clk_pllv3 *av_pll;
+
+	av_pll = (struct clk_pllv3 *) container_of(pll, struct clk_pllv3,
+						   imx_pll);
+
+	av_pll->orig_num = readl_relaxed(av_pll->base + av_pll->num_offset);
+	av_pll->orig_denom = readl_relaxed(av_pll->base + av_pll->denom_offset);
+	av_pll->orig_div = readl_relaxed(av_pll->base) & av_pll->div_mask;
+}
+
+static unsigned long imx_pllv3_av_get_rate(struct clk_imx_pll *pll,
+					   unsigned long parent_rate)
+{
+	struct clk_pllv3 *av_pll;
+
+	av_pll = (struct clk_pllv3 *) container_of(pll, struct clk_pllv3,
+						   imx_pll);
+
+	return clk_pllv3_av_recalc_rate(&av_pll->hw, parent_rate);
+}
+
+static int imx_pllv3_av_set_rate(struct clk_imx_pll *pll, unsigned long rate,
+				 unsigned long parent_rate)
+{
+	struct clk_pllv3 *av_pll;
+	int rc = IMX_CLK_PLL_SUCCESS;
+
+	av_pll = (struct clk_pllv3 *) container_of(pll, struct clk_pllv3,
+						   imx_pll);
+
+	if (clk_pllv3_av_set_rate(&av_pll->hw, rate, parent_rate) < 0)
+		rc = -IMX_CLK_PLL_INVALID_PARAM;
+
+	return rc;
+}
+
+static const struct clk_imx_pll_ops imx_clk_pllv3_av_ops = {
+	.set_rate	= imx_pllv3_av_set_rate,
+	.get_rate	= imx_pllv3_av_get_rate,
+	.adjust		= imx_pllv3_av_adjust,
+	.init           = imx_pllv3_av_init,
+};
+
 static unsigned long clk_pllv3_enet_recalc_rate(struct clk_hw *hw,
 						unsigned long parent_rate)
 {
@@ -495,6 +599,7 @@ struct clk_hw *imx_clk_hw_pllv3(enum imx_pllv3_type type, const char *name,
 		fallthrough;
 	case IMX_PLLV3_AV:
 		ops = &clk_pllv3_av_ops;
+		pll->imx_pll.ops = &imx_clk_pllv3_av_ops;
 		break;
 	case IMX_PLLV3_ENET_IMX7:
 		pll->power_bit = IMX7_ENET_PLL_POWER;
@@ -531,6 +636,9 @@ struct clk_hw *imx_clk_hw_pllv3(enum imx_pllv3_type type, const char *name,
 		kfree(pll);
 		return ERR_PTR(ret);
 	}
+
+	if (imx_pll_register(&pll->imx_pll, name) < 0)
+		pr_warn("Failed to register %s into imx pll\n", name);
 
 	return hw;
 }

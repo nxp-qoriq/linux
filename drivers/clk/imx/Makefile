@@ -16,6 +16,7 @@ mxc-clk-objs += clk-gate-93.o
 mxc-clk-objs += clk-gate-exclusive.o
 mxc-clk-objs += clk-pfd.o
 mxc-clk-objs += clk-pfdv2.o
+mxc-clk-objs += clk-pll.o
 mxc-clk-objs += clk-pllv1.o
 mxc-clk-objs += clk-pllv2.o
 mxc-clk-objs += clk-pllv3.o

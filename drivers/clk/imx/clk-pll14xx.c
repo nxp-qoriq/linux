@@ -13,6 +13,7 @@
 #include <linux/jiffies.h>
 
 #include "clk.h"
+#include "clk-pll.h"
 
 #define GNRL_CTL	0x0
 #define DIV_CTL		0x4
@@ -32,11 +33,19 @@
 
 #define LOCK_TIMEOUT_US		10000
 
+#define KDIV_MIN	S16_MIN
+#define KDIV_MAX	S16_MAX
+
 struct clk_pll14xx {
 	struct clk_hw			hw;
 	void __iomem			*base;
+	u32				orig_mdiv;
+	u32				orig_pdiv;
+	u32				orig_sdiv;
+	short int			orig_kdiv;
 	enum imx_pll14xx_type		type;
 	const struct imx_pll14xx_rate_table *rate_table;
+	struct clk_imx_pll		imx_pll;
 	int rate_count;
 };
 
@@ -133,6 +142,31 @@ static unsigned long clk_pll1416x_recalc_rate(struct clk_hw *hw,
 	return fvco;
 }
 
+/* This function calculate the actual rate based on the configured PLL registers */
+static unsigned long __clk_pll1443x_recalc_rate(struct clk_hw *hw,
+						  unsigned long parent_rate)
+{
+	struct clk_pll14xx *pll = to_clk_pll14xx(hw);
+	u32 mdiv, pdiv, sdiv, pll_div_ctl0, pll_div_ctl1;
+	short int kdiv;
+	u64 fvco = parent_rate;
+
+	pll_div_ctl0 = readl_relaxed(pll->base + 4);
+	pll_div_ctl1 = readl_relaxed(pll->base + 8);
+	mdiv = (pll_div_ctl0 & MDIV_MASK) >> MDIV_SHIFT;
+	pdiv = (pll_div_ctl0 & PDIV_MASK) >> PDIV_SHIFT;
+	sdiv = (pll_div_ctl0 & SDIV_MASK) >> SDIV_SHIFT;
+	kdiv = pll_div_ctl1 & KDIV_MASK;
+
+	/* fvco = (m * 65536 + k) * Fin / (p * 65536) */
+	fvco *= (mdiv * 65536 + kdiv);
+	pdiv *= 65536;
+
+	do_div(fvco, pdiv << sdiv);
+
+	return (unsigned long)fvco;
+}
+
 static unsigned long clk_pll1443x_recalc_rate(struct clk_hw *hw,
 						  unsigned long parent_rate)
 {
@@ -140,7 +174,6 @@ static unsigned long clk_pll1443x_recalc_rate(struct clk_hw *hw,
 	const struct imx_pll14xx_rate_table *rate_table = pll->rate_table;
 	u32 mdiv, pdiv, sdiv, pll_div_ctl0, pll_div_ctl1;
 	short int kdiv;
-	u64 fvco = parent_rate;
 	long rate = 0;
 	int i;
 
@@ -163,13 +196,8 @@ static unsigned long clk_pll1443x_recalc_rate(struct clk_hw *hw,
 			rate = rate_table[i].rate;
 	}
 
-	/* fvco = (m * 65536 + k) * Fin / (p * 65536) */
-	fvco *= (mdiv * 65536 + kdiv);
-	pdiv *= 65536;
+	return rate ? (unsigned long) rate : __clk_pll1443x_recalc_rate(hw, parent_rate);
 
-	do_div(fvco, pdiv << sdiv);
-
-	return rate ? (unsigned long) rate : (unsigned long)fvco;
 }
 
 static inline bool clk_pll14xx_mp_change(const struct imx_pll14xx_rate_table *rate,
@@ -417,6 +445,118 @@ static const struct clk_ops clk_pll1443x_ops = {
 	.set_rate	= clk_pll1443x_set_rate,
 };
 
+/* This function fetches the original PLL parameters to use
+ * them later for ppb adjustment
+ */
+static void imx_pll1443x_init(struct clk_imx_pll *pll)
+{
+	struct clk_pll14xx *pll14xx;
+	short int kdiv;
+	u32 mdiv, pdiv, sdiv, pll_div_ctl0, pll_div_ctl1;
+
+	pll14xx = (struct clk_pll14xx *) container_of(pll,
+					struct clk_pll14xx, imx_pll);
+
+	pll_div_ctl0 = readl_relaxed(pll14xx->base + 4);
+	pll_div_ctl1 = readl_relaxed(pll14xx->base + 8);
+	mdiv = (pll_div_ctl0 & MDIV_MASK) >> MDIV_SHIFT;
+	pdiv = (pll_div_ctl0 & PDIV_MASK) >> PDIV_SHIFT;
+	sdiv = (pll_div_ctl0 & SDIV_MASK) >> SDIV_SHIFT;
+	kdiv = (pll_div_ctl1 & KDIV_MASK) >> KDIV_SHIFT;
+
+	pll14xx->orig_kdiv = kdiv;
+	pll14xx->orig_mdiv = mdiv;
+	pll14xx->orig_pdiv = pdiv;
+	pll14xx->orig_sdiv = sdiv;
+}
+
+/**
+ * imx_pll1443x_adjust - Adjust the Audio pll by ppb.
+ *
+ * This function adjust the audio pll by ppb (part per billion) and returns
+ * the exact number of ppb adjusted.
+ * The adjustment is done by only modifying the delta-sigma modulator(DSM) part
+ * of the audio PLL.
+ * Since the pllout = (parent_rate * (m + k/65536)) / (p * 2^s)
+ * and the adjusted value is
+ *    pllout_new = pllout * (1 + ppb/1e9) which equals:
+ *    (parent_rate * (m + k_new/65536)) / (p * 2^s)
+ * The new DSM (k_new) is calculated as the following:
+ *    k_new = (1e9 * k + (m * 65536 + k) * ppb) / (1e9)
+ */
+
+static int imx_pll1443x_adjust(struct clk_imx_pll *pll, int *ppb)
+{
+	s64 temp64;
+	s64 applied_ppb;
+	struct clk_pll14xx *pll14xx;
+	int rc = IMX_CLK_PLL_SUCCESS;
+
+	int req_ppb = *ppb;
+
+	pll14xx = (struct clk_pll14xx *) container_of(pll,
+						struct clk_pll14xx, imx_pll);
+
+	/*Calcultate the new DSM value*/
+	temp64 = ((s64) pll14xx->orig_kdiv * 1000000000)
+			+ ((s64) pll14xx->orig_mdiv * 65536 + (s64) pll14xx->orig_kdiv) * req_ppb;
+
+	temp64 = div_s64(temp64, 1000000000);
+
+	if (temp64 > KDIV_MAX || temp64 < KDIV_MIN) {
+		rc = -IMX_CLK_PLL_PREC_ERR;
+		goto exit;
+	}
+
+	/* Write the PLL control settings with the new DSM
+	*/
+
+	writel_relaxed(temp64, pll14xx->base + 0x8);
+
+	/*Calculate and return the actual applied ppb*/
+	applied_ppb = div64_s64((s64) (temp64 - pll14xx->orig_kdiv) * 1000000000,
+			pll14xx->orig_kdiv + 65536 * (s64) pll14xx->orig_mdiv);
+
+	*ppb = (int) applied_ppb;
+
+ exit:
+	return rc;
+}
+
+static unsigned long imx_pll1443x_get_rate(struct clk_imx_pll *pll,
+					   unsigned long parent_rate)
+{
+	struct clk_pll14xx *pll14xx;
+
+	pll14xx = (struct clk_pll14xx *) container_of(pll,
+						struct clk_pll14xx, imx_pll);
+
+	return __clk_pll1443x_recalc_rate(&pll14xx->hw, parent_rate);
+}
+
+static int imx_pll1443x_set_rate(struct clk_imx_pll *pll, unsigned long rate,
+				 unsigned long parent_rate)
+{
+	struct clk_pll14xx *pll14xx;
+	int rc = IMX_CLK_PLL_SUCCESS;
+
+	pll14xx = (struct clk_pll14xx *) container_of(pll,
+						struct clk_pll14xx, imx_pll);
+
+	if (clk_pll1443x_set_rate(&pll14xx->hw, rate, parent_rate) < 0)
+		rc = -IMX_CLK_PLL_INVALID_PARAM;
+
+	return rc;
+}
+
+static const struct clk_imx_pll_ops imx_clk_pll1443x_ops = {
+	.set_rate	= imx_pll1443x_set_rate,
+	.get_rate	= imx_pll1443x_get_rate,
+	.adjust		= imx_pll1443x_adjust,
+	.init		= imx_pll1443x_init,
+};
+
+
 struct clk_hw *imx_dev_clk_hw_pll14xx(struct device *dev, const char *name,
 				const char *parent_name, void __iomem *base,
 				const struct imx_pll14xx_clk *pll_clk)
@@ -471,6 +611,13 @@ struct clk_hw *imx_dev_clk_hw_pll14xx(struct device *dev, const char *name,
 			__func__, name, ret);
 		kfree(pll);
 		return ERR_PTR(ret);
+	}
+
+	if (pll_clk->type == PLL_1443X) {
+		pll->imx_pll.ops = &imx_clk_pll1443x_ops;
+
+		if (imx_pll_register(&pll->imx_pll, name) < 0)
+			pr_warn("Failed to register %s into imx pll\n", name);
 	}
 
 	return hw;

@@ -612,6 +612,17 @@
 				fsl,sdma-ram-script-name = "imx/sdma/sdma-imx7d.bin";
 			};
 
+			gpt1: gpt@302d0000 {
+				compatible = "fsl,imx8mq-gpt", "fsl,imx7d-gpt";
+				reg = <0x302d0000 0x10000>;
+				interrupts = <GIC_SPI 55 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&clk IMX8MM_CLK_GPT1_ROOT>,
+					 <&clk IMX8MM_CLK_GPT1_ROOT>,
+					 <&clk IMX8MM_CLK_GPT_3M>;
+				clock-names = "ipg", "per", "osc_per";
+				status = "disabled";
+			};
+
 			iomuxc: pinctrl@30330000 {
 				compatible = "fsl,imx8mm-iomuxc";
 				reg = <0x30330000 0x10000>;

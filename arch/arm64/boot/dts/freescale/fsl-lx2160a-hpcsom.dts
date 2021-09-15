@@ -52,6 +52,13 @@
 
 &i2c0 {
 	status = "okay";
+
+	temp1: temperature-sensor@4c {
+		compatible = "nxp,sa56004";
+		reg = <0x4c>;
+		vcc-supply = <&sb_3v3>;
+		#thermal-sensor-cells = <1>;
+	};
 };
 
 &i2c2 {

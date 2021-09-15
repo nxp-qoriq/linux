@@ -1,0 +1,33 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2020-2021 NXP
+ */
+
+/dts-v1/;
+
+#include "imx8mm-evk.dts"
+
+/* AVB HW timer*/
+&gpt1 {
+	compatible = "fsl,avb-gpt";
+	timer-channel = <1>; /* Use output compare channel 1*/
+	prescale = <1>;
+
+	clocks = <&clk IMX8MM_CLK_GPT1_ROOT>,
+		 <&clk IMX8MM_CLK_GPT1_ROOT>;
+	clock-names = "ipg", "per";
+
+	/* Make the GPT clk root derive from the audio PLL*/
+	assigned-clocks = <&clk IMX8MM_CLK_GPT1>, <&clk IMX8MM_CLK_GPT1>;
+	assigned-clock-parents = <&clk IMX8MM_AUDIO_PLL1_OUT>;
+	assigned-clock-rates = <0>, <49152000>;
+
+	status = "okay";
+};
+
+&fec1 {
+	fsl,rx-phy-delay-100-ns = <670>;
+	fsl,tx-phy-delay-100-ns = <670>;
+	fsl,rx-phy-delay-1000-ns = <0>;
+	fsl,tx-phy-delay-1000-ns = <0>;
+};

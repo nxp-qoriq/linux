@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2021 NXP
+ */
+
+/dts-v1/;
+
+#include "imx8mp-evk.dts"
+
+/* AVB HW timer*/
+&gpt1 {
+	compatible = "fsl,avb-gpt";
+	timer-channel = <1>; /* Use output compare channel 1*/
+	rec-channel = <1 0 1>; // capture channel, eth port, ENET TC id
+	prescale = <1>;
+	domain = <0>;
+
+	clocks = <&clk IMX8MP_CLK_GPT1_ROOT>,
+		 <&clk IMX8MP_CLK_GPT1_ROOT>,
+		 <&clk IMX8MP_AUDIO_PLL1>;
+	clock-names = "ipg", "per", "audio_pll";
+
+	/* Make the GPT clk root derive from the audio PLL*/
+	assigned-clocks = <&clk IMX8MP_CLK_GPT1>, <&clk IMX8MP_CLK_GPT1>;
+	assigned-clock-parents = <&clk IMX8MP_AUDIO_PLL1_OUT>;
+	assigned-clock-rates = <0>, <49152000>;
+
+	gpt1_capin1_sel = <&gpr 0x4 2>;
+
+	status = "okay";
+};
+
+&fec {
+       fsl,rx-phy-delay-100-ns = <670>;
+       fsl,tx-phy-delay-100-ns = <670>;
+       fsl,rx-phy-delay-1000-ns = <0>;
+       fsl,tx-phy-delay-1000-ns = <0>;
+};
+
+&ethphy1 {
+	eee-broken-100tx;
+};

@@ -36,7 +36,8 @@
 #include <net/genetlink.h>
 #include <net/sock.h>
 
-#define PHY_STATE_TIME	HZ
+#define PHY_STATE_TIME		HZ
+#define PHY_STATE_TIME_MS      100
 
 #define PHY_STATE_STR(_state)			\
 	case PHY_##_state:			\
@@ -1240,7 +1241,7 @@ void phy_state_machine(struct work_struct *work)
 	 */
 	mutex_lock(&phydev->lock);
 	if (phy_polling_mode(phydev) && phy_is_started(phydev))
-		phy_queue_state_machine(phydev, PHY_STATE_TIME);
+		phy_queue_state_machine(phydev, (PHY_STATE_TIME_MS * HZ) / 1000);
 	mutex_unlock(&phydev->lock);
 }
 

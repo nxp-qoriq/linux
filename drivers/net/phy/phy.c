@@ -36,7 +36,8 @@
 #include <net/genetlink.h>
 #include <net/sock.h>
 
-#define PHY_STATE_TIME	HZ
+#define PHY_STATE_TIME		HZ
+#define PHY_STATE_TIME_MS      100
 
 #define PHY_STATE_STR(_state)			\
 	case PHY_##_state:			\
@@ -1534,7 +1535,7 @@ static enum phy_state_work _phy_state_machine(struct phy_device *phydev)
 	 * called from phy_disconnect() synchronously.
 	 */
 	if (phy_polling_mode(phydev) && phy_is_started(phydev))
-		phy_queue_state_machine(phydev, PHY_STATE_TIME);
+		phy_queue_state_machine(phydev, (PHY_STATE_TIME_MS * HZ) / 1000);
 
 	return state_work;
 }

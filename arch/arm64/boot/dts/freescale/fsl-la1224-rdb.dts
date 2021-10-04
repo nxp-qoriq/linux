@@ -68,9 +68,9 @@
 			compatible = "fsl,dpaa2-ptp";
 			fsl,cksel = <0x00>;
 			fsl,extts-fifo;
-			fsl,max-adj = <0xda335ff>;
+			fsl,max-adj = <0xEE6B27F>;
 			fsl,tclk-period = <0x0a>;
-			fsl,tmr-add = <0xd0555556>;
+			fsl,tmr-add = <0xCCCCCCCD>;
 			fsl,tmr-fiper1 = <0x3b9ac9f6>;
 			fsl,tmr-fiper2 = <0x3b9ac9f6>;
 			fsl,tmr-fiper3 = <0x3b9ac9f6>;
@@ -300,7 +300,7 @@
 		P13 {
 			gpio-hog;
 			gpios = <11 GPIO_ACTIVE_HIGH>;
-			output-high;
+			output-low;
 			line-name = "cfg_ieee_src[1]";
 		};
 

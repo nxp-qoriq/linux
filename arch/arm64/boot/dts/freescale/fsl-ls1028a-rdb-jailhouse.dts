@@ -53,3 +53,7 @@
 &duart1 {
 	status = "disabled";
 };
+
+&gpio3 {
+	status = "disabled";
+};

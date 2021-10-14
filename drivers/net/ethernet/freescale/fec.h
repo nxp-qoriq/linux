@@ -615,6 +615,13 @@ struct fec_enet_private {
 	u32 cycle_speed;
 	int hwts_rx_en;
 	int hwts_tx_en;
+
+	/* Transmit and receive latency, depending on link speed, for
+	 * packets timestamps in ns
+	 */
+	u32 rx_tstamp_latency;
+	u32 tx_tstamp_latency;
+
 	struct delayed_work time_keep;
 	struct regulator *reg_phy;
 	struct fec_stop_mode_gpr stop_gpr;
@@ -648,6 +655,14 @@ struct fec_enet_private {
 	u64 perout_stime;
 
 	struct imx_sc_ipc *ipc_handle;
+
+	/* Configured rx/tx timestamps delays for different link speeds
+	 * to compensate for FEC-PHY latency in ns
+	 */
+	u32 rx_delay_100;
+	u32 tx_delay_100;
+	u32 rx_delay_1000;
+	u32 tx_delay_1000;
 
 	u64 ethtool_stats[];
 };

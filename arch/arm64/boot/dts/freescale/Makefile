@@ -17,7 +17,6 @@ dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1028a-rdb-jailhouse.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1028a-rdb-dpdk.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1028a-rdb-jailhouse-without-enetc.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1028a-rdb-sdk-bm.dtb
-dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1028a-rdb-dsa-swp5-eno3.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fii-ls1028a-tsn.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1043a-qds.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1043a-qds-sdk.dtb

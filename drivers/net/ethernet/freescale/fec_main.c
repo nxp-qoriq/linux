@@ -1404,6 +1404,12 @@ fec_enet_tx_queue(struct net_device *ndev, u16 queue_id)
 			struct bufdesc_ex *ebdp = (struct bufdesc_ex *)bdp;
 
 			fec_enet_hwtstamp(fep, fec32_to_cpu(ebdp->ts), &shhwtstamps);
+
+			/* Adjust for TX MAC-PHY latency
+			 */
+			shhwtstamps.hwtstamp =
+				ktime_add_ns(shhwtstamps.hwtstamp, fep->tx_tstamp_latency);
+
 			skb_tstamp_tx(skb, &shhwtstamps);
 		}
 
@@ -1626,9 +1632,15 @@ fec_enet_rx_queue(struct net_device *ndev, int budget, u16 queue_id)
 		skb->protocol = eth_type_trans(skb, ndev);
 
 		/* Get receive timestamp from the skb */
-		if (fep->hwts_rx_en && fep->bufdesc_ex)
+		if (fep->hwts_rx_en && fep->bufdesc_ex) {
 			fec_enet_hwtstamp(fep, fec32_to_cpu(ebdp->ts),
 					  skb_hwtstamps(skb));
+
+			/* Adjust for RX MAC-PHY latency
+			 */
+			skb_hwtstamps(skb)->hwtstamp =
+				ktime_sub_ns(skb_hwtstamps(skb)->hwtstamp, fep->rx_tstamp_latency);
+		}
 
 		if (fep->bufdesc_ex &&
 		    (fep->csum_flags & FLAG_RX_CSUM_ENABLED)) {
@@ -1865,6 +1877,20 @@ static void fec_enet_adjust_link(struct net_device *ndev)
 		if (phy_dev->speed != fep->speed) {
 			fep->speed = phy_dev->speed;
 			status_change = 1;
+		}
+
+		switch (fep->speed) {
+		case SPEED_100:
+			fep->rx_tstamp_latency = fep->rx_delay_100;
+			fep->tx_tstamp_latency = fep->tx_delay_100;
+			break;
+		case SPEED_1000:
+			fep->rx_tstamp_latency = fep->rx_delay_1000;
+			fep->tx_tstamp_latency = fep->tx_delay_1000;
+			break;
+		default:
+			fep->rx_tstamp_latency = 0;
+			fep->tx_tstamp_latency = 0;
 		}
 
 		/* if any of the above changed restart the FEC */
@@ -4002,6 +4028,18 @@ fec_probe(struct platform_device *pdev)
 		}
 		fep->reg_phy = NULL;
 	}
+
+	if (of_property_read_u32(np, "fsl,rx-phy-delay-100-ns", &fep->rx_delay_100))
+		fep->rx_delay_100 = 600;
+
+	if (of_property_read_u32(np, "fsl,tx-phy-delay-100-ns", &fep->tx_delay_100))
+		fep->tx_delay_100 = 0;
+
+	if (of_property_read_u32(np, "fsl,rx-phy-delay-1000-ns", &fep->rx_delay_1000))
+		fep->rx_delay_1000 = 0;
+
+	if (of_property_read_u32(np, "fsl,tx-phy-delay-1000-ns", &fep->tx_delay_1000))
+		fep->tx_delay_1000 = 0;
 
 	pm_runtime_set_autosuspend_delay(&pdev->dev, FEC_MDIO_PM_TIMEOUT);
 	pm_runtime_use_autosuspend(&pdev->dev);

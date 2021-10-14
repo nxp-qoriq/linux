@@ -170,6 +170,30 @@ properties:
       If present, each MAC has their exclusive MDIO bus in current board
       design, otherwise multiple MACs share one MDIO bus to reduce Pins utilize.
 
+  fsl,rx-phy-delay-100-ns:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description:
+      If present, should specify the delay (MAC-PHY) compensation
+      in ns to be applied on packets timestamps on receive for 100 Mbps link speed
+
+  fsl,tx-phy-delay-100-ns:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description:
+      If present, should specify the delay (MAC-PHY) compensation
+      in ns to be applied on packets timestamps on transmit for 100 Mbps link speed
+
+  fsl,rx-phy-delay-1000-ns:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description:
+      If present, should specify the delay (MAC-PHY) compensation
+      in ns to be applied on packets timestamps on receive for 1 Gbps link speed
+
+  fsl,tx-phy-delay-1000-ns:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description:
+      If present, should specify the delay (MAC-PHY) compensation
+      in ns to be applied on packets timestamps on transmit for 1 Gbps link speed
+
   mdio:
     type: object
     description:

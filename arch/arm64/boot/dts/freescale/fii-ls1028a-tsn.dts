@@ -1,0 +1,325 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Device Tree file for Foxconn LS1028A TSN Board.
+ *
+ * Copyright 2020-2022 NXP
+ *
+ * Wes Li <wes.li@nxp.com>
+ * Vladimir Oltean <vladimir.oltean@nxp.com>
+ */
+
+/dts-v1/;
+#include "fsl-ls1028a.dtsi"
+
+/ {
+	model = "Foxconn LS1028A TSN Board";
+	compatible = "fsl,ls1028a-rdb", "fsl,ls1028a";
+
+	aliases {
+		crypto = &crypto;
+		serial0 = &duart0;
+		serial1 = &duart1;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+
+	memory@80000000 {
+		device_type = "memory";
+		reg = <0x0 0x80000000 0x1 0x0000000>;
+	};
+
+	sys_mclk: clock-mclk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <25000000>;
+	};
+
+	reg_1p8v: regulator-1p8v {
+		compatible = "regulator-fixed";
+		regulator-name = "1P8V";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		regulator-always-on;
+	};
+
+	sb_3v3: regulator-sb3v3 {
+		compatible = "regulator-fixed";
+		regulator-name = "3v3_vbus";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+};
+
+&dspi2 {
+	bus-num = <2>;
+	status = "okay";
+
+	sja1105_switch0: ethernet-switch@0 {
+		reg = <0x0>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "nxp,sja1105s";
+		dsa,member = <1 1>;
+		/* 20 MHz */
+		spi-max-frequency = <20000000>;
+		/* Sample data on trailing clock edge */
+		spi-cpha;
+		/* SPI controller settings for SJA1105 timing requirements */
+		fsl,spi-cs-sck-delay = <1000>;
+		fsl,spi-sck-cs-delay = <1000>;
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				label = "sw0p0";
+				phy-handle = <&sw0p0_rgmii_phy>;
+				phy-mode = "rgmii-id";
+				reg = <0>;
+			};
+
+			port@1 {
+				label = "sw0p1";
+				phy-handle = <&sw0p1_rgmii_phy>;
+				phy-mode = "rgmii-id";
+				reg = <1>;
+			};
+
+			port@2 {
+				label = "sw0p2";
+				phy-handle = <&sw0p2_rgmii_phy>;
+				phy-mode = "rgmii-id";
+				reg = <2>;
+			};
+
+			port@3 {
+				reg = <3>;
+				status = "disabled";
+			};
+
+			port@4 {
+				ethernet = <&mscc_felix_port0>;
+				phy-mode = "sgmii";
+				reg = <4>;
+
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
+			};
+		};
+	};
+
+	/* Daughter card 1 */
+	sja1105_switch1: ethernet-switch@1 {
+		reg = <0x1>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "nxp,sja1105s";
+		dsa,member = <2 2>;
+		/* 20 MHz */
+		spi-max-frequency = <20000000>;
+		spi-cpha;
+		fsl,spi-cs-sck-delay = <1000>;
+		fsl,spi-sck-cs-delay = <1000>;
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				label = "sw1p0";
+				phy-handle = <&sw1p0_rgmii_phy>;
+				phy-mode = "rgmii-id";
+				reg = <0>;
+			};
+
+			port@1 {
+				label = "sw1p1";
+				phy-handle = <&sw1p1_rgmii_phy>;
+				phy-mode = "rgmii-id";
+				reg = <1>;
+			};
+
+			port@2 {
+				label = "sw1p2";
+				phy-handle = <&sw1p2_rgmii_phy>;
+				phy-mode = "rgmii-id";
+				reg = <2>;
+			};
+
+			port@3 {
+				label = "sw1p3";
+				phy-handle = <&sw1p3_rgmii_phy>;
+				phy-mode = "rgmii-id";
+				reg = <3>;
+			};
+
+			port@4 {
+				ethernet = <&mscc_felix_port2>;
+				phy-mode = "sgmii";
+				reg = <4>;
+
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
+			};
+		};
+	};
+};
+
+&duart0 {
+	status = "okay";
+};
+
+&duart1 {
+	status = "okay";
+};
+
+&enetc_mdio_pf3 {
+	status = "okay";
+
+	/*
+	 * PHYs on main board
+	 */
+
+	/* RTL8211FSI */
+	sw0p0_rgmii_phy: ethernet-phy@7 {
+		reg = <0x7>;
+	};
+
+	/* VSC8502 SGMII dual PHY */
+	sw0p1_rgmii_phy: ethernet-phy@0 {
+		reg = <0x0>;
+	};
+
+	sw0p2_rgmii_phy: ethernet-phy@1 {
+		reg = <0x1>;
+	};
+
+	/*
+	 * PHYs on daughter board 1
+	 */
+
+	/* RTL8211FSI */
+	sw1p0_rgmii_phy: ethernet-phy@9 {
+		reg = <0x9>;
+	};
+
+	sw1p1_rgmii_phy: ethernet-phy@8 {
+		reg = <0x8>;
+	};
+
+	/* VSC8502 RGMII dual PHY */
+	sw1p2_rgmii_phy: ethernet-phy@5 {
+		reg = <0x5>;
+	};
+
+	sw1p3_rgmii_phy: ethernet-phy@4 {
+		reg = <0x4>;
+	};
+};
+
+&enetc_port0 {
+	status = "disabled";
+};
+
+&enetc_port1 {
+	status = "disabled";
+};
+
+&enetc_port2 {
+	status = "okay";
+};
+
+&esdhc {
+	cap-sd-highspeed;
+	status = "okay";
+};
+
+&esdhc1 {
+	mmc-hs200-1_8v;
+	status = "okay";
+};
+
+&i2c0 {
+	status = "okay";
+
+	i2c-mux@77 {
+		compatible = "nxp,pca9847";
+		reg = <0x77>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		i2c@2 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x02>;
+
+			current-monitor@40 {
+				compatible = "ti,ina220";
+				reg = <0x40>;
+				shunt-resistor = <500>;
+			};
+		};
+
+		i2c@3 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x3>;
+
+			temperature-sensor@4c {
+				compatible = "nxp,sa56004";
+				reg = <0x4c>;
+				vcc-supply = <&sb_3v3>;
+			};
+
+			rtc@51 {
+				compatible = "nxp,pcf2129";
+				reg = <0x51>;
+			};
+		};
+	};
+};
+
+&mscc_felix {
+	status = "okay";
+};
+
+/* Master for SJA1105 on main board */
+&mscc_felix_port0 {
+	phy-mode = "sgmii";
+	status = "okay";
+
+	fixed-link {
+		speed = <1000>;
+		full-duplex;
+	};
+};
+
+/* Master for SJA1105 on daughter card 1 */
+&mscc_felix_port2 {
+	phy-mode = "sgmii";
+	status = "okay";
+
+	fixed-link {
+		speed = <1000>;
+		full-duplex;
+	};
+};
+
+&mscc_felix_port4 {
+	ethernet = <&enetc_port2>;
+	status = "okay";
+};
+
+&hdptx0 {
+	lane-mapping = <0x4e>;
+	status = "okay";
+};

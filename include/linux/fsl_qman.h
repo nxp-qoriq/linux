@@ -1,4 +1,5 @@
 /* Copyright 2008-2012 Freescale Semiconductor, Inc.
+ * Copyright 2019-2023 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -2065,6 +2066,9 @@ const cpumask_t *qman_affine_cpus(void);
  * member of the mask returned from qman_affine_cpus().
  */
 u16 qman_affine_channel(int cpu);
+#ifdef CONFIG_FSL_DPAA_ETHERCAT
+u16 qman_affine_channel_ethercat(int cpu);
+#endif
 
 /**
  * qman_get_affine_portal - return the portal pointer affine to cpu
@@ -2072,6 +2076,9 @@ u16 qman_affine_channel(int cpu);
  *
  */
 void *qman_get_affine_portal(int cpu);
+#ifdef CONFIG_FSL_DPAA_ETHERCAT
+void *qman_get_affine_portal_ethercat(int cpu);
+#endif
 
 /**
  * qman_poll_dqrr - process DQRR (fast-path) entries

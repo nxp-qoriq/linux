@@ -1,4 +1,5 @@
 /* Copyright 2008-2012 Freescale Semiconductor, Inc.
+ * Copyright 2019-2023 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -776,6 +777,28 @@ fail_eqcr:
 	return NULL;
 }
 
+#ifdef CONFIG_FSL_DPAA_ETHERCAT
+static struct qman_portal ethercat_portal;
+static u16 ethercat_channel;
+static DEFINE_SPINLOCK(ethercat_mask_lock);
+
+struct qman_portal *qman_create_affine_portal_ethercat
+			(const struct qm_portal_config *config,
+			const struct qman_cgrs *cgrs)
+{
+	struct qman_portal *res;
+	struct qman_portal *portal = &ethercat_portal;
+
+	res = qman_create_portal(portal, config, cgrs);
+	if (res) {
+		spin_lock(&ethercat_mask_lock);
+		ethercat_channel = config->public_cfg.channel;
+		spin_unlock(&ethercat_mask_lock);
+	}
+	return res;
+}
+#endif
+
 struct qman_portal *qman_create_affine_portal(
 			const struct qm_portal_config *config,
 			const struct qman_cgrs *cgrs)
@@ -1411,6 +1434,20 @@ void *qman_get_affine_portal(int cpu)
 	return affine_portals[cpu];
 }
 EXPORT_SYMBOL(qman_get_affine_portal);
+
+#ifdef CONFIG_FSL_DPAA_ETHERCAT
+u16 qman_affine_channel_ethercat(int cpu)
+{
+	return ethercat_channel;
+}
+EXPORT_SYMBOL(qman_affine_channel_ethercat);
+
+void *qman_get_affine_portal_ethercat(int cpu)
+{
+	return &ethercat_portal;
+}
+EXPORT_SYMBOL(qman_get_affine_portal_ethercat);
+#endif
 
 int qman_p_poll_dqrr(struct qman_portal *p, unsigned int limit)
 {

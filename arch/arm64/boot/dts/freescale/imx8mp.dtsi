@@ -455,7 +455,6 @@
 			domain-index = <14>;
 			domain-name = "ispdwp";
 			parent-domains = <&mediamix_pd>;
-			clocks = <&clk IMX8MP_CLK_MEDIA_ISP>;
 		};
 
 		mipi_phy1_pd: mipiphy1-pd {
@@ -2052,6 +2051,7 @@
 				phys = <&usb3_phy0>, <&usb3_phy0>;
 				phy-names = "usb2-phy", "usb3-phy";
 				snps,dis-u2-freeclk-exists-quirk;
+				snps,usb2-lpm-disable;
 				status = "disabled";
 			};
 
@@ -2095,6 +2095,7 @@
 				phys = <&usb3_phy1>, <&usb3_phy1>;
 				phy-names = "usb2-phy", "usb3-phy";
 				snps,dis-u2-freeclk-exists-quirk;
+				snps,usb2-lpm-disable;
 				status = "disabled";
 			};
 		};

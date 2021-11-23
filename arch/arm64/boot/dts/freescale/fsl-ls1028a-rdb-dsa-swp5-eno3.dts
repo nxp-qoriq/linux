@@ -11,6 +11,12 @@
 /dts-v1/;
 #include "fsl-ls1028a-rdb.dts"
 
+&enetc_port2 {
+	fixed-link {
+		pause;
+	};
+};
+
 &enetc_port3 {
 	status = "okay";
 };
@@ -19,6 +25,10 @@
 	label = "swp4";
 	/delete-property/ ethernet;
 	status = "okay";
+
+	fixed-link {
+		pause;
+	};
 };
 
 &mscc_felix_port5 {

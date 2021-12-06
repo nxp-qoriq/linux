@@ -20,8 +20,8 @@
 			arch = "arm64";
 			os = "linux";
 			compression = "gzip";
-			load = <0x80080000>;
-			entry = <0x80080000>;
+			load = <0x84080000>;
+			entry = <0x84080000>;
 		};
 		fdt@1 {
 			description = "Flattened Device Tree blob";

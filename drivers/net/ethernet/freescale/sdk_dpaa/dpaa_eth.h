@@ -1,5 +1,5 @@
 /* Copyright 2008-2012 Freescale Semiconductor Inc.
- * Copyright 2019 NXP
+ * Copyright 2019-2023 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -414,6 +414,11 @@ struct dpa_priv_s {
 #endif
 #ifdef CONFIG_FSL_DPAA_CEETM
 	bool ceetm_en; /* CEETM QoS enabled */
+#endif
+
+#ifdef CONFIG_FSL_DPAA_ETHERCAT
+	uint16_t ethercat_channel;  /* "fsl,qman-channel-id" */
+	struct qman_portal *p;
 #endif
 };
 

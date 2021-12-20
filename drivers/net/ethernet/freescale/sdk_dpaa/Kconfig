@@ -96,6 +96,15 @@ config FSL_DPAA_1588
         help
          Enable IEEE1588 support code.
 
+config FSL_DPAA_ETHERCAT
+        bool "Enable DPAA Ethercat support"
+        depends on FSL_SDK_DPAA_ETH
+        default n
+        help
+         Enable DPAA Ethercat support code, if enabling this feature, will create a new
+	 QMan Portal for Ethercat port, and isolate the last cpu core for Ethercat traffic.
+         Regular ethernet traffic will NOT be in the isolated core.
+
 config FSL_DPAA_ETH_MAX_BUF_COUNT
 	int "Maximum number of buffers in the private bpool"
 	depends on FSL_SDK_DPAA_ETH

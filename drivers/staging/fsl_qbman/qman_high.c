@@ -778,21 +778,22 @@ fail_eqcr:
 }
 
 #ifdef CONFIG_FSL_DPAA_ETHERCAT
-static struct qman_portal ethercat_portal;
-static u16 ethercat_channel;
+static struct qman_portal ethercat_portal[NR_CPUS];
+static u16 ethercat_channel[NR_CPUS];
 static DEFINE_SPINLOCK(ethercat_mask_lock);
 
 struct qman_portal *qman_create_affine_portal_ethercat
 			(const struct qm_portal_config *config,
-			const struct qman_cgrs *cgrs)
+			const struct qman_cgrs *cgrs, int cpu)
 {
 	struct qman_portal *res;
-	struct qman_portal *portal = &ethercat_portal;
+	struct qman_portal *portal = NULL;
 
+	portal = &ethercat_portal[cpu];
 	res = qman_create_portal(portal, config, cgrs);
 	if (res) {
 		spin_lock(&ethercat_mask_lock);
-		ethercat_channel = config->public_cfg.channel;
+		ethercat_channel[cpu] = config->public_cfg.channel;
 		spin_unlock(&ethercat_mask_lock);
 	}
 	return res;
@@ -1438,13 +1439,13 @@ EXPORT_SYMBOL(qman_get_affine_portal);
 #ifdef CONFIG_FSL_DPAA_ETHERCAT
 u16 qman_affine_channel_ethercat(int cpu)
 {
-	return ethercat_channel;
+	return ethercat_channel[cpu];
 }
 EXPORT_SYMBOL(qman_affine_channel_ethercat);
 
 void *qman_get_affine_portal_ethercat(int cpu)
 {
-	return &ethercat_portal;
+	return &ethercat_portal[cpu];
 }
 EXPORT_SYMBOL(qman_get_affine_portal_ethercat);
 #endif

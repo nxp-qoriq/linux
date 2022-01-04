@@ -63,6 +63,7 @@ static const char rtx[][3] = {
 #define DPAA_ETH_MAX_PAD (L1_CACHE_BYTES * 8)
 
 static u32 dpa_priv_bpid;
+static u32 dpa_priv_cpuid;
 
 #ifdef CONFIG_FSL_DPAA_DBG_LOOP
 struct net_device *dpa_loop_netdevs[20];
@@ -913,6 +914,7 @@ static int dpaa_ethercat_probe(struct platform_device *_of_dev)
 	struct fm_port_fqs port_fqs;
 	struct dpa_buffer_layout_s *buf_layout = NULL;
 	struct mac_device *mac_dev;
+	u32 last_cpu = 0;
 
 	dev = &_of_dev->dev;
 
@@ -929,6 +931,16 @@ static int dpaa_ethercat_probe(struct platform_device *_of_dev)
 	if (err) {
 		dev_err(dev, "Cannot find buffer pool ID in the device tree\n");
 		return -EINVAL;
+	}
+
+	last_cpu = qman_get_affine_last_cpu();
+	err = of_property_read_u32(dpa_node, "fsl,cpuid", &dpa_priv_cpuid);
+	if (err) {
+		dev_warn(dev, "Cannot find cpuid in the device tree, using the last core\n");
+		dpa_priv_cpuid = last_cpu;
+	} else if (dpa_priv_cpuid > last_cpu) {
+		dev_warn(dev, "Invalid cpuid in the device tree, using the last core\n");
+		dpa_priv_cpuid = last_cpu;
 	}
 
 	dpa_bp = (dpa_bpid2pool(dpa_priv_bpid)) ? :
@@ -1015,9 +1027,9 @@ static int dpaa_ethercat_probe(struct platform_device *_of_dev)
 		goto bp_create_failed;
 
 	priv->mac_dev = mac_dev;
-	priv->ethercat_channel = (u16)qman_affine_channel_ethercat(0);
+	priv->ethercat_channel = (u16)qman_affine_channel_ethercat(dpa_priv_cpuid);
 	priv->channel = priv->ethercat_channel;
-	priv->p = qman_get_affine_portal_ethercat(0);
+	priv->p = qman_get_affine_portal_ethercat(dpa_priv_cpuid);
 
 	dpa_fq_setup_ethercat(priv, &private_fq_cbs, priv->mac_dev->port_dev[TX]);
 
@@ -1092,9 +1104,10 @@ static int dpaa_ethercat_probe(struct platform_device *_of_dev)
 	if (err < 0)
 		goto netdev_init_failed;
 
-	pr_info("Ethercat port:%02hx:%02hx:%02hx:%02hx:%02hx:%02hx, name:%s\n",
+	pr_info("Ethercat port:%02hx:%02hx:%02hx:%02hx:%02hx:%02hx bpid:%d cpu:%d\n",
 		mac_dev->addr[0], mac_dev->addr[1], mac_dev->addr[2],
-		mac_dev->addr[3], mac_dev->addr[4], mac_dev->addr[5], net_dev->name);
+		mac_dev->addr[3], mac_dev->addr[4], mac_dev->addr[5],
+		dpa_priv_bpid, dpa_priv_cpuid);
 
 #ifdef CONFIG_PM
 	device_set_wakeup_capable(dev, true);

@@ -236,7 +236,7 @@ struct qman_portal *qman_create_portal(
 #ifdef CONFIG_FSL_DPAA_ETHERCAT
 struct qman_portal *qman_create_affine_portal_ethercat
 			(const struct qm_portal_config *config,
-			const struct qman_cgrs *cgrs);
+			const struct qman_cgrs *cgrs, int cpu);
 #endif
 struct qman_portal *qman_create_affine_portal(
 			const struct qm_portal_config *config,

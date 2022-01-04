@@ -1001,22 +1001,59 @@ void dpa_release_channel(void)
 }
 EXPORT_SYMBOL(dpa_release_channel);
 
+#ifdef CONFIG_FSL_DPAA_ETHERCAT
+static int ec_cpu_isolated[NR_CPUS];
+static int __init ethercat_cpus_setup(char *str)
+{
+	int last_idx = -1;
+	int dash_flag = 0;
+	int idx = 0;
+	int i = 0;
+	int j = 0;
+
+	if (!str)
+		return 0;
+
+	for (i = 0; i < strlen(str); i++) {
+		if (str[i] == ',') {
+			last_idx = -1;
+			dash_flag = 0;
+			continue;
+		} else if ((str[i] == '-') && (last_idx >= 0)) {
+			dash_flag = 1;
+			continue;
+		}
+
+		if ((str[i] >= '0') && (str[i] <= '9')) {
+			idx = str[i] - '0';
+			ec_cpu_isolated[idx] = 1;
+
+			if (dash_flag) {
+				for (j = last_idx; j < idx; j++)
+					ec_cpu_isolated[j] = 1;
+				last_idx = -1;
+				dash_flag = 0;
+			} else {
+				last_idx = idx;
+			}
+		}
+	}
+
+	return 1;
+}
+__setup("ethercat_cpus=", ethercat_cpus_setup);
+#endif
+
 void dpaa_eth_add_channel(u16 channel)
 {
 	const cpumask_t *cpus = qman_affine_cpus();
 	u32 pool = QM_SDQCR_CHANNELS_POOL_CONV(channel);
 	int cpu;
 	struct qman_portal *portal;
-#ifdef CONFIG_FSL_DPAA_ETHERCAT
-	int last_cpu = 0;
-
-	for_each_online_cpu(cpu)
-		last_cpu = cpu;
-#endif
 
 	for_each_cpu(cpu, cpus) {
 #ifdef CONFIG_FSL_DPAA_ETHERCAT
-		if (cpu == last_cpu)
+		if (ec_cpu_isolated[cpu])
 			continue;
 #endif
 		portal = (struct qman_portal *)qman_get_affine_portal(cpu);

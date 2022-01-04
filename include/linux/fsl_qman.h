@@ -2078,6 +2078,7 @@ u16 qman_affine_channel_ethercat(int cpu);
 void *qman_get_affine_portal(int cpu);
 #ifdef CONFIG_FSL_DPAA_ETHERCAT
 void *qman_get_affine_portal_ethercat(int cpu);
+u32 qman_get_affine_last_cpu(void);
 #endif
 
 /**

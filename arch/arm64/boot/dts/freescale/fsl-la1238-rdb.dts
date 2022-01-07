@@ -2,7 +2,7 @@
 //
 // Device Tree file for LA1238RDB
 //
-// Copyright 2021 NXP
+// Copyright 2021-2022 NXP
 
 /dts-v1/;
 
@@ -46,6 +46,7 @@
 		yucca2-reset-gpio = <&gpio2 1 GPIO_ACTIVE_LOW>;
 		yucca1-trx-gpio = <&gpio2 17 GPIO_ACTIVE_LOW>;
 		yucca2-trx-gpio = <&gpio2 18 GPIO_ACTIVE_LOW>;
+		yucca-trx-gpio = <&gpio3 8 GPIO_ACTIVE_LOW>;
 	};
 
 	modem_tti {

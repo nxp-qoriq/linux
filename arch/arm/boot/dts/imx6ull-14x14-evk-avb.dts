@@ -1,0 +1,67 @@
+/*
+ * Copyright 2023 NXP
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ */
+
+#include "imx6ull-14x14-evk.dts"
+
+/******************************************************************************************
+* This dts adds the media clock recovery capability for AVB to the imx6ull-14x14-evk board.
+* A hardware rework is necessary for this feature:
+* -connect SD1_DATA2 and GPIO1_IO05 pads (can be done by connecting R1728 and TP2120)
+* -connect JTAG_MOD and JTAG_TMS (SAI2_MCLK) pads (can be done by connecting R1023 and
+*  JTAG pin number 7)
+*
+* Warning: this will prevent using SD1 Slot.
+*******************************************************************************************/
+
+&iomuxc {
+	pinctrl_avb: avbgrp {
+		fsl,pins = <
+			MX6UL_PAD_SD1_DATA2__GPT2_CAPTURE1		0x110b0
+			MX6UL_PAD_GPIO1_IO05__ENET2_1588_EVENT0_OUT	0x88
+			MX6UL_PAD_JTAG_MOD__GPT2_CLK			0x1f0b0
+		>;
+	};
+};
+
+&gpt2 {
+	compatible = "fsl,avb-gpt";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_avb>;
+	prescale = <1>;
+
+	timer-channel = <1>; /* Use output compare channel 1 */
+
+	rec-channel = <1 0 0>; /* capture channel, eth port, ENET TC id */
+	domain = <0>;
+
+	clocks = <&clks IMX6UL_CLK_GPT2_BUS>, <&clks IMX6UL_CLK_GPT2_BUS>,
+		 <&clks IMX6UL_CLK_SAI2>, <&clks IMX6UL_CLK_PLL4>;
+	clock-names = "ipg", "per", "clk_in", "audio_pll";
+
+	status = "okay";
+};
+
+/* Pin conflict on GPIO1_IO05 */
+&usdhc1 {
+	status = "disabled";
+};
+
+&fec1 {
+	fsl,rx-phy-delay-100-ns = <670>;
+	fsl,tx-phy-delay-100-ns = <670>;
+	fsl,rx-phy-delay-1000-ns = <0>;
+	fsl,tx-phy-delay-1000-ns = <0>;
+};
+
+&fec2 {
+	fsl,rx-phy-delay-100-ns = <670>;
+	fsl,tx-phy-delay-100-ns = <670>;
+	fsl,rx-phy-delay-1000-ns = <0>;
+	fsl,tx-phy-delay-1000-ns = <0>;
+};

@@ -27,3 +27,11 @@
 };
 
 /delete-node/ &sim2;
+
+/* Enable AVB HW timer support for default device tree. */
+&gpt2 {
+	compatible = "fsl,avb-gpt";
+	prescale = <1>;
+	timer-channel = <1>; /* Use output compare channel 1 */
+	status = "okay";
+};

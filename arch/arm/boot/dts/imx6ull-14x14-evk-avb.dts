@@ -1,0 +1,29 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+//
+// Copyright 2018 NXP
+
+#include "imx6ull-14x14-evk.dts"
+
+/* AVB HW timer*/
+&epit1 {
+	compatible = "fsl,avb-epit";
+	clocks = <&clks IMX6UL_CLK_EPIT1>;
+	clock-names = "epit1";
+
+	status = "okay";
+};
+
+&fec1 {
+	fsl,rx-phy-delay-100-ns = <670>;
+	fsl,tx-phy-delay-100-ns = <670>;
+	fsl,rx-phy-delay-1000-ns = <0>;
+	fsl,tx-phy-delay-1000-ns = <0>;
+};
+
+&fec2 {
+	fsl,rx-phy-delay-100-ns = <670>;
+	fsl,tx-phy-delay-100-ns = <670>;
+	fsl,rx-phy-delay-1000-ns = <0>;
+	fsl,tx-phy-delay-1000-ns = <0>;
+};
+

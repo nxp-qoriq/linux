@@ -1,0 +1,59 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+//
+// Copyright 2022 NXP
+
+#include "imx6ull-14x14-evk-avb.dts"
+
+/******************************************************************************************
+* This dts adds the media clock recovery capability for AVB to the imx6ull-14x14-evk board.
+* A hardware rework is necessary for this feature:
+* -connect SD1_DATA2 and GPIO1_IO05 pads (can be done by connecting R1728 and TP2120)
+* -connect JTAG_MOD and JTAG_TMS (SAI2_MCLK) pads (can be done by connecting R1023 and
+*  JTAG pin number 7)
+*
+* Warning: this will prevent using SD1 Slot.
+*******************************************************************************************/
+
+&iomuxc {
+	pinctrl_avb: avbgrp {
+		fsl,pins = <
+			MX6UL_PAD_SD1_DATA2__GPT2_CAPTURE1		0x110b0
+			MX6UL_PAD_GPIO1_IO05__ENET2_1588_EVENT0_OUT	0x88
+			MX6UL_PAD_JTAG_MOD__GPT2_CLK			0x1f0b0
+		>;
+	};
+};
+
+/* AVB MCR timer */
+&gpt2 {
+	compatible = "fsl,avb-gpt";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_avb>;
+	prescale = <1>;
+
+	rec-channel = <1 0 0>; /* capture channel, eth port, ENET TC id */
+	domain = <0>;
+
+	clocks = <&clks IMX6UL_CLK_GPT2_BUS>, <&clks IMX6UL_CLK_GPT2_SERIAL>,
+		 <&clks IMX6UL_CLK_SAI2>, <&clks IMX6UL_CLK_PLL4>;
+	clock-names = "ipg", "per", "clk_in", "audio_pll";
+
+	status = "okay";
+};
+
+/* Pin conflict on GPIO1_IO05 */
+&usdhc1 {
+	status = "disabled";
+};
+
+/* Set PERCLK parent to IPG to make sure that GPT_CLK set above is lower
+ * than 1/4 of frequency of the peripheral clock
+ * (Keep previsouly set, from included dts files, clocks in the node)
+ */
+&clks {
+	assigned-clocks = <&clks IMX6UL_CLK_PERCLK_SEL>,
+				<&clks IMX6UL_CLK_PLL3_PFD2>,
+				<&clks IMX6UL_CLK_PLL4_AUDIO_DIV>;
+	assigned-clock-parents = <&clks IMX6UL_CLK_IPG>;
+	assigned-clock-rates = <0>, <320000000>, <786432000>;
+};

@@ -815,7 +815,7 @@
 			snps,host-vbus-glitches;
 		};
 
-		pcie@3400000 {
+		pcie1: pcie@3400000 {
 			compatible = "fsl,ls1021a-pcie";
 			reg = <0x00 0x03400000 0x0 0x00010000>, /* controller registers */
 			      <0x40 0x00000000 0x0 0x00002000>; /* configuration space */
@@ -841,7 +841,7 @@
 			status = "disabled";
 		};
 
-		pcie@3500000 {
+		pcie2: pcie@3500000 {
 			compatible = "fsl,ls1021a-pcie";
 			reg = <0x00 0x03500000 0x0 0x00010000>, /* controller registers */
 			      <0x48 0x00000000 0x0 0x00002000>; /* configuration space */

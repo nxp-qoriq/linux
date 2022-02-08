@@ -54,6 +54,10 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/ipi.h>
 
+#ifdef CONFIG_BAREMETAL
+#include <linux/ipi_baremetal.h>
+#endif
+
 DEFINE_PER_CPU_READ_MOSTLY(int, cpu_number);
 EXPORT_PER_CPU_SYMBOL(cpu_number);
 
@@ -74,6 +78,13 @@ enum ipi_msg_type {
 	IPI_TIMER,
 	IPI_IRQ_WORK,
 	IPI_WAKEUP,
+#ifdef CONFIG_BAREMETAL
+#ifdef CONFIG_IMX8M_BAREMETAL
+	IPI_BAREMETAL_COMM = 9,
+#else
+	IPI_BAREMETAL_COMM = 8,
+#endif
+#endif
 	NR_IPI
 };
 
@@ -796,6 +807,9 @@ static const char *ipi_types[NR_IPI] __tracepoint_string = {
 	[IPI_TIMER]		= "Timer broadcast interrupts",
 	[IPI_IRQ_WORK]		= "IRQ work interrupts",
 	[IPI_WAKEUP]		= "CPU wake-up interrupts",
+#ifdef CONFIG_BAREMETAL
+	[IPI_BAREMETAL_COMM]	= "Baremetal inter-core interrupts",
+#endif
 };
 
 static void smp_cross_call(const struct cpumask *target, unsigned int ipinr);
@@ -931,6 +945,17 @@ static void do_handle_IPI(int ipinr)
 		WARN_ONCE(!acpi_parking_protocol_valid(cpu),
 			  "CPU%u: Wake-up IPI outside the ACPI parking protocol\n",
 			  cpu);
+		break;
+#endif
+
+#ifdef CONFIG_BAREMETAL
+	case IPI_BAREMETAL_COMM: {
+		/* FIXME: use the fixed source coreID from core1 */
+		int irqsrc = 1;
+		/*linux core is 0 core, so iterate from 1 core.*/
+		for(irqsrc = 1; irqsrc < CONFIG_MAX_CPUS; irqsrc++)
+			ipi_baremetal_handle(ipinr, irqsrc);
+		}
 		break;
 #endif
 

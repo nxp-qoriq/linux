@@ -613,4 +613,8 @@ config APPLE_AIC
 	  Support for the Apple Interrupt Controller found on Apple Silicon SoCs,
 	  such as the M1.
 
+config BAREMETAL
+	bool
+	depends on ARM_GIC || ARM_GIC_V3
+
 endmenu

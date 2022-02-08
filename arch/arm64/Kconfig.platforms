@@ -214,6 +214,12 @@ config ARCH_MXC
 config HAVE_IMX_BUSFREQ
 	bool "i.MX8M busfreq"
 
+config IMX8M_BAREMETAL
+	bool "NXP IMX8MM/IMX8MP baremetal support"
+	select BAREMETAL
+	help
+	  This enables support for NXP i.MX8MM and i.MX8MP baremetal.
+
 config ARCH_QCOM
 	bool "Qualcomm Platforms"
 	select GPIOLIB

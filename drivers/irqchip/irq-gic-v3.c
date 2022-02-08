@@ -31,6 +31,10 @@
 #include <linux/bits.h>
 #include <linux/arm-smccc.h>
 
+#ifdef CONFIG_BAREMETAL
+#include <linux/ipi_baremetal.h>
+#endif
+
 #include <asm/cputype.h>
 #include <asm/exception.h>
 #include <asm/smp_plat.h>
@@ -1508,12 +1512,12 @@ static void __init gic_smp_init(void)
 				  "irqchip/arm/gicv3:starting",
 				  gic_starting_cpu, NULL);
 
-	/* Register all 8 non-secure SGIs */
-	base_sgi = irq_domain_alloc_irqs(gic_data.domain, 8, NUMA_NO_NODE, &sgi_fwspec);
+	/* Register all 16 non-secure SGIs */
+	base_sgi = irq_domain_alloc_irqs(gic_data.domain, 16, NUMA_NO_NODE, &sgi_fwspec);
 	if (WARN_ON(base_sgi <= 0))
 		return;
 
-	set_smp_ipi_range(base_sgi, 8);
+	set_smp_ipi_range(base_sgi, 16);
 }
 
 static int gic_set_affinity(struct irq_data *d, const struct cpumask *mask_val,

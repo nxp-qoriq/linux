@@ -55,6 +55,10 @@
 
 #include <trace/events/ipi.h>
 
+#ifdef CONFIG_BAREMETAL
+#include <linux/ipi_baremetal.h>
+#endif
+
 /*
  * as from 2.5, kernels no longer have an init_tasks structure
  * so we need some other way of telling a new secondary core
@@ -71,6 +75,13 @@ enum ipi_msg_type {
 	IPI_CPU_STOP_NMI,
 	IPI_TIMER,
 	IPI_IRQ_WORK,
+#ifdef CONFIG_BAREMETAL
+#ifdef CONFIG_IMX8M_BAREMETAL
+	IPI_BAREMETAL_COMM = 9,
+#else
+	IPI_BAREMETAL_COMM = 8,
+#endif
+#endif
 	NR_IPI,
 	/*
 	 * Any enum >= NR_IPI and < MAX_IPI is special and not tracable
@@ -828,6 +839,9 @@ static const char *ipi_types[MAX_IPI] __tracepoint_string = {
 	[IPI_CPU_STOP_NMI]	= "CPU stop NMIs",
 	[IPI_TIMER]		= "Timer broadcast interrupts",
 	[IPI_IRQ_WORK]		= "IRQ work interrupts",
+#ifdef CONFIG_BAREMETAL
+	[IPI_BAREMETAL_COMM]	= "Baremetal inter-core interrupts",
+#endif
 	[IPI_CPU_BACKTRACE]	= "CPU backtrace interrupts",
 	[IPI_KGDB_ROUNDUP]	= "KGDB roundup interrupts",
 };
@@ -1001,6 +1015,17 @@ static void do_handle_IPI(int ipinr)
 	case IPI_KGDB_ROUNDUP:
 		kgdb_nmicallback(cpu, get_irq_regs());
 		break;
+
+#ifdef CONFIG_BAREMETAL
+	case IPI_BAREMETAL_COMM: {
+		/* FIXME: use the fixed source coreID from core1 */
+		int irqsrc = 1;
+		/*linux core is 0 core, so iterate from 1 core.*/
+		for(irqsrc = 1; irqsrc < CONFIG_MAX_CPUS; irqsrc++)
+			ipi_baremetal_handle(ipinr, irqsrc);
+		}
+		break;
+#endif
 
 	default:
 		pr_crit("CPU%u: Unknown IPI message 0x%x\n", cpu, ipinr);

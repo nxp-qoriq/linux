@@ -749,4 +749,8 @@ config SUNPLUS_SP7021_INTC
 	  chained controller, routing all interrupt source in P-Chip to
 	  the primary controller on C-Chip.
 
+config BAREMETAL
+	bool
+	depends on ARM_GIC || ARM_GIC_V3
+
 endmenu

@@ -1,0 +1,39 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2020-2023 NXP
+ */
+
+/dts-v1/;
+
+#include "imx8mm-evk.dts"
+
+/ {
+	model = "FSL i.MX8MM LPDDR4 EVK RevB  board - Baremetal";
+
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		rpmsg_reserved: rpmsg@0xb8000000 {
+			no-map;
+			reg = <0 0xb8000000 0 0x400000>;
+		};
+		bm_reserved: baremetal@0x60000000 {
+			no-map;
+			reg = <0 0x60000000 0 0x10000000>;
+		};
+	};
+};
+
+&fec1 {
+       status = "disabled";
+};
+
+&gpio5 {
+	status = "disabled";
+};
+
+&uart3 {
+	status = "disabled";
+};

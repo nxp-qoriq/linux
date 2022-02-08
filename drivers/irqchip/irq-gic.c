@@ -866,13 +866,13 @@ static __init void gic_smp_init(void)
 				  "irqchip/arm/gic:starting",
 				  gic_starting_cpu, NULL);
 
-	base_sgi = __irq_domain_alloc_irqs(gic_data[0].domain, -1, 8,
+	base_sgi = __irq_domain_alloc_irqs(gic_data[0].domain, -1, 16,
 					   NUMA_NO_NODE, &sgi_fwspec,
 					   false, NULL);
 	if (WARN_ON(base_sgi <= 0))
 		return;
 
-	set_smp_ipi_range(base_sgi, 8);
+	set_smp_ipi_range(base_sgi, 16);
 }
 #else
 #define gic_smp_init()		do { } while(0)

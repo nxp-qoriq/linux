@@ -51,6 +51,10 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/ipi.h>
 
+#ifdef CONFIG_BAREMETAL
+#include <linux/ipi_baremetal.h>
+#endif
+
 /*
  * as from 2.5, kernels no longer have an init_tasks structure
  * so we need some other way of telling a new secondary core
@@ -66,6 +70,9 @@ enum ipi_msg_type {
 	IPI_CPU_STOP,
 	IPI_IRQ_WORK,
 	IPI_COMPLETION,
+#ifdef CONFIG_BAREMETAL
+	IPI_BAREMETAL_COMM = 8,
+#endif
 	NR_IPI,
 	/*
 	 * CPU_BACKTRACE is special and not included in NR_IPI
@@ -530,6 +537,9 @@ static const char *ipi_types[NR_IPI] __tracepoint_string = {
 	[IPI_CPU_STOP]		= "CPU stop interrupts",
 	[IPI_IRQ_WORK]		= "IRQ work interrupts",
 	[IPI_COMPLETION]	= "completion interrupts",
+#ifdef CONFIG_BAREMETAL
+	S(IPI_BAREMETAL_COMM, "Baremetal inter-core interrupts"),
+#endif
 };
 
 static void smp_cross_call(const struct cpumask *target, unsigned int ipinr);
@@ -660,6 +670,18 @@ static void do_handle_IPI(int ipinr)
 	case IPI_COMPLETION:
 		ipi_complete(cpu);
 		break;
+
+#ifdef CONFIG_BAREMETAL
+#define GICC_IAR_MASK   0x1fff
+	case IPI_BAREMETAL_COMM: {
+		/* FIXME: use the fixed source coreID from core1 */
+		int irqsrc = 1;
+		/*linux core is 0 core, so iterate from 1 core.*/
+		for(irqsrc = 1; irqsrc < CONFIG_MAX_CPUS; irqsrc++)
+			ipi_baremetal_handle(ipinr, irqsrc);
+		}
+		break;
+#endif
 
 	case IPI_CPU_BACKTRACE:
 		printk_deferred_enter();

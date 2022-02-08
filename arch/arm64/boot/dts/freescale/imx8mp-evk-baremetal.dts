@@ -1,0 +1,37 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2020-2023 NXP
+ */
+
+/dts-v1/;
+
+#include "imx8mp-evk.dts"
+
+/ {
+	model = "NXP i.MX8MPlus EVK board - Baremetal";
+
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		rpmsg_reserved: rpmsg@0x55800000 {
+			no-map;
+			reg = <0 0x55800000 0 0x800000>;
+		};
+
+		/* baremetal: slave cores reserved memory */
+		bm_reserved: baremetal@0x60000000 {
+			no-map;
+			reg = <0 0x60000000 0 0x10000000>;
+		};
+	};
+};
+
+&fec {
+	status = "disabled";
+};
+
+&uart3 {
+	status = "disabled";
+};

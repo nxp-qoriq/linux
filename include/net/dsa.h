@@ -895,6 +895,18 @@ struct dsa_switch_ops {
 				      u8 prio);
 
 	/*
+	 * ethtool --set-frame-preemption
+	 */
+	int	(*set_preempt)(struct dsa_switch *ds, int port,
+			       struct ethtool_fp *fpcmd);
+
+	/*
+	 * ethtool --show-frame-preemption
+	 */
+	int	(*get_preempt)(struct dsa_switch *ds, int port,
+			       struct ethtool_fp *fpcmd);
+
+	/*
 	 * Suspend and resume
 	 */
 	int	(*suspend)(struct dsa_switch *ds);

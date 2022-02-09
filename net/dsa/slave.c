@@ -1553,6 +1553,30 @@ static int dsa_slave_get_ts_info(struct net_device *dev,
 	return ds->ops->get_ts_info(ds, p->dp->index, ts);
 }
 
+static int dsa_slave_set_preempt(struct net_device *dev,
+				 struct ethtool_fp *fpcmd)
+{
+	struct dsa_slave_priv *p = netdev_priv(dev);
+	struct dsa_switch *ds = p->dp->ds;
+
+	if (!ds->ops->set_preempt)
+		return -EOPNOTSUPP;
+
+	return ds->ops->set_preempt(ds, p->dp->index, fpcmd);
+}
+
+static int dsa_slave_get_preempt(struct net_device *dev,
+				 struct ethtool_fp *fpcmd)
+{
+	struct dsa_slave_priv *p = netdev_priv(dev);
+	struct dsa_switch *ds = p->dp->ds;
+
+	if (!ds->ops->get_preempt)
+		return -EOPNOTSUPP;
+
+	return ds->ops->get_preempt(ds, p->dp->index, fpcmd);
+}
+
 static int dsa_slave_vlan_rx_add_vid(struct net_device *dev, __be16 proto,
 				     u16 vid)
 {
@@ -2102,6 +2126,8 @@ static const struct ethtool_ops dsa_slave_ethtool_ops = {
 	.set_rxnfc		= dsa_slave_set_rxnfc,
 	.get_ts_info		= dsa_slave_get_ts_info,
 	.self_test		= dsa_slave_net_selftest,
+	.set_preempt		= dsa_slave_set_preempt,
+	.get_preempt		= dsa_slave_get_preempt,
 };
 
 static const struct dcbnl_rtnl_ops __maybe_unused dsa_slave_dcbnl_ops = {

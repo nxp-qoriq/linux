@@ -956,6 +956,18 @@ struct dsa_switch_ops {
 				struct ethtool_mm_stats *stats);
 
 	/*
+	 * ethtool --set-frame-preemption
+	 */
+	int	(*set_preempt)(struct dsa_switch *ds, int port,
+			       struct ethtool_fp *fpcmd);
+
+	/*
+	 * ethtool --show-frame-preemption
+	 */
+	int	(*get_preempt)(struct dsa_switch *ds, int port,
+			       struct ethtool_fp *fpcmd);
+
+	/*
 	 * DCB ops
 	 */
 	int	(*port_get_default_prio)(struct dsa_switch *ds, int port);

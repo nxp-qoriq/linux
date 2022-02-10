@@ -7146,7 +7146,9 @@ static const struct net_device_ops stmmac_netdev_ops = {
 	.ndo_fix_features = stmmac_fix_features,
 	.ndo_set_features = stmmac_set_features,
 	.ndo_set_rx_mode = stmmac_set_rx_mode,
+#ifndef CONFIG_NET_SCH_MULTIQ
 	.ndo_tx_timeout = stmmac_tx_timeout,
+#endif
 	.ndo_eth_ioctl = stmmac_ioctl,
 	.ndo_get_stats64 = stmmac_get_stats64,
 	.ndo_setup_tc = stmmac_setup_tc,

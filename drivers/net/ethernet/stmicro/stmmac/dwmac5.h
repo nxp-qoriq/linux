@@ -20,6 +20,9 @@
 #define SVER				BIT(1)
 #define EFPE				BIT(0)
 
+#define MTL_FPE_CTRL_STS		0x00000c90
+#define MTL_FPECTRL_PEC_SHIFT		8
+
 #define MAC_PPS_CONTROL			0x00000b70
 #define PPS_MAXIDX(x)			((((x) + 1) * 8) - 1)
 #define PPS_MINIDX(x)			((x) * 8)
@@ -154,7 +157,8 @@ int dwmac5_est_configure(void __iomem *ioaddr, struct stmmac_est *cfg,
 void dwmac5_est_irq_status(void __iomem *ioaddr, struct net_device *dev,
 			   struct stmmac_extra_stats *x, u32 txqcnt);
 void dwmac5_fpe_configure(void __iomem *ioaddr, u32 num_txq, u32 num_rxq,
-			  bool enable);
+			  bool enable, struct stmmac_fpe *fpe);
+void dwmac5_fpe_configure_get(void __iomem *ioaddr, struct stmmac_fpe *fpe);
 void dwmac5_fpe_send_mpacket(void __iomem *ioaddr,
 			     enum stmmac_mpacket_type type);
 int dwmac5_fpe_irq_status(void __iomem *ioaddr, struct net_device *dev);

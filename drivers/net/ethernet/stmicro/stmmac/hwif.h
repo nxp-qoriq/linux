@@ -285,6 +285,12 @@ struct stmmac_pps_cfg;
 struct stmmac_rss;
 struct stmmac_est;
 
+struct stmmac_fpe {
+	u8 enable;
+	u8 p_queues;
+	u8 fragsize;
+};
+
 /* Helpers to program the MAC core */
 struct stmmac_ops {
 	/* MAC core initialization */
@@ -396,7 +402,8 @@ struct stmmac_ops {
 	void (*est_irq_status)(void __iomem *ioaddr, struct net_device *dev,
 			       struct stmmac_extra_stats *x, u32 txqcnt);
 	void (*fpe_configure)(void __iomem *ioaddr, u32 num_txq, u32 num_rxq,
-			      bool enable);
+			      bool enable, struct stmmac_fpe *fpe);
+	void (*fpe_configure_get)(void __iomem *ioaddr, struct stmmac_fpe *fpe);
 	void (*fpe_send_mpacket)(void __iomem *ioaddr,
 				 enum stmmac_mpacket_type type);
 	int (*fpe_irq_status)(void __iomem *ioaddr, struct net_device *dev);
@@ -500,6 +507,8 @@ struct stmmac_ops {
 	stmmac_do_void_callback(__priv, mac, est_irq_status, __args)
 #define stmmac_fpe_configure(__priv, __args...) \
 	stmmac_do_void_callback(__priv, mac, fpe_configure, __args)
+#define stmmac_fpe_configure_get(__priv, __args...) \
+	stmmac_do_void_callback(__priv, mac, fpe_configure_get, __args)
 #define stmmac_fpe_send_mpacket(__priv, __args...) \
 	stmmac_do_void_callback(__priv, mac, fpe_send_mpacket, __args)
 #define stmmac_fpe_irq_status(__priv, __args...) \

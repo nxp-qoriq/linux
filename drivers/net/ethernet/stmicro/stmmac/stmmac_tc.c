@@ -801,7 +801,7 @@ static int tc_setup_taprio(struct stmmac_priv *priv,
 	struct plat_stmmacenet_data *plat = priv->plat;
 	struct timespec64 time, current_time, qopt_time;
 	ktime_t current_time_ns;
-	bool fpe = false;
+	struct stmmac_fpe fpe;
 	int i, ret = 0;
 	u64 ctr;
 
@@ -867,6 +867,8 @@ static int tc_setup_taprio(struct stmmac_priv *priv,
 	priv->plat->est->enable = qopt->enable;
 	mutex_unlock(&priv->plat->est->lock);
 
+	stmmac_fpe_configure_get(priv, priv->ioaddr, &fpe);
+
 	for (i = 0; i < size; i++) {
 		s64 delta_ns = qopt->entries[i].interval;
 		u32 gates = qopt->entries[i].gate_mask;
@@ -878,16 +880,18 @@ static int tc_setup_taprio(struct stmmac_priv *priv,
 
 		switch (qopt->entries[i].command) {
 		case TC_TAPRIO_CMD_SET_GATES:
-			if (fpe)
+			if (fpe.enable)
 				return -EINVAL;
 			break;
 		case TC_TAPRIO_CMD_SET_AND_HOLD:
+			if (!fpe.enable)
+				return -EINVAL;
 			gates |= BIT(0);
-			fpe = true;
 			break;
 		case TC_TAPRIO_CMD_SET_AND_RELEASE:
+			if (!fpe.enable)
+				return -EINVAL;
 			gates &= ~BIT(0);
-			fpe = true;
 			break;
 		default:
 			return -EOPNOTSUPP;
@@ -914,16 +918,6 @@ static int tc_setup_taprio(struct stmmac_priv *priv,
 	priv->plat->est->ctr[0] = do_div(ctr, NSEC_PER_SEC);
 	priv->plat->est->ctr[1] = (u32)ctr;
 
-	if (fpe && !priv->dma_cap.fpesel) {
-		mutex_unlock(&priv->plat->est->lock);
-		return -EOPNOTSUPP;
-	}
-
-	/* Actual FPE register configuration will be done after FPE handshake
-	 * is success.
-	 */
-	priv->plat->fpe_cfg->enable = fpe;
-
 	ret = stmmac_est_configure(priv, priv->ioaddr, priv->plat->est,
 				   priv->plat->clk_ptp_rate);
 	mutex_unlock(&priv->plat->est->lock);
@@ -933,11 +927,6 @@ static int tc_setup_taprio(struct stmmac_priv *priv,
 	}
 
 	netdev_info(priv->dev, "configured EST\n");
-
-	if (fpe) {
-		stmmac_fpe_handshake(priv, true);
-		netdev_info(priv->dev, "start FPE handshake\n");
-	}
 
 	return 0;
 
@@ -949,16 +938,6 @@ disable:
 				     priv->plat->clk_ptp_rate);
 		mutex_unlock(&priv->plat->est->lock);
 	}
-
-	priv->plat->fpe_cfg->enable = false;
-	stmmac_fpe_configure(priv, priv->ioaddr,
-			     priv->plat->tx_queues_to_use,
-			     priv->plat->rx_queues_to_use,
-			     false);
-	netdev_info(priv->dev, "disabled FPE\n");
-
-	stmmac_fpe_handshake(priv, false);
-	netdev_info(priv->dev, "stop FPE handshake\n");
 
 	return ret;
 }

@@ -173,6 +173,26 @@ br_switchdev_fdb_notify(struct net_bridge *br,
 	}
 }
 
+static u16 br_switchdev_get_bridge_vlan_proto(const struct net_device *dev)
+{
+	const struct net_device *br = NULL;
+	u16 vlan_proto = ETH_P_8021Q;
+	struct net_bridge_port *p;
+
+	if (netif_is_bridge_master(dev)) {
+		br = dev;
+	} else {
+		p = br_port_get_rtnl_rcu(dev);
+		if (p)
+			br = p->br->dev;
+	}
+
+	if (br)
+		br_vlan_get_proto(br, &vlan_proto);
+
+	return vlan_proto;
+}
+
 int br_switchdev_port_vlan_add(struct net_device *dev, u16 vid, u16 flags,
 			       bool changed, struct netlink_ext_ack *extack)
 {
@@ -184,6 +204,8 @@ int br_switchdev_port_vlan_add(struct net_device *dev, u16 vid, u16 flags,
 		.changed = changed,
 	};
 
+	v.proto = br_switchdev_get_bridge_vlan_proto(dev);
+
 	return switchdev_port_obj_add(dev, &v.obj, extack);
 }
 
@@ -194,6 +216,8 @@ int br_switchdev_port_vlan_del(struct net_device *dev, u16 vid)
 		.obj.id = SWITCHDEV_OBJ_ID_PORT_VLAN,
 		.vid = vid,
 	};
+
+	v.proto = br_switchdev_get_bridge_vlan_proto(dev);
 
 	return switchdev_port_obj_del(dev, &v.obj);
 }

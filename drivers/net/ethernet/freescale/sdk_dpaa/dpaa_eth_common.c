@@ -1,4 +1,5 @@
 /* Copyright 2008-2013 Freescale Semiconductor, Inc.
+ * Copyright 2019-2023 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -478,7 +479,15 @@ int __cold dpa_remove(struct platform_device *of_dev)
 	dpaa_eth_sysfs_remove(dev);
 
 	dev_set_drvdata(dev, NULL);
+
+#ifdef CONFIG_FSL_DPAA_ETHERCAT
+	if (priv->ecdev)
+		dpa_unregister_ethercat(net_dev);
+	else
+		unregister_netdev(net_dev);
+#else
 	unregister_netdev(net_dev);
+#endif
 
 	err = dpa_fq_free(dev, &priv->dpa_fq_list);
 
@@ -998,8 +1007,18 @@ void dpaa_eth_add_channel(u16 channel)
 	u32 pool = QM_SDQCR_CHANNELS_POOL_CONV(channel);
 	int cpu;
 	struct qman_portal *portal;
+#ifdef CONFIG_FSL_DPAA_ETHERCAT
+	int last_cpu = 0;
+
+	for_each_online_cpu(cpu)
+		last_cpu = cpu;
+#endif
 
 	for_each_cpu(cpu, cpus) {
+#ifdef CONFIG_FSL_DPAA_ETHERCAT
+		if (cpu == last_cpu)
+			continue;
+#endif
 		portal = (struct qman_portal *)qman_get_affine_portal(cpu);
 		qman_p_static_dequeue_add(portal, pool);
 	}

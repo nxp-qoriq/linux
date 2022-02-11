@@ -1,5 +1,5 @@
 /* Copyright 2012 Freescale Semiconductor Inc.
- * Copyright 2019 NXP
+ * Copyright 2019-2023 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -608,9 +608,30 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	 * which case we were in) having been removed from the pool.
 	 */
 	(*count_ptr)--;
+#ifndef CONFIG_FSL_DPAA_ETHERCAT
 	skb->protocol = eth_type_trans(skb, net_dev);
-
+#endif
 	skb_len = skb->len;
+
+#ifdef CONFIG_FSL_DPAA_ETHERCAT
+	if (priv->ecdev) {
+		u16 rawcpuid = 0;
+		u16 prot = 0;
+
+		rawcpuid = (u16)raw_smp_processor_id();
+		skb_record_rx_queue(skb, rawcpuid);
+
+		prot = ntohs(*(u16 *)(skb->data + 12));
+		if (prot == ETH_P_ETHERCAT)
+			ec_dpaa_receive_data(priv->ecdev, skb->data, skb->len);
+		else
+			pr_warn("invalid ethercat protocol 0x%x\n", prot);
+
+		dev_kfree_skb(skb);
+		goto ethercat_tag;
+	}
+	skb->protocol = eth_type_trans(skb, net_dev);
+#endif
 
 #ifdef CONFIG_FSL_DPAA_DBG_LOOP
 	if (dpa_skb_loop(priv, skb)) {
@@ -635,6 +656,9 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	} else if (unlikely(netif_receive_skb(skb) == NET_RX_DROP))
 		return;
 
+#ifdef CONFIG_FSL_DPAA_ETHERCAT
+ethercat_tag:
+#endif
 	percpu_stats->rx_packets++;
 	percpu_stats->rx_bytes += skb_len;
 

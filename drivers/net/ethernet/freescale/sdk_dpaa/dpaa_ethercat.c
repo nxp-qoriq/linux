@@ -268,7 +268,8 @@ static void _dpa_tx_error(struct net_device		*net_dev,
 	}
 
 	skb = _dpa_cleanup_tx_fd(priv, fd);
-	dev_kfree_skb(skb);
+	if (!priv->ecdev)
+		dev_kfree_skb(skb);
 }
 
 static void __hot _dpa_tx_conf(struct net_device	*net_dev,
@@ -303,8 +304,8 @@ static void __hot _dpa_tx_conf(struct net_device	*net_dev,
 	percpu_priv->tx_confirm++;
 
 	skb = _dpa_cleanup_tx_fd(priv, fd);
-
-	dev_kfree_skb(skb);
+	if (!priv->ecdev)
+		dev_kfree_skb(skb);
 }
 
 static enum qman_cb_dqrr_result
@@ -478,26 +479,6 @@ static int __cold dpa_eth_priv_stop(struct net_device *net_dev)
 	return _errno;
 }
 
-#ifdef CONFIG_NET_POLL_CONTROLLER
-static void dpaa_eth_poll_controller(struct net_device *net_dev)
-{
-	struct dpa_priv_s *priv = netdev_priv(net_dev);
-	struct dpa_percpu_priv_s *percpu_priv =
-		raw_cpu_ptr(priv->percpu_priv);
-	struct qman_portal *p;
-	const struct qman_portal_config *pc;
-	struct dpa_napi_portal *np;
-
-	p = (struct qman_portal *)qman_get_affine_portal(smp_processor_id());
-	pc = qman_p_get_portal_config(p);
-	np = &percpu_priv->np[pc->index];
-
-	qman_p_irqsource_remove(np->p, QM_PIRQ_DQRI);
-	qman_p_poll_dqrr(np->p, np->napi.weight);
-	qman_p_irqsource_add(np->p, QM_PIRQ_DQRI);
-}
-#endif
-
 static const struct net_device_ops dpa_private_ops = {
 	.ndo_open = dpa_eth_priv_start,
 	.ndo_start_xmit = dpa_tx,
@@ -514,10 +495,140 @@ static const struct net_device_ops dpa_private_ops = {
 	.ndo_set_features = dpa_set_features,
 	.ndo_fix_features = dpa_fix_features,
 	.ndo_do_ioctl = dpa_ioctl,
-#ifdef CONFIG_NET_POLL_CONTROLLER
-	.ndo_poll_controller = dpaa_eth_poll_controller,
-#endif
 };
+
+typedef int (*ec_dpaa_receive_cb)(void *pecdev, const void *data, size_t size);
+typedef int (*ec_dpaa_link_cb)(void *pecdev, uint8_t link);
+typedef int (*ec_dpaa_close_cb)(void *pecdev);
+
+static ec_dpaa_receive_cb ec_dpaa_recv_func;
+static ec_dpaa_close_cb ec_dpaa_close_func;
+static ec_dpaa_link_cb ec_dpaa_link_func;
+
+int ec_dpaa_receive_data(void *pecdev, const void *data, size_t size)
+{
+	int ret = 0;
+
+	if (ec_dpaa_recv_func)
+		ret = ec_dpaa_recv_func(pecdev, data, size);
+
+	return ret;
+}
+
+int ec_dpaa_set_func_cb(ec_dpaa_receive_cb recv, ec_dpaa_link_cb link, ec_dpaa_close_cb close)
+{
+	ec_dpaa_recv_func = recv;
+	ec_dpaa_link_func = link;
+	ec_dpaa_close_func = close;
+
+	return 0;
+}
+EXPORT_SYMBOL(ec_dpaa_set_func_cb);
+
+struct module *ec_dpaa_get_module(void)
+{
+	struct module *m = THIS_MODULE;
+	return m;
+}
+EXPORT_SYMBOL(ec_dpaa_get_module);
+
+#define MAX_EC_DPAA_NETDEV_CNT (16)
+static int ec_dpaa_netdev_cnt;
+static struct net_device *ec_dpaa_netdev[MAX_EC_DPAA_NETDEV_CNT];
+
+struct net_device *ec_dpaa_get_netdev(int idx)
+{
+	if (idx >= MAX_EC_DPAA_NETDEV_CNT)
+		return NULL;
+
+	if (idx >= ec_dpaa_netdev_cnt)
+		return NULL;
+
+	return ec_dpaa_netdev[idx];
+}
+EXPORT_SYMBOL(ec_dpaa_get_netdev);
+
+int ec_dpaa_set_ecdev(int idx, void *ecdev)
+{
+	struct net_device *net_dev = NULL;
+	struct dpa_priv_s *priv = NULL;
+
+	net_dev = ec_dpaa_get_netdev(idx);
+	if (net_dev) {
+		priv = netdev_priv(net_dev);
+		priv->ecdev = ecdev;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(ec_dpaa_set_ecdev);
+
+void *ec_dpaa_get_ecdev(int idx)
+{
+	struct net_device *net_dev = NULL;
+	struct dpa_priv_s *priv = NULL;
+	void *ecdev = NULL;
+
+	net_dev = ec_dpaa_get_netdev(idx);
+	if (net_dev) {
+		priv = netdev_priv(net_dev);
+		ecdev = priv->ecdev;
+	}
+
+	return ecdev;
+}
+EXPORT_SYMBOL(ec_dpaa_get_ecdev);
+
+void ec_dpaa_poll(struct net_device *net_dev)
+{
+	struct dpa_priv_s *priv = netdev_priv(net_dev);
+	u8 link = net_dev->phydev->state;
+
+	qman_p_poll_dqrr(priv->p, DPA_NAPI_WEIGHT);
+
+	if (ec_dpaa_link_func)
+		ec_dpaa_link_func(priv->ecdev, link);
+}
+EXPORT_SYMBOL(ec_dpaa_poll);
+
+int dpa_unregister_ethercat(struct net_device *net_dev)
+{
+	struct dpa_priv_s *priv = netdev_priv(net_dev);
+
+	if (priv->ecdev) {
+		if (ec_dpaa_close_func)
+			ec_dpaa_close_func(priv->ecdev);
+		return 0;
+	}
+
+	return -1;
+}
+EXPORT_SYMBOL(dpa_unregister_ethercat);
+
+static int dpa_ethercat_netdev_init(struct net_device *net_dev,
+				    const u8 *mac_addr,
+				    uint16_t tx_timeout)
+{
+	struct dpa_priv_s *priv = netdev_priv(net_dev);
+
+	net_dev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
+
+	net_dev->features |= net_dev->hw_features;
+	net_dev->vlan_features = net_dev->features;
+
+	memcpy(net_dev->perm_addr, mac_addr, net_dev->addr_len);
+	memcpy(net_dev->dev_addr, mac_addr, net_dev->addr_len);
+
+	net_dev->ethtool_ops = &dpa_ethtool_ops;
+
+	net_dev->needed_headroom = priv->tx_headroom;
+	net_dev->watchdog_timeo = msecs_to_jiffies(tx_timeout);
+
+	if (ec_dpaa_netdev_cnt < MAX_EC_DPAA_NETDEV_CNT)
+		ec_dpaa_netdev[ec_dpaa_netdev_cnt++] = net_dev;
+
+	return 0;
+}
 
 static int dpa_private_netdev_init(struct net_device *net_dev)
 {
@@ -561,7 +672,7 @@ static int dpa_private_netdev_init(struct net_device *net_dev)
 	/* Advertise NETIF_F_HW_ACCEL_MQ to avoid Tx timeout warnings */
 	net_dev->features |= NETIF_F_HW_ACCEL_MQ;
 
-	return dpa_netdev_init(net_dev, mac_addr, tx_timeout);
+	return dpa_ethercat_netdev_init(net_dev, mac_addr, tx_timeout);
 }
 
 static struct dpa_bp * __cold
@@ -980,6 +1091,10 @@ static int dpaa_ethercat_probe(struct platform_device *_of_dev)
 
 	if (err < 0)
 		goto netdev_init_failed;
+
+	pr_info("Ethercat port:%02hx:%02hx:%02hx:%02hx:%02hx:%02hx, name:%s\n",
+		mac_dev->addr[0], mac_dev->addr[1], mac_dev->addr[2],
+		mac_dev->addr[3], mac_dev->addr[4], mac_dev->addr[5], net_dev->name);
 
 #ifdef CONFIG_PM
 	device_set_wakeup_capable(dev, true);

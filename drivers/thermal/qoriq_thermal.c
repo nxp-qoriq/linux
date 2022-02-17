@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright 2016 Freescale Semiconductor, Inc.
- * Copyright 2017-2018,2020-2021 NXP
+ * Copyright 2017-2018,2020-2022 NXP
  *
  */
 
@@ -200,8 +200,8 @@ irqreturn_t qoriq_tmu_irq_handler_avg_temp(int irq, void *data)
 
 	if (qoriq_prv_data) {
 		qdata = qoriq_prv_data->qdata;
-		qoriq_thermal_event |= (1 << CTD_HIGH_AVG_TEMP_EVENT);
 		if (qdata->ver == TMU_VER1) {
+			qoriq_thermal_event |= (1 << CTD_HIGH_AVG_TEMP_EVENT);
 			tidr = tmu_read(qdata, &qdata->regs->tidr);
 			tmr = tmu_read(qdata, &qdata->regs->tmr);
 			tmu_write(qdata, tmr & ~TMR_ME, &qdata->regs->tmr);
@@ -214,16 +214,24 @@ irqreturn_t qoriq_tmu_irq_handler_avg_temp(int irq, void *data)
 			tmu_write(qdata, tmr | TMR_ME, &qdata->regs->tmr);
 		} else {
 			tidr = tmu_read(qdata, &qdata->regs_v2->tidr);
-			tmr = tmu_read(qdata, &qdata->regs_v2->tmr);
-			tmu_write(qdata, tmr & ~TMR_ME, &qdata->regs_v2->tmr);
-			tmu_write(qdata, TIER_AVERAGE_THRESHOLD_ENABLED,
-				&qdata->regs_v2->tidr);
-			tmu_write(qdata,
-				(~TIER_AVERAGE_THRESHOLD_ENABLED &
-				tmu_read(qdata, &qdata->regs_v2->tier)),
-				&qdata->regs->tier);
-			tmu_write(qdata, tmr | TMR_ME, &qdata->regs_v2->tmr);
+			if (tidr & TIER_AVERAGE_THRESHOLD_ENABLED) {
+				qoriq_thermal_event |= (1 << CTD_HIGH_AVG_TEMP_EVENT);
+				tmu_write(qdata,
+					(~TIER_AVERAGE_THRESHOLD_ENABLED &
+					tmu_read(qdata, &qdata->regs_v2->tier)),
+					&qdata->regs->tier);
+				tmu_write(qdata, TIER_AVERAGE_THRESHOLD_ENABLED,
+					&qdata->regs_v2->tidr);
 
+			} else if (tidr & TIER_AVERAGE_LOW_THRESHOLD_ENABLED) {
+				qoriq_thermal_event |= (1 << CTD_LOW_AVG_TEMP_EVENT);
+				tmu_write(qdata,
+					(~TIER_AVERAGE_LOW_THRESHOLD_ENABLED &
+					tmu_read(qdata, &qdata->regs_v2->tier)),
+					&qdata->regs->tier);
+				tmu_write(qdata, TIER_AVERAGE_LOW_THRESHOLD_ENABLED,
+					&qdata->regs_v2->tidr);
+			}
 		}
 		raw_spin_lock(&qoriq_prv_data->qoriq_tmu_wq_lock);
 		swake_up_all_locked(&qoriq_prv_data->qoriq_tmu_wq);
@@ -241,9 +249,9 @@ irqreturn_t qoriq_tmu_irq_handler_crit_temp(int irq, void *data)
 	struct qoriq_prv_data *qoriq_prv_data = (struct qoriq_prv_data *)data;
 
 	if (qoriq_prv_data) {
-		qoriq_thermal_event |= (1 << CTD_HIGH_CRITICAL_TEMP_EVENT);
 		qdata = qoriq_prv_data->qdata;
 		if (qdata->ver == TMU_VER1) {
+			qoriq_thermal_event |= (1 << CTD_HIGH_CRITICAL_TEMP_EVENT);
 			tidr = tmu_read(qdata, &qdata->regs->tidr);
 			tmr = tmu_read(qdata, &qdata->regs->tmr);
 			tmu_write(qdata, tmr & ~TMR_ME, &qdata->regs->tmr);
@@ -256,15 +264,23 @@ irqreturn_t qoriq_tmu_irq_handler_crit_temp(int irq, void *data)
 			tmu_write(qdata, tmr | TMR_ME, &qdata->regs->tmr);
 		} else {
 			tidr = tmu_read(qdata, &qdata->regs_v2->tidr);
-			tmr = tmu_read(qdata, &qdata->regs_v2->tmr);
-			tmu_write(qdata, tmr & ~TMR_ME, &qdata->regs_v2->tmr);
-			tmu_write(qdata, TIER_CRITICAL_THRESHOLD_ENABLED,
-				&qdata->regs_v2->tidr);
-			tmu_write(qdata,
-				(~TIER_CRITICAL_THRESHOLD_ENABLED &
-			tmu_read(qdata, &qdata->regs_v2->tier)),
-				&qdata->regs_v2->tier);
-			tmu_write(qdata, tmr | TMR_ME, &qdata->regs_v2->tmr);
+			if (tidr & TIER_CRITICAL_THRESHOLD_ENABLED) {
+				qoriq_thermal_event |= (1 << CTD_HIGH_CRITICAL_TEMP_EVENT);
+				tmu_write(qdata,
+					(~TIER_CRITICAL_THRESHOLD_ENABLED &
+					tmu_read(qdata, &qdata->regs_v2->tier)),
+					&qdata->regs_v2->tier);
+				tmu_write(qdata, TIER_CRITICAL_THRESHOLD_ENABLED,
+					&qdata->regs_v2->tidr);
+			} else if (tidr & TIER_CRITICAL_LOW_THRESHOLD_ENABLED) {
+				qoriq_thermal_event |= (1 << CTD_LOW_CRITICAL_TEMP_EVENT);
+				tmu_write(qdata,
+					(~TIER_CRITICAL_LOW_THRESHOLD_ENABLED &
+					tmu_read(qdata, &qdata->regs_v2->tier)),
+					&qdata->regs_v2->tier);
+				tmu_write(qdata, TIER_CRITICAL_LOW_THRESHOLD_ENABLED,
+					&qdata->regs_v2->tidr);
+			}
 		}
 		raw_spin_lock(&qoriq_prv_data->qoriq_tmu_wq_lock);
 		swake_up_all_locked(&qoriq_prv_data->qoriq_tmu_wq);
@@ -436,80 +452,6 @@ static void qoriq_tmu_init_device(struct qoriq_tmu_data *data)
 }
 
 #ifdef CONFIG_QORIQ_THERMAL_INTERRUPT
-static int thread_monitoring_avg_low_temp(void *arg)
-{
-	int curent_temp;
-	struct qoriq_tmu_data *data = platform_get_drvdata(pdev_tmu);
-	int low_temp_threshold;
-	(void) arg;
-	while (!kthread_should_stop()) {
-		low_temp_threshold = (tmu_read(data, &data->regs->tmhtatr) &
-					0x1FF);
-		low_temp_threshold = TEMP_KELVIN_TO_CELSIUS(low_temp_threshold);
-		curent_temp = ctd_get_temp();
-
-		/*
-		 * Programmed high threshold = Original threshold + hysteresis
-		 * Subtracting hysteresis value twice to get low temp threshold.
-		 * where, programmed low threshold = Original threshold - hysteresis
-		 */
-		if ((curent_temp < (low_temp_threshold - (2 * ctd_hysteresis_val)))) {
-			if (data->ver == TMU_VER1) {
-				tmu_write(data, TIER_AVERAGE_THRESHOLD_ENABLED,
-					&data->regs->tier);
-			} else {
-				tmu_write(data, TIER_AVERAGE_THRESHOLD_ENABLED,
-					&data->regs_v2->tier);
-			}
-			send_call_back(CTD_LOW_AVG_TEMP_EVENT);
-			avg_thread_running = 0;
-			kthread_stop(ts_avg_temp_monitoring_task);
-			continue;
-		}
-		msleep(TEMP_POLLING_DEFAULT_SLEEP_TIME);
-	}
-	return 0;
-}
-
-static int thread_monitoring_crit_low_temp(void *arg)
-{
-	int curent_temp;
-	struct qoriq_tmu_data *data = platform_get_drvdata(pdev_tmu);
-	int high_temp_threshold;
-	(void) arg;
-	while (!kthread_should_stop()) {
-		if (data->ver == TMU_VER1) {
-			high_temp_threshold = (tmu_read(data,
-					&data->regs->tmhtactr) & 0x1FF);
-		} else {
-			high_temp_threshold = (tmu_read(data,
-					&data->regs_v2->tmhtactr) & 0x1FF);
-		}
-		high_temp_threshold = TEMP_KELVIN_TO_CELSIUS(high_temp_threshold);
-		curent_temp = ctd_get_temp();
-
-		/* Programmed high threshold = Original threshold + hysteresis
-		Subtracting hysteresis value twice to get low temp threshold.
-		where, programmed low threshold = Original threshold - hysteresis */
-		if ((curent_temp < (high_temp_threshold - (2 * ctd_hysteresis_val)))) {
-			if (data->ver == TMU_VER1) {
-				tmu_write(data, TIER_CRITICAL_THRESHOLD_ENABLED,
-					&data->regs->tier);
-			} else {
-				tmu_write(data, TIER_CRITICAL_THRESHOLD_ENABLED,
-					&data->regs_v2->tier);
-			}
-			send_call_back(CTD_LOW_CRITICAL_TEMP_EVENT);
-			crit_thread_running = 0;
-			kthread_stop(ts_crit_temp_monitoring_task);
-			continue;
-		}
-		msleep(TEMP_POLLING_DEFAULT_SLEEP_TIME);
-	}
-
-	return 0;
-}
-
 static int thread_cb(void *arg)
 {
 	struct qoriq_prv_data *qoriq_prv_data = (struct qoriq_prv_data *) arg;
@@ -532,31 +474,21 @@ static int thread_cb(void *arg)
 		raw_spin_unlock_irqrestore(&qoriq_prv_data->qoriq_tmu_wq_lock,
 						flags);
 		if (qoriq_thermal_event & (1<<CTD_HIGH_AVG_TEMP_EVENT)) {
-			if (!avg_thread_running) {
-				ts_avg_temp_monitoring_task = kthread_run(
-					thread_monitoring_avg_low_temp,
-					NULL, "Avg low temp monitoring thread");
-				if (IS_ERR(ts_avg_temp_monitoring_task))
-					dev_err(&pdev_tmu->dev,
-						"ERROR: Cannot create thread\n");
-				avg_thread_running = 1;
-			}
 			send_call_back(CTD_HIGH_AVG_TEMP_EVENT);
 			qoriq_thermal_event &= ~(1 << CTD_HIGH_AVG_TEMP_EVENT);
 			msleep(100);
+		} else if (qoriq_thermal_event & (1<<CTD_LOW_AVG_TEMP_EVENT)) {
+			send_call_back(CTD_LOW_AVG_TEMP_EVENT);
+			qoriq_thermal_event &= ~(1 << CTD_LOW_AVG_TEMP_EVENT);
+			msleep(100);
 		}
 		if (qoriq_thermal_event & (1<<CTD_HIGH_CRITICAL_TEMP_EVENT)) {
-			if (!crit_thread_running) {
-				ts_crit_temp_monitoring_task = kthread_run(
-					thread_monitoring_crit_low_temp,
-					NULL, "Crit low temp monitoring thread");
-				if (IS_ERR(ts_crit_temp_monitoring_task))
-					dev_err(&pdev_tmu->dev,
-						"ERROR: Cannot create thread\n");
-				crit_thread_running = 1;
-			}
 			send_call_back(CTD_HIGH_CRITICAL_TEMP_EVENT);
 			qoriq_thermal_event &= ~(1 << CTD_HIGH_CRITICAL_TEMP_EVENT);
+			msleep(100);
+		} else if (qoriq_thermal_event & (1<<CTD_LOW_CRITICAL_TEMP_EVENT)) {
+			send_call_back(CTD_LOW_CRITICAL_TEMP_EVENT);
+			qoriq_thermal_event &= ~(1 << CTD_LOW_CRITICAL_TEMP_EVENT);
 			msleep(100);
 		}
 	}
@@ -587,7 +519,7 @@ int qoriq_tmu_register_interrupt(struct platform_device *pdev,
 		qoriq_prv_data->qdata = data;
 		irq = of_irq_get(np, 1);
 		ret = request_irq(irq, qoriq_tmu_irq_handler_crit_temp,
-			IRQ_TYPE_EDGE_RISING, "TMU critical alarm",
+			IRQ_TYPE_LEVEL_HIGH, "TMU critical alarm",
 			qoriq_prv_data);
 		if (ret < 0) {
 			dev_err(&pdev->dev, "Failed to register interrupt.\n");
@@ -595,7 +527,7 @@ int qoriq_tmu_register_interrupt(struct platform_device *pdev,
 		}
 		irq = of_irq_get(np, 0);
 		ret = request_irq(irq, qoriq_tmu_irq_handler_avg_temp,
-			IRQ_TYPE_EDGE_RISING, "TMU alarm", qoriq_prv_data);
+			IRQ_TYPE_LEVEL_HIGH, "TMU alarm", qoriq_prv_data);
 		if (ret < 0) {
 			dev_err(&pdev->dev, "Failed to register interrupt.\n");
 			goto err_avg_tmp_irq_failed;
@@ -653,19 +585,17 @@ int qoriq_tmu_register_interrupt(struct platform_device *pdev,
 			high_threshold = TEMP_CELCIUS_TO_KELVIN(high_threshold);
 			tmr = tmu_read(data, &data->regs_v2->tmr);
 			tmu_write(data, tmr & ~TMR_ME, &data->regs_v2->tmr);
-			tmu_write(data, (tmr | 0x1F), &data->regs_v2->ticscr);
+			tmu_write(data, 0x0, &data->regs_v2->ticscr);
+			tmu_write(data, 0x0, &data->regs_v2->tiascr);
 			tmu_write(data,
 				(high_threshold | THRESHOLD_VALID),
 				&data->regs_v2->tmhtactr);
-			tmu_write(data, (tmr | 0x1F), &data->regs_v2->tiascr);
 			tmu_write(data,
 				(low_threshold | THRESHOLD_VALID),
 				&data->regs_v2->tmhtatr);
-			tmu_write(data, (tmr | 0x1F), &data->regs_v2->ticscr);
 			tmu_write(data,
 				(high_threshold_low | THRESHOLD_VALID),
 				&data->regs_v2->tmltactr);
-			tmu_write(data, (tmr | 0x1F), &data->regs_v2->tiascr);
 			tmu_write(data,
 				(low_threshold_low | THRESHOLD_VALID),
 				&data->regs_v2->tmltatr);
@@ -681,6 +611,7 @@ int qoriq_tmu_register_interrupt(struct platform_device *pdev,
 				TIER_AVERAGE_LOW_THRESHOLD_ENABLED |
 				TIER_CRITICAL_LOW_THRESHOLD_ENABLED),
 				&data->regs_v2->tier);
+			udelay(100);
 			tmu_write(data, (tmr | TMR_ME), &data->regs_v2->tmr);
 
 
@@ -774,15 +705,21 @@ int qoriq_tmu_update_threshold(struct platform_device *pdev, int hysteresis_val)
 		 * Programmed high threshold = Original threshold + hysteresis
 		 **/
 		threshold = tmu_read(data, &data->regs_v2->tmhtatr);
-		val = threshold & 0xFF;
-		if (threshold & THRESHOLD_VALID)
+		val = threshold & 0x1FF;
+		if (threshold & THRESHOLD_VALID) {
 			tmu_write(data, ((val + ctd_hysteresis_val)
 				| THRESHOLD_VALID), &data->regs_v2->tmhtatr);
+			tmu_write(data, ((val - ctd_hysteresis_val)
+				| THRESHOLD_VALID), &data->regs_v2->tmltatr);
+		}
 		threshold = tmu_read(data, &data->regs_v2->tmhtactr);
-		val = threshold & 0xFF;
-		if (threshold & THRESHOLD_VALID)
+		val = threshold & 0x1FF;
+		if (threshold & THRESHOLD_VALID) {
 			tmu_write(data, ((val + ctd_hysteresis_val)
 				| THRESHOLD_VALID), &data->regs_v2->tmhtactr);
+			tmu_write(data, ((val - ctd_hysteresis_val)
+				| THRESHOLD_VALID), &data->regs_v2->tmltactr);
+		}
 		tmu_write(data, (tmr | TMR_ME), &data->regs_v2->tmr);
 	}
 

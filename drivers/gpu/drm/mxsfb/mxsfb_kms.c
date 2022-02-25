@@ -390,7 +390,7 @@ static enum drm_mode_status mxsfb_crtc_mode_valid(struct drm_crtc *crtc,
 	if (!crtc->primary->state->fb)
 		bpp = 32;
 	else
-		bpp = crtc->primary->state->fb->format->depth;
+		bpp = crtc->primary->state->fb->format->cpp[0] * 8;
 
 	bw = (u64)mode->clock * 1000;
 	bw = bw * mode->hdisplay * mode->vdisplay * (bpp / 8);
@@ -568,9 +568,16 @@ static int mxsfb_plane_atomic_check(struct drm_plane *plane,
 									     plane);
 	struct mxsfb_drm_private *mxsfb = to_mxsfb_drm_private(plane->dev);
 	struct drm_crtc_state *crtc_state;
+	struct drm_framebuffer *fb = plane_state->fb;
+	struct drm_plane_state *old_state = plane->state;
+	struct drm_framebuffer *old_fb = old_state->fb;
 
 	crtc_state = drm_atomic_get_new_crtc_state(state,
 						   &mxsfb->crtc);
+
+	if (plane->type == DRM_PLANE_TYPE_PRIMARY && old_fb && fb &&
+	    old_fb->pitches[0] != fb->pitches[0])
+		crtc_state->mode_changed = true;
 
 	return drm_atomic_helper_check_plane_state(plane_state, crtc_state,
 						   DRM_PLANE_HELPER_NO_SCALING,
@@ -580,8 +587,8 @@ static int mxsfb_plane_atomic_check(struct drm_plane *plane,
 
 static void mxsfb_set_fb_hcrop(struct mxsfb_drm_private *mxsfb, u32 src_w, u32 fb_w)
 {
-	u32 mask_cnt, htotal, hcount;
-	u32 vdctrl2, vdctrl3, vdctrl4, transfer_count;
+	u32 mask_cnt;
+	u32 vdctrl3, vdctrl4, transfer_count;
 
 	if (src_w == fb_w) {
 		writel(0x0, mxsfb->base + HW_EPDC_PIGEON_12_0);
@@ -591,18 +598,9 @@ static void mxsfb_set_fb_hcrop(struct mxsfb_drm_private *mxsfb, u32 src_w, u32 f
 	}
 
 	transfer_count = readl(mxsfb->base + LCDC_V4_TRANSFER_COUNT);
-	hcount = TRANSFER_COUNT_GET_HCOUNT(transfer_count);
-
 	transfer_count &= ~TRANSFER_COUNT_SET_HCOUNT(0xffff);
 	transfer_count |= TRANSFER_COUNT_SET_HCOUNT(fb_w);
 	writel(transfer_count, mxsfb->base + LCDC_V4_TRANSFER_COUNT);
-
-	vdctrl2 = readl(mxsfb->base + LCDC_VDCTRL2);
-	htotal  = VDCTRL2_GET_HSYNC_PERIOD(vdctrl2);
-	htotal  += fb_w - hcount;
-	vdctrl2 &= ~VDCTRL2_SET_HSYNC_PERIOD(0x3ffff);
-	vdctrl2 |= VDCTRL2_SET_HSYNC_PERIOD(htotal);
-	writel(vdctrl2, mxsfb->base + LCDC_VDCTRL2);
 
 	vdctrl4 = readl(mxsfb->base + LCDC_VDCTRL4);
 	vdctrl4 &= ~SET_DOTCLK_H_VALID_DATA_CNT(0x3ffff);

@@ -2692,7 +2692,7 @@ static int __test_tls(struct crypto_aead *tfm, int enc,
 			/* verification failure was expected */
 			if (template[i].novrfy)
 				continue;
-			/* fall through */
+			fallthrough;
 		default:
 			pr_err("alg: tls%s: %s failed on test %d for %s: ret=%d\n",
 			       d, e, i, algo, -ret);
@@ -5655,8 +5655,8 @@ static const struct alg_test_desc alg_test_descs[] = {
 		.test = alg_test_tls,
 		.suite = {
 			.tls = {
-				.enc = __VECS(tls12_enc_tv_template),
-				.dec = __VECS(tls12_dec_tv_template)
+				.enc = __VECS(tls_enc_tv_template),
+				.dec = __VECS(tls_dec_tv_template)
 			}
 		}
 	}, {
@@ -5664,8 +5664,8 @@ static const struct alg_test_desc alg_test_descs[] = {
 		.test = alg_test_tls,
 		.suite = {
 			.tls = {
-				.enc = __VECS(tls_enc_tv_template),
-				.dec = __VECS(tls_dec_tv_template)
+				.enc = __VECS(tls12_enc_tv_template),
+				.dec = __VECS(tls12_dec_tv_template)
 			}
 		}
 	}, {

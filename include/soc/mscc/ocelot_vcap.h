@@ -704,6 +704,7 @@ struct ocelot_vcap_filter {
 	enum ocelot_vcap_bit dmac_mc;
 	enum ocelot_vcap_bit dmac_bc;
 	struct ocelot_vcap_key_vlan vlan;
+	struct ocelot_vcap_key_vlan cvlan;
 
 	enum ocelot_vcap_key_type key_type;
 	union {

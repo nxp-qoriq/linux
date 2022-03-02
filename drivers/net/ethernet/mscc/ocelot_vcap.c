@@ -670,6 +670,7 @@ static int is1_entry_set(struct ocelot *ocelot, int ix,
 			  struct ocelot_vcap_filter *filter)
 {
 	const struct vcap_props *vcap = &ocelot->vcap[VCAP_IS1];
+	struct ocelot_vcap_key_vlan *ctag = &filter->cvlan;
 	struct ocelot_vcap_key_vlan *tag = &filter->vlan;
 	struct ocelot_vcap_u64 payload;
 	struct vcap_data data;
@@ -706,6 +707,20 @@ static int is1_entry_set(struct ocelot *ocelot, int ix,
 		     tag->vid.value, tag->vid.mask);
 	vcap_key_set(vcap, &data, VCAP_IS1_HK_PCP,
 		     tag->pcp.value[0], tag->pcp.mask[0]);
+
+	if (ctag->vid.value != 0) {
+		if (type != IS1_TYPE_S1_5TUPLE_IP4)
+			return -EOPNOTSUPP;
+
+		vcap_key_bit_set(vcap, &data, VCAP_IS1_HK_TPID,
+				 OCELOT_VCAP_BIT_1);
+		vcap_key_bit_set(vcap, &data, VCAP_IS1_HK_VLAN_DBL_TAGGED,
+				 OCELOT_VCAP_BIT_1);
+		vcap_key_set(vcap, &data, VCAP_IS1_HK_IP4_INNER_VID,
+			     ctag->vid.value, ctag->vid.mask);
+		vcap_key_set(vcap, &data, VCAP_IS1_HK_IP4_INNER_PCP,
+			     ctag->pcp.value[0], ctag->pcp.mask[0]);
+	}
 
 	switch (filter->key_type) {
 	case OCELOT_VCAP_KEY_ETYPE: {

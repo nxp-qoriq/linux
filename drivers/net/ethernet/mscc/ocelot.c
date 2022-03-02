@@ -247,6 +247,12 @@ static void ocelot_vcap_enable(struct ocelot *ocelot, int port)
 	ocelot_write_gix(ocelot, ANA_PORT_VCAP_CFG_S1_ENA,
 			 ANA_PORT_VCAP_CFG, port);
 
+	/* Use key S1_5TUPLE_IP4 in second lookup. */
+	ocelot_write_ix(ocelot,
+			ANA_PORT_VCAP_S1_KEY_CFG_S1_KEY_IP6_CFG(2) |
+			ANA_PORT_VCAP_S1_KEY_CFG_S1_KEY_IP4_CFG(2),
+			ANA_PORT_VCAP_S1_KEY_CFG, port, 1);
+
 	ocelot_rmw_gix(ocelot, REW_PORT_CFG_ES0_EN,
 		       REW_PORT_CFG_ES0_EN,
 		       REW_PORT_CFG, port);

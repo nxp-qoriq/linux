@@ -970,17 +970,50 @@ static int felix_vlan_add(struct dsa_switch *ds, int port,
 	if (err)
 		return err;
 
-	return ocelot_vlan_add(ocelot, port, vlan->vid,
+	err = ocelot_vlan_add(ocelot, port, vlan->vid,
 			       flags & BRIDGE_VLAN_INFO_PVID,
 			       flags & BRIDGE_VLAN_INFO_UNTAGGED);
+	if (err)
+		return err;
+
+	if (vlan->proto == ETH_P_8021AD) {
+		if (!ocelot->qinq_enable) {
+			ocelot->qinq_enable = true;
+			kref_init(&ocelot->qinq_refcount);
+		} else {
+			kref_get(&ocelot->qinq_refcount);
+		}
+	}
+
+	return 0;
+}
+
+static void felix_vlan_qinq_release(struct kref *ref)
+{
+	struct ocelot *ocelot;
+
+	ocelot = container_of(ref, struct ocelot, qinq_refcount);
+	ocelot->qinq_enable = false;
 }
 
 static int felix_vlan_del(struct dsa_switch *ds, int port,
 			  const struct switchdev_obj_port_vlan *vlan)
 {
 	struct ocelot *ocelot = ds->priv;
+	int err;
 
-	return ocelot_vlan_del(ocelot, port, vlan->vid);
+	err = ocelot_vlan_del(ocelot, port, vlan->vid);
+	if (err) {
+		dev_err(ds->dev, "Failed to remove VLAN %d from port %d: %d\n",
+			vlan->vid, port, err);
+		return err;
+	}
+
+	if (ocelot->qinq_enable && vlan->proto == ETH_P_8021AD)
+		kref_put(&ocelot->qinq_refcount,
+			 felix_vlan_qinq_release);
+
+	return 0;
 }
 
 static void felix_phylink_validate(struct dsa_switch *ds, int port,
@@ -1348,6 +1381,98 @@ static int felix_connect_tag_protocol(struct dsa_switch *ds,
 	}
 }
 
+
+static int felix_qinq_port_bitmap_get(struct dsa_switch *ds, u32 *bitmap)
+{
+	struct ocelot *ocelot = ds->priv;
+	struct ocelot_port *ocelot_port;
+	int port;
+
+	*bitmap = 0;
+	for (port = 0; port < ds->num_ports; port++) {
+		ocelot_port = ocelot->ports[port];
+		if (ocelot_port->qinq_mode)
+			*bitmap |= 0x01 << port;
+	}
+
+	return 0;
+}
+
+static int felix_qinq_port_bitmap_set(struct dsa_switch *ds, u32 bitmap)
+{
+	struct ocelot *ocelot = ds->priv;
+	struct ocelot_port *ocelot_port;
+	int port;
+
+	for (port = 0; port < ds->num_ports; port++) {
+		ocelot_port = ocelot->ports[port];
+		if (bitmap & (0x01 << port))
+			ocelot_port->qinq_mode = true;
+		else
+			ocelot_port->qinq_mode = false;
+	}
+
+	return 0;
+}
+
+enum felix_devlink_param_id {
+	FELIX_DEVLINK_PARAM_ID_BASE = DEVLINK_PARAM_GENERIC_ID_MAX,
+	FELIX_DEVLINK_PARAM_ID_QINQ_PORT_BITMAP,
+};
+
+static int felix_devlink_param_get(struct dsa_switch *ds, u32 id,
+				   struct devlink_param_gset_ctx *ctx)
+{
+	int err;
+
+	switch (id) {
+	case FELIX_DEVLINK_PARAM_ID_QINQ_PORT_BITMAP:
+		err = felix_qinq_port_bitmap_get(ds, &ctx->val.vu32);
+		break;
+	default:
+		err = -EOPNOTSUPP;
+		break;
+	}
+
+	return err;
+}
+
+static int felix_devlink_param_set(struct dsa_switch *ds, u32 id,
+				   struct devlink_param_gset_ctx *ctx)
+{
+	int err;
+
+	switch (id) {
+	case FELIX_DEVLINK_PARAM_ID_QINQ_PORT_BITMAP:
+		err = felix_qinq_port_bitmap_set(ds, ctx->val.vu32);
+		break;
+	default:
+		err = -EOPNOTSUPP;
+		break;
+	}
+
+	return err;
+}
+
+static const struct devlink_param felix_devlink_params[] = {
+	DSA_DEVLINK_PARAM_DRIVER(FELIX_DEVLINK_PARAM_ID_QINQ_PORT_BITMAP,
+				 "qinq_port_bitmap",
+				 DEVLINK_PARAM_TYPE_U32,
+				 BIT(DEVLINK_PARAM_CMODE_RUNTIME)),
+};
+
+static int felix_setup_devlink_params(struct dsa_switch *ds)
+{
+	return dsa_devlink_params_register(ds, felix_devlink_params,
+					   ARRAY_SIZE(felix_devlink_params));
+}
+
+static void felix_teardown_devlink_params(struct dsa_switch *ds)
+{
+	dsa_devlink_params_unregister(ds, felix_devlink_params,
+				      ARRAY_SIZE(felix_devlink_params));
+}
+
 /* Hardware initialization done here so that we can allocate structures with
  * devm without fear of dsa_register_switch returning -EPROBE_DEFER and causing
  * us to allocate structures twice (leak memory) and map PCI memory twice
@@ -1412,6 +1537,10 @@ static int felix_setup(struct dsa_switch *ds)
 	ds->fdb_isolation = true;
 	ds->max_num_bridges = ds->num_ports;
 
+	err = felix_setup_devlink_params(ds);
+	if (err < 0)
+		return err;
+
 	return 0;
 
 out_deinit_ports:
@@ -1438,6 +1567,8 @@ static void felix_teardown(struct dsa_switch *ds)
 		felix_del_tag_protocol(ds, dp->index, felix->tag_proto);
 		break;
 	}
+
+	felix_teardown_devlink_params(ds);
 
 	dsa_switch_for_each_available_port(dp, ds)
 		ocelot_deinit_port(ocelot, dp->index);
@@ -1917,6 +2048,8 @@ const struct dsa_switch_ops felix_switch_ops = {
 	.port_mrp_del_ring_role		= felix_mrp_del_ring_role,
 	.tag_8021q_vlan_add		= felix_tag_8021q_vlan_add,
 	.tag_8021q_vlan_del		= felix_tag_8021q_vlan_del,
+	.devlink_param_get		= felix_devlink_param_get,
+	.devlink_param_set		= felix_devlink_param_set,
 	.port_get_default_prio		= felix_port_get_default_prio,
 	.port_set_default_prio		= felix_port_set_default_prio,
 	.port_get_dscp_prio		= felix_port_get_dscp_prio,

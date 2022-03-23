@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2022 NXP
+ */
+
+#include "imx8mp-evk-root.dts"
+
+&eqos {
+	status = "disabled";
+};
+
+&flexcan1 {
+	status = "disabled";
+};

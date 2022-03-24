@@ -1118,6 +1118,30 @@ static int felix_get_ts_info(struct dsa_switch *ds, int port,
 	return ocelot_get_ts_info(ocelot, port, info);
 }
 
+static int felix_set_preempt(struct dsa_switch *ds, int port,
+			     struct ethtool_fp *fpcmd)
+{
+	struct ocelot *ocelot = ds->priv;
+	struct felix *felix = ocelot_to_felix(ocelot);
+
+	if (felix->info->port_set_preempt)
+		return felix->info->port_set_preempt(ocelot, port, fpcmd);
+
+	return -EOPNOTSUPP;
+}
+
+static int felix_get_preempt(struct dsa_switch *ds, int port,
+			     struct ethtool_fp *fpcmd)
+{
+	struct ocelot *ocelot = ds->priv;
+	struct felix *felix = ocelot_to_felix(ocelot);
+
+	if (felix->info->port_get_preempt)
+		return felix->info->port_get_preempt(ocelot, port, fpcmd);
+
+	return -EOPNOTSUPP;
+}
+
 static int felix_parse_ports_node(struct felix *felix,
 				  struct device_node *ports_node,
 				  phy_interface_t *port_phy_modes)
@@ -1995,6 +2019,8 @@ const struct dsa_switch_ops felix_switch_ops = {
 	.get_ethtool_stats		= felix_get_ethtool_stats,
 	.get_sset_count			= felix_get_sset_count,
 	.get_ts_info			= felix_get_ts_info,
+	.set_preempt			= felix_set_preempt,
+	.get_preempt			= felix_get_preempt,
 	.phylink_validate		= felix_phylink_validate,
 	.phylink_mac_config		= felix_phylink_mac_config,
 	.phylink_mac_link_down		= felix_phylink_mac_link_down,

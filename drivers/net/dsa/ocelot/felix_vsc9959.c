@@ -6,6 +6,7 @@
 #include <soc/mscc/ocelot_qsys.h>
 #include <soc/mscc/ocelot_vcap.h>
 #include <soc/mscc/ocelot_ana.h>
+#include <soc/mscc/ocelot_dev.h>
 #include <soc/mscc/ocelot_ptp.h>
 #include <soc/mscc/ocelot_sys.h>
 #include <net/tc_act/tc_gate.h>
@@ -2301,6 +2302,65 @@ static const struct ocelot_ops vsc9959_ops = {
 	.tas_clock_adjust	= vsc9959_tas_clock_adjust,
 };
 
+static int vsc9959_port_set_preempt(struct ocelot *ocelot, int port,
+				    struct ethtool_fp *fpcmd)
+{
+	struct ocelot_port *ocelot_port = ocelot->ports[port];
+	int p_queues = fpcmd->preemptible_queues_mask;
+	int mm_fragsize;
+
+	if (fpcmd->min_frag_size < 60 || fpcmd->min_frag_size > 252)
+		return -EINVAL;
+
+	mm_fragsize = DIV_ROUND_UP((fpcmd->min_frag_size + 4), 64) - 1;
+	fpcmd->fp_supported = 1;
+
+	ocelot_port_rmwl(ocelot_port,
+			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
+			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
+			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
+			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
+			 DEV_MM_ENABLE_CONFIG);
+
+	ocelot_port_rmwl(ocelot_port,
+			 (fpcmd->fp_enabled ?
+			  0 : DEV_MM_CONFIG_VERIF_CONFIG_PRM_VERIFY_DIS),
+			 DEV_MM_CONFIG_VERIF_CONFIG_PRM_VERIFY_DIS,
+			 DEV_MM_VERIF_CONFIG);
+
+	ocelot_rmw_rix(ocelot,
+		       QSYS_PREEMPTION_CFG_MM_ADD_FRAG_SIZE(mm_fragsize) |
+		       QSYS_PREEMPTION_CFG_P_QUEUES(p_queues),
+		       QSYS_PREEMPTION_CFG_MM_ADD_FRAG_SIZE_M |
+		       QSYS_PREEMPTION_CFG_P_QUEUES_M,
+		       QSYS_PREEMPTION_CFG,
+		       port);
+
+	return 0;
+}
+
+static int vsc9959_port_get_preempt(struct ocelot *ocelot, int port,
+				    struct ethtool_fp *fpcmd)
+{
+	struct ocelot_port *ocelot_port = ocelot->ports[port];
+	u8 fragsize;
+	u32 val;
+
+	fpcmd->fp_supported = 1;
+	fpcmd->supported_queues_mask = GENMASK(7, 0);
+
+	val = ocelot_port_readl(ocelot_port, DEV_MM_VERIF_CONFIG);
+	val &= DEV_MM_CONFIG_VERIF_CONFIG_PRM_VERIFY_DIS;
+	fpcmd->fp_enabled = (val ? 0 : 1);
+
+	val = ocelot_read_rix(ocelot, QSYS_PREEMPTION_CFG, port);
+	fpcmd->preemptible_queues_mask = val & QSYS_PREEMPTION_CFG_P_QUEUES_M;
+	fragsize = QSYS_PREEMPTION_CFG_MM_ADD_FRAG_SIZE_X(val);
+	fpcmd->min_frag_size = (fragsize + 1) * 64 - 4;
+
+	return 0;
+}
+
 static const struct felix_info felix_info_vsc9959 = {
 	.target_io_res		= vsc9959_target_io_res,
 	.port_io_res		= vsc9959_port_io_res,
@@ -2327,6 +2387,8 @@ static const struct felix_info felix_info_vsc9959 = {
 	.port_setup_tc		= vsc9959_port_setup_tc,
 	.port_sched_speed_set	= vsc9959_sched_speed_set,
 	.init_regmap		= ocelot_regmap_init,
+	.port_set_preempt	= vsc9959_port_set_preempt,
+	.port_get_preempt	= vsc9959_port_get_preempt,
 };
 
 static irqreturn_t felix_irq_handler(int irq, void *data)

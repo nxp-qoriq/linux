@@ -52,6 +52,10 @@ struct felix_info {
 					int speed);
 	struct regmap *(*init_regmap)(struct ocelot *ocelot,
 				      struct resource *res);
+	int	(*port_set_preempt)(struct ocelot *ocelot, int port,
+				    struct ethtool_fp *fpcmd);
+	int	(*port_get_preempt)(struct ocelot *ocelot, int port,
+				    struct ethtool_fp *fpcmd);
 };
 
 extern const struct dsa_switch_ops felix_switch_ops;

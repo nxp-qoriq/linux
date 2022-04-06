@@ -65,3 +65,11 @@
 	fsl,rx-phy-delay-1000-ns = <0>;
 	fsl,tx-phy-delay-1000-ns = <0>;
 };
+
+/* Set PERCLK parent to IPG to make sure that GPT_CLK set above is lower
+ * than 1/4 of frequency of the peripheral clock
+ */
+&clks {
+       assigned-clocks = <&clks IMX6UL_CLK_PERCLK_SEL>;
+       assigned-clock-parents = <&clks IMX6UL_CLK_IPG>;
+};

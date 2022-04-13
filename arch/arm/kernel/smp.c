@@ -538,7 +538,7 @@ static const char *ipi_types[NR_IPI] __tracepoint_string = {
 	[IPI_IRQ_WORK]		= "IRQ work interrupts",
 	[IPI_COMPLETION]	= "completion interrupts",
 #ifdef CONFIG_BAREMETAL
-	S(IPI_BAREMETAL_COMM, "Baremetal inter-core interrupts"),
+	[IPI_BAREMETAL_COMM]	= "Baremetal inter-core interrupts",
 #endif
 };
 

@@ -2,7 +2,7 @@
 //
 // Device Tree file for LA1224RDB Rev C board
 //
-// Copyright 2021 NXP
+// Copyright 2021-2022 NXP
 
 /dts-v1/;
 
@@ -96,6 +96,11 @@
 			status = "okay";
 		};
 	};
+
+        la9310_wdog: la9310_wdog@0 {
+                compatible = "la9310_wdog";
+                la9310-reset-gpio = <&pcal6524_1 11 GPIO_ACTIVE_HIGH>;
+        };
 
 	soc {
 		ptp-timer@8b95000 {

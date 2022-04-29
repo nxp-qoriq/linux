@@ -44,7 +44,7 @@
 			reg = <0x0>;
 			interrupt-cells = <3>;
 			interrupts = <GIC_SPI 9 IRQ_TYPE_EDGE_RISING>;
-			modem-reset-gpio = <&pcal6524_1 15 GPIO_ACTIVE_LOW>;
+			modem-reset-gpio = <&pcal6524_1 16 GPIO_ACTIVE_LOW>;
 			status = "okay";
 		};
 
@@ -261,13 +261,6 @@
 			gpios = <15 GPIO_ACTIVE_LOW>;
 			output-low;
 			line-name = "SW_LA1224_BLOCK_PORST_B";
-		};
-
-		P20 {
-			gpio-hog;
-			gpios = <16 GPIO_ACTIVE_LOW>;
-			output-low;
-			line-name = "SW_LA1224_BLOCK_HRESET_B";
 		};
 
 		P21 {

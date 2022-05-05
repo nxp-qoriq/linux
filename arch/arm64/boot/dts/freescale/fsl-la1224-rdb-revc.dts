@@ -249,12 +249,6 @@
 			line-name = "I2C_LEA_6T_RST_B";
 		};
 
-		P16 {
-			gpio-hog;
-			gpios = <14 GPIO_ACTIVE_LOW>;
-			output-low;
-			line-name = "I2C_MODEM_RST_B";
-		};
 
 		P17 {
 			gpio-hog;

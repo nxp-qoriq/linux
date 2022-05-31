@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/tty/rpmsg_tty.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: rpmsg tty driver
+
+maintainers:
+  - Biwen Li <biwen.li@nxp.com>
+
+properties:
+  compatible:
+    const: fsl,uart-rpbus
+
+  bus_id:
+    items:
+      - description: Used for imx srtm uart application protocol. Specify which real uart(LPUARTx/UARTx, x is instance number) will be used by a virtual tty(/dev/ttyRPMSGx), bus_id = 0xff when bus_id is not specified in dts and specified the flag(IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG).
+    maxItems: 1
+
+  flags:
+    items:
+      - description: used for imx srtm uart application protocol(IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG: support multi uart message protocol; IMX_SRTM_UART_SPECIFY_PORT_NUM_MASK: whether specify destination uart id; IMX_SRTM_UART_PORT_NUM_MASK: which destination uart id will be used)
+    maxItems: 1
+
+  status:
+    maxItems: 1
+
+examples:
+  - |
+    #include <dt-bindings/rpmsg/imx_srtm.h>
+
+    uart-rpbus-0 {
+        compatible = "fsl,uart-rpbus";
+        bus_id = <3>; /* use uart3 */
+        flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+        status = "okay";
+    }; /* /dev/ttyRPMSG0 on linux(running on acore) <--SRTM PROTOCOL--> srtm uart channel 0(endpoint on mcore) <---MULTI UART MSG PROTOCOL---> UART3(mcore is the owner) */
+
+    uart-rpbus-1 {
+        compatible = "fsl,uart-rpbus";
+        bus_id = <3>; /* use uart3 */
+        flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+        status = "okay";
+    }; /* /dev/ttyRPMSG1 on linux(running on acore) <--SRTM PROTOCOL--> srtm uart channel 1(endpoint on mcore) <---MULTI UART MSG PROTOCOL---> UART3(mcore is the owner) */
+
+    uart-rpbus-2 {
+        compatible = "fsl,uart-rpbus";
+        bus_id = <2>; /* use uart2 */
+        flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+        status = "okay";
+    }; /* /dev/ttyRPMSG2 on linux(running on acore) <--SRTM PROTOCOL--> srtm uart channel 2(endpoint on mcore) <---MULTI UART MSG PROTOCOL---> UART2(mcore is the owner) */
+
+    uart-rpbus-3 {
+        compatible = "fsl,uart-rpbus";
+        bus_id = <4>; /* use uart4 */
+        flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG | IMX_SRTM_UART_SPECIFY_PORT_NUM_MASK | IMX_SRTM_UART_PORT_NUM_MASK(0x8)>;
+        status = "okay";
+    }; /* [/dev/ttyRPMSG3 on linux(running on acore) <--SRTM PROTOCOL--> srtm uart channel 3(endpoint on mcore) <---MULTI UART MSG PROTOCOL---> UART4(mcore is the owner), first board] <---MULTI UART MSG PROTOCOL--> [UARTx(mcore is the owner) <---MULTI UART MSG PROTOCOL---> srtm uart channel 8 <---SRTM PROTOCOL--> /dev/ttyRPMSG8 on linux(running on acore), second board ] */
+
+    uart-rpbus-4 {
+        compatible = "fsl,uart-rpbus";
+        bus_id = <5>; /* use uart5 */
+        status = "okay";
+    }; /* /dev/ttyRPMSG4 on linux(running on acore) <--SRTM PROTOCOL--> srtm uart channel 4(endpoint on mcore) <-----> UART5(mcore is the owner) <----> GPS device(The device have exclusive use of the UART5, other virtual tty cannot use UART5) */
+
+    /* Note: when nothing is specified(include compatible, bus_id, flags, status), it's a normal rpmsg tty. /dev/ttyRPMSG7(running on acore) <--RPMSG--> rpmsg endpoint(running on mcore) */

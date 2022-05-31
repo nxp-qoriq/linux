@@ -382,4 +382,6 @@ config RPMSG_TTY
 
 endif # TTY
 
+
+
 source "drivers/tty/serdev/Kconfig"

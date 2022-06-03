@@ -29,18 +29,26 @@
 	};
 };
 
+/* AVB HW timer*/
+&epit1 {
+	compatible = "fsl,imx6ql-epit";
+	clocks = <&clks IMX6UL_CLK_EPIT1>;
+	clock-names = "epit1";
+
+	status = "okay";
+};
+
+/* AVB MCR timer */
 &gpt2 {
 	compatible = "fsl,avb-gpt";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_avb>;
 	prescale = <1>;
 
-	timer-channel = <1>; /* Use output compare channel 1 */
-
 	rec-channel = <1 0 0>; /* capture channel, eth port, ENET TC id */
 	domain = <0>;
 
-	clocks = <&clks IMX6UL_CLK_GPT2_BUS>, <&clks IMX6UL_CLK_GPT2_BUS>,
+	clocks = <&clks IMX6UL_CLK_GPT2_BUS>, <&clks IMX6UL_CLK_GPT2_SERIAL>,
 		 <&clks IMX6UL_CLK_SAI2>, <&clks IMX6UL_CLK_PLL4>;
 	clock-names = "ipg", "per", "clk_in", "audio_pll";
 

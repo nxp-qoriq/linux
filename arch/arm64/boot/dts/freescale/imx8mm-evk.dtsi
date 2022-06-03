@@ -237,13 +237,6 @@
 	};
 };
 
-&gpt1 {
-	compatible = "fsl,avb-gpt";
-	timer-channel = <1>; /* Use output compare channel 1*/
-	prescale = <1>;
-	status = "okay";
-};
-
 &fec1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_fec1>;

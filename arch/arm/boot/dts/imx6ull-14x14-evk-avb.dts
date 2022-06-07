@@ -31,7 +31,7 @@
 
 /* AVB HW timer*/
 &epit1 {
-	compatible = "fsl,imx6ql-epit";
+	compatible = "fsl,avb-epit";
 	clocks = <&clks IMX6UL_CLK_EPIT1>;
 	clock-names = "epit1";
 

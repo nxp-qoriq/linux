@@ -78,6 +78,9 @@
  * than 1/4 of frequency of the peripheral clock
  */
 &clks {
-       assigned-clocks = <&clks IMX6UL_CLK_PERCLK_SEL>;
-       assigned-clock-parents = <&clks IMX6UL_CLK_IPG>;
+	assigned-clocks = <&clks IMX6UL_CLK_PERCLK_SEL>,
+				<&clks IMX6UL_CLK_PLL3_PFD2>,
+				<&clks IMX6UL_CLK_PLL4_AUDIO_DIV>;
+	assigned-clock-parents = <&clks IMX6UL_CLK_IPG>;
+	assigned-clock-rates = <0>, <320000000>, <786432000>;
 };

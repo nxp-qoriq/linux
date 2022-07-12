@@ -35,6 +35,7 @@
 #define TMSARA_V2		0xe
 #define TMU_VER1		0x1
 #define TMU_VER2		0x2
+#define TMU_NON_IDEALITY_FACTOR	1022
 #define TEMP_CELCIUS_TO_KELVIN(val)		((CELSIUS_TO_DECI_KELVIN(val)) / 10)
 #define TEMP_KELVIN_TO_CELSIUS(val)		DECI_KELVIN_TO_CELSIUS(val * 10)
 
@@ -293,26 +294,52 @@ irqreturn_t qoriq_tmu_irq_handler_crit_temp(int irq, void *data)
 int ctd_get_temp(void)
 {
 	int i, max_temp = 0;
-	int ctd_curent_temp[MAX_TMUv2_CTD_MONITORING_SITE];
+	u32 ctd_curent_temp[MAX_TMUv2_CTD_MONITORING_SITE];
 	struct qoriq_tmu_data *data = platform_get_drvdata(pdev_tmu);
+	u32 tritsr = 0;
 
 	if (data->ver == TMU_VER1) {
 		for (i = 0; i < MAX_CTD_MONITORING_SITE; i++) {
-			ctd_curent_temp[i] = tmu_read(data,
-					&data->regs->site[i].tritsr) & 0xff;
+			tritsr = tmu_read(data, &data->regs->site[i].tritsr);
+			if (!(tritsr & 0x80000000))
+				break;
+			ctd_curent_temp[i] = tritsr & 0xFF;
 			if (ctd_curent_temp[i] > max_temp)
 				max_temp = ctd_curent_temp[i];
 		}
+
+		if (!(tritsr & 0x80000000) || max_temp < MIN_CTD_TEMP ||
+			max_temp > MAX_CTD_TEMP) {
+			pr_err("%s : Invalid temperature, valid=%d, temp=%d\n",
+			    __func__, (tritsr & 0x80000000), max_temp);
+			return INVALID_CTD_TEMP;
+		}
+
 		return max_temp;
 	} else {
 		for (i = 0; i < MAX_TMUv2_CTD_MONITORING_SITE; i++) {
-			ctd_curent_temp[i] = tmu_read(data,
-					&data->regs_v2->site[i].tritsr);
-			if ((ctd_curent_temp[i] & 0x80000000))
-				if (max_temp < (ctd_curent_temp[i] & 0x1FF))
-					max_temp = ctd_curent_temp[i] & 0x1FF;
+			tritsr = tmu_read(data, &data->regs_v2->site[i].tritsr);
+			if (!(tritsr & 0x80000000))
+				break;
+			ctd_curent_temp[i] = tritsr & 0x1FF;
+			if (max_temp < ctd_curent_temp[i])
+				max_temp = ctd_curent_temp[i];
 		}
-		return TEMP_KELVIN_TO_CELSIUS(max_temp);
+
+		/* Temperature is calculated as
+		 * T = ((t-3) +273)*( 1.008/1.022) -273
+		 */
+		max_temp = (((max_temp - 3 + 273) * 1008) /
+			TMU_NON_IDEALITY_FACTOR) - 273;
+		max_temp = TEMP_KELVIN_TO_CELSIUS(max_temp);
+
+		if (!(tritsr & 0x80000000) || max_temp < MIN_CTD_TEMP ||
+			max_temp > MAX_CTD_TEMP) {
+			pr_err("%s: Invalid temperature, valid=%d, temp=%d\n",
+			    __func__, (tritsr & 0x80000000), max_temp);
+			return INVALID_CTD_TEMP;
+		}
+		return max_temp;
 	}
 }
 EXPORT_SYMBOL_GPL(ctd_get_temp);

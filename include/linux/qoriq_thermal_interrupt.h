@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright 2019-2021 NXP
- * All rights reserved.
+ * Copyright 2019-2022 NXP
  */
 
 #ifndef _QORIQ_THERMAL_INTERRUPT_
@@ -16,6 +15,10 @@
 #define TIER_CRITICAL_LOW_THRESHOLD_ENABLED	0x04000000
 #define THRESHOLD_VALID 0x80000000
 #define TEMP_POLLING_DEFAULT_SLEEP_TIME 5000
+
+#define INVALID_CTD_TEMP	(0xffff)
+#define MIN_CTD_TEMP	(0)
+#define MAX_CTD_TEMP	(125)
 
 /*
  * CTD Thermal event

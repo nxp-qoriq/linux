@@ -3,6 +3,7 @@
  * Freescale SCFG MSI(-X) support
  *
  * Copyright (C) 2016 Freescale Semiconductor.
+ * Copyright 2022 NXP
  *
  * Author: Minghuan Lian <Minghuan.Lian@nxp.com>
  */
@@ -65,11 +66,13 @@ static struct irq_chip ls_scfg_msi_irq_chip = {
 static struct msi_domain_info ls_scfg_msi_domain_info = {
 	.flags	= (MSI_FLAG_USE_DEF_DOM_OPS |
 		   MSI_FLAG_USE_DEF_CHIP_OPS |
+		   MSI_FLAG_MULTI_PCI_MSI |
 		   MSI_FLAG_PCI_MSIX),
 	.chip	= &ls_scfg_msi_irq_chip,
 };
 
-static int msi_affinity_flag = 1;
+/* To support Multiple MSI, the MSI affinity must be disabled */
+static int msi_affinity_flag = 0;
 
 static int __init early_parse_ls_scfg_msi(char *p)
 {
@@ -140,28 +143,29 @@ static int ls_scfg_msi_domain_irq_alloc(struct irq_domain *domain,
 {
 	msi_alloc_info_t *info = args;
 	struct ls_scfg_msi *msi_data = domain->host_data;
-	int pos, err = 0;
-
-	WARN_ON(nr_irqs != 1);
+	int pos;
+	int i;
+	int err;
 
 	spin_lock(&msi_data->lock);
-	pos = find_first_zero_bit(msi_data->used, msi_data->irqs_num);
-	if (pos < msi_data->irqs_num)
-		__set_bit(pos, msi_data->used);
-	else
-		err = -ENOSPC;
+	/* To support Multiple MSI */
+	pos = bitmap_find_free_region(msi_data->used,
+			msi_data->cfg->msir_irqs * msi_data->msir_num,
+			order_base_2(nr_irqs));
 	spin_unlock(&msi_data->lock);
 
-	if (err)
-		return err;
+	if (pos < 0)
+		return pos;
 
 	err = iommu_dma_prepare_msi(info->desc, msi_data->msiir_addr);
 	if (err)
 		return err;
 
-	irq_domain_set_info(domain, virq, pos,
-			    &ls_scfg_msi_parent_chip, msi_data,
-			    handle_simple_irq, NULL, NULL);
+	for (i = 0; i < nr_irqs; i++) {
+		irq_domain_set_info(domain, virq + i, pos + i,
+				&ls_scfg_msi_parent_chip, msi_data,
+				handle_simple_irq, NULL, NULL);
+	}
 
 	return 0;
 }
@@ -180,7 +184,7 @@ static void ls_scfg_msi_domain_irq_free(struct irq_domain *domain,
 	}
 
 	spin_lock(&msi_data->lock);
-	__clear_bit(pos, msi_data->used);
+	bitmap_release_region(msi_data->used, pos, order_base_2(nr_irqs));
 	spin_unlock(&msi_data->lock);
 }
 

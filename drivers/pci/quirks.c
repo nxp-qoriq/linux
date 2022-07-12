@@ -3613,6 +3613,21 @@ static void mellanox_check_broken_intx_masking(struct pci_dev *pdev)
 out:
 	pci_disable_device(pdev);
 }
+
+/*
+ *  set NXP LA9310 device class code
+ */
+static void quirk_la9310_cc(struct pci_dev *pdev)
+{
+
+	/* LA9310 devices do not have class code set when in PCIe boot mode */
+	if (pdev->class == PCI_CLASS_NOT_DEFINED) {
+		dev_info(&pdev->dev, "Setting PCI class for LA9310 PCIe device\n");
+		pdev->class = PCI_CLASS_NETWORK_OTHER;
+	}
+}
+DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_FREESCALE, PCI_DEVICE_ID_LA9310, quirk_la9310_cc);
+DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_FREESCALE, PCI_DEVICE_ID_LA9310_DISABLE_CIP, quirk_la9310_cc);
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_MELLANOX, PCI_ANY_ID,
 			mellanox_check_broken_intx_masking);
 

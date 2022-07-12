@@ -2,7 +2,7 @@
 //
 // Device Tree Include file for Layerscape-LX2160A family SoC.
 //
-// Copyright 2018-2020 NXP
+// Copyright 2018-2022 NXP
 
 #include <dt-bindings/clock/fsl,qoriq-clockgen.h>
 #include <dt-bindings/gpio/gpio.h>
@@ -461,7 +461,7 @@
 			};
 
 			cooling-maps {
-				map0 {
+				map0: map0 {
 					trip = <&cluster6_7_alert>;
 					cooling-device =
 						<&cpu0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,

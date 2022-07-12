@@ -56,6 +56,7 @@ dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-lx2160a-rdb.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-lx2162a-qds.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-la1224-rdb-revc.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-la1224-rdb.dtb
+dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-la1238-rdb.dtb
 
 fsl-ls1028a-qds-13bb-dtbs := fsl-ls1028a-qds.dtb fsl-ls1028a-qds-13bb.dtbo
 fsl-ls1028a-qds-65bb-dtbs := fsl-ls1028a-qds.dtb fsl-ls1028a-qds-65bb.dtbo

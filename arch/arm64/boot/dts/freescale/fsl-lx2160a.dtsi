@@ -470,7 +470,7 @@
 			};
 
 			cooling-maps {
-				map0 {
+				map0: map0 {
 					trip = <&cluster6_7_alert>;
 					cooling-device =
 						<&cpu0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,

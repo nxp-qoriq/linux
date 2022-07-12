@@ -1591,6 +1591,12 @@ properties:
               - nxp,la1224-rdb
           - const: fsl,lx2160a
 
+        - description: LX2160A ARMv8 based LA1238RDB Boards
+          items:
+            - enum:
+                - fsl,la1238-rdb
+            - const: fsl,lx2160a
+
       - description: SolidRun LX2160A CEX-7 based Boards
         items:
           - enum:

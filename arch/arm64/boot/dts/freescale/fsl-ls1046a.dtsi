@@ -3,7 +3,7 @@
  * Device Tree Include file for NXP Layerscape-1046A family SoC.
  *
  * Copyright 2016 Freescale Semiconductor, Inc.
- * Copyright 2018, 2020 NXP
+ * Copyright 2018, 2020-2022 NXP
  *
  * Mingkai Hu <mingkai.hu@nxp.com>
  */
@@ -474,7 +474,7 @@
 		tmu: tmu@1f00000 {
 			compatible = "fsl,qoriq-tmu";
 			reg = <0x0 0x1f00000 0x0 0x10000>;
-			interrupts = <0 33 0x4>;
+			interrupts = <0 33 0x4>, <0 34 0x4>;
 			fsl,tmu-range = <0xb0000 0x9002a 0x6004c 0x70062>;
 			fsl,tmu-calibration =
 				/* Calibration data group 1 */

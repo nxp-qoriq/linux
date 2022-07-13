@@ -44,6 +44,7 @@ void swake_up_all_locked(struct swait_queue_head *q)
 	while (!list_empty(&q->task_list))
 		swake_up_locked(q);
 }
+EXPORT_SYMBOL(swake_up_all_locked);
 
 void swake_up_one(struct swait_queue_head *q)
 {

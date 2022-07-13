@@ -705,7 +705,7 @@
 		tmu: tmu@1f80000 {
 			compatible = "fsl,qoriq-tmu";
 			reg = <0x0 0x1f80000 0x0 0x10000>;
-			interrupts = <GIC_SPI 23 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts = <GIC_SPI 23 IRQ_TYPE_LEVEL_HIGH>, <GIC_SPI 24 IRQ_TYPE_LEVEL_HIGH>;
 			fsl,tmu-range = <0x800000e6 0x8001017d>;
 			fsl,tmu-calibration =
 				/* Calibration data group 1 */

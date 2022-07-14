@@ -1100,10 +1100,10 @@
 		};
 
 		pcie1: pcie@3400000 {
-			compatible = "fsl,ls2088a-pcie";
+			compatible = "fsl,lx2160a-pcie";
 			reg = <0x00 0x03400000 0x0 0x00100000   /* controller registers */
 			       0x80 0x00000000 0x0 0x00002000>; /* configuration space */
-			reg-names = "regs", "config";
+			reg-names = "csr_axi_slave", "config_axi_slave";
 			interrupts = <GIC_SPI 108 IRQ_TYPE_LEVEL_HIGH>, /* AER interrupt */
 				     <GIC_SPI 108 IRQ_TYPE_LEVEL_HIGH>, /* PME interrupt */
 				     <GIC_SPI 108 IRQ_TYPE_LEVEL_HIGH>; /* controller interrupt */
@@ -1112,10 +1112,10 @@
 			#size-cells = <2>;
 			device_type = "pci";
 			dma-coherent;
-			num-viewport = <8>;
+			apio-wins = <8>;
+			ppio-wins = <8>;
 			bus-range = <0x0 0xff>;
-			ranges = <0x81000000 0x0 0x00000000 0x80 0x00010000 0x0 0x00010000
-				  0x82000000 0x0 0x40000000 0x80 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+			ranges = <0x82000000 0x0 0x40000000 0x80 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
 			msi-parent = <&its>;
 			iommu-map = <0 &smmu 0 1>; /* This is fixed-up by u-boot */
 			#interrupt-cells = <1>;
@@ -1128,7 +1128,7 @@
 		};
 
 		pcie_ep1: pcie_ep@3400000 {
-			compatible = "fsl,lx2160ar2-pcie-ep", "fsl,ls-pcie-ep";
+			compatible = "fsl,lx2160a-pcie-ep";
 			reg = <0x00 0x03400000 0x0 0x00100000
 			       0x80 0x00000000 0x8 0x00000000>;
 			reg-names = "regs", "addr_space";
@@ -1137,10 +1137,10 @@
 		};
 
 		pcie2: pcie@3500000 {
-			compatible = "fsl,ls2088a-pcie";
+			compatible = "fsl,lx2160a-pcie";
 			reg = <0x00 0x03500000 0x0 0x00100000   /* controller registers */
 			       0x88 0x00000000 0x0 0x00002000>; /* configuration space */
-			reg-names = "regs", "config";
+			reg-names = "csr_axi_slave", "config_axi_slave";
 			interrupts = <GIC_SPI 113 IRQ_TYPE_LEVEL_HIGH>, /* AER interrupt */
 				     <GIC_SPI 113 IRQ_TYPE_LEVEL_HIGH>, /* PME interrupt */
 				     <GIC_SPI 113 IRQ_TYPE_LEVEL_HIGH>; /* controller interrupt */
@@ -1149,10 +1149,10 @@
 			#size-cells = <2>;
 			device_type = "pci";
 			dma-coherent;
-			num-viewport = <8>;
+			apio-wins = <8>;
+			ppio-wins = <8>;
 			bus-range = <0x0 0xff>;
-			ranges = <0x81000000 0x0 0x00000000 0x88 0x00010000 0x0 0x00010000
-				  0x82000000 0x0 0x40000000 0x88 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+			ranges = <0x82000000 0x0 0x40000000 0x88 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
 			msi-parent = <&its>;
 			iommu-map = <0 &smmu 0 1>; /* This is fixed-up by u-boot */
 			#interrupt-cells = <1>;
@@ -1165,7 +1165,7 @@
 		};
 
 		pcie_ep2: pcie_ep@3500000 {
-			compatible = "fsl,lx2160ar2-pcie-ep", "fsl,ls-pcie-ep";
+			compatible = "fsl,lx2160a-pcie-ep";
 			reg = <0x00 0x03500000 0x0 0x00100000
 			       0x88 0x00000000 0x8 0x00000000>;
 			reg-names = "regs", "addr_space";
@@ -1174,10 +1174,10 @@
 		};
 
 		pcie3: pcie@3600000 {
-			compatible = "fsl,ls2088a-pcie";
+			compatible = "fsl,lx2160a-pcie";
 			reg = <0x00 0x03600000 0x0 0x00100000   /* controller registers */
 			       0x90 0x00000000 0x0 0x00002000>; /* configuration space */
-			reg-names = "regs", "config";
+			reg-names = "csr_axi_slave", "config_axi_slave";
 			interrupts = <GIC_SPI 118 IRQ_TYPE_LEVEL_HIGH>, /* AER interrupt */
 				     <GIC_SPI 118 IRQ_TYPE_LEVEL_HIGH>, /* PME interrupt */
 				     <GIC_SPI 118 IRQ_TYPE_LEVEL_HIGH>; /* controller interrupt */
@@ -1186,10 +1186,10 @@
 			#size-cells = <2>;
 			device_type = "pci";
 			dma-coherent;
-			num-viewport = <256>;
+			apio-wins = <8>;
+			ppio-wins = <8>;
 			bus-range = <0x0 0xff>;
-			ranges = <0x81000000 0x0 0x00000000 0x90 0x00010000 0x0 0x00010000
-				  0x82000000 0x0 0x40000000 0x90 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+			ranges = <0x82000000 0x0 0x40000000 0x90 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
 			msi-parent = <&its>;
 			iommu-map = <0 &smmu 0 1>; /* This is fixed-up by u-boot */
 			#interrupt-cells = <1>;
@@ -1202,19 +1202,20 @@
 		};
 
 		pcie_ep3: pcie_ep@3600000 {
-			compatible = "fsl,lx2160ar2-pcie-ep", "fsl,ls-pcie-ep";
+			compatible = "fsl,lx2160a-pcie-ep";
 			reg = <0x00 0x03600000 0x0 0x00100000
 			       0x90 0x00000000 0x8 0x00000000>;
 			reg-names = "regs", "addr_space";
 			apio-wins = <256>;
+			max-functions = /bits/ 8 <2>;
 			status = "disabled";
 		};
 
 		pcie4: pcie@3700000 {
-			compatible = "fsl,ls2088a-pcie";
+			compatible = "fsl,lx2160a-pcie";
 			reg = <0x00 0x03700000 0x0 0x00100000   /* controller registers */
 			       0x98 0x00000000 0x0 0x00002000>; /* configuration space */
-			reg-names = "regs", "config";
+			reg-names = "csr_axi_slave", "config_axi_slave";
 			interrupts = <GIC_SPI 123 IRQ_TYPE_LEVEL_HIGH>, /* AER interrupt */
 				     <GIC_SPI 123 IRQ_TYPE_LEVEL_HIGH>, /* PME interrupt */
 				     <GIC_SPI 123 IRQ_TYPE_LEVEL_HIGH>; /* controller interrupt */
@@ -1223,10 +1224,10 @@
 			#size-cells = <2>;
 			device_type = "pci";
 			dma-coherent;
-			num-viewport = <8>;
+			apio-wins = <8>;
+			ppio-wins = <8>;
 			bus-range = <0x0 0xff>;
-			ranges = <0x81000000 0x0 0x00000000 0x98 0x00010000 0x0 0x00010000
-				  0x82000000 0x0 0x40000000 0x98 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+			ranges = <0x82000000 0x0 0x40000000 0x98 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
 			msi-parent = <&its>;
 			iommu-map = <0 &smmu 0 1>; /* This is fixed-up by u-boot */
 			#interrupt-cells = <1>;
@@ -1239,7 +1240,7 @@
 		};
 
 		pcie_ep4: pcie_ep@3700000 {
-			compatible = "fsl,lx2160ar2-pcie-ep", "fsl,ls-pcie-ep";
+			compatible = "fsl,lx2160a-pcie-ep";
 			reg = <0x00 0x03700000 0x0 0x00100000
 			       0x98 0x00000000 0x8 0x00000000>;
 			reg-names = "regs", "addr_space";
@@ -1248,10 +1249,10 @@
 		};
 
 		pcie5: pcie@3800000 {
-			compatible = "fsl,ls2088a-pcie";
+			compatible = "fsl,lx2160a-pcie";
 			reg = <0x00 0x03800000 0x0 0x00100000   /* controller registers */
 			       0xa0 0x00000000 0x0 0x00002000>; /* configuration space */
-			reg-names = "regs", "config";
+			reg-names = "csr_axi_slave", "config_axi_slave";
 			interrupts = <GIC_SPI 128 IRQ_TYPE_LEVEL_HIGH>, /* AER interrupt */
 				     <GIC_SPI 128 IRQ_TYPE_LEVEL_HIGH>, /* PME interrupt */
 				     <GIC_SPI 128 IRQ_TYPE_LEVEL_HIGH>; /* controller interrupt */
@@ -1260,10 +1261,10 @@
 			#size-cells = <2>;
 			device_type = "pci";
 			dma-coherent;
-			num-viewport = <256>;
+			apio-wins = <8>;
+			ppio-wins = <8>;
 			bus-range = <0x0 0xff>;
-			ranges = <0x81000000 0x0 0x00000000 0xa0 0x00010000 0x0 0x00010000
-				  0x82000000 0x0 0x40000000 0xa0 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+			ranges = <0x82000000 0x0 0x40000000 0xa0 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
 			msi-parent = <&its>;
 			iommu-map = <0 &smmu 0 1>; /* This is fixed-up by u-boot */
 			#interrupt-cells = <1>;
@@ -1276,19 +1277,20 @@
 		};
 
 		pcie_ep5: pcie_ep@3800000 {
-			compatible = "fsl,lx2160ar2-pcie-ep", "fsl,ls-pcie-ep";
+			compatible = "fsl,lx2160a-pcie-ep";
 			reg = <0x00 0x03800000 0x0 0x00100000
 			       0xa0 0x00000000 0x8 0x00000000>;
 			reg-names = "regs", "addr_space";
 			apio-wins = <256>;
+			max-functions = /bits/ 8 <2>;
 			status = "disabled";
 		};
 
 		pcie6: pcie@3900000 {
-			compatible = "fsl,ls2088a-pcie";
+			compatible = "fsl,lx2160a-pcie";
 			reg = <0x00 0x03900000 0x0 0x00100000   /* controller registers */
 			       0xa8 0x00000000 0x0 0x00002000>; /* configuration space */
-			reg-names = "regs", "config";
+			reg-names = "csr_axi_slave", "config_axi_slave";
 			interrupts = <GIC_SPI 103 IRQ_TYPE_LEVEL_HIGH>, /* AER interrupt */
 				     <GIC_SPI 103 IRQ_TYPE_LEVEL_HIGH>, /* PME interrupt */
 				     <GIC_SPI 103 IRQ_TYPE_LEVEL_HIGH>; /* controller interrupt */
@@ -1297,10 +1299,10 @@
 			#size-cells = <2>;
 			device_type = "pci";
 			dma-coherent;
-			num-viewport = <8>;
+			apio-wins = <8>;
+			ppio-wins = <8>;
 			bus-range = <0x0 0xff>;
-			ranges = <0x81000000 0x0 0x00000000 0xa8 0x00010000 0x0 0x00010000
-				  0x82000000 0x0 0x40000000 0xa8 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
+			ranges = <0x82000000 0x0 0x40000000 0xa8 0x40000000 0x0 0x40000000>; /* non-prefetchable memory */
 			msi-parent = <&its>;
 			iommu-map = <0 &smmu 0 1>; /* This is fixed-up by u-boot */
 			#interrupt-cells = <1>;
@@ -1313,7 +1315,7 @@
 		};
 
 		pcie_ep6: pcie_ep@3900000 {
-			compatible = "fsl,lx2160ar2-pcie-ep", "fsl,ls-pcie-ep";
+			compatible = "fsl,lx2160a-pcie-ep";
 			reg = <0x00 0x03900000 0x0 0x00100000
 			       0xa8 0x00000000 0x8 0x00000000>;
 			reg-names = "regs", "addr_space";
@@ -1716,109 +1718,91 @@
 				dpmac1: ethernet@1 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x1>;
-					pcs-handle = <&pcs1>;
 				};
 
 				dpmac2: ethernet@2 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x2>;
-					pcs-handle = <&pcs2>;
 				};
 
 				dpmac3: ethernet@3 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x3>;
-					pcs-handle = <&pcs3>;
 				};
 
 				dpmac4: ethernet@4 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x4>;
-					pcs-handle = <&pcs4>;
 				};
 
 				dpmac5: ethernet@5 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x5>;
-					pcs-handle = <&pcs5>;
 				};
 
 				dpmac6: ethernet@6 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x6>;
-					pcs-handle = <&pcs6>;
 				};
 
 				dpmac7: ethernet@7 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x7>;
-					pcs-handle = <&pcs7>;
 				};
 
 				dpmac8: ethernet@8 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x8>;
-					pcs-handle = <&pcs8>;
 				};
 
 				dpmac9: ethernet@9 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x9>;
-					pcs-handle = <&pcs9>;
 				};
 
 				dpmac10: ethernet@a {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0xa>;
-					pcs-handle = <&pcs10>;
 				};
 
 				dpmac11: ethernet@b {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0xb>;
-					pcs-handle = <&pcs11>;
 				};
 
 				dpmac12: ethernet@c {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0xc>;
-					pcs-handle = <&pcs12>;
 				};
 
 				dpmac13: ethernet@d {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0xd>;
-					pcs-handle = <&pcs13>;
 				};
 
 				dpmac14: ethernet@e {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0xe>;
-					pcs-handle = <&pcs14>;
 				};
 
 				dpmac15: ethernet@f {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0xf>;
-					pcs-handle = <&pcs15>;
 				};
 
 				dpmac16: ethernet@10 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x10>;
-					pcs-handle = <&pcs16>;
 				};
 
 				dpmac17: ethernet@11 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x11>;
-					pcs-handle = <&pcs17>;
 				};
 
 				dpmac18: ethernet@12 {
 					compatible = "fsl,qoriq-mc-dpmac";
 					reg = <0x12>;
-					pcs-handle = <&pcs18>;
 				};
 			};
 		};

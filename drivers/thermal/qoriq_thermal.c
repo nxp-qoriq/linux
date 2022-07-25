@@ -35,7 +35,6 @@
 #define TMSARA_V2		0xe
 #define TMU_VER1		0x1
 #define TMU_VER2		0x2
-#define TMU_NON_IDEALITY_FACTOR	1022
 #define TEMP_CELCIUS_TO_KELVIN(val)		((CELSIUS_TO_DECI_KELVIN(val)) / 10)
 #define TEMP_KELVIN_TO_CELSIUS(val)		DECI_KELVIN_TO_CELSIUS(val * 10)
 
@@ -326,11 +325,6 @@ int ctd_get_temp(void)
 				max_temp = ctd_curent_temp[i];
 		}
 
-		/* Temperature is calculated as
-		 * T = ((t-3) +273)*( 1.008/1.022) -273
-		 */
-		max_temp = (((max_temp - 3 + 273) * 1008) /
-			TMU_NON_IDEALITY_FACTOR) - 273;
 		max_temp = TEMP_KELVIN_TO_CELSIUS(max_temp);
 
 		if (!(tritsr & 0x80000000) || max_temp < MIN_CTD_TEMP ||

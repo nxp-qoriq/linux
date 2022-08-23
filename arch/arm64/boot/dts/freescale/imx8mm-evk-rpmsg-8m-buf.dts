@@ -1,0 +1,228 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2019-2023 NXP
+ */
+
+/dts-v1/;
+#include <dt-bindings/rpmsg/imx_srtm.h>
+#include "imx8mm-evk.dts"
+
+/ {
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		m4_reserved: m4@0x80000000 {
+			no-map;
+			reg = <0 0x80000000 0 0x1000000>;
+		};
+
+		vdev0vring0: vdev0vring0@b8000000 {
+			reg = <0 0xb8000000 0 0x100000>;
+			no-map;
+		};
+
+		vdev0vring1: vdev0vring1@b8100000 {
+			reg = <0 0xb8100000 0 0x100000>;
+			no-map;
+		};
+
+		rsc_table: rsc_table@b8a00000 {
+			reg = <0 0xb8a00000 0 0x1000>;
+			no-map;
+		};
+
+		vdevbuffer: vdevbuffer@b8200000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0xb8200000 0 0x800000>;
+			no-map;
+		};
+	};
+
+	bt_sco_codec: bt_sco_codec {
+		status = "disabled";
+	};
+
+	sound-bt-sco {
+		status = "disabled";
+	};
+
+	sound-wm8524 {
+		status = "disabled";
+	};
+
+	wm8524: audio-codec {
+		status = "disabled";
+	};
+
+	rpmsg_audio: rpmsg_audio {
+		compatible = "fsl,imx8mm-rpmsg-audio";
+		model = "ak4497-audio";
+		fsl,platform = "rpmsg-audio-channel";
+		fsl,enable-lpa;
+		fsl,rpmsg-out;
+		assigned-clocks = <&clk IMX8MM_CLK_SAI1>;
+		assigned-clock-parents = <&clk IMX8MM_AUDIO_PLL1_OUT>;
+		assigned-clock-rates = <49152000>;
+		clocks = <&clk IMX8MM_CLK_SAI1_IPG>,
+			 <&clk IMX8MM_CLK_SAI1_ROOT>,
+			 <&clk IMX8MM_CLK_SDMA3_ROOT>,
+			 <&clk IMX8MM_AUDIO_PLL1_OUT>,
+			 <&clk IMX8MM_AUDIO_PLL2_OUT>;
+		clock-names = "ipg", "mclk", "dma", "pll8k", "pll11k";
+		status = "okay";
+	};
+
+	uart_rpbus_0: uart-rpbus-0 {
+		compatible = "fsl,uart-rpbus";
+		bus_id = <3>; /* use uart3 */
+		//flags=<IMX_SRTM_UART_RPMSG_OVER_UART_FLAG>;
+		flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+		status = "okay";
+	};
+
+	uart_rpbus_1: uart-rpbus-1 {
+		compatible = "fsl,uart-rpbus";
+		bus_id = <3>; /* use uart3 */
+		//flags=<IMX_SRTM_UART_RPMSG_OVER_UART_FLAG>;
+		flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+		status = "okay";
+	};
+
+	uart_rpbus_2: uart-rpbus-2 {
+		compatible = "fsl,uart-rpbus";
+		bus_id = <3>; /* use uart3 */
+		//flags=<IMX_SRTM_UART_RPMSG_OVER_UART_FLAG>;
+		flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+		status = "okay";
+	};
+
+	uart_rpbus_3: uart-rpbus-3 {
+		compatible = "fsl,uart-rpbus";
+		bus_id = <3>; /* use uart3 */
+		//flags=<IMX_SRTM_UART_RPMSG_OVER_UART_FLAG>;
+		flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+		status = "okay";
+	};
+
+	uart_rpbus_4: uart-rpbus-4 {
+		compatible = "fsl,uart-rpbus";
+		bus_id = <3>; /* use uart3 */
+		//flags=<IMX_SRTM_UART_RPMSG_OVER_UART_FLAG>;
+		flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+		status = "okay";
+	};
+
+	uart_rpbus_5: uart-rpbus-5 {
+		compatible = "fsl,uart-rpbus";
+		bus_id = <3>; /* use uart3 */
+		//flags=<IMX_SRTM_UART_RPMSG_OVER_UART_FLAG>;
+		flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+		status = "okay";
+	};
+
+	uart_rpbus_6: uart-rpbus-6 {
+		compatible = "fsl,uart-rpbus";
+		bus_id = <3>; /* use uart3 */
+		//flags=<IMX_SRTM_UART_RPMSG_OVER_UART_FLAG>;
+		flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+		status = "okay";
+	};
+
+	uart_rpbus_7: uart-rpbus-7 {
+		compatible = "fsl,uart-rpbus";
+		bus_id = <3>; /* use uart3 */
+		//flags=<IMX_SRTM_UART_RPMSG_OVER_UART_FLAG>;
+		flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+		status = "okay";
+	};
+
+	uart_rpbus_8: uart-rpbus-8 {
+		compatible = "fsl,uart-rpbus";
+		bus_id = <3>; /* use uart3 */
+		//flags=<IMX_SRTM_UART_RPMSG_OVER_UART_FLAG>;
+		flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+		status = "okay";
+	};
+
+	uart_rpbus_9: uart-rpbus-9 {
+		compatible = "fsl,uart-rpbus";
+		bus_id = <3>; /* use uart3 */
+		//flags=<IMX_SRTM_UART_RPMSG_OVER_UART_FLAG>;
+		flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+		status = "okay";
+	};
+
+	uart_rpbus_10: uart-rpbus-10 {
+		compatible = "fsl,uart-rpbus";
+		status = "okay"; /* mcore directly print data that receive from acore */
+	};
+
+	imx8mm-cm4 {
+		compatible = "fsl,imx8mm-cm4";
+		rsc-da = <0xb8000000>;
+		clocks = <&clk IMX8MM_CLK_M4_DIV>;
+		mbox-names = "tx", "rx", "rxdb";
+		mboxes = <&mu 0 1
+			  &mu 1 1
+			  &mu 3 1>;
+		memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>, <&rsc_table>;
+		syscon = <&src>;
+		fsl,startup-delay-ms = <500>;
+	};
+};
+
+&clk {
+	init-on-array = <IMX8MM_CLK_UART4_ROOT
+	IMX8MM_CLK_AHB IMX8MM_CLK_DRAM_CORE
+	IMX8MM_CLK_NOC IMX8MM_CLK_NOC_APB
+	IMX8MM_CLK_USB_BUS
+	IMX8MM_CLK_MAIN_AXI IMX8MM_CLK_AUDIO_AHB
+	IMX8MM_CLK_DRAM_APB IMX8MM_CLK_A53_DIV
+	IMX8MM_ARM_PLL_OUT IMX8MM_CLK_DISP_AXI
+	IMX8MM_CLK_DISP_APB
+	>;
+};
+
+/*
+ * ATTENTION: M4 may use IPs like below
+ * ECSPI0/ECSPI2, GPIO1/GPIO5, GPT1, I2C3, I2S3, WDOG1, UART3, UART4, PWM3, SDMA1
+ */
+
+&i2c3 {
+	status = "disabled";
+};
+
+/* the uart3 is used by m4 to support srtm uart service */
+&uart3 {
+	status = "disabled";
+};
+
+&uart4 {
+	status = "disabled";
+};
+
+&sdma3 {
+	status = "disabled";
+};
+
+&sai3 {
+	status = "disabled";
+};
+
+&sai1 {
+	status = "disabled";
+};
+
+&sai2 {
+	status = "disabled";
+};
+
+&sai6 {
+	status = "disabled";
+};
+
+&flexspi {
+	status = "disabled";
+};

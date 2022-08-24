@@ -2386,9 +2386,9 @@ static int vsc9959_port_get_preempt(struct ocelot *ocelot, int port,
 	fpcmd->fp_supported = 1;
 	fpcmd->supported_queues_mask = GENMASK(7, 0);
 
-	val = ocelot_port_readl(ocelot_port, DEV_MM_VERIF_CONFIG);
-	val &= DEV_MM_CONFIG_VERIF_CONFIG_PRM_VERIFY_DIS;
-	fpcmd->fp_enabled = (val ? 0 : 1);
+	val = ocelot_port_readl(ocelot_port, DEV_MM_STATUS);
+	val &= DEV_MM_STATISTICS_MM_STATUS_PRMPT_ACTIVE_STATUS;
+	fpcmd->fp_enabled = (val ? 1 : 0);
 
 	val = ocelot_read_rix(ocelot, QSYS_PREEMPTION_CFG, port);
 	fpcmd->preemptible_queues_mask = val & QSYS_PREEMPTION_CFG_P_QUEUES_M;

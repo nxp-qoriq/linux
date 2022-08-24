@@ -2782,6 +2782,8 @@ int dev_ethtool(struct net *net, struct ifreq *ifr, void __user *useraddr)
 	case ETHTOOL_PHY_GTUNABLE:
 	case ETHTOOL_GLINKSETTINGS:
 	case ETHTOOL_GFECPARAM:
+	case ETHTOOL_GFP:
+	case ETHTOOL_SFP:
 		break;
 	default:
 		if (!ns_capable(net->user_ns, CAP_NET_ADMIN))

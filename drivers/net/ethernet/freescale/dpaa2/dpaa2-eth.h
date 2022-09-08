@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause) */
 /* Copyright 2014-2016 Freescale Semiconductor Inc.
- * Copyright 2016-2019 NXP
+ * Copyright 2016-2022 NXP
  */
 
 #ifndef __DPAA2_ETH_H
@@ -10,6 +10,7 @@
 #include <linux/netdevice.h>
 #include <linux/if_vlan.h>
 #include <linux/fsl/mc.h>
+#include <linux/net_tstamp.h>
 
 #include <soc/fsl/dpaa2-io.h>
 #include <soc/fsl/dpaa2-fd.h>
@@ -445,8 +446,8 @@ struct dpaa2_eth_priv {
 	u16 bpid;
 	struct iommu_domain *iommu_domain;
 
-	bool tx_tstamp; /* Tx timestamping enabled */
-	bool rx_tstamp; /* Rx timestamping enabled */
+	enum hwtstamp_tx_types tx_tstamp_type;	/* Tx timestamping type */
+	bool rx_tstamp;				/* Rx timestamping enabled */
 
 	u16 tx_qdid;
 	struct fsl_mc_io *mc_io;
@@ -484,6 +485,8 @@ struct dpaa2_eth_priv {
 
 	bool ceetm_en;
 };
+
+#define TX_TSTAMP		0x1
 
 #define DPAA2_RXH_SUPPORTED	(RXH_L2DA | RXH_VLAN | RXH_L3_PROTO \
 				| RXH_IP_SRC | RXH_IP_DST | RXH_L4_B_0_1 \
@@ -555,7 +558,7 @@ enum dpaa2_eth_rx_dist {
 
 static inline
 unsigned int dpaa2_eth_needed_headroom(struct dpaa2_eth_priv *priv,
-				       struct sk_buff *skb)
+				      struct sk_buff *skb)
 {
 	unsigned int headroom = DPAA2_ETH_SWA_SIZE;
 
@@ -572,7 +575,7 @@ unsigned int dpaa2_eth_needed_headroom(struct dpaa2_eth_priv *priv,
 		return 0;
 
 	/* If we have Tx timestamping, need 128B hardware annotation */
-	if (priv->tx_tstamp && skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)
+	if (skb->cb[0] == TX_TSTAMP)
 		headroom += DPAA2_ETH_TX_HWA_SIZE;
 
 	return headroom;

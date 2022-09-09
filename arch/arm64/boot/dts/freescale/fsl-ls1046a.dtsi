@@ -668,7 +668,8 @@
 			clocks = <&clockgen QORIQ_CLK_PLATFORM_PLL
 					    QORIQ_CLK_PLL_DIV(1)>;
 			clock-names = "ipg";
-			status = "disabled";
+//#			status = "disabled";
+			status = "ok";
 		};
 
 		lpuart1: serial@2960000 {
@@ -678,7 +679,8 @@
 			clocks = <&clockgen QORIQ_CLK_PLATFORM_PLL
 					    QORIQ_CLK_PLL_DIV(2)>;
 			clock-names = "ipg";
-			status = "disabled";
+//#			status = "disabled";
+			status = "ok";
 		};
 
 		lpuart2: serial@2970000 {

@@ -808,6 +808,17 @@ static int enetc_set_link_ksettings(struct net_device *dev,
 	return phylink_ethtool_ksettings_set(priv->phylink, cmd);
 }
 
+void enetc_preempt_reset(struct enetc_hw *hw)
+{
+	u32 temp;
+
+	temp = enetc_port_rd(hw, ENETC_MMCSR);
+
+	enetc_port_wr(hw, ENETC_MMCSR, temp & (~ENETC_MMCSR_ME));
+	if (temp & ENETC_MMCSR_ME)
+		enetc_port_wr(hw, ENETC_MMCSR, temp);
+}
+
 static void enetc_get_channels(struct net_device *ndev,
 			       struct ethtool_channels *chan)
 {
@@ -833,10 +844,7 @@ static int enetc_set_preempt(struct net_device *ndev,
 
 	rafs = DIV_ROUND_UP((pt->min_frag_size + 4), 64) - 1;
 
-	if (!pt->fp_enabled)
-		preempt = 0x0;
-	else
-		preempt = pt->preemptible_queues_mask;
+	preempt = pt->preemptible_queues_mask;
 
 	temp = enetc_rd(&priv->si->hw, ENETC_QBV_PTGCR_OFFSET);
 	if (temp & ENETC_QBV_TGE)
@@ -860,6 +868,10 @@ static int enetc_set_preempt(struct net_device *ndev,
 	temp = enetc_port_rd(&priv->si->hw, ENETC_MMCSR);
 	temp &= ~ENETC_MMCSR_RAFS_MASK;
 	temp |= ENETC_MMCSR_RAFS(rafs);
+	if (pt->fp_enabled)
+		temp &= ~ENETC_MMCSR_VDIS;
+	else
+		temp |= ENETC_MMCSR_VDIS;
 	enetc_port_wr(&priv->si->hw, ENETC_MMCSR, temp);
 
 	return 0;
@@ -878,6 +890,10 @@ static int enetc_get_preempt(struct net_device *ndev,
 	if (enetc_port_rd(&priv->si->hw, ENETC_PFPMR) & ENETC_PFPMR_PMACE)
 		pt->fp_enabled = true;
 	else
+		pt->fp_enabled = false;
+
+	temp = enetc_port_rd(&priv->si->hw, ENETC_MMCSR);
+	if (!(temp & ENETC_MMCSR_VDIS) && (ENETC_MMCSR_GET_VSTS(temp) != 3))
 		pt->fp_enabled = false;
 
 	pt->preemptible_queues_mask = 0;

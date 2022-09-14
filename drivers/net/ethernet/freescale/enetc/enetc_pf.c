@@ -1126,6 +1126,12 @@ static void enetc_pl_mac_link_up(struct phylink_config *config,
 	enetc_port_wr(hw, ENETC_PM1_CMD_CFG, cmd_cfg);
 
 	enetc_mac_enable(hw, true);
+
+	/* enetc_preempt_reset() is used to send SMD-v to verify preemption
+	 * status. wait 200 ms for the link to be established.
+	 */
+	msleep(200);
+	enetc_preempt_reset(hw);
 }
 
 static void enetc_pl_mac_link_down(struct phylink_config *config,
@@ -1135,6 +1141,7 @@ static void enetc_pl_mac_link_down(struct phylink_config *config,
 	struct enetc_pf *pf = phylink_to_enetc_pf(config);
 
 	enetc_mac_enable(&pf->si->hw, false);
+	enetc_preempt_reset(&pf->si->hw);
 }
 
 static const struct phylink_mac_ops enetc_mac_phylink_ops = {

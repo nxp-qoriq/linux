@@ -2339,6 +2339,29 @@ static const struct ocelot_ops vsc9959_ops = {
 	.tas_clock_adjust	= vsc9959_tas_clock_adjust,
 };
 
+static void vsc9959_port_preempt_reset(struct ocelot *ocelot, int port)
+{
+	struct ocelot_port *ocelot_port = ocelot->ports[port];
+	u32 val;
+
+	val = ocelot_port_readl(ocelot_port, DEV_MM_ENABLE_CONFIG);
+	val &= (DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
+		DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA);
+
+	ocelot_port_rmwl(ocelot_port, 0,
+			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
+			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
+			 DEV_MM_ENABLE_CONFIG);
+
+	if (val)
+		ocelot_port_rmwl(ocelot_port,
+				 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
+				 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
+				 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
+				 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
+				 DEV_MM_ENABLE_CONFIG);
+}
+
 static int vsc9959_port_set_preempt(struct ocelot *ocelot, int port,
 				    struct ethtool_fp *fpcmd)
 {
@@ -2426,6 +2449,7 @@ static const struct felix_info felix_info_vsc9959 = {
 	.init_regmap		= ocelot_regmap_init,
 	.port_set_preempt	= vsc9959_port_set_preempt,
 	.port_get_preempt	= vsc9959_port_get_preempt,
+	.port_preempt_reset	= vsc9959_port_preempt_reset,
 };
 
 static irqreturn_t felix_irq_handler(int irq, void *data)

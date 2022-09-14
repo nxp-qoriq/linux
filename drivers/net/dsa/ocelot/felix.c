@@ -1044,9 +1044,13 @@ static void felix_phylink_mac_link_down(struct dsa_switch *ds, int port,
 					phy_interface_t interface)
 {
 	struct ocelot *ocelot = ds->priv;
+	struct felix *felix = ocelot_to_felix(ocelot);
 
 	ocelot_phylink_mac_link_down(ocelot, port, link_an_mode, interface,
 				     FELIX_MAC_QUIRKS);
+
+	if (felix->info->port_preempt_reset)
+		felix->info->port_preempt_reset(ocelot, port);
 }
 
 static void felix_phylink_mac_link_up(struct dsa_switch *ds, int port,
@@ -1065,6 +1069,9 @@ static void felix_phylink_mac_link_up(struct dsa_switch *ds, int port,
 
 	if (felix->info->port_sched_speed_set)
 		felix->info->port_sched_speed_set(ocelot, port, speed);
+
+	if (felix->info->port_preempt_reset)
+		felix->info->port_preempt_reset(ocelot, port);
 }
 
 static void felix_port_qos_map_init(struct ocelot *ocelot, int port)

@@ -295,4 +295,13 @@ config QCOM_IPCC
 	  acts as an interrupt controller for receiving interrupts from clients.
 	  Say Y here if you want to build this driver.
 
+config GENERIC_SOFTWARE_MAILBOX
+	tristate "Generic software Mailbox driver"
+	depends on OF
+	select GENERIC_IRQ_INJECTION
+	select GIC_GENTLE_CONFIG if ARM_GIC_V3
+	help
+	  This driver leverages unused interrupt line and shared memory to
+	  implement a mailbox, which is used to send messages between different
+	  OSes.
 endif

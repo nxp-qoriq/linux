@@ -88,6 +88,11 @@ extern void secondary_entry(void);
 extern void arch_send_call_function_single_ipi(int cpu);
 extern void arch_send_call_function_ipi_mask(const struct cpumask *mask);
 
+#ifdef CONFIG_ARM_SGI_MAILBOX
+extern void sgi_mbox_send_ipi_mask(const struct cpumask *mask);
+extern void sgi_mbox_send_ipi_single(int cpu);
+#endif
+
 #ifdef CONFIG_ARM64_ACPI_PARKING_PROTOCOL
 extern void arch_send_wakeup_ipi_mask(const struct cpumask *mask);
 #else

@@ -58,6 +58,10 @@
 #include <linux/ipi_baremetal.h>
 #endif
 
+#ifdef CONFIG_ARM_SGI_MAILBOX
+extern int arm_sgi_mbox_interrupt(uint32_t irq);
+#endif
+
 DEFINE_PER_CPU_READ_MOSTLY(int, cpu_number);
 EXPORT_PER_CPU_SYMBOL(cpu_number);
 
@@ -84,6 +88,9 @@ enum ipi_msg_type {
 #else
 	IPI_BAREMETAL_COMM = 8,
 #endif
+#endif
+#ifdef CONFIG_ARM_SGI_MAILBOX
+	IPI_ARM_SGI_MAILBOX = CONFIG_ARM_SGI_MAILBOX_IPI_NR,
 #endif
 	NR_IPI
 };
@@ -810,6 +817,10 @@ static const char *ipi_types[NR_IPI] __tracepoint_string = {
 #ifdef CONFIG_BAREMETAL
 	[IPI_BAREMETAL_COMM]	= "Baremetal inter-core interrupts",
 #endif
+
+#ifdef CONFIG_ARM_SGI_MAILBOX
+	[IPI_ARM_SGI_MAILBOX]	= "SGI Mailbox interrupts",
+#endif
 };
 
 static void smp_cross_call(const struct cpumask *target, unsigned int ipinr);
@@ -841,6 +852,18 @@ void arch_send_call_function_single_ipi(int cpu)
 {
 	smp_cross_call(cpumask_of(cpu), IPI_CALL_FUNC);
 }
+
+#ifdef CONFIG_ARM_SGI_MAILBOX
+void sgi_mbox_send_ipi_mask(const struct cpumask *mask)
+{
+	smp_cross_call(mask, IPI_ARM_SGI_MAILBOX);
+}
+
+void sgi_mbox_send_ipi_single(int cpu)
+{
+	smp_cross_call(cpumask_of(cpu), IPI_ARM_SGI_MAILBOX);
+}
+#endif
 
 #ifdef CONFIG_ARM64_ACPI_PARKING_PROTOCOL
 void arch_send_wakeup_ipi_mask(const struct cpumask *mask)
@@ -956,6 +979,12 @@ static void do_handle_IPI(int ipinr)
 		for(irqsrc = 1; irqsrc < CONFIG_MAX_CPUS; irqsrc++)
 			ipi_baremetal_handle(ipinr, irqsrc);
 		}
+		break;
+#endif
+
+#ifdef CONFIG_ARM_SGI_MAILBOX
+	case IPI_ARM_SGI_MAILBOX:
+		arm_sgi_mbox_interrupt(ipinr);
 		break;
 #endif
 

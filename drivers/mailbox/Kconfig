@@ -273,4 +273,33 @@ config QCOM_IPCC
 	  acts as an interrupt controller for receiving interrupts from clients.
 	  Say Y here if you want to build this driver.
 
+menuconfig ARM_SGI_MAILBOX
+	tristate "ARM SGI Mailbox driver"
+	depends on ARM64 && OF
+	help
+	  This driver leverages SGI interrupt on ARM64 and sharing memory to
+	  implement a mailbox, which is used to send message between different
+	  OSes running on different ARM64 CPU Cores.
+
+if ARM_SGI_MAILBOX
+config ARM_SGI_MAILBOX_IPI_NR
+	int "ARM SGI Mailbox IPI number"
+	depends on ARM_SGI_MAILBOX
+	default 10
+	help
+	  Select the IPI interrupt number to be used for mailbox notification.
+	  Note:
+	    Don't overlay with the ones already reserved by kernel, seeing
+	    arch/arm64/kernel/smp.c.
+
+config ARM_SGI_MAILBOX_TARGET_CORE
+	int "ARM SGI Mailbox target core"
+	depends on ARM_SGI_MAILBOX
+	default 3
+	help
+	  Select the target core, on which runs RTOS/Baremetal communicating
+	  with this mailbox.
+	  Note:
+	    The core number is counted from 0.
+endif
 endif

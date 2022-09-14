@@ -1,0 +1,36 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2022-2023 NXP
+ */
+
+#include "imx8m-generic-mbox.dtsi"
+
+/ {
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		rpmsg_ca53_reserved: rpmsg-ca53@b8600000 {
+			reg = <0 0xb8600000 0 0x10000>;
+			no-map;
+		};
+
+		vdevbuffer_ca53: vdevbuffer-ca53@b8700000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0xb8700000 0 0x100000>;
+			no-map;
+		};
+	};
+
+	rpmsg-ca53 {
+		compatible = "fsl,imx8mm-rpmsg";
+		reg = <0x0 0xb8600000 0x0 0x10000>; /* 64K for one rpmsg instance */
+		memory-region = <&vdevbuffer_ca53>;
+		mbox-names = "tx", "rx", "rxdb";
+		mboxes = <&gen_sw_mbox 0 0
+			  &gen_sw_mbox 1 0
+			  &gen_sw_mbox 2 0>;
+		vdev-nums = <1>;
+	};
+};

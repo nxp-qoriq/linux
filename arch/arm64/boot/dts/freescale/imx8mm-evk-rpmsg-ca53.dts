@@ -1,0 +1,39 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2023 NXP
+ */
+
+/dts-v1/;
+#include "imx8mm-evk.dts"
+#include "imx8m-rpmsg-ca53.dtsi"
+
+/ {
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		rtos_ca53_reserved: rtos-ca53@93c00000 {
+			reg = <0 0x93c00000 0x0 0x24000000>;
+			no-map;
+		};
+	};
+};
+
+&clk {
+	init-on-array = <IMX8MM_CLK_UART4_ROOT
+	IMX8MM_CLK_AHB IMX8MM_CLK_DRAM_CORE
+	IMX8MM_CLK_NOC IMX8MM_CLK_NOC_APB
+	IMX8MM_CLK_MAIN_AXI IMX8MM_CLK_DRAM_APB
+	IMX8MM_CLK_A53_DIV IMX8MM_ARM_PLL_OUT
+	>;
+};
+
+/*
+ * ATTENTION: The isolated CA53 core uses IPs below
+ * UART4
+ */
+
+&uart4 {
+	status = "disabled";
+};

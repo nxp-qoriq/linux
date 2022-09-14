@@ -1160,7 +1160,11 @@ static int stmmac_set_preempt(struct net_device *dev, struct ethtool_fp *fpcmd)
 
 	fpe.p_queues = fpcmd->preemptible_queues_mask;
 	fpe.fragsize = DIV_ROUND_UP((fpcmd->min_frag_size + 4), 64) - 1;
-	fpe.enable = 1;
+
+	if (priv->plat->fpe_cfg->lo_fpe_state == FPE_STATE_ON)
+		fpe.enable = 1;
+	else
+		fpe.enable = fpcmd->fp_enabled ? 0 : 1;
 
 	if (fpe.p_queues > GENMASK(priv->plat->tx_queues_to_use, 0))
 		return -EINVAL;
@@ -1168,9 +1172,9 @@ static int stmmac_set_preempt(struct net_device *dev, struct ethtool_fp *fpcmd)
 	stmmac_fpe_configure(priv, priv->ioaddr, priv->plat->tx_queues_to_use,
 			     priv->plat->rx_queues_to_use, fpe.enable, &fpe);
 
-	fpcmd->fp_supported = 1;
+	stmmac_fpe_handshake(priv, fpcmd->fp_enabled);
 
-	priv->plat->fpe_cfg->enable = fpe.enable;
+	priv->plat->fpe_cfg->enable = 1;
 
 	return 0;
 }

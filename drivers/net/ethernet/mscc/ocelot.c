@@ -3277,24 +3277,6 @@ static void ocelot_detect_features(struct ocelot *ocelot)
 	ocelot->num_frame_refs = QSYS_MMGT_EQ_CTRL_FP_FREE_CNT(eq_ctrl);
 }
 
-/* Entry for PTP over Ethernet (etype 0x88f7)
- * Action: trap to CPU port
- */
-static struct ocelot_vcap_filter ptp_rule = {
-	.prio		= 1,
-	.block_id	= VCAP_IS2,
-	.key_type	= OCELOT_VCAP_KEY_ETYPE,
-	.dmac_mc	= OCELOT_VCAP_BIT_1,
-	.action.mask_mode	= OCELOT_MASK_MODE_PERMIT_DENY,
-	.action.port_mask	= 0,
-	.action.cpu_copy_ena	= 1,
-	.action.cpu_qu_num	= 0,
-	.key.etype.etype.value[0]	= 0x88,
-	.key.etype.etype.value[1]	= 0xf7,
-	.key.etype.etype.mask[0]	= 0xff,
-	.key.etype.etype.mask[1]	= 0xff,
-};
-
 int ocelot_init(struct ocelot *ocelot)
 {
 	char queue_name[32];
@@ -3307,12 +3289,6 @@ int ocelot_init(struct ocelot *ocelot)
 			dev_err(ocelot->dev, "Switch reset failed\n");
 			return ret;
 		}
-
-		/* Available on all ingress port except CPU port */
-		ptp_rule.ingress_port_mask =
-			GENMASK(ocelot->num_phys_ports - 1, 0);
-		ptp_rule.ingress_port_mask &= ~BIT(ocelot->npi);
-		ocelot_vcap_filter_add(ocelot, &ptp_rule, NULL);
 	}
 
 	ocelot->stats = devm_kcalloc(ocelot->dev,

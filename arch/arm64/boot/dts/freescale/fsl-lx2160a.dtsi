@@ -1009,6 +1009,12 @@
 			timeout-sec = <30>;
 		};
 
+        ccn@4000000 {
+            compatible = "arm,ccn-508";
+            reg = <0x0 0x04000000 0x0 0x01000000>;
+            interrupts = <GIC_SPI 12 IRQ_TYPE_LEVEL_HIGH>;
+        };
+
 		rcpm: power-controller@1e34040 {
 			compatible = "fsl,lx2160a-rcpm", "fsl,qoriq-rcpm-2.1+";
 			reg = <0x0 0x1e34040 0x0 0x1c>;

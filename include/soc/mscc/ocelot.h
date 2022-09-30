@@ -674,6 +674,8 @@ struct ocelot_port {
 	struct sk_buff_head		tx_skbs;
 	u8				ts_id;
 
+	struct tc_taprio_qopt_offload	*taprio;
+
 	phy_interface_t			phy_mode;
 
 	u8				*xmit_template;
@@ -694,8 +696,6 @@ struct ocelot_port {
 	u8				preemptable_prios;
 
 	int				speed;
-
-	s64				base_time;
 };
 
 struct ocelot {

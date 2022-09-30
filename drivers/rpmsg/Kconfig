@@ -84,7 +84,7 @@ config RPMSG_VIRTIO
 config HAVE_IMX_RPMSG
 	bool "IMX RPMSG driver on the AMP SOCs"
 	default y
-	depends on IMX_MBOX
+	depends on IMX_MBOX || GENERIC_SOFTWARE_MAILBOX
 	select RPMSG_VIRTIO
 	help
 	  Say y here to enable support for the iMX Rpmsg Driver	providing

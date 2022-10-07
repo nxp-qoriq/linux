@@ -1222,12 +1222,20 @@ static void vsc9959_tas_min_gate_lengths(struct tc_taprio_qopt_offload *taprio,
 				/* Gate closes now, record a potential new
 				 * minimum and reinitialize length
 				 */
-				if (min_gate_len[tc] > gate_len[tc])
+				if (gate_len[tc] &&
+				    min_gate_len[tc] > gate_len[tc])
 					min_gate_len[tc] = gate_len[tc];
 				gate_len[tc] = 0;
 			}
 		}
 	}
+
+	/* If the TC gate is closed or open in all entries, the value of
+	 * min_gate_len[tc] is always U64_MAX. Assign 0 to it when the gate
+	 * is always closed. */
+	for (tc = 0; tc < OCELOT_NUM_TC; tc++)
+		if (min_gate_len[tc] == U64_MAX && gate_len[tc] == 0)
+			min_gate_len[tc] = 0;
 }
 
 /* Update QSYS_PORT_MAX_SDU to make sure the static guard bands added by the

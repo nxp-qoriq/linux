@@ -10,6 +10,7 @@
 #include <soc/mscc/ocelot_sys.h>
 #include <soc/mscc/ocelot_ptp.h>
 #include <soc/mscc/ocelot.h>
+#include <net/pkt_sched.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/pcs-lynx.h>
@@ -157,6 +158,35 @@ static u32 felix_tas_read_status(struct ocelot *ocelot)
 	return ocelot_read(ocelot, QSYS_TAS_PARAM_CFG_CTRL);
 }
 
+static struct tc_taprio_qopt_offload *
+felix_tsnconf_to_taprio(struct tsn_qbv_conf *shaper_config)
+{
+	struct tsn_qbv_basic *admin_basic = &shaper_config->admin;
+	struct tsn_qbv_entry *control_list = admin_basic->control_list;
+	struct tc_taprio_qopt_offload *taprio;
+	int i;
+
+	taprio = kzalloc(struct_size(taprio, entries,
+				     admin_basic->control_list_length),
+			 GFP_KERNEL);
+	if (!taprio)
+		return NULL;
+
+	taprio->enable = shaper_config->gate_enabled;
+	taprio->base_time = admin_basic->base_time;
+	taprio->cycle_time = admin_basic->cycle_time;
+	taprio->cycle_time_extension = admin_basic->cycle_time_extension;
+	taprio->num_entries = admin_basic->control_list_length;
+
+	for (i = 0; i < taprio->num_entries; i++) {
+		taprio->entries[i].command = TC_TAPRIO_CMD_SET_GATES;
+		taprio->entries[i].gate_mask = control_list->gate_state;
+		taprio->entries[i].interval = control_list->time_interval;
+	}
+
+	return taprio;
+}
+
 static int felix_qbv_set(struct net_device *ndev,
 			 struct tsn_qbv_conf *shaper_config)
 {
@@ -196,7 +226,7 @@ static int felix_qbv_set(struct net_device *ndev,
 	}
 
 	ocelot_port = ocelot->ports[port];
-	ocelot_port->base_time = admin_basic->base_time;
+	ocelot_port->taprio = felix_tsnconf_to_taprio(shaper_config);
 
 	mutex_lock(&ocelot->tas_lock);
 
@@ -216,8 +246,10 @@ static int felix_qbv_set(struct net_device *ndev,
 			       QSYS_TAG_CONFIG, port);
 	}
 
-	if (!shaper_config->gate_enabled)
+	if (!shaper_config->gate_enabled) {
 		admin_basic->gate_states = 0xff;
+		kfree(ocelot_port->taprio);
+	}
 
 	ocelot_rmw_rix(ocelot,
 		       (shaper_config->gate_enabled ? QSYS_TAG_CONFIG_ENABLE : 0) |

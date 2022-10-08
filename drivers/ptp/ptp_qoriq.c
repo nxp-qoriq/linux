@@ -3,6 +3,7 @@
  * PTP 1588 clock for Freescale QorIQ 1588 timer
  *
  * Copyright (C) 2010 OMICRON electronics GmbH
+ * Copyright 2022-2025 NXP
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -16,8 +17,9 @@
 #include <linux/timex.h>
 #include <linux/slab.h>
 #include <linux/clk.h>
-
 #include <linux/fsl/ptp_qoriq.h>
+
+static int pulse_width_1588; 
 
 /*
  * Register access functions
@@ -473,6 +475,7 @@ int ptp_qoriq_init(struct ptp_qoriq *ptp_qoriq, void __iomem *base,
 	struct timespec64 now;
 	unsigned long flags;
 	u32 tmr_ctrl;
+	u32 nominal_freq = 0;
 
 	if (!node)
 		return -ENODEV;
@@ -511,6 +514,11 @@ int ptp_qoriq_init(struct ptp_qoriq *ptp_qoriq, void __iomem *base,
 
 		if (ptp_qoriq_auto_config(ptp_qoriq, node))
 			return -ENODEV;
+	}
+
+	if (pulse_width_1588 > 0 ) {
+		nominal_freq = 1000 / ptp_qoriq->tclk_period;
+		ptp_qoriq->tmr_prsc = (nominal_freq * pulse_width_1588) / 1000; 
 	}
 
 	if (of_property_read_bool(node, "little-endian")) {
@@ -674,6 +682,18 @@ static struct platform_driver ptp_qoriq_driver = {
 };
 
 module_platform_driver(ptp_qoriq_driver);
+
+/* Get pulse_width_1588 from bootargs to change pulse width */
+static int __init tmr_pulse_width_fetch(char *str)
+{
+	int ret = 0;
+
+	if (str) {
+		ret = kstrtoint(str, 10 , &pulse_width_1588);
+	}
+	return ret;
+}
+early_param("pulse_width_1588", tmr_pulse_width_fetch);
 
 MODULE_AUTHOR("Richard Cochran <richardcochran@gmail.com>");
 MODULE_DESCRIPTION("PTP clock for Freescale QorIQ 1588 timer");

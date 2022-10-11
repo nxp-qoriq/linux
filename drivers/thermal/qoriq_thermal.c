@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright 2016 Freescale Semiconductor, Inc.
- * Copyright 2017-2018 NXP
+ * Copyright 2017-2018, 2022 NXP
  *
  */
 
@@ -256,8 +256,6 @@ static int qoriq_tmu_calibration(struct platform_device *pdev)
 
 static void qoriq_tmu_init_device(struct qoriq_tmu_data *data)
 {
-	int i;
-
 	/* Disable interrupt, using polling instead */
 	tmu_write(data, TIER_DISABLE, &data->regs->tier);
 
@@ -267,8 +265,6 @@ static void qoriq_tmu_init_device(struct qoriq_tmu_data *data)
 	} else {
 		tmu_write(data, TMTMIR_DEFAULT, &data->regs_v2->tmtmir);
 		tmu_write(data, TEUMR0_V2, &data->regs_v2->teumr0);
-		for (i = 0; i < 7; i++)
-			tmu_write(data, TMSARA_V2, &data->regs_v2->tmsar[i].tmsar);
 	}
 
 	/* Disable monitoring */

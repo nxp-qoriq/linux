@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2023 NXP
+ */
+
+/dts-v1/;
+
+#include "imx93-11x11-evk.dts"
+
+/* AVB HW timer*/
+&tpm4 {
+	compatible = "fsl,avb-tpm";
+	timer-channel = <1>; /* Use output compare channel 1*/
+	prescale = <1>;
+	domain = <0>;
+	interrupts = <GIC_SPI 76 IRQ_TYPE_LEVEL_HIGH>;
+
+	clocks = <&clk IMX93_CLK_BUS_WAKEUP>, <&clk IMX93_CLK_TPM4_GATE>, <&clk IMX93_CLK_AUDIO_PLL>;
+	clock-names = "ipg", "per", "audio_pll";
+
+	/* Set TPM4 clock root to Audio PLL. */
+	assigned-clocks = <&clk IMX93_CLK_TPM4>;
+	assigned-clock-parents = <&clk IMX93_CLK_AUDIO_PLL>;
+	assigned-clock-rates = <49152000>;
+
+	status = "okay";
+};
+
+&fec {
+       fsl,rx-phy-delay-100-ns = <670>;
+       fsl,tx-phy-delay-100-ns = <670>;
+       fsl,rx-phy-delay-1000-ns = <0>;
+       fsl,tx-phy-delay-1000-ns = <0>;
+};
+
+&ethphy2 {
+	eee-broken-100tx;
+};

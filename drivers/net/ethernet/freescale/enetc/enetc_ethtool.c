@@ -808,6 +808,19 @@ static int enetc_set_link_ksettings(struct net_device *dev,
 	return phylink_ethtool_ksettings_set(priv->phylink, cmd);
 }
 
+static void enetc_configure_port_pmac(struct enetc_hw *hw)
+{
+	u32 temp;
+
+	/* Set pMAC step lock */
+	temp = enetc_port_rd(hw, ENETC_PFPMR);
+	enetc_port_wr(hw, ENETC_PFPMR,
+		      temp | ENETC_PFPMR_PMACE | ENETC_PFPMR_MWLM);
+
+	temp = enetc_port_rd(hw, ENETC_MMCSR);
+	enetc_port_wr(hw, ENETC_MMCSR, temp | ENETC_MMCSR_ME);
+}
+
 void enetc_preempt_reset(struct enetc_hw *hw)
 {
 	u32 temp;
@@ -873,6 +886,8 @@ static int enetc_set_preempt(struct net_device *ndev,
 	else
 		temp |= ENETC_MMCSR_VDIS;
 	enetc_port_wr(&priv->si->hw, ENETC_MMCSR, temp);
+
+	enetc_configure_port_pmac(&priv->si->hw);
 
 	return 0;
 }

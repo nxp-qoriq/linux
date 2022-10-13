@@ -1629,6 +1629,14 @@ int enetc_qbu_set(struct net_device *ndev, u8 ptvector)
 				      temp & ~ENETC_FPE);
 	}
 
+	/* Set pMAC step lock */
+	temp = enetc_port_rd(&priv->si->hw, ENETC_PFPMR);
+	enetc_port_wr(&priv->si->hw, ENETC_PFPMR,
+		      temp | ENETC_PFPMR_PMACE | ENETC_PFPMR_MWLM);
+
+	temp = enetc_port_rd(&priv->si->hw, ENETC_MMCSR);
+	enetc_port_wr(&priv->si->hw, ENETC_MMCSR, temp | ENETC_MMCSR_ME);
+
 	return 0;
 }
 

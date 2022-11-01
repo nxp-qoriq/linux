@@ -468,20 +468,27 @@ static int ocelot_flower_parse_action(struct ocelot *ocelot, int port,
 			switch (ntohs(a->vlan.proto)) {
 			case ETH_P_8021Q:
 				tpid = OCELOT_TAG_TPID_SEL_8021Q;
+				filter->action.tag_b_tpid_sel = tpid;
+				filter->action.push_inner_tag = OCELOT_ES0_TAG;
+				filter->action.tag_b_vid_sel = OCELOT_ES0_VID;
+				filter->action.tag_b_pcp_sel = OCELOT_ES0_PCP;
+				filter->action.vid_b_val = a->vlan.vid;
+				filter->action.pcp_b_val = a->vlan.prio;
 				break;
 			case ETH_P_8021AD:
 				tpid = OCELOT_TAG_TPID_SEL_8021AD;
+				filter->action.tag_a_tpid_sel = tpid;
+				filter->action.push_outer_tag = OCELOT_ES0_TAG;
+				filter->action.tag_a_vid_sel = OCELOT_ES0_VID;
+				filter->action.tag_a_pcp_sel = OCELOT_ES0_PCP;
+				filter->action.vid_a_val = a->vlan.vid;
+				filter->action.pcp_a_val = a->vlan.prio;
 				break;
 			default:
 				NL_SET_ERR_MSG_MOD(extack,
 						   "Cannot push custom TPID");
 				return -EOPNOTSUPP;
 			}
-			filter->action.tag_a_tpid_sel = tpid;
-			filter->action.push_outer_tag = OCELOT_ES0_TAG;
-			filter->action.tag_a_vid_sel = OCELOT_ES0_VID;
-			filter->action.vid_a_val = a->vlan.vid;
-			filter->action.pcp_a_val = a->vlan.prio;
 			filter->type = OCELOT_VCAP_FILTER_OFFLOAD;
 			break;
 		case FLOW_ACTION_GATE:

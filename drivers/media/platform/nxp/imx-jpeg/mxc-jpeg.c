@@ -116,7 +116,7 @@ static const struct mxc_jpeg_fmt mxc_formats[] = {
 	},
 	{
 		.name		= "YUV420", /* 1st plane = Y, 2nd plane = UV */
-		.fourcc		= V4L2_PIX_FMT_NV12M,
+		.fourcc		= V4L2_PIX_FMT_NV12,
 		.subsampling	= V4L2_JPEG_CHROMA_SUBSAMPLING_420,
 		.nc		= 3,
 		.depth		= 12, /* 6 bytes (4Y + UV) for 4 pixels */
@@ -1004,7 +1004,7 @@ static void mxc_jpeg_config_enc_desc(struct vb2_buffer *out_buf,
 			      &h, h, MXC_JPEG_MAX_HEIGHT, q_data->fmt->v_align, 0);
 	mxc_jpeg_set_res(desc, w, h);
 	mxc_jpeg_set_line_pitch(desc, q_data->bytesperline[0]);
-	mxc_jpeg_set_bufsize(desc, q_data->sizeimage[0]);
+	mxc_jpeg_set_bufsize(desc, ALIGN(vb2_plane_size(dst_buf, 0), 1024));
 	img_fmt = mxc_jpeg_fourcc_to_imgfmt(q_data->fmt->fourcc);
 	if (img_fmt == MXC_JPEG_INVALID)
 		dev_err(jpeg->dev, "No valid image format detected\n");
@@ -1229,6 +1229,7 @@ static int mxc_jpeg_decoder_cmd(struct file *file, void *priv,
 {
 	struct v4l2_fh *fh = file->private_data;
 	struct mxc_jpeg_ctx *ctx = mxc_jpeg_fh_to_ctx(fh);
+	unsigned long flags;
 	int ret;
 
 	ret = v4l2_m2m_ioctl_try_decoder_cmd(file, fh, cmd);
@@ -1238,7 +1239,9 @@ static int mxc_jpeg_decoder_cmd(struct file *file, void *priv,
 	if (!vb2_is_streaming(v4l2_m2m_get_src_vq(fh->m2m_ctx)))
 		return 0;
 
+	spin_lock_irqsave(&ctx->mxc_jpeg->hw_lock, flags);
 	ret = v4l2_m2m_ioctl_decoder_cmd(file, priv, cmd);
+	spin_unlock_irqrestore(&ctx->mxc_jpeg->hw_lock, flags);
 	if (ret < 0)
 		return ret;
 
@@ -1259,6 +1262,7 @@ static int mxc_jpeg_encoder_cmd(struct file *file, void *priv,
 {
 	struct v4l2_fh *fh = file->private_data;
 	struct mxc_jpeg_ctx *ctx = mxc_jpeg_fh_to_ctx(fh);
+	unsigned long flags;
 	int ret;
 
 	ret = v4l2_m2m_ioctl_try_encoder_cmd(file, fh, cmd);
@@ -1269,7 +1273,9 @@ static int mxc_jpeg_encoder_cmd(struct file *file, void *priv,
 	    !vb2_is_streaming(v4l2_m2m_get_dst_vq(fh->m2m_ctx)))
 		return 0;
 
+	spin_lock_irqsave(&ctx->mxc_jpeg->hw_lock, flags);
 	ret = v4l2_m2m_ioctl_encoder_cmd(file, fh, cmd);
+	spin_unlock_irqrestore(&ctx->mxc_jpeg->hw_lock, flags);
 	if (ret < 0)
 		return 0;
 
@@ -1292,23 +1298,11 @@ static int mxc_jpeg_queue_setup(struct vb2_queue *q,
 {
 	struct mxc_jpeg_ctx *ctx = vb2_get_drv_priv(q);
 	struct mxc_jpeg_q_data *q_data = NULL;
-	struct mxc_jpeg_q_data tmp_q;
 	int i;
 
 	q_data = mxc_jpeg_get_q_data(ctx, q->type);
 	if (!q_data)
 		return -EINVAL;
-
-	tmp_q.fmt = q_data->fmt;
-	tmp_q.w = q_data->w_adjusted;
-	tmp_q.h = q_data->h_adjusted;
-	for (i = 0; i < MXC_JPEG_MAX_PLANES; i++) {
-		tmp_q.bytesperline[i] = q_data->bytesperline[i];
-		tmp_q.sizeimage[i] = q_data->sizeimage[i];
-	}
-	mxc_jpeg_sizeimage(&tmp_q);
-	for (i = 0; i < MXC_JPEG_MAX_PLANES; i++)
-		tmp_q.sizeimage[i] = max(tmp_q.sizeimage[i], q_data->sizeimage[i]);
 
 	/* Handle CREATE_BUFS situation - *nplanes != 0 */
 	if (*nplanes) {
@@ -1657,10 +1651,6 @@ static int mxc_jpeg_buf_prepare(struct vb2_buffer *vb)
 		vb2_set_plane_payload(vb, 0, 0);
 		vb2_set_plane_payload(vb, 1, 0);
 	}
-	if (V4L2_TYPE_IS_CAPTURE(vb->vb2_queue->type)) {
-		vb2_set_plane_payload(vb, 0, 0);
-		vb2_set_plane_payload(vb, 1, 0);
-	}
 	return 0;
 }
 
@@ -1768,19 +1758,24 @@ static void mxc_jpeg_encode_ctrls(struct mxc_jpeg_ctx *ctx)
 
 static int mxc_jpeg_ctrls_setup(struct mxc_jpeg_ctx *ctx)
 {
+	int err;
+
 	v4l2_ctrl_handler_init(&ctx->ctrl_handler, 2);
 
 	if (ctx->mxc_jpeg->mode == MXC_JPEG_ENCODE)
 		mxc_jpeg_encode_ctrls(ctx);
 
 	if (ctx->ctrl_handler.error) {
-		int err = ctx->ctrl_handler.error;
+		err = ctx->ctrl_handler.error;
 
 		v4l2_ctrl_handler_free(&ctx->ctrl_handler);
 		return err;
 	}
 
-	return v4l2_ctrl_handler_setup(&ctx->ctrl_handler);
+	err = v4l2_ctrl_handler_setup(&ctx->ctrl_handler);
+	if (err)
+		v4l2_ctrl_handler_free(&ctx->ctrl_handler);
+	return err;
 }
 
 static int mxc_jpeg_open(struct file *file)
@@ -2204,9 +2199,9 @@ static int mxc_jpeg_dec_g_selection(struct file *file, void *fh, struct v4l2_sel
 	switch (s->target) {
 	case V4L2_SEL_TGT_COMPOSE:
 	case V4L2_SEL_TGT_COMPOSE_DEFAULT:
-	case V4L2_SEL_TGT_COMPOSE_PADDED:
 		s->r = q_data_cap->crop;
 		break;
+	case V4L2_SEL_TGT_COMPOSE_PADDED:
 	case V4L2_SEL_TGT_COMPOSE_BOUNDS:
 		s->r.left = 0;
 		s->r.top = 0;
@@ -2445,6 +2440,8 @@ static int mxc_jpeg_probe(struct platform_device *pdev)
 	unsigned int slot;
 
 	of_id = of_match_node(mxc_jpeg_match, dev->of_node);
+	if (!of_id)
+		return -ENODEV;
 	mode = *(const int *)of_id->data;
 
 	jpeg = devm_kzalloc(dev, sizeof(struct mxc_jpeg_dev), GFP_KERNEL);

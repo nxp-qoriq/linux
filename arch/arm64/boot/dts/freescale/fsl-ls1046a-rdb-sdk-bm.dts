@@ -90,3 +90,7 @@
 &ifc {
 	status = "disabled";
 };
+
+&gpio1 {
+	status = "disabled";
+};

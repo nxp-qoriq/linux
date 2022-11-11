@@ -201,6 +201,7 @@ static int arm_sgi_mailbox_probe(struct platform_device *pdev)
 	mbox->base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(mbox->base))
 		return PTR_ERR(mbox->base);
+	memset_io(&mbox->base->status, 0, 4);
 
 	mbox->controller.dev = dev;
 	mbox->controller.chans = mbox->chan;

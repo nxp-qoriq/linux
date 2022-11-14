@@ -1116,7 +1116,10 @@ static void enetc_pl_mac_link_up(struct phylink_config *config,
 	 * status. wait 200 ms for the link to be established.
 	 */
 	msleep(200);
-	enetc_preempt_reset(hw);
+	if (priv->preemptable_verify)
+		enetc_preempt_reset(hw, 0);
+	else
+		enetc_preempt_reset(hw, 1);
 }
 
 static void enetc_pl_mac_link_down(struct phylink_config *config,
@@ -1126,7 +1129,7 @@ static void enetc_pl_mac_link_down(struct phylink_config *config,
 	struct enetc_pf *pf = phylink_to_enetc_pf(config);
 
 	enetc_mac_enable(&pf->si->hw, false);
-	enetc_preempt_reset(&pf->si->hw);
+	enetc_preempt_reset(&pf->si->hw, 0);
 }
 
 static const struct phylink_mac_ops enetc_mac_phylink_ops = {

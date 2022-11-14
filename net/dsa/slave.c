@@ -1553,6 +1553,17 @@ static int dsa_slave_get_ts_info(struct net_device *dev,
 	return ds->ops->get_ts_info(ds, p->dp->index, ts);
 }
 
+static int dsa_slave_reset_preempt(struct net_device *dev, bool enable)
+{
+	struct dsa_slave_priv *p = netdev_priv(dev);
+	struct dsa_switch *ds = p->dp->ds;
+
+	if (!ds->ops->reset_preempt)
+		return -EOPNOTSUPP;
+
+	return ds->ops->reset_preempt(ds, p->dp->index, enable);
+}
+
 static int dsa_slave_set_preempt(struct net_device *dev,
 				 struct ethtool_fp *fpcmd)
 {
@@ -2128,6 +2139,7 @@ static const struct ethtool_ops dsa_slave_ethtool_ops = {
 	.self_test		= dsa_slave_net_selftest,
 	.set_preempt		= dsa_slave_set_preempt,
 	.get_preempt		= dsa_slave_get_preempt,
+	.reset_preempt		= dsa_slave_reset_preempt,
 };
 
 static const struct dcbnl_rtnl_ops __maybe_unused dsa_slave_dcbnl_ops = {

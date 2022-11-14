@@ -1050,7 +1050,7 @@ static void felix_phylink_mac_link_down(struct dsa_switch *ds, int port,
 				     FELIX_MAC_QUIRKS);
 
 	if (felix->info->port_preempt_reset)
-		felix->info->port_preempt_reset(ocelot, port);
+		felix->info->port_preempt_reset(ocelot, port, 0);
 }
 
 static void felix_phylink_mac_link_up(struct dsa_switch *ds, int port,
@@ -1071,7 +1071,7 @@ static void felix_phylink_mac_link_up(struct dsa_switch *ds, int port,
 		felix->info->port_sched_speed_set(ocelot, port, speed);
 
 	if (felix->info->port_preempt_reset)
-		felix->info->port_preempt_reset(ocelot, port);
+		felix->info->port_preempt_reset(ocelot, port, 0);
 }
 
 static void felix_port_qos_map_init(struct ocelot *ocelot, int port)
@@ -1123,6 +1123,20 @@ static int felix_get_ts_info(struct dsa_switch *ds, int port,
 	struct ocelot *ocelot = ds->priv;
 
 	return ocelot_get_ts_info(ocelot, port, info);
+}
+
+static int felix_reset_preempt(struct dsa_switch *ds, int port, bool enable)
+{
+	struct ocelot *ocelot = ds->priv;
+	struct felix *felix = ocelot_to_felix(ocelot);
+
+	if (felix->info->port_preempt_reset) {
+		felix->info->port_preempt_reset(ocelot, port, enable);
+
+		return 0;
+	}
+
+	return -EOPNOTSUPP;
 }
 
 static int felix_set_preempt(struct dsa_switch *ds, int port,
@@ -2035,6 +2049,7 @@ const struct dsa_switch_ops felix_switch_ops = {
 	.get_ethtool_stats		= felix_get_ethtool_stats,
 	.get_sset_count			= felix_get_sset_count,
 	.get_ts_info			= felix_get_ts_info,
+	.reset_preempt			= felix_reset_preempt,
 	.set_preempt			= felix_set_preempt,
 	.get_preempt			= felix_get_preempt,
 	.phylink_validate		= felix_phylink_validate,

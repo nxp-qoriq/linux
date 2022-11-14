@@ -2545,7 +2545,7 @@ static const struct ocelot_ops vsc9959_ops = {
 	.tas_clock_adjust	= vsc9959_tas_clock_adjust,
 };
 
-static void vsc9959_port_preempt_reset(struct ocelot *ocelot, int port)
+static void vsc9959_port_preempt_reset(struct ocelot *ocelot, int port, bool enable)
 {
 	struct ocelot_port *ocelot_port = ocelot->ports[port];
 	u32 val;
@@ -2559,7 +2559,7 @@ static void vsc9959_port_preempt_reset(struct ocelot *ocelot, int port)
 			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
 			 DEV_MM_ENABLE_CONFIG);
 
-	if (val)
+	if (enable || (!ocelot_port->preemptable_verify && val))
 		ocelot_port_rmwl(ocelot_port,
 				 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
 				 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
@@ -2579,14 +2579,14 @@ static int vsc9959_port_set_preempt(struct ocelot *ocelot, int port,
 		return -EINVAL;
 
 	mm_fragsize = DIV_ROUND_UP((fpcmd->min_frag_size + 4), 64) - 1;
-	fpcmd->fp_supported = 1;
 
-	ocelot_port_rmwl(ocelot_port,
-			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
-			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
-			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
-			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
-			 DEV_MM_ENABLE_CONFIG);
+	if (!fpcmd->fp_lldp_verify)
+		ocelot_port_rmwl(ocelot_port,
+				 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
+				 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
+				 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
+				 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
+				 DEV_MM_ENABLE_CONFIG);
 
 	ocelot_port_rmwl(ocelot_port,
 			 (fpcmd->fp_enabled ?
@@ -2601,6 +2601,8 @@ static int vsc9959_port_set_preempt(struct ocelot *ocelot, int port,
 		       QSYS_PREEMPTION_CFG_P_QUEUES_M,
 		       QSYS_PREEMPTION_CFG,
 		       port);
+
+	ocelot_port->preemptable_verify = fpcmd->fp_lldp_verify;
 
 	return 0;
 }
@@ -2617,7 +2619,8 @@ static int vsc9959_port_get_preempt(struct ocelot *ocelot, int port,
 
 	val = ocelot_port_readl(ocelot_port, DEV_MM_STATUS);
 	val &= DEV_MM_STATISTICS_MM_STATUS_PRMPT_ACTIVE_STATUS;
-	fpcmd->fp_enabled = (val ? 1 : 0);
+	fpcmd->fp_active = (val ? 1 : 0);
+	fpcmd->fp_status = ocelot_port->preemptable_verify ? 1 : fpcmd->fp_active;
 
 	val = ocelot_read_rix(ocelot, QSYS_PREEMPTION_CFG, port);
 	fpcmd->preemptible_queues_mask = val & QSYS_PREEMPTION_CFG_P_QUEUES_M;

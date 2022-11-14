@@ -57,7 +57,7 @@ struct felix_info {
 				    struct ethtool_fp *fpcmd);
 	int	(*port_get_preempt)(struct ocelot *ocelot, int port,
 				    struct ethtool_fp *fpcmd);
-	void	(*port_preempt_reset)(struct ocelot *ocelot, int port);
+	void	(*port_preempt_reset)(struct ocelot *ocelot, int port, bool enable);
 };
 
 extern const struct dsa_switch_ops felix_switch_ops;

@@ -968,6 +968,10 @@ struct dsa_switch_ops {
 			       struct ethtool_fp *fpcmd);
 
 	/*
+	 * ethtool --reset-frame-preemption
+	 */
+	int	(*reset_preempt)(struct dsa_switch *ds, int port, bool enable);
+	/*
 	 * DCB ops
 	 */
 	int	(*port_get_default_prio)(struct dsa_switch *ds, int port);

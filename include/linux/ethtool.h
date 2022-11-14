@@ -693,6 +693,7 @@ struct ethtool_ops {
 			       struct ethtool_fp *);
 	int	(*set_preempt)(struct net_device *,
 			       struct ethtool_fp *);
+	int	(*reset_preempt)(struct net_device *, bool enable);
 	void	(*get_ethtool_phy_stats)(struct net_device *,
 					 struct ethtool_stats *, u64 *);
 	int	(*get_phy_tunable)(struct net_device *,

@@ -1582,6 +1582,7 @@ enum ethtool_fec_config_bits {
 
 #define ETHTOOL_GFP		0x00000052 /* Get Frame Preemption settings */
 #define ETHTOOL_SFP		0x00000053 /* Set Frame Preemption settings */
+#define ETHTOOL_RFP            0x00000054 /* Reset Frame Preemption settings */
 
 /* compatibility with older code */
 #define SPARC_ETH_GSET		ETHTOOL_GSET

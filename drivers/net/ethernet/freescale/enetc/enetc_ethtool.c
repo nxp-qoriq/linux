@@ -823,13 +823,16 @@ static void enetc_configure_port_pmac(struct enetc_hw *hw, bool enable)
 	}
 }
 
-void enetc_preempt_reset(struct enetc_hw *hw, bool enable)
+int enetc_preempt_reset(struct net_device *ndev, bool enable)
 {
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	u32 temp;
 
-	temp = enetc_port_rd(hw, ENETC_PFPMR);
+	temp = enetc_port_rd(&priv->si->hw, ENETC_PFPMR);
 	if (temp & ENETC_PFPMR_PMACE)
-		enetc_configure_port_pmac(hw, enable);
+		enetc_configure_port_pmac(&priv->si->hw, enable);
+
+	return 0;
 }
 
 static void enetc_get_channels(struct net_device *ndev,
@@ -962,6 +965,7 @@ static const struct ethtool_ops enetc_pf_ethtool_ops = {
 	.get_channels = enetc_get_channels,
 	.set_preempt = enetc_set_preempt,
 	.get_preempt = enetc_get_preempt,
+	.reset_preempt = enetc_preempt_reset,
 };
 
 static const struct ethtool_ops enetc_vf_ethtool_ops = {

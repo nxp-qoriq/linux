@@ -1147,6 +1147,20 @@ static int stmmac_set_tunable(struct net_device *dev,
 	return ret;
 }
 
+static int stmmac_reset_preempt(struct net_device *dev, bool enable)
+{
+	struct stmmac_priv *priv = netdev_priv(dev);
+
+	stmmac_fpe_configure(priv, priv->ioaddr, priv->plat->tx_queues_to_use,
+			     priv->plat->rx_queues_to_use, enable, NULL);
+
+	stmmac_fpe_handshake(priv, priv->fp_verify);
+
+	priv->plat->fpe_cfg->enable = enable;
+
+	return 0;
+}
+
 static int stmmac_set_preempt(struct net_device *dev, struct ethtool_fp *fpcmd)
 {
 	struct stmmac_priv *priv = netdev_priv(dev);
@@ -1166,6 +1180,12 @@ static int stmmac_set_preempt(struct net_device *dev, struct ethtool_fp *fpcmd)
 	else
 		fpe.enable = fpcmd->fp_enabled ? 0 : 1;
 
+	if (fpcmd->fp_lldp_verify)
+		fpe.enable = 0;
+
+	priv->fp_lldp_verify = fpcmd->fp_lldp_verify;
+	priv->fp_verify = fpcmd->fp_enabled;
+
 	/* To support preemption MAC should have more than 1 TX queue with at
 	 * least 1 Queue designated as Express Queue. Queue 0 is always used as
 	 * preemption queue when preemption MAC is enabled.
@@ -1182,7 +1202,7 @@ static int stmmac_set_preempt(struct net_device *dev, struct ethtool_fp *fpcmd)
 
 	stmmac_fpe_handshake(priv, fpcmd->fp_enabled);
 
-	priv->plat->fpe_cfg->enable = 1;
+	priv->plat->fpe_cfg->enable = fpcmd->fp_lldp_verify ? 0 : 1;
 
 	return 0;
 }
@@ -1204,7 +1224,9 @@ static int stmmac_get_preempt(struct net_device *dev, struct ethtool_fp *fpcmd)
 	}
 
 	fpcmd->fp_supported = 1;
-	fpcmd->fp_enabled = fpe.enable;
+	fpcmd->fp_status = priv->fp_lldp_verify ? 1 :
+			   (priv->fp_verify ? 1 : fpe.enable);
+	fpcmd->fp_active = fpe.enable;
 	fpcmd->supported_queues_mask = GENMASK(priv->plat->tx_queues_to_use - 1,
 					       0);
 	fpcmd->preemptible_queues_mask = fpe.p_queues;
@@ -1254,6 +1276,7 @@ static const struct ethtool_ops stmmac_ethtool_ops = {
 	.set_link_ksettings = stmmac_ethtool_set_link_ksettings,
 	.set_preempt = stmmac_set_preempt,
 	.get_preempt = stmmac_get_preempt,
+	.reset_preempt = stmmac_reset_preempt,
 };
 
 void stmmac_set_ethtool_ops(struct net_device *netdev)

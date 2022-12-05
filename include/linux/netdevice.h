@@ -1369,6 +1369,9 @@ struct net_device_ops {
 	int			(*ndo_stop)(struct net_device *dev);
 	netdev_tx_t		(*ndo_start_xmit)(struct sk_buff *skb,
 						  struct net_device *dev);
+	struct sk_buff* 	(*ndo_start_recv)(struct net_device *dev, int *err);
+	int			(*ndo_fast_recv)(struct net_device *ndev, void __user *buff, size_t len, struct sockaddr __user *addr,  int __user *addr_len);
+	int			(*ndo_fast_xmit)(struct net_device *ndev, void __user *buff, size_t len);
 	netdev_features_t	(*ndo_features_check)(struct sk_buff *skb,
 						      struct net_device *dev,
 						      netdev_features_t features);
@@ -2102,6 +2105,8 @@ struct net_device {
 	unsigned long		mem_end;
 	unsigned long		mem_start;
 	unsigned long		base_addr;
+
+	unsigned int		fast_raw_device;
 
 	/*
 	 *	Some hardware also needs these fields (state,dev_list,

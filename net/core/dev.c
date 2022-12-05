@@ -11201,6 +11201,7 @@ struct net_device *alloc_netdev_mqs(int sizeof_priv, const char *name,
 	dev_mc_init(dev);
 	dev_uc_init(dev);
 
+	dev->fast_raw_device = 0;
 	dev_net_set(dev, &init_net);
 
 	dev->gso_max_size = GSO_LEGACY_MAX_SIZE;

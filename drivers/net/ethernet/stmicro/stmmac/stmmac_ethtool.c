@@ -1230,6 +1230,9 @@ static int stmmac_get_preempt(struct net_device *dev, struct ethtool_fp *fpcmd)
 	fpcmd->supported_queues_mask = GENMASK(priv->plat->tx_queues_to_use - 1,
 					       0);
 	fpcmd->preemptible_queues_mask = fpe.p_queues;
+	/* Queue 0 is always preemption when preemption is enabled. */
+	if (fpe.enable)
+		fpcmd->preemptible_queues_mask |= 1;
 	fpcmd->min_frag_size = (fpe.fragsize + 1) * 64 - 4;
 
 	return 0;

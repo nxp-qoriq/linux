@@ -25,7 +25,12 @@
 		/* 512MB */
 		freertos_reserved: inmate@93c00000 {
 			no-map;
-			reg = <0 0x93c00000 0x0 0x24000000>;
+			reg = <0 0x93c00000 0x0 0x20000000>;
+		};
+
+		virtio_buffer: virtio-buffer@b3c00000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0xb3c00000 0 0x4000000>;
 		};
 	};
 
@@ -42,6 +47,7 @@
 		compatible = "virtio,mmio";
 		reg = <0x0 0xbbb00000 0x0 0x1000>;
 		hypervisor_less;
+		memory-region = <&virtio_buffer>;
 		mbox-names = "mmiowr", "mmioirq";
 		mboxes = <&gen_sw_mbox 0 1
 			  &gen_sw_mbox 1 1>;

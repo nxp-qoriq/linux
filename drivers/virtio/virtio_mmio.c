@@ -63,6 +63,7 @@
 #include <linux/list.h>
 #include <linux/mailbox_client.h>
 #include <linux/module.h>
+#include <linux/of_reserved_mem.h>
 #include <linux/platform_device.h>
 #include <linux/pm.h>
 #include <linux/slab.h>
@@ -749,8 +750,12 @@ static int virtio_mmio_probe(struct platform_device *pdev)
 	if (!vm_dev)
 		return -ENOMEM;
 
-	if (of_property_read_bool(pdev->dev.of_node, "hypervisor_less"))
+	if (of_property_read_bool(pdev->dev.of_node, "hypervisor_less")) {
 		vm_dev->is_hypervisor_less = true;
+		rc = of_reserved_mem_device_init(&pdev->dev);
+		if (rc)
+			dev_info(&pdev->dev, "Device specific DMA pool is not available\n");
+	}
 
 	vm_dev->vdev.dev.parent = &pdev->dev;
 	vm_dev->vdev.dev.release = virtio_mmio_release_dev;
@@ -761,14 +766,17 @@ static int virtio_mmio_probe(struct platform_device *pdev)
 
 	vm_dev->base = devm_platform_get_and_ioremap_resource(pdev, 0, &res);
 
-	if (IS_ERR(vm_dev->base))
-		return PTR_ERR(vm_dev->base);
+	if (IS_ERR(vm_dev->base)) {
+		rc = PTR_ERR(vm_dev->base);
+		goto err;
+	}
 
 	/* Check magic value */
 	magic = readl(vm_dev->base + VIRTIO_MMIO_MAGIC_VALUE);
 	if (magic != ('v' | 'i' << 8 | 'r' << 16 | 't' << 24)) {
 		dev_warn(&pdev->dev, "Wrong magic value 0x%08lx!\n", magic);
-		return -ENODEV;
+		rc = -ENODEV;
+		goto err;
 	}
 
 	/* Check device version */
@@ -776,7 +784,8 @@ static int virtio_mmio_probe(struct platform_device *pdev)
 	if (vm_dev->version < 1 || vm_dev->version > 2) {
 		dev_err(&pdev->dev, "Version %ld not supported!\n",
 				vm_dev->version);
-		return -ENXIO;
+		rc = -ENXIO;
+		goto err;
 	}
 
 	vm_dev->vdev.id.device = readl(vm_dev->base + VIRTIO_MMIO_DEVICE_ID);
@@ -785,7 +794,8 @@ static int virtio_mmio_probe(struct platform_device *pdev)
 		 * virtio-mmio device with an ID 0 is a (dummy) placeholder
 		 * with no function. End probing now with no error reported.
 		 */
-		return -ENODEV;
+		rc = -ENODEV;
+		goto err;
 	}
 	vm_dev->vdev.id.vendor = readl(vm_dev->base + VIRTIO_MMIO_VENDOR_ID);
 
@@ -798,7 +808,7 @@ static int virtio_mmio_probe(struct platform_device *pdev)
 		/* Initialize mailbox mmio channel. */
 		rc = virtio_mmio_mbox_channel_init(vm_dev);
 		if (rc)
-			return -ENODEV;
+			goto err;
 	}
 
 	if (vm_dev->version == 1) {
@@ -825,6 +835,12 @@ static int virtio_mmio_probe(struct platform_device *pdev)
 	rc = register_virtio_device(&vm_dev->vdev);
 	if (rc)
 		put_device(&vm_dev->vdev.dev);
+
+	return rc;
+
+err:
+	if (vm_dev->is_hypervisor_less)
+		of_reserved_mem_device_release(&pdev->dev);
 
 	return rc;
 }

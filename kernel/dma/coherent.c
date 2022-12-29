@@ -36,7 +36,8 @@ static inline dma_addr_t dma_get_device_base(struct device *dev,
 }
 
 static struct dma_coherent_mem *dma_init_coherent_memory(phys_addr_t phys_addr,
-		dma_addr_t device_addr, size_t size, bool use_dma_pfn_offset)
+		dma_addr_t device_addr, size_t size, bool use_dma_pfn_offset,
+		bool cacheable)
 {
 	struct dma_coherent_mem *dma_mem;
 	int pages = size >> PAGE_SHIFT;
@@ -45,7 +46,8 @@ static struct dma_coherent_mem *dma_init_coherent_memory(phys_addr_t phys_addr,
 	if (!size)
 		return ERR_PTR(-EINVAL);
 
-	mem_base = memremap(phys_addr, size, MEMREMAP_WC);
+	mem_base = memremap(phys_addr, size, cacheable ? MEMREMAP_WB :
+			    MEMREMAP_WC);
 	if (!mem_base)
 		return ERR_PTR(-EINVAL);
 
@@ -119,8 +121,10 @@ int dma_declare_coherent_memory(struct device *dev, phys_addr_t phys_addr,
 {
 	struct dma_coherent_mem *mem;
 	int ret;
+	bool cacheable = dev_is_dma_coherent(dev);
 
-	mem = dma_init_coherent_memory(phys_addr, device_addr, size, false);
+	mem = dma_init_coherent_memory(phys_addr, device_addr, size, false,
+				       cacheable);
 	if (IS_ERR(mem))
 		return PTR_ERR(mem);
 
@@ -312,7 +316,7 @@ int dma_init_global_coherent(phys_addr_t phys_addr, size_t size)
 {
 	struct dma_coherent_mem *mem;
 
-	mem = dma_init_coherent_memory(phys_addr, phys_addr, size, true);
+	mem = dma_init_coherent_memory(phys_addr, phys_addr, size, true, false);
 	if (IS_ERR(mem))
 		return PTR_ERR(mem);
 	dma_coherent_default_memory = mem;
@@ -338,9 +342,10 @@ static int rmem_dma_device_init(struct reserved_mem *rmem, struct device *dev)
 {
 	if (!rmem->priv) {
 		struct dma_coherent_mem *mem;
+		bool cacheable = dev_is_dma_coherent(dev);
 
 		mem = dma_init_coherent_memory(rmem->base, rmem->base,
-					       rmem->size, true);
+					       rmem->size, true, cacheable);
 		if (IS_ERR(mem))
 			return PTR_ERR(mem);
 		rmem->priv = mem;

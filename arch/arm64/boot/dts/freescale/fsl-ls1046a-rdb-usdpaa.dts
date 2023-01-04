@@ -2,7 +2,7 @@
  * Device Tree Include file for Freescale Layerscape-1046A family SoC.
  *
  * Copyright 2016 Freescale Semiconductor, Inc.
- * Copyright 2017-2019 NXP
+ * Copyright 2017-2019,2023 NXP
  *
  * This file is licensed under the terms of the GNU General Public
  * License version 2.  This program is licensed "as is" without any
@@ -89,6 +89,14 @@
 			fsl,qman-frame-queues-oh = <0x60 1 0x61 1>;
 			fsl,fman-oh-port = <&fman0_oh2>;
 		};
+
+		dpa-fman0-oh@3 {
+			compatible = "fsl,dpa-oh";
+			/* Define frame queues for the OH port*/
+			/* <OH Rx error, OH Rx default> */
+			fsl,qman-frame-queues-oh = <0x62 1 0x63 1>;
+			fsl,fman-oh-port = <&fman0_oh3>;
+		};
 	};
 
 	pcie@3400000 {
@@ -106,6 +114,33 @@
 	/delete-node/ iommu@9000000;
 };
 / {
+	chosen {
+		name = "chosen";
+		dpaa-extended-args {
+			fman0-extd-args {
+				cell-index = <0>;
+				compatible = "fsl,fman-extended-args";
+				dma-aid-mode = "port";
+
+				fman0_oh2-extd-args {
+					cell-index = <1>;
+					compatible = "fsl,fman-port-op-extended-args";
+					/* Define Virtual storage profile */
+					/* <number of profiles, default profile id> */
+					vsp-window = <2 0>;
+				};
+
+				fman0_oh3-extd-args {
+					cell-index = <2>;
+					compatible = "fsl,fman-port-op-extended-args";
+					/* Define Virtual storage profile */
+					/* <number of profiles, default profile id> */
+					vsp-window = <2 0>;
+				};
+			};
+		};
+	};
+
 	reserved-memory {
 		#address-cells = <2>;
 		#size-cells = <2>;
@@ -122,13 +157,5 @@
 			size = <0 0x1000>;
 			alignment = <0 0x1000>;
 		};
-	};
-};
-
-&fman0 {
-	fman0_oh2: port@83000 {
-		cell-index = <1>;
-		compatible = "fsl,fman-port-oh";
-		reg = <0x83000 0x1000>;
 	};
 };

@@ -147,6 +147,7 @@ static const struct imx_sc_pd_range imx8qxp_scu_pd_ranges[] = {
 	{ "esai1", IMX_SC_R_ESAI_1, 1, false, 0 },
 	{ "spdif0", IMX_SC_R_SPDIF_0, 1, false, 0 },
 	{ "spdif1", IMX_SC_R_SPDIF_1, 1, false, 0 },
+	{ "gpt", IMX_SC_R_GPT_5, 4, true, 5 },
 	{ "sai", IMX_SC_R_SAI_0, 3, true, 0 },
 	{ "sai3", IMX_SC_R_SAI_3, 1, false, 0 },
 	{ "sai4", IMX_SC_R_SAI_4, 1, false, 0 },

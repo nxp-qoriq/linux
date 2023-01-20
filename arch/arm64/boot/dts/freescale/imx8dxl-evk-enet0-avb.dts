@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2022 NXP
+ */
+
+/dts-v1/;
+
+#include "imx8dxl-evk-enet0.dts"
+
+/* AVB HW timer*/
+&gpt5 {
+	compatible = "fsl,avb-gpt";
+	timer-channel = <1>; /* Use output compare channel 1*/
+	prescale = <1>;
+	domain = <0>;
+
+	interrupts = <GIC_SPI 268 IRQ_TYPE_LEVEL_HIGH>;
+
+	status = "okay";
+};
+
+&fec1 {
+	fsl,rx-phy-delay-100-ns = <670>;
+	fsl,tx-phy-delay-100-ns = <670>;
+	fsl,rx-phy-delay-1000-ns = <0>;
+	fsl,tx-phy-delay-1000-ns = <0>;
+};

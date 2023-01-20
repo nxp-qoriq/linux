@@ -239,6 +239,15 @@ audio_subsys: bus@59000000 {
 		status = "disabled";
 	};
 
+	gpt5: gpt@590b0000 {
+		reg = <0x590b0000 0x10000>;
+		clocks = <&gpt5_lpcg 0>,
+			<&gpt5_lpcg 0>;
+		clock-names = "ipg", "per";
+		power-domains = <&pd IMX_SC_R_GPT_5>;
+		status = "disabled";
+	};
+
 	asrc1: asrc@59800000 {
 		compatible = "fsl,imx8qm-asrc";
 		reg = <0x59800000 0x10000>;
@@ -553,6 +562,16 @@ audio_subsys: bus@59000000 {
 		clock-output-names = "sai3_lpcg_mclk",
 				     "sai3_lpcg_ipg_clk";
 		power-domains = <&pd IMX_SC_R_SAI_3>;
+	};
+
+	gpt5_lpcg: clock-controller@594b0000 {
+		compatible = "fsl,imx8qxp-lpcg";
+		reg = <0x594b0000 0x10000>;
+		#clock-cells = <1>;
+		clocks = <&audio_ipg_clk>;
+		bit-offset = <16>;
+		clock-output-names = "gpt5_lpcg_ipg_clk";
+		power-domains = <&pd IMX_SC_R_GPT_5>;
 	};
 
 	asrc1_lpcg: clock-controller@59c00000 {

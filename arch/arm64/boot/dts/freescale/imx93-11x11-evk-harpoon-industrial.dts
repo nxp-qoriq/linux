@@ -1,0 +1,18 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2023 NXP
+ */
+
+#include "imx93-11x11-evk-root.dts"
+
+&eqos {
+	status = "disabled";
+};
+
+&flexcan2 {
+	status = "disabled";
+};
+
+&reg_can2_stby {
+	status = "disabled";
+};

@@ -21,7 +21,7 @@
 	/* Set TPM4 clock root to Audio PLL. */
 	assigned-clocks = <&clk IMX93_CLK_TPM4>;
 	assigned-clock-parents = <&clk IMX93_CLK_AUDIO_PLL>;
-	assigned-clock-rates = <49152000>;
+	assigned-clock-rates = <0>;
 
 	status = "okay";
 };

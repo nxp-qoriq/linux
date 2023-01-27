@@ -18,9 +18,9 @@
 	clock-names = "ipg", "per";
 
 	/* Make the GPT clk root derive from the audio PLL*/
-	assigned-clocks = <&clk IMX8MM_CLK_GPT1>, <&clk IMX8MM_CLK_GPT1>;
+	assigned-clocks = <&clk IMX8MM_CLK_GPT1>;
 	assigned-clock-parents = <&clk IMX8MM_AUDIO_PLL1_OUT>;
-	assigned-clock-rates = <0>, <49152000>;
+	assigned-clock-rates = <0>;
 
 	status = "okay";
 };

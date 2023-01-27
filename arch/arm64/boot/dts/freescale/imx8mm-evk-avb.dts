@@ -12,15 +12,19 @@
 	compatible = "fsl,avb-gpt";
 	timer-channel = <1>; /* Use output compare channel 1*/
 	prescale = <1>;
+	domain = <0>;
 
 	clocks = <&clk IMX8MM_CLK_GPT1_ROOT>,
-		 <&clk IMX8MM_CLK_GPT1_ROOT>;
-	clock-names = "ipg", "per";
+		 <&clk IMX8MM_CLK_GPT1_ROOT>, <&clk IMX8MM_AUDIO_PLL1>;
+	clock-names = "ipg", "per", "audio_pll";
 
-	/* Make the GPT clk root derive from the audio PLL*/
+	/* Make the GPT clk root derive from the audio PLL */
 	assigned-clocks = <&clk IMX8MM_CLK_GPT1>;
 	assigned-clock-parents = <&clk IMX8MM_AUDIO_PLL1_OUT>;
 	assigned-clock-rates = <0>;
+
+	/* Enble SW sampling for media clock recovery on port 0 */
+	sw-recovery = <0>;
 
 	status = "okay";
 };

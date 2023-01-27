@@ -23,6 +23,9 @@
 	assigned-clock-parents = <&clk IMX93_CLK_AUDIO_PLL>;
 	assigned-clock-rates = <0>;
 
+	/* Enble SW sampling for media clock recovery on port 0 */
+	sw-recovery = <0>;
+
 	status = "okay";
 };
 

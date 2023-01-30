@@ -1,22 +1,23 @@
 # SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
 %YAML 1.2
 ---
-$id: http://devicetree.org/schemas/mailbox/arm,sgi-mbox.yaml#
+$id: http://devicetree.org/schemas/mailbox/generic-software-mbox.yaml#
 $schema: http://devicetree.org/meta-schemas/core.yaml#
 
-title: ARM SGI Mailbox
+title: Generic Software Mailbox
 
 maintainers:
   - Hou Zhiqiang <Zhiqiang.Hou@nxp.com>
 
 description: |
-  The SGI Mailbox is a virtual device, which uses SGI interrupt to
-  notify remote side and share memory for device MMIO registers.
+  The Generic Software Mailbox is a virtual device, which uses unused
+  interrupt line to notify remote side and shared memory to emulate
+  device MMIO registers.
 
 properties:
   compatible:
     oneOf:
-      - const: fsl,arm-sgi-mbox
+      - const: fsl,generic-software-mbox
   reg:
     maxItems: 1
 
@@ -28,8 +29,7 @@ properties:
       channel   : Channel index
 
       This mailbox support 3 type of unidirectional channels, each type
-      has 4 channels. A total of 12 channels. Following types are
-      supported:
+      has 32 channels. Following types are supported:
       0 - TX channel with 32bit transmit register
       1 - RX channel with 32bit receive register and IRQ support
       2 - RX doorbell channel.
@@ -39,20 +39,25 @@ required:
   - compatible
   - reg
   - "#mbox-cells"
+  - interrupts
+  - interrupt-names
 
 additionalProperties: false
 
 examples:
   - |
     reserved-memory {
-        sgi-mbox@b8500000 {
+        gen-sw-mbox@b8500000 {
             no-map;
             reg = <0 0xb8500000 0 0x1000>;
         };
     };
 
-    sgi-mailbox@b8500000 {
-        compatible = "fsl,arm-sgi-mbox";
+    generic-software-mailbox@b8500000 {
+        compatible = "fsl,generic-software-mbox";
         reg = <0 0xb8500000 0 0x1000>;
         #mbox-cells = <2>;
+        interrupts = <GIC_SPI 76 IRQ_TYPE_LEVEL_HIGH>,
+                     <GIC_SPI 77 IRQ_TYPE_LEVEL_HIGH>;
+        interrupt-names = "irq", "remote_irq";
     };

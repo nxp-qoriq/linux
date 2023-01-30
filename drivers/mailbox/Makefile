@@ -59,4 +59,4 @@ obj-$(CONFIG_SPRD_MBOX)		+= sprd-mailbox.o
 
 obj-$(CONFIG_QCOM_IPCC)		+= qcom-ipcc.o
 
-obj-$(CONFIG_ARM_SGI_MAILBOX)	+= arm-sgi-mailbox.o
+obj-$(CONFIG_GENERIC_SOFTWARE_MAILBOX)	+= generic-software-mailbox.o

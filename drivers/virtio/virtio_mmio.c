@@ -3,6 +3,7 @@
  * Virtio memory mapped device driver
  *
  * Copyright 2011-2014, ARM Ltd.
+ * Copyright 2022-2023 NXP
  *
  * This module allows virtio devices to be used over a virtual, memory mapped
  * platform device.
@@ -60,8 +61,10 @@
 #include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/list.h>
+#include <linux/mailbox_client.h>
 #include <linux/module.h>
 #include <linux/of.h>
+#include <linux/of_reserved_mem.h>
 #include <linux/platform_device.h>
 #include <linux/pm.h>
 #include <linux/slab.h>
@@ -70,7 +73,7 @@
 #include <linux/virtio_config.h>
 #include <uapi/linux/virtio_mmio.h>
 #include <linux/virtio_ring.h>
-
+#include <linux/delay.h>
 
 
 /* The alignment to use between consumer and producer parts of vring.
@@ -82,6 +85,13 @@
 #define to_virtio_mmio_device(_plat_dev) \
 	container_of(_plat_dev, struct virtio_mmio_device, vdev)
 
+struct virtio_mmio_wr_op {
+	uint64_t phy_base;
+	uint32_t offset;
+	uint32_t value;
+	uint8_t len;
+};
+
 struct virtio_mmio_device {
 	struct virtio_device vdev;
 	struct platform_device *pdev;
@@ -92,6 +102,16 @@ struct virtio_mmio_device {
 	/* a list of queues so we can dispatch IRQs */
 	spinlock_t lock;
 	struct list_head virtqueues;
+
+	/* Hypervisor_less virtio */
+	bool is_hypervisor_less;
+	phys_addr_t phys;
+	struct virtio_mmio_wr_op *wr_ops;
+	dma_addr_t wr_ops_phys;
+	struct mbox_client mbox_wr_cl;
+	struct mbox_client mbox_irq_cl;
+	struct mbox_chan *mmio_wr_ch;
+	struct mbox_chan *mmio_irq_ch;
 };
 
 struct virtio_mmio_vq_info {
@@ -102,6 +122,68 @@ struct virtio_mmio_vq_info {
 	struct list_head node;
 };
 
+static void vmd_write(struct virtio_mmio_device *vm_dev, u32 val, u32 off, u8 len)
+{
+	void __iomem *addr = vm_dev->base + off;
+	struct virtio_mmio_wr_op *wr_ops = vm_dev->wr_ops;
+	int timeout;
+	int ret;
+
+	switch (len) {
+	case 1:
+		writeb(val, addr);
+		break;
+	case 2:
+		writew(val, addr);
+		break;
+	case 4:
+		writel(val, addr);
+		break;
+	default:
+		return;
+	}
+
+	if (vm_dev->is_hypervisor_less) {
+
+		timeout = 1000000;
+		writel(0, vm_dev->base + VIRTIO_MMIO_WD_STATUS);
+
+		wr_ops->phy_base = (uint64_t)vm_dev->phys;
+		wr_ops->offset = off;
+		wr_ops->value = val;
+		wr_ops->len = len;
+
+		ret = mbox_send_message(vm_dev->mmio_wr_ch, &vm_dev->wr_ops_phys);
+		if (ret < 0)
+			dev_err(&vm_dev->vdev.dev, "mmio write error: base: %llx offset: %x, val: %x, len: %d\n",
+				wr_ops->phy_base, wr_ops->offset,
+				wr_ops->value, wr_ops->len);
+
+		/* poll backend write operation complete */
+		while (timeout-- && !readl(vm_dev->base + VIRTIO_MMIO_WD_STATUS))
+			udelay(1);
+
+		if (timeout < 0)
+			dev_err(&vm_dev->vdev.dev, "mmio write timeout: base: %llx offset: %x, val: %x, len: %d\n",
+				wr_ops->phy_base, wr_ops->offset,
+				wr_ops->value, wr_ops->len);
+	}
+}
+
+static void vmd_writel(struct virtio_mmio_device *vm_dev, u32 val, u32 off)
+{
+	vmd_write(vm_dev, val, off, 4);
+}
+
+static void vmd_writew(struct virtio_mmio_device *vm_dev, u32 val, u32 off)
+{
+	vmd_write(vm_dev, val, off, 2);
+}
+
+static void vmd_writeb(struct virtio_mmio_device *vm_dev, u32 val, u32 off)
+{
+	vmd_write(vm_dev, val, off, 1);
+}
 
 
 /* Configuration interface */
@@ -111,11 +193,11 @@ static u64 vm_get_features(struct virtio_device *vdev)
 	struct virtio_mmio_device *vm_dev = to_virtio_mmio_device(vdev);
 	u64 features;
 
-	writel(1, vm_dev->base + VIRTIO_MMIO_DEVICE_FEATURES_SEL);
+	vmd_writel(vm_dev, 1, VIRTIO_MMIO_DEVICE_FEATURES_SEL);
 	features = readl(vm_dev->base + VIRTIO_MMIO_DEVICE_FEATURES);
 	features <<= 32;
 
-	writel(0, vm_dev->base + VIRTIO_MMIO_DEVICE_FEATURES_SEL);
+	vmd_writel(vm_dev, 0, VIRTIO_MMIO_DEVICE_FEATURES_SEL);
 	features |= readl(vm_dev->base + VIRTIO_MMIO_DEVICE_FEATURES);
 
 	return features;
@@ -135,13 +217,13 @@ static int vm_finalize_features(struct virtio_device *vdev)
 		return -EINVAL;
 	}
 
-	writel(1, vm_dev->base + VIRTIO_MMIO_DRIVER_FEATURES_SEL);
-	writel((u32)(vdev->features >> 32),
-			vm_dev->base + VIRTIO_MMIO_DRIVER_FEATURES);
+	vmd_writel(vm_dev, 1, VIRTIO_MMIO_DRIVER_FEATURES_SEL);
+	vmd_writel(vm_dev, (u32)(vdev->features >> 32),
+			VIRTIO_MMIO_DRIVER_FEATURES);
 
-	writel(0, vm_dev->base + VIRTIO_MMIO_DRIVER_FEATURES_SEL);
-	writel((u32)vdev->features,
-			vm_dev->base + VIRTIO_MMIO_DRIVER_FEATURES);
+	vmd_writel(vm_dev, 0, VIRTIO_MMIO_DRIVER_FEATURES_SEL);
+	vmd_writel(vm_dev, (u32)vdev->features,
+			VIRTIO_MMIO_DRIVER_FEATURES);
 
 	return 0;
 }
@@ -192,39 +274,34 @@ static void vm_set(struct virtio_device *vdev, unsigned int offset,
 		   const void *buf, unsigned int len)
 {
 	struct virtio_mmio_device *vm_dev = to_virtio_mmio_device(vdev);
-	void __iomem *base = vm_dev->base + VIRTIO_MMIO_CONFIG;
+	u32 base = VIRTIO_MMIO_CONFIG;
 	u8 b;
 	__le16 w;
 	__le32 l;
 
 	if (vm_dev->version == 1) {
-		const u8 *ptr = buf;
-		int i;
-
-		for (i = 0; i < len; i++)
-			writeb(ptr[i], base + offset + i);
-
+		vmd_writel(vm_dev, *(u32 *)buf, base + offset);
 		return;
 	}
 
 	switch (len) {
 	case 1:
 		memcpy(&b, buf, sizeof b);
-		writeb(b, base + offset);
+		vmd_writeb(vm_dev, b, base + offset);
 		break;
 	case 2:
 		memcpy(&w, buf, sizeof w);
-		writew(le16_to_cpu(w), base + offset);
+		vmd_writew(vm_dev, le16_to_cpu(w), base + offset);
 		break;
 	case 4:
 		memcpy(&l, buf, sizeof l);
-		writel(le32_to_cpu(l), base + offset);
+		vmd_writel(vm_dev, le32_to_cpu(l), base + offset);
 		break;
 	case 8:
 		memcpy(&l, buf, sizeof l);
-		writel(le32_to_cpu(l), base + offset);
+		vmd_writel(vm_dev, le32_to_cpu(l), base + offset);
 		memcpy(&l, buf + sizeof l, sizeof l);
-		writel(le32_to_cpu(l), base + offset + sizeof l);
+		vmd_writel(vm_dev, le32_to_cpu(l), base + offset + sizeof l);
 		break;
 	default:
 		BUG();
@@ -260,7 +337,7 @@ static void vm_set_status(struct virtio_device *vdev, u8 status)
 	 * that the cache coherent memory writes have completed
 	 * before writing to the MMIO region.
 	 */
-	writel(status, vm_dev->base + VIRTIO_MMIO_STATUS);
+	vmd_writel(vm_dev, status, VIRTIO_MMIO_STATUS);
 }
 
 static void vm_reset(struct virtio_device *vdev)
@@ -268,7 +345,7 @@ static void vm_reset(struct virtio_device *vdev)
 	struct virtio_mmio_device *vm_dev = to_virtio_mmio_device(vdev);
 
 	/* 0 status means a reset. */
-	writel(0, vm_dev->base + VIRTIO_MMIO_STATUS);
+	vmd_writel(vm_dev, 0, VIRTIO_MMIO_STATUS);
 }
 
 
@@ -282,7 +359,7 @@ static bool vm_notify(struct virtqueue *vq)
 
 	/* We write the queue's selector into the notification register to
 	 * signal the other end */
-	writel(vq->index, vm_dev->base + VIRTIO_MMIO_QUEUE_NOTIFY);
+	vmd_writel(vm_dev, vq->index, VIRTIO_MMIO_QUEUE_NOTIFY);
 	return true;
 }
 
@@ -297,6 +374,36 @@ static bool vm_notify_with_data(struct virtqueue *vq)
 }
 
 /* Notify all virtqueues on an interrupt. */
+static void virtio_mmio_irq_callback(struct mbox_client *c, void *msg)
+{
+	struct virtio_mmio_device *vm_dev = container_of(c,
+			struct virtio_mmio_device, mbox_irq_cl);
+	struct virtio_mmio_vq_info *info;
+	unsigned long status;
+	unsigned long flags;
+
+	/* Read and acknowledge interrupts */
+	status = readl(vm_dev->base + VIRTIO_MMIO_INTERRUPT_STATUS);
+
+	/*
+	 * For Hypervisor-less virtio, write ACK without notification, since
+	 * in mailbox RX channel callback function sometimes the timeout occur
+	 * calling the vmd_writel().
+	 */
+	writel(status, vm_dev->base + VIRTIO_MMIO_INTERRUPT_ACK);
+
+	if (unlikely(status & VIRTIO_MMIO_INT_CONFIG))
+		virtio_config_changed(&vm_dev->vdev);
+
+	if (likely(status & VIRTIO_MMIO_INT_VRING)) {
+		spin_lock_irqsave(&vm_dev->lock, flags);
+		list_for_each_entry(info, &vm_dev->virtqueues, node)
+			vring_interrupt(0, info->vq);
+		spin_unlock_irqrestore(&vm_dev->lock, flags);
+	}
+}
+
+/* Notify all virtqueues on an interrupt. */
 static irqreturn_t vm_interrupt(int irq, void *opaque)
 {
 	struct virtio_mmio_device *vm_dev = opaque;
@@ -307,7 +414,7 @@ static irqreturn_t vm_interrupt(int irq, void *opaque)
 
 	/* Read and acknowledge interrupts */
 	status = readl(vm_dev->base + VIRTIO_MMIO_INTERRUPT_STATUS);
-	writel(status, vm_dev->base + VIRTIO_MMIO_INTERRUPT_ACK);
+	vmd_writel(vm_dev, status, VIRTIO_MMIO_INTERRUPT_ACK);
 
 	if (unlikely(status & VIRTIO_MMIO_INT_CONFIG)) {
 		virtio_config_changed(&vm_dev->vdev);
@@ -338,11 +445,11 @@ static void vm_del_vq(struct virtqueue *vq)
 	spin_unlock_irqrestore(&vm_dev->lock, flags);
 
 	/* Select and deactivate the queue */
-	writel(index, vm_dev->base + VIRTIO_MMIO_QUEUE_SEL);
+	vmd_writel(vm_dev, index, VIRTIO_MMIO_QUEUE_SEL);
 	if (vm_dev->version == 1) {
-		writel(0, vm_dev->base + VIRTIO_MMIO_QUEUE_PFN);
+		vmd_writel(vm_dev, 0, VIRTIO_MMIO_QUEUE_PFN);
 	} else {
-		writel(0, vm_dev->base + VIRTIO_MMIO_QUEUE_READY);
+		vmd_writel(vm_dev, 0, VIRTIO_MMIO_QUEUE_READY);
 		WARN_ON(readl(vm_dev->base + VIRTIO_MMIO_QUEUE_READY));
 	}
 
@@ -359,7 +466,10 @@ static void vm_del_vqs(struct virtio_device *vdev)
 	list_for_each_entry_safe(vq, n, &vdev->vqs, list)
 		vm_del_vq(vq);
 
-	free_irq(platform_get_irq(vm_dev->pdev, 0), vm_dev);
+	if (vm_dev->is_hypervisor_less)
+		mbox_free_channel(vm_dev->mmio_irq_ch);
+	else
+		free_irq(platform_get_irq(vm_dev->pdev, 0), vm_dev);
 }
 
 static void vm_synchronize_cbs(struct virtio_device *vdev)
@@ -390,7 +500,7 @@ static struct virtqueue *vm_setup_vq(struct virtio_device *vdev, unsigned int in
 		return NULL;
 
 	/* Select the queue we're interested in */
-	writel(index, vm_dev->base + VIRTIO_MMIO_QUEUE_SEL);
+	vmd_writel(vm_dev, index, VIRTIO_MMIO_QUEUE_SEL);
 
 	/* Queue shouldn't already be set up. */
 	if (readl(vm_dev->base + (vm_dev->version == 1 ?
@@ -423,7 +533,7 @@ static struct virtqueue *vm_setup_vq(struct virtio_device *vdev, unsigned int in
 	vq->num_max = num;
 
 	/* Activate the queue */
-	writel(virtqueue_get_vring_size(vq), vm_dev->base + VIRTIO_MMIO_QUEUE_NUM);
+	vmd_writel(vm_dev, virtqueue_get_vring_size(vq), VIRTIO_MMIO_QUEUE_NUM);
 	if (vm_dev->version == 1) {
 		u64 q_pfn = virtqueue_get_desc_addr(vq) >> PAGE_SHIFT;
 
@@ -440,27 +550,27 @@ static struct virtqueue *vm_setup_vq(struct virtio_device *vdev, unsigned int in
 			goto error_bad_pfn;
 		}
 
-		writel(PAGE_SIZE, vm_dev->base + VIRTIO_MMIO_QUEUE_ALIGN);
-		writel(q_pfn, vm_dev->base + VIRTIO_MMIO_QUEUE_PFN);
+		vmd_writel(vm_dev, PAGE_SIZE, VIRTIO_MMIO_QUEUE_ALIGN);
+		vmd_writel(vm_dev, q_pfn, VIRTIO_MMIO_QUEUE_PFN);
 	} else {
 		u64 addr;
 
 		addr = virtqueue_get_desc_addr(vq);
-		writel((u32)addr, vm_dev->base + VIRTIO_MMIO_QUEUE_DESC_LOW);
-		writel((u32)(addr >> 32),
-				vm_dev->base + VIRTIO_MMIO_QUEUE_DESC_HIGH);
+		vmd_writel(vm_dev, (u32)addr, VIRTIO_MMIO_QUEUE_DESC_LOW);
+		vmd_writel(vm_dev, (u32)(addr >> 32),
+				VIRTIO_MMIO_QUEUE_DESC_HIGH);
 
 		addr = virtqueue_get_avail_addr(vq);
-		writel((u32)addr, vm_dev->base + VIRTIO_MMIO_QUEUE_AVAIL_LOW);
-		writel((u32)(addr >> 32),
-				vm_dev->base + VIRTIO_MMIO_QUEUE_AVAIL_HIGH);
+		vmd_writel(vm_dev, (u32)addr, VIRTIO_MMIO_QUEUE_AVAIL_LOW);
+		vmd_writel(vm_dev, (u32)(addr >> 32),
+				VIRTIO_MMIO_QUEUE_AVAIL_HIGH);
 
 		addr = virtqueue_get_used_addr(vq);
-		writel((u32)addr, vm_dev->base + VIRTIO_MMIO_QUEUE_USED_LOW);
-		writel((u32)(addr >> 32),
-				vm_dev->base + VIRTIO_MMIO_QUEUE_USED_HIGH);
+		vmd_writel(vm_dev, (u32)addr, VIRTIO_MMIO_QUEUE_USED_LOW);
+		vmd_writel(vm_dev, (u32)(addr >> 32),
+				VIRTIO_MMIO_QUEUE_USED_HIGH);
 
-		writel(1, vm_dev->base + VIRTIO_MMIO_QUEUE_READY);
+		vmd_writel(vm_dev, 1, VIRTIO_MMIO_QUEUE_READY);
 	}
 
 	vq->priv = info;
@@ -476,9 +586,9 @@ error_bad_pfn:
 	vring_del_virtqueue(vq);
 error_new_virtqueue:
 	if (vm_dev->version == 1) {
-		writel(0, vm_dev->base + VIRTIO_MMIO_QUEUE_PFN);
+		vmd_writel(vm_dev, 0, VIRTIO_MMIO_QUEUE_PFN);
 	} else {
-		writel(0, vm_dev->base + VIRTIO_MMIO_QUEUE_READY);
+		vmd_writel(vm_dev, 0, VIRTIO_MMIO_QUEUE_READY);
 		WARN_ON(readl(vm_dev->base + VIRTIO_MMIO_QUEUE_READY));
 	}
 	kfree(info);
@@ -487,22 +597,51 @@ error_available:
 	return ERR_PTR(err);
 }
 
+static int virtio_mmio_irq_channel_init(struct virtio_mmio_device *vm_dev)
+{
+	struct platform_device *pdev = vm_dev->pdev;
+	struct device *dev = &pdev->dev;
+	struct mbox_client *cl;
+	int ret = 0;
+
+	cl = &vm_dev->mbox_irq_cl;
+	cl->dev = dev;
+	cl->rx_callback = virtio_mmio_irq_callback;
+
+	vm_dev->mmio_irq_ch = mbox_request_channel_byname(cl, "mmioirq");
+	if (IS_ERR(vm_dev->mmio_irq_ch)) {
+		ret = PTR_ERR(vm_dev->mmio_irq_ch);
+		dev_err(cl->dev, "failed to request mbox irq chan, ret %d\n",
+			ret);
+		return ret;
+	}
+
+	return ret;
+}
+
 static int vm_find_vqs(struct virtio_device *vdev, unsigned int nvqs,
 		       struct virtqueue *vqs[],
 		       struct virtqueue_info vqs_info[],
 		       struct irq_affinity *desc)
 {
 	struct virtio_mmio_device *vm_dev = to_virtio_mmio_device(vdev);
-	int irq = platform_get_irq(vm_dev->pdev, 0);
+	int irq;
 	int i, err, queue_idx = 0;
 
-	if (irq < 0)
-		return irq;
+	if (vm_dev->is_hypervisor_less) {
+		err = virtio_mmio_irq_channel_init(vm_dev);
+		if (err)
+			return err;
+	} else {
+		irq = platform_get_irq(vm_dev->pdev, 0);
+		if (irq < 0)
+			return irq;
 
-	err = request_irq(irq, vm_interrupt, IRQF_SHARED,
+		err = request_irq(irq, vm_interrupt, IRQF_SHARED,
 			dev_name(&vdev->dev), vm_dev);
-	if (err)
-		return err;
+		if (err)
+			return err;
+	}
 
 	if (of_property_read_bool(vm_dev->pdev->dev.of_node, "wakeup-source"))
 		enable_irq_wake(irq);
@@ -540,7 +679,7 @@ static bool vm_get_shm_region(struct virtio_device *vdev,
 	u64 len, addr;
 
 	/* Select the region we're interested in */
-	writel(id, vm_dev->base + VIRTIO_MMIO_SHM_SEL);
+	vmd_writel(vm_dev, id, VIRTIO_MMIO_SHM_SEL);
 
 	/* Read the region size */
 	len = (u64) readl(vm_dev->base + VIRTIO_MMIO_SHM_LEN_LOW);
@@ -611,6 +750,27 @@ static void virtio_mmio_release_dev(struct device *_d)
 	kfree(vm_dev);
 }
 
+static int virtio_mmio_mbox_channel_init(struct virtio_mmio_device *vm_dev)
+{
+	struct platform_device *pdev = vm_dev->pdev;
+	struct device *dev = &pdev->dev;
+	struct mbox_client *cl;
+	int ret = 0;
+
+	cl = &vm_dev->mbox_wr_cl;
+	cl->dev = dev;
+
+	vm_dev->mmio_wr_ch = mbox_request_channel_byname(cl, "mmiowr");
+	if (IS_ERR(vm_dev->mmio_wr_ch)) {
+		ret = PTR_ERR(vm_dev->mmio_wr_ch);
+		dev_err(cl->dev, "failed to request mbox chan mmio, ret %d\n",
+			ret);
+		return ret;
+	}
+
+	return ret;
+}
+
 /* Platform device */
 
 static int virtio_mmio_probe(struct platform_device *pdev)
@@ -618,10 +778,18 @@ static int virtio_mmio_probe(struct platform_device *pdev)
 	struct virtio_mmio_device *vm_dev;
 	unsigned long magic;
 	int rc;
+	struct resource *res;
 
 	vm_dev = kzalloc(sizeof(*vm_dev), GFP_KERNEL);
 	if (!vm_dev)
 		return -ENOMEM;
+
+	if (of_property_read_bool(pdev->dev.of_node, "hypervisor_less")) {
+		vm_dev->is_hypervisor_less = true;
+		rc = of_reserved_mem_device_init(&pdev->dev);
+		if (rc)
+			dev_info(&pdev->dev, "Device specific DMA pool is not available\n");
+	}
 
 	vm_dev->vdev.dev.parent = &pdev->dev;
 	vm_dev->vdev.dev.release = virtio_mmio_release_dev;
@@ -630,7 +798,7 @@ static int virtio_mmio_probe(struct platform_device *pdev)
 	INIT_LIST_HEAD(&vm_dev->virtqueues);
 	spin_lock_init(&vm_dev->lock);
 
-	vm_dev->base = devm_platform_ioremap_resource(pdev, 0);
+	vm_dev->base = devm_platform_get_and_ioremap_resource(pdev, 0, &res);
 	if (IS_ERR(vm_dev->base)) {
 		rc = PTR_ERR(vm_dev->base);
 		goto free_vm_dev;
@@ -641,7 +809,7 @@ static int virtio_mmio_probe(struct platform_device *pdev)
 	if (magic != ('v' | 'i' << 8 | 'r' << 16 | 't' << 24)) {
 		dev_warn(&pdev->dev, "Wrong magic value 0x%08lx!\n", magic);
 		rc = -ENODEV;
-		goto free_vm_dev;
+		goto err;
 	}
 
 	/* Check device version */
@@ -650,7 +818,7 @@ static int virtio_mmio_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Version %ld not supported!\n",
 				vm_dev->version);
 		rc = -ENXIO;
-		goto free_vm_dev;
+		goto err;
 	}
 
 	vm_dev->vdev.id.device = readl(vm_dev->base + VIRTIO_MMIO_DEVICE_ID);
@@ -660,12 +828,24 @@ static int virtio_mmio_probe(struct platform_device *pdev)
 		 * with no function. End probing now with no error reported.
 		 */
 		rc = -ENODEV;
-		goto free_vm_dev;
+		goto err;
 	}
 	vm_dev->vdev.id.vendor = readl(vm_dev->base + VIRTIO_MMIO_VENDOR_ID);
 
+	if (vm_dev->is_hypervisor_less) {
+		vm_dev->phys = res->start;
+
+		vm_dev->wr_ops = vm_dev->base + VIRTIO_MMIO_RW_OPS_MEM_OFFSET;
+		vm_dev->wr_ops_phys = res->start + VIRTIO_MMIO_RW_OPS_MEM_OFFSET;
+
+		/* Initialize mailbox mmio channel. */
+		rc = virtio_mmio_mbox_channel_init(vm_dev);
+		if (rc)
+			goto err;
+	}
+
 	if (vm_dev->version == 1) {
-		writel(PAGE_SIZE, vm_dev->base + VIRTIO_MMIO_GUEST_PAGE_SIZE);
+		vmd_writel(vm_dev, PAGE_SIZE, VIRTIO_MMIO_GUEST_PAGE_SIZE);
 
 		rc = dma_set_mask(&pdev->dev, DMA_BIT_MASK(64));
 		/*
@@ -691,6 +871,9 @@ static int virtio_mmio_probe(struct platform_device *pdev)
 
 	return rc;
 
+err:
+	if (vm_dev->is_hypervisor_less)
+		of_reserved_mem_device_release(&pdev->dev);
 free_vm_dev:
 	kfree(vm_dev);
 	return rc;
@@ -699,6 +882,10 @@ free_vm_dev:
 static void virtio_mmio_remove(struct platform_device *pdev)
 {
 	struct virtio_mmio_device *vm_dev = platform_get_drvdata(pdev);
+
+	if (vm_dev->is_hypervisor_less)
+		mbox_free_channel(vm_dev->mmio_wr_ch);
+
 	unregister_virtio_device(&vm_dev->vdev);
 }
 

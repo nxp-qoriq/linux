@@ -120,6 +120,14 @@ config VIRTIO_INPUT
 
 	 If unsure, say M.
 
+config VIRTIO_TRANS
+	tristate "Virtio transfer test driver"
+	depends on VIRTIO
+	help
+	 This driver is for virtio transfer performance test
+	 between front-end and back-end driver.
+	 If unsure, say N.
+
 config VIRTIO_MMIO
 	tristate "Platform bus driver for memory mapped virtio devices"
 	depends on HAS_IOMEM && HAS_DMA

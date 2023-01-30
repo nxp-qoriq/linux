@@ -110,6 +110,9 @@
 /* Device status register - Read Write */
 #define VIRTIO_MMIO_STATUS		0x070
 
+/* Hypervisor-less virtio: Device write operation done status register */
+#define VIRTIO_MMIO_WD_STATUS		0x074
+
 /* Selected queue's Descriptor Table address, 64 bits in two halves */
 #define VIRTIO_MMIO_QUEUE_DESC_LOW	0x080
 #define VIRTIO_MMIO_QUEUE_DESC_HIGH	0x084
@@ -140,7 +143,9 @@
  * the per-driver configuration space - Read Write */
 #define VIRTIO_MMIO_CONFIG		0x100
 
-
+/* Hypervisor-less virtio: write operation space shared with remote */
+#define VIRTIO_MMIO_RW_OPS_MEM_OFFSET	0x400
+#define VIRTIO_MMIO_RW_OPS_MEM_SIZE	64
 
 /*
  * Interrupt flags (re: interrupt status & acknowledge registers)

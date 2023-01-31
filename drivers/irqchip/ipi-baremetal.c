@@ -134,9 +134,13 @@ void __iomem *share_base;
 
 #define IPIDEV_IOCIRQ 1
 
+#define ICC_CMD_TX_DATA     0x00
+#define ICC_CMD_DUMP_TIME   0x01
+
 struct icc_desc {
 	unsigned long block_addr;	/* block address */
 	unsigned int byte_count;	/* available bytes */
+	unsigned int option_mode;	/* option mode for this icc irq */
 };
 
 struct icc_ring {
@@ -149,6 +153,7 @@ struct icc_ring {
 	unsigned int desc_tail;		/* modified by consumer */
 	unsigned long busy_counts;	/* statistic: ring full */
 	unsigned long interrupt_counts; /* statistic: total sent number */
+	unsigned int irq_status;	/* status of the ring, set by producer, reset by consumer */
 };
 #endif
 
@@ -274,7 +279,7 @@ int ipi_baremetal_handle(u32 irqnr, u32 irqsrc)
 	struct icc_desc *desc;
 	struct icc_desc *desc_phy;
 	unsigned long block_addr;
-	unsigned int byte_count;
+	unsigned int byte_count, option_mode;
 	int i, valid;
 	int hw_irq, src_coreid;
 
@@ -292,13 +297,19 @@ int ipi_baremetal_handle(u32 irqnr, u32 irqsrc)
 	for (i = 0; i < valid; i++) {
 		desc_phy = ring->desc + ring->desc_tail;
 		desc = ICC_PHY2VIRT(desc_phy);
-		block_addr = desc->block_addr;
-		byte_count = desc->byte_count;
+		option_mode = desc->option_mode;
 
-		if ((*(char *)ICC_PHY2VIRT(block_addr)) != 0x5a)
-			pr_info("Get the ICC from core %d; block: 0x%lx, bytes: %d, value: 0x%x\n",
-				src_coreid, block_addr, byte_count,
-				(*(char *)ICC_PHY2VIRT(block_addr)));
+		if (option_mode & ICC_CMD_DUMP_TIME) {
+			pr_info("Get the SGI from CoreID: %d\n", src_coreid);
+		} else {
+			block_addr = desc->block_addr;
+			byte_count = desc->byte_count;
+
+			if ((*(char *)ICC_PHY2VIRT(block_addr)) != 0x5a)
+				pr_info("Get the ICC from core %d; block: 0x%lx, bytes: %d, value: 0x%x\n",
+					src_coreid, block_addr, byte_count,
+					(*(char *)ICC_PHY2VIRT(block_addr)));
+		}
 
 		/* add desc_tail */
 		ring->desc_tail = (ring->desc_tail + 1) % ring->desc_num;

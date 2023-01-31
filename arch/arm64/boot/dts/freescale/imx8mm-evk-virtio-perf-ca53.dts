@@ -12,9 +12,9 @@
 		#size-cells = <2>;
 		ranges;
 
-		virtio_reserved: virtio@bbb00000 {
+		virtio_reserved: virtio@b8400000 {
 			no-map;
-			reg = <0 0xbbb00000 0x0 0x00100000>;
+			reg = <0 0xb8400000 0x0 0x00100000>;
 		};
 
 		sw_mbox_reserved: gen-sw-mbox@b8500000 {
@@ -43,9 +43,9 @@
 		interrupt-names = "irq", "remote_irq";
 	};
 
-	virtio_trans@bbb00000 {
+	virtio_trans@b8400000 {
 		compatible = "virtio,mmio";
-		reg = <0x0 0xbbb00000 0x0 0x1000>;
+		reg = <0x0 0xb8400000 0x0 0x1000>;
 		hypervisor_less;
 		dma-coherent;
 		memory-region = <&virtio_buffer>;

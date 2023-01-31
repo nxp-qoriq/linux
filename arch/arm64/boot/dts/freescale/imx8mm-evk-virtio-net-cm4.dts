@@ -12,15 +12,15 @@
 		#size-cells = <2>;
 		ranges;
 
-		virtio_reserved: virtio@bbb00000 {
+		virtio_reserved: virtio@b8400000 {
 			no-map;
-			reg = <0 0xbbb00000 0x0 0x00100000>;
+			reg = <0 0xb8400000 0x0 0x00100000>;
 		};
 	};
 
-	virtio_net@bbb00000 {
+	virtio_net@b8400000 {
 		compatible = "virtio,mmio";
-		reg = <0x0 0xbbb00000 0x0 0x1000>;
+		reg = <0x0 0xb8400000 0x0 0x1000>;
 		hypervisor_less;
 		interrupts = <GIC_SPI 88 IRQ_TYPE_LEVEL_HIGH>; //MU IRQ to CA53
 		mbox-names = "mmiowr", "mmioirq";

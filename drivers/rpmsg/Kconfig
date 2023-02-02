@@ -118,4 +118,11 @@ config IMX_RPMSG_TTY
 	  executed by the command "echo <string> > <accordingly node>", thus
 	  remote M core would receive the string.
 
+config RPMSG_8M_BUF
+	bool "RPMSG 8M bytes buffer support"
+	default n
+	depends on HAVE_IMX_RPMSG
+	help
+	  Say y here to enable support for 8M bytes Vring buffer for rpmsg.
+
 endmenu

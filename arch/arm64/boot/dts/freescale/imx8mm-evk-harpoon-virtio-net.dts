@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2023 NXP
+ */
+
+#include "imx8mm-evk-root.dts"
+#include "imx8mm-virtio-ca53.dtsi"
+
+&fec1 {
+	status = "disabled";
+};

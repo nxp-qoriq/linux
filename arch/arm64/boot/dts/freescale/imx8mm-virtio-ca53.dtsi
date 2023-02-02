@@ -1,0 +1,46 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2023 NXP
+ */
+
+/ {
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		virtio_reserved: virtio@b8400000 {
+			no-map;
+			reg = <0 0xb8400000 0x0 0x00100000>;
+		};
+
+		sw_mbox_reserved: gen-sw-mbox@b8500000 {
+			reg = <0 0xb8500000 0 0x1000>;
+			no-map;
+		};
+
+		virtio_buffer: virtio-buffer@b3c00000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0xb3c00000 0 0x4000000>;
+		};
+	};
+
+	gen_sw_mbox: generic-software-mailbox@b8500000 {
+		compatible = "fsl,generic-software-mbox";
+		reg = <0 0xb8500000 0 0x1000>;
+		#mbox-cells = <3>;
+		/* Use 2 unused SPI interrupts */
+		interrupts = <GIC_SPI 76 IRQ_TYPE_LEVEL_HIGH>, <GIC_SPI 77 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "irq", "remote_irq";
+	};
+
+	virtio_net@b8400000 {
+		compatible = "virtio,mmio";
+		reg = <0x0 0xb8400000 0x0 0x1000>;
+		hypervisor_less;
+		memory-region = <&virtio_buffer>;
+		mbox-names = "mmiowr", "mmioirq";
+		mboxes = <&gen_sw_mbox 0 1 1		/* TX channel with ACK */
+			  &gen_sw_mbox 1 1 0>;		/* RX channel without ACK */
+	};
+};

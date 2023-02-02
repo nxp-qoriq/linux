@@ -38,7 +38,7 @@
 			no-map;
 		};
 
-		sgi_mbox_reserved: sgi-mbox@b8500000 {
+		sw_mbox_reserved: gen-sw-mbox@b8500000 {
 			reg = <0 0xb8500000 0 0x1000>;
 			no-map;
 		};
@@ -113,20 +113,23 @@
 		status = "disabled";
 	};
 
-	sgi_mailbox: sgi-mailbox@b8500000 {
-		compatible = "fsl,arm-sgi-mbox";
+	gen_sw_mbox: generic-software-mailbox@b8500000 {
+		compatible = "fsl,generic-software-mbox";
 		reg = <0 0xb8500000 0 0x1000>;
 		#mbox-cells = <2>;
+		/* Use 2 unused SPI interrupts */
+		interrupts = <GIC_SPI 76 IRQ_TYPE_LEVEL_HIGH>, <GIC_SPI 77 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "irq", "remote_irq";
 	};
 
 	rpmsg-ca53 {
-		compatible = "fsl,imx8mq-rpmsg";
+		compatible = "fsl,imx8mm-rpmsg";
 		reg = <0x0 0xb8600000 0x0 0x10000>; /* 64K for one rpmsg instance */
 		memory-region = <&vdevbuffer_ca53>;
 		mbox-names = "tx", "rx", "rxdb";
-		mboxes = <&sgi_mailbox 0 0
-			  &sgi_mailbox 1 0
-			  &sgi_mailbox 2 0>;
+		mboxes = <&gen_sw_mbox 0 0
+			  &gen_sw_mbox 1 0
+			  &gen_sw_mbox 2 0>;
 		vdev-nums = <1>;
 	};
 };

@@ -466,6 +466,13 @@ static int imx_rpmsg_rxdb_channel_init(struct imx_rpmsg_vproc *rpdev)
 	return ret;
 }
 
+static int imx_rpmsg_rxdb_channel_deinit(struct imx_rpmsg_vproc *rpdev)
+{
+	mbox_free_channel(rpdev->rxdb_ch);
+
+	return 0;
+}
+
 static void imx_rpmsg_rx_callback(struct mbox_client *c, void *msg)
 {
 	int buf_space;
@@ -529,6 +536,14 @@ err_out:
 		mbox_free_channel(rpdev->rx_ch);
 
 	return ret;
+}
+
+static int imx_rpmsg_xtr_channel_deinit(struct imx_rpmsg_vproc *rpdev)
+{
+	mbox_free_channel(rpdev->tx_ch);
+	mbox_free_channel(rpdev->rx_ch);
+
+	return 0;
 }
 
 static int imx_rpmsg_probe(struct platform_device *pdev)
@@ -653,6 +668,34 @@ err_chl:
 	return ret;
 }
 
+static void imx_rpmsg_remove(struct platform_device *pdev)
+{
+	struct imx_rpmsg_vproc *rpdev = platform_get_drvdata(pdev);
+	struct device *dev = &pdev->dev;
+	int i;
+
+#ifdef CONFIG_IMX_SCU
+	if (rpdev->variant == IMX8QXP || rpdev->variant == IMX8QM) {
+		imx_scu_irq_unregister_notifier(&rpdev->proc_nb);
+		imx_scu_irq_group_enable(IMX_SC_IRQ_GROUP_REBOOTED,
+					BIT(rpdev->mub_partition), false);
+	}
+#endif
+	imx_rpmsg_rxdb_channel_deinit(rpdev);
+
+	for (i = 0; i < rpdev->vdev_nums; i++) {
+		unregister_virtio_device(&rpdev->ivdev[i]->vdev);
+		kfree(rpdev->ivdev[i]);
+	}
+
+	if (rpdev->flags & SPECIFIC_DMA_POOL)
+		of_reserved_mem_device_release(dev);
+
+	imx_rpmsg_xtr_channel_deinit(rpdev);
+
+	cancel_delayed_work_sync(&rpdev->rpmsg_work);
+}
+
 static struct platform_driver imx_rpmsg_driver = {
 	.driver = {
 		   .owner = THIS_MODULE,
@@ -660,6 +703,7 @@ static struct platform_driver imx_rpmsg_driver = {
 		   .of_match_table = imx_rpmsg_dt_ids,
 		   },
 	.probe = imx_rpmsg_probe,
+	.remove = imx_rpmsg_remove,
 };
 
 static int __init imx_rpmsg_init(void)

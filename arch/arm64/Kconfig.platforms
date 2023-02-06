@@ -238,6 +238,12 @@ config IMX8M_BAREMETAL
 	help
 	  This enables support for NXP i.MX8MM and i.MX8MP baremetal.
 
+config IMX93_BAREMETAL
+	bool "NXP IMX93 baremetal support"
+	select BAREMETAL
+	help
+	  This enables support for NXP i.MX93 baremetal.
+
 config ARCH_QCOM
 	bool "Qualcomm Platforms"
 	select GPIOLIB

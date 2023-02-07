@@ -5,6 +5,7 @@
 
 /dts-v1/;
 #include "imx8mm-evk.dts"
+#include "imx8m-rpmsg-ca53.dtsi"
 
 / {
 	reserved-memory {
@@ -35,27 +36,6 @@
 		vdevbuffer: vdevbuffer@b8400000 {
 			compatible = "shared-dma-pool";
 			reg = <0 0xb8400000 0 0x100000>;
-			no-map;
-		};
-
-		sw_mbox_reserved: gen-sw-mbox@b8500000 {
-			reg = <0 0xb8500000 0 0x1000>;
-			no-map;
-		};
-
-		rpmsg_ca53_reserved: rpmsg-ca53@b8600000 {
-			reg = <0 0xb8600000 0 0x10000>;
-			no-map;
-		};
-
-		rsc_table_ca53: rsc_table-ca53@b86ff000 {
-			reg = <0 0xb86ff000 0 0x1000>;
-			no-map;
-		};
-
-		vdevbuffer_ca53: vdevbuffer-ca53@b8700000 {
-			compatible = "shared-dma-pool";
-			reg = <0 0xb8700000 0 0x100000>;
 			no-map;
 		};
 
@@ -111,26 +91,6 @@
 		syscon = <&src>;
 		fsl,startup-delay-ms = <500>;
 		status = "disabled";
-	};
-
-	gen_sw_mbox: generic-software-mailbox@b8500000 {
-		compatible = "fsl,generic-software-mbox";
-		reg = <0 0xb8500000 0 0x1000>;
-		#mbox-cells = <2>;
-		/* Use 2 unused SPI interrupts */
-		interrupts = <GIC_SPI 76 IRQ_TYPE_LEVEL_HIGH>, <GIC_SPI 77 IRQ_TYPE_LEVEL_HIGH>;
-		interrupt-names = "irq", "remote_irq";
-	};
-
-	rpmsg-ca53 {
-		compatible = "fsl,imx8mm-rpmsg";
-		reg = <0x0 0xb8600000 0x0 0x10000>; /* 64K for one rpmsg instance */
-		memory-region = <&vdevbuffer_ca53>;
-		mbox-names = "tx", "rx", "rxdb";
-		mboxes = <&gen_sw_mbox 0 0
-			  &gen_sw_mbox 1 0
-			  &gen_sw_mbox 2 0>;
-		vdev-nums = <1>;
 	};
 };
 

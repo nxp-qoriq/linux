@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Copyright 2022 NXP
+ * Copyright 2022-2023 NXP
  */
 
 #include "imx8mm-evk-harpoon.dts"
+#include "imx8m-rpmsg-ca53.dtsi"
 
 &fec1 {
 	status = "disabled";

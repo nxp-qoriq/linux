@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Copyright 2021-2022 NXP
+ * Copyright 2021-2023 NXP
  */
 
 #include "imx8mp-evk-root.dts"
+#include "imx8mp-rpmsg-ca53.dtsi"
 
 &i2c3 {
 	status = "disabled";

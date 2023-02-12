@@ -194,9 +194,20 @@ static int ipi_baremetal_release(struct inode *inode, struct file *file)
 static long ipi_baremetal_ioctl(struct file *file,
 		unsigned int cmd, unsigned long arg)
 {
-	unsigned long val = *(unsigned long *)arg | 1 << 40;
+	unsigned long val;
+	unsigned long __user *argp = (unsigned long __user *)arg;
+	int err;
 #if defined(CONFIG_LX2160A_BAREMETAL)
 	unsigned long i, cluster, mask;
+#endif
+
+	err = copy_from_user(&val, argp, sizeof(val));
+	if (err)
+		return -EFAULT;
+
+	val |= ((unsigned long)1 << 40);
+
+#if defined(CONFIG_LX2160A_BAREMETAL)
 	val = *(unsigned long *)arg;
 
 	for (i = 0; i < 16; i++) {

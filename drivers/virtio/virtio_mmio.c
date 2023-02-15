@@ -159,6 +159,10 @@ static void vmd_write(struct virtio_mmio_device *vm_dev, u32 val, u32 off, u8 le
 				wr_ops->phy_base, wr_ops->offset,
 				wr_ops->value, wr_ops->len);
 
+		/* Unnecessary to sync for virtqueue notification */
+		if (off == VIRTIO_MMIO_QUEUE_NOTIFY)
+			return;
+
 		/* poll backend write operation complete */
 		while (timeout-- && !readl(vm_dev->base + VIRTIO_MMIO_WD_STATUS))
 			udelay(1);

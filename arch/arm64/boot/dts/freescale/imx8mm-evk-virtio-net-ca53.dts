@@ -46,6 +46,7 @@
 	virtio_net@b8400000 {
 		compatible = "virtio,mmio";
 		reg = <0x0 0xb8400000 0x0 0x1000>;
+		dma-coherent;
 		hypervisor_less;
 		memory-region = <&virtio_buffer>;
 		mbox-names = "mmiowr", "mmioirq";

@@ -29,6 +29,11 @@
 	};
 };
 
+&{/busfreq} {
+	/* Disable busfreq to avoid Linux busfreq crash multicore virtio backend */
+	status = "disabled";
+};
+
 &uart4 {
 	status = "disabled";
 };

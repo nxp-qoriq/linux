@@ -41,7 +41,7 @@ struct fec_platform_data {
 #define FEC_ENET_TX_FRPPG	(PAGE_SIZE / FEC_ENET_TX_FRSIZE)
 
 #ifdef CONFIG_AVB_SUPPORT
-#define FEC_TX_RING_SIZE	128	/* Must be power of two */
+#define FEC_TX_RING_SIZE	256	/* Must be power of two */
 #else
 #define FEC_TX_RING_SIZE	1024	/* Must be power of two */
 #endif

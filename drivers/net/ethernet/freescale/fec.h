@@ -403,8 +403,13 @@ struct bufdesc_ex {
 #define FEC_ITR_EN		(0x1 << 31)
 #define FEC_ITR_ICFT(X)		(((X) & 0xff) << 20)
 #define FEC_ITR_ICTT(X)		((X) & 0xffff)
-#define FEC_ITR_ICFT_DEFAULT	200  /* Set 200 frame count threshold */
 #define FEC_ITR_ICTT_DEFAULT	1000 /* Set 1000us timer threshold */
+
+#ifdef CONFIG_AVB_SUPPORT
+#define FEC_ITR_ICFT_DEFAULT   50  /* Keep it coherent with FEC_TX_RING_SIZE/FEC_RX_RING_SIZE */
+#else
+#define FEC_ITR_ICFT_DEFAULT   200  /* Set 200 frame count threshold */
+#endif
 
 #define FEC_VLAN_TAG_LEN	0x04
 #define FEC_ETHTYPE_LEN		0x02

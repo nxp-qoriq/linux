@@ -3950,13 +3950,15 @@ static void fec_enet_free_buffers(struct net_device *ndev)
 						fep->avb->free(fep->avb_data, &desc->common);
 					else
 						skb = desc->data;
-				} else
+				} else {
 					skb = txq->tx_skbuff[i];
-			if (skb)
+				}
+
+				if (skb)
+					dev_kfree_skb(skb);
 #else
-				skb = txq->tx_skbuff[i];
+				dev_kfree_skb(txq->tx_skbuff[i]);
 #endif
-				dev_kfree_skb(skb);
 				txq->tx_skbuff[i] = NULL;
 			}
 		}

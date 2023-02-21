@@ -2620,7 +2620,13 @@ static int vsc9959_port_get_preempt(struct ocelot *ocelot, int port,
 	val = ocelot_port_readl(ocelot_port, DEV_MM_STATUS);
 	val &= DEV_MM_STATISTICS_MM_STATUS_PRMPT_ACTIVE_STATUS;
 	fpcmd->fp_active = (val ? 1 : 0);
-	fpcmd->fp_status = ocelot_port->preemptable_verify ? 1 : fpcmd->fp_active;
+
+	val = ocelot_port_readl(ocelot_port, DEV_MM_ENABLE_CONFIG);
+	val &= DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA;
+	if (ocelot_port->preemptable_verify)
+		fpcmd->fp_status = 1;
+	else
+		fpcmd->fp_status = val;
 
 	val = ocelot_read_rix(ocelot, QSYS_PREEMPTION_CFG, port);
 	fpcmd->preemptible_queues_mask = val & QSYS_PREEMPTION_CFG_P_QUEUES_M;

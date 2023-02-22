@@ -16,24 +16,25 @@
  * Generic software Registers:
  *
  * TX_STATUS[n]: TX channel n status
- * 	0: indicates message in TX_CH[n] is invalid and channel ready.
- * 	1: indicates message in TX_CH[n] is valid and channel busy.
  * RX_STATUS[n]: RX channel n status
- * 	0: indicates message in RX_CH[n] is invalid and channel ready.
- * 	1: indicates message in RX_CH[n] is valid and channel busy.
+ * 	0: indicates message in T/RX_CH[n] is invalid and channel ready.
+ * 	1: indicates message in T/RX_CH[n] is valid and channel busy.
+ * 	2: indicates message in T/RX_CH[n] has been received by the peer.
  * RXDB_STATUS[n]: RX doorbell channel n status
  * 	0: indicates channel ready.
  * 	1: indicates channel busy.
+ * 	2: indicates channel doorbell has been received by the peer.
  * TX_CH[n]: Transmit data register for channel n
  * RX_CH[n]: Receive data register for channel n
  *
  * To send a message:
  * Update the data register TX_CH[n] with the message, then set the
- * TX_STATUS[n] to 1, inject a interrupt to remote side.
+ * TX_STATUS[n] to 1, inject a interrupt to remote side; after the
+ * transmission done set the TX_STATUS[n] back to 0.
  *
  * When received a message:
- * Get the received data from RX_CH[n] and then clear the RX_STATUS[n] to
- * indicate the remote side transmit done.
+ * Get the received data from RX_CH[n] and then set the RX_STATUS[n] to
+ * 2 and inject a interrupt to notify the remote side transmission done.
  */
 
 #define MBOX_TX_CHAN		(4)
@@ -52,8 +53,9 @@ struct sw_mbox_reg {
 };
 
 enum sw_mbox_channel_status {
-	S_INVALID,
-	S_VALID,
+	S_READY,
+	S_BUSY,
+	S_DONE,
 };
 
 enum sw_mbox_type {
@@ -78,18 +80,6 @@ struct sw_mbox {
 	int remote_irq;
 };
 
-static bool sw_mbox_last_tx_done(struct mbox_chan *chan)
-{
-	struct sw_mbox_con_priv *cp = chan->con_priv;
-	struct sw_mbox *mbox = cp->priv;
-	uint32_t idx = cp->idx;
-
-	if (readl(&mbox->base->tx_status[idx]) == S_INVALID)
-		return true;
-
-	return false;
-}
-
 static int sw_mbox_send_data(struct mbox_chan *chan, void *msg)
 {
 	struct sw_mbox_con_priv *cp = chan->con_priv;
@@ -104,7 +94,7 @@ static int sw_mbox_send_data(struct mbox_chan *chan, void *msg)
 	}
 
 	writel(*data, &mbox->base->tx_ch[idx]);
-	writel(S_VALID, &mbox->base->tx_status[idx]);
+	writel(S_BUSY, &mbox->base->tx_status[idx]);
 	ret = irq_set_irqchip_state(mbox->remote_irq, IRQCHIP_STATE_PENDING,
 				    true);
 	if (ret) {
@@ -121,14 +111,26 @@ static irqreturn_t sw_mbox_interrupt(int irq, void *dev_id)
 	irqreturn_t ret = IRQ_NONE;
 	uint32_t rxdb_status;
 	uint32_t rx_status;
+	uint32_t tx_status;
 	uint32_t rx_ch;
 	int i;
 
+	for (i = 0; i < MBOX_TX_CHAN; i++) {
+		tx_status = readl(&mbox->base->tx_status[i]);
+		if (tx_status == S_DONE) {
+			writel(S_READY, &mbox->base->tx_status[i]);
+			mbox_chan_txdone(&mbox->chan[i], 0);
+			ret = IRQ_HANDLED;
+		}
+	}
+
 	for (i = 0; i < MBOX_RX_CHAN; i++) {
 		rx_status = readl(&mbox->base->rx_status[i]);
-		if (rx_status == S_VALID) {
+		if (rx_status == S_BUSY) {
 			rx_ch = readl(&mbox->base->rx_ch[i]);
-			writel(S_INVALID, &mbox->base->rx_status[i]);
+			writel(S_DONE, &mbox->base->rx_status[i]);
+			irq_set_irqchip_state(mbox->remote_irq,
+					      IRQCHIP_STATE_PENDING, true);
 			mbox_chan_received_data(&mbox->chan[i + RX_CHAN_SHFT],
 						(void *)&rx_ch);
 			ret = IRQ_HANDLED;
@@ -137,8 +139,10 @@ static irqreturn_t sw_mbox_interrupt(int irq, void *dev_id)
 
 	for (i = 0; i < MBOX_RXDB_CHAN; i++) {
 		rxdb_status = readl(&mbox->base->rxdb_status[i]);
-		if (rxdb_status == S_VALID) {
-			writel(S_INVALID, &mbox->base->rxdb_status[i]);
+		if (rxdb_status == S_BUSY) {
+			writel(S_DONE, &mbox->base->rxdb_status[i]);
+			irq_set_irqchip_state(mbox->remote_irq,
+					      IRQCHIP_STATE_PENDING, true);
 			mbox_chan_received_data(&mbox->chan[i + RXDB_CHAN_SHFT],
 						NULL);
 			ret = IRQ_HANDLED;
@@ -161,7 +165,6 @@ static const struct mbox_chan_ops sw_mbox_ops = {
 	.send_data    = sw_mbox_send_data,
 	.startup      = sw_mbox_startup,
 	.shutdown     = sw_mbox_shutdown,
-	.last_tx_done = sw_mbox_last_tx_done,
 };
 
 
@@ -249,7 +252,7 @@ static int sw_mailbox_probe(struct platform_device *pdev)
 	mbox->controller.num_chans = MBOX_CHAN_MAX;
 	mbox->controller.ops = &sw_mbox_ops;
 	mbox->controller.of_xlate = sw_mbox_xlate;
-	mbox->controller.txdone_poll = true;
+	mbox->controller.txdone_irq = true;
 
 	for (i = 0; i < MBOX_CHAN_MAX; i++) {
 		mbox->chan[i].con_priv = &mbox->cp[i];

@@ -18,3 +18,10 @@
 
 	status = "okay";
 };
+
+&fec1 {
+	fsl,rx-phy-delay-100-ns = <670>;
+	fsl,tx-phy-delay-100-ns = <670>;
+	fsl,rx-phy-delay-1000-ns = <0>;
+	fsl,tx-phy-delay-1000-ns = <0>;
+};

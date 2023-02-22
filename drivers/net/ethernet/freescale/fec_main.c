@@ -5230,7 +5230,7 @@ fec_probe(struct platform_device *pdev)
 	}
 
 	if (of_property_read_u32(np, "fsl,rx-phy-delay-100-ns", &fep->rx_delay_100))
-		fep->rx_delay_100 = 600;
+		fep->rx_delay_100 = 0;
 
 	if (of_property_read_u32(np, "fsl,tx-phy-delay-100-ns", &fep->tx_delay_100))
 		fep->tx_delay_100 = 0;

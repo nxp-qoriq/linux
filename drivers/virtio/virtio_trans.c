@@ -165,6 +165,9 @@ static int tx_pkts(struct virtio_trans *vt, size_t pkt_size, u32 times)
 	while (vt->vt_running && cnt > 0) {
 		buf = vt_get_tx_buf(vt);
 		while (!buf) {
+			if (!vt->back_poll_mode)
+				virtqueue_kick(vt->tx_vq);
+
 			if (vt->poll_mode) {
 				udelay(poll_delay);
 				buf = vt_get_tx_buf(vt);
@@ -185,9 +188,6 @@ static int tx_pkts(struct virtio_trans *vt, size_t pkt_size, u32 times)
 		virttrans_queue_txbuf(vt, &vt->tx_sgl[idx % vt->tx_vring_size],
 				      buf, vt->pkt_size);
 		idx++;
-
-		if (!vt->back_poll_mode)
-			virtqueue_kick(vt->tx_vq);
 		spin_unlock(&vt->txvq_lock);
 
 		cnt -= INDIRECT_NUM;
@@ -302,6 +302,9 @@ static int rx_pkts(struct virtio_trans *vt, size_t pkt_size, u32 times)
 	while (vt->vt_running && cnt > 0) {
 		buf = vt_get_rx_buf(vt);
 		while (!buf) {
+			if (!vt->back_poll_mode)
+				virtqueue_kick(vt->tx_vq);
+
 			if (vt->poll_mode) {
 				udelay(poll_delay);
 				buf = vt_get_rx_buf(vt);
@@ -322,9 +325,6 @@ static int rx_pkts(struct virtio_trans *vt, size_t pkt_size, u32 times)
 		virttrans_queue_rxbuf(vt, &vt->rx_sgl[idx % vt->rx_vring_size],
 				      buf, vt->pkt_size);
 		idx++;
-
-		if (!vt->back_poll_mode)
-			virtqueue_kick(vt->rx_vq);
 		spin_unlock(&vt->rxvq_lock);
 
 		cnt -= INDIRECT_NUM;

@@ -1156,8 +1156,6 @@ static int stmmac_reset_preempt(struct net_device *dev, bool enable)
 
 	stmmac_fpe_handshake(priv, priv->fp_verify);
 
-	priv->plat->fpe_cfg->enable = enable;
-
 	return 0;
 }
 
@@ -1202,7 +1200,7 @@ static int stmmac_set_preempt(struct net_device *dev, struct ethtool_fp *fpcmd)
 
 	stmmac_fpe_handshake(priv, fpcmd->fp_enabled);
 
-	priv->plat->fpe_cfg->enable = fpcmd->fp_lldp_verify ? 0 : 1;
+	priv->plat->fpe_cfg->enable = 1;
 
 	return 0;
 }

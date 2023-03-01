@@ -1060,6 +1060,11 @@ static void stmmac_fpe_link_state_handle(struct stmmac_priv *priv, bool is_up)
 	} else {
 		*lo_state = FPE_STATE_OFF;
 		*lp_state = FPE_STATE_OFF;
+		if (*hs_enable)
+			stmmac_fpe_configure(priv, priv->ioaddr,
+					     priv->plat->tx_queues_to_use,
+					     priv->plat->rx_queues_to_use,
+					     0, NULL);
 	}
 }
 

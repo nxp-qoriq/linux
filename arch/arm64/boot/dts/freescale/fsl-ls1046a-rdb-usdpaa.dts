@@ -82,16 +82,39 @@
 			fsl,qman-frame-queues-tx = <0x7e 1 0x7f 1>;
 		};
 
-		dpa-fman0-oh@2 {
+		/* Creating ONIC ports to support HW assisted interapplication
+		 * communication with FMAN based OH ports.
+		 */
+		ethernet@16 {
+			compatible = "fsl,dpa-ethernet-generic";
+			fsl,qman-frame-queues-tx = <0x84 8>;
+			/* Define Rx and Tx OH ports for onic port*/
+			/* <Rx OH port, Tx OH port> */
+			fsl,oh-ports = <&oh3 &oh2>;
+			local-mac-address = [00 11 22 33 44 55];
+		};
+
+		ethernet@17 {
+			compatible = "fsl,dpa-ethernet-generic";
+			fsl,qman-frame-queues-tx = <0x94 8>;
+			/* Define Rx and Tx OH ports for onic port*/
+			/* <Rx OH port, Tx OH port> */
+			fsl,oh-ports = <&oh2 &oh3>;
+			local-mac-address = [55 44 33 22 11 00];
+		};
+
+		oh2: dpa-fman0-oh@2 {
 			compatible = "fsl,dpa-oh";
+			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
 			/* Define frame queues for the OH port*/
 			/* <OH Rx error, OH Rx default> */
 			fsl,qman-frame-queues-oh = <0x60 1 0x61 1>;
 			fsl,fman-oh-port = <&fman0_oh2>;
 		};
 
-		dpa-fman0-oh@3 {
+		oh3: dpa-fman0-oh@3 {
 			compatible = "fsl,dpa-oh";
+			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
 			/* Define frame queues for the OH port*/
 			/* <OH Rx error, OH Rx default> */
 			fsl,qman-frame-queues-oh = <0x62 1 0x63 1>;

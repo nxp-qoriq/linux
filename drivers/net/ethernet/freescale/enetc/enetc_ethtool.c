@@ -817,10 +817,12 @@ static void enetc_configure_port_pmac(struct enetc_hw *hw, bool enable)
 	enetc_port_wr(hw, ENETC_PFPMR,
 		      temp | ENETC_PFPMR_PMACE | ENETC_PFPMR_MWLM);
 
-	if (enable) {
-		temp = enetc_port_rd(hw, ENETC_MMCSR);
-		enetc_port_wr(hw, ENETC_MMCSR, temp | ENETC_MMCSR_ME);
-	}
+	temp = enetc_port_rd(hw, ENETC_MMCSR);
+	if (enable)
+		temp |= ENETC_MMCSR_ME;
+	else
+		temp &= (~ENETC_MMCSR_ME);
+	enetc_port_wr(hw, ENETC_MMCSR, temp);
 }
 
 int enetc_preempt_reset(struct net_device *ndev, bool enable)

@@ -303,7 +303,7 @@ static int rx_pkts(struct virtio_trans *vt, size_t pkt_size, u32 times)
 		buf = vt_get_rx_buf(vt);
 		while (!buf) {
 			if (!vt->back_poll_mode)
-				virtqueue_kick(vt->tx_vq);
+				virtqueue_kick(vt->rx_vq);
 
 			if (vt->poll_mode) {
 				udelay(poll_delay);

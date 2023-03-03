@@ -2573,20 +2573,24 @@ static int vsc9959_port_set_preempt(struct ocelot *ocelot, int port,
 {
 	struct ocelot_port *ocelot_port = ocelot->ports[port];
 	int p_queues = fpcmd->preemptible_queues_mask;
-	int mm_fragsize;
+	int mm_fragsize, val;
 
-	if (fpcmd->min_frag_size < 60 || fpcmd->min_frag_size > 252)
+	if (!fpcmd->disabled &&
+	    (fpcmd->min_frag_size < 60 || fpcmd->min_frag_size > 252))
 		return -EINVAL;
 
 	mm_fragsize = DIV_ROUND_UP((fpcmd->min_frag_size + 4), 64) - 1;
 
-	if (!fpcmd->fp_lldp_verify)
-		ocelot_port_rmwl(ocelot_port,
-				 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
-				 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
-				 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
-				 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
-				 DEV_MM_ENABLE_CONFIG);
+	if (!fpcmd->disabled && !fpcmd->fp_lldp_verify)
+		val = DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
+		      DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA;
+	else
+		val = 0;
+
+	ocelot_port_rmwl(ocelot_port, val,
+			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
+			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
+			 DEV_MM_ENABLE_CONFIG);
 
 	ocelot_port_rmwl(ocelot_port,
 			 (fpcmd->fp_enabled ?

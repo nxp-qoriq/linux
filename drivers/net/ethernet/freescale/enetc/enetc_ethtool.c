@@ -857,7 +857,7 @@ static int enetc_set_preempt(struct net_device *ndev,
 	if (!pt)
 		return -EINVAL;
 
-	if (pt->min_frag_size < 60 || pt->min_frag_size > 252)
+	if (!pt->disabled && (pt->min_frag_size < 60 || pt->min_frag_size > 252))
 		return -EINVAL;
 
 	rafs = DIV_ROUND_UP((pt->min_frag_size + 4), 64) - 1;
@@ -892,10 +892,16 @@ static int enetc_set_preempt(struct net_device *ndev,
 		temp |= ENETC_MMCSR_VDIS;
 	enetc_port_wr(&priv->si->hw, ENETC_MMCSR, temp);
 
-	if (pt->fp_lldp_verify)
+	if (pt->disabled || pt->fp_lldp_verify)
 		enetc_configure_port_pmac(&priv->si->hw, 0);
 	else
 		enetc_configure_port_pmac(&priv->si->hw, 1);
+
+	if (pt->disabled) {
+		temp = enetc_port_rd(&priv->si->hw, ENETC_PFPMR);
+		enetc_port_wr(&priv->si->hw, ENETC_PFPMR,
+			      temp & ~(ENETC_PFPMR_PMACE | ENETC_PFPMR_MWLM));
+	}
 
 	priv->preemptable_verify = pt->fp_lldp_verify;
 

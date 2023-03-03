@@ -382,6 +382,7 @@ struct ethtool_eee {
 /**
  * struct ethtool_fp - Frame Preemption information
  * @cmd: ETHTOOL_{G,S}FP
+ * @disabled: Disable hardware preemption supports.
  * @fp_supported: If frame preemption is supported.
  * @fp_enabled: If frame preemption should be advertised to the link partner
  *	as enabled.
@@ -393,6 +394,7 @@ struct ethtool_eee {
  */
 struct ethtool_fp {
 	__u32	cmd;
+	__u8	disabled;
 	__u8	fp_supported;
 	__u8	fp_lldp_verify;
 	__u8	fp_enabled;

@@ -110,6 +110,7 @@ static const struct nla_policy
 preempt_set_policy[ETHTOOL_A_PREEMPT_MAX + 1] = {
 	[ETHTOOL_A_PREEMPT_UNSPEC]			= { .type = NLA_REJECT },
 	[ETHTOOL_A_PREEMPT_HEADER]			= { .type = NLA_NESTED },
+	[ETHTOOL_A_PREEMPT_DISABLED]			= { .type = NLA_FLAG },
 	[ETHTOOL_A_PREEMPT_SUPPORTED]			= { .type = NLA_REJECT },
 	[ETHTOOL_A_PREEMPT_STATUS]			= { .type = NLA_REJECT },
 	[ETHTOOL_A_PREEMPT_LLDP_VERIFY]			= { .type = NLA_U8 },
@@ -151,13 +152,10 @@ int ethnl_set_preempt(struct sk_buff *skb, struct genl_info *info)
 	if (ret < 0)
 		goto out_rtnl;
 
-	ret = dev->ethtool_ops->get_preempt(dev, &preempt);
-	if (ret < 0) {
-		if (info)
-			GENL_SET_ERR_MSG(info, "failed to retrieve frame preemption settings");
-		goto out_ops;
+	if (nla_get_flag(tb[ETHTOOL_A_PREEMPT_DISABLED])) {
+		preempt.disabled = 1;
+		mod = true;
 	}
-
 	ethnl_update_u8(&preempt.fp_lldp_verify,
 			tb[ETHTOOL_A_PREEMPT_LLDP_VERIFY], &mod);
 	ethnl_update_u8(&preempt.fp_enabled,

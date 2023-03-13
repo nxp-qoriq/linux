@@ -1,5 +1,5 @@
 /* Copyright (C) 2008-2012 Freescale Semiconductor, Inc.
- * Copyright 2017-2021 NXP
+ * Copyright 2017-2021,2023 NXP
  * Authors: Andy Fleming <afleming@freescale.com>
  *	    Timur Tabi <timur@freescale.com>
  *	    Geoff Thorpe <Geoff.Thorpe@freescale.com>
@@ -1884,7 +1884,8 @@ static void phy_link_updates(struct net_device *net_dev)
 		}
 	}
 
-	pr_err(KBUILD_MODNAME "Device not registered for link events\n");
+	pr_debug("%s: %s not registered for link events\n", KBUILD_MODNAME,
+		 net_dev->name);
 }
 
 static int setup_eventfd(struct task_struct *userspace_task,

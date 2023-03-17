@@ -1,0 +1,72 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2023 NXP
+ */
+
+/dts-v1/;
+#include "imx8mp-evk.dts"
+
+/ {
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		cm7_reserved: cm7@80000000 {
+			reg = <0 0x80000000 0x0 0x01000000>;
+			no-map;
+		};
+
+		virtio_buffer: virtio-buffer@b3c00000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0xb3c00000 0 0x4000000>;
+			no-map;
+		};
+
+		virtio_reserved: virtio@b8400000 {
+			no-map;
+			reg = <0 0xb8400000 0x0 0x00100000>;
+		};
+	};
+
+	virtio_net@b8400000 {
+		compatible = "virtio,mmio";
+		reg = <0x0 0xb8400000 0x0 0x1000>;
+		hypervisor_less;
+		memory-region = <&virtio_buffer>;
+		mbox-names = "mmiowr", "mmioirq";
+		mboxes = <&mu 0 2
+			  &mu 1 2>;
+	};
+};
+
+&{/busfreq} {
+	/* Disable busfreq to avoid Linux busfreq crash multicore virtio backend */
+	status = "disabled";
+};
+
+&uart4 {
+	status = "disabled";
+};
+
+
+&fec {
+	status = "disabled";
+};
+
+&eqos {
+	/delete-property/ clocks;
+	/delete-property/ clock-names;
+	clocks =  <&clk IMX8MP_CLK_QOS_ENET_ROOT>,
+	       <&clk IMX8MP_CLK_ENET_QOS_TIMER>,
+	       <&clk IMX8MP_CLK_ENET_QOS>;
+	clock-names = "pclk", "ptp_ref", "tx";
+};
+
+&i2c3 {
+	status = "disabled";
+};
+
+&sai3 {
+	status = "disabled";
+};

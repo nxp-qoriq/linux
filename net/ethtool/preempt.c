@@ -160,8 +160,11 @@ int ethnl_set_preempt(struct sk_buff *skb, struct genl_info *info)
 			tb[ETHTOOL_A_PREEMPT_LLDP_VERIFY], &mod);
 	ethnl_update_u8(&preempt.fp_enabled,
 			tb[ETHTOOL_A_PREEMPT_ACTIVE], &mod);
-	ethnl_update_u32(&preempt.min_frag_size,
-			 tb[ETHTOOL_A_PREEMPT_MIN_FRAG_SIZE], &mod);
+	if (tb[ETHTOOL_A_PREEMPT_MIN_FRAG_SIZE])
+		ethnl_update_u32(&preempt.min_frag_size,
+				 tb[ETHTOOL_A_PREEMPT_MIN_FRAG_SIZE], &mod);
+	else
+		preempt.min_frag_size = 60;
 	ethnl_update_u32(&preempt.preemptible_queues_mask,
 			 tb[ETHTOOL_A_PREEMPT_QUEUES_PREEMPTIBLE], &mod);
 

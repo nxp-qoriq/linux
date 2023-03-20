@@ -1,6 +1,6 @@
 #! /bin/bash
 # SPDX-License-Identifier: GPL-2.0
-# Copyright 2022 NXP
+# Copyright 2022-2023 NXP
 
 set -eo pipefail
 
@@ -62,7 +62,7 @@ fi
 
 CONFIG=$(( $(( TYPE << 0 )) | $(( BACK_COPY << 1 )) | $(( FRONT_COPY << 2 )) ))
 
-echo ${REGRESS} > /sys/devices/platform/bbb00000.virtio_trans/virtio0/vt_regression&&
-echo ${PKT_SIZE} > /sys/devices/platform/bbb00000.virtio_trans/virtio0/vt_pkt_size&&
-echo ${CONFIG} > /sys/devices/platform/bbb00000.virtio_trans/virtio0/vt_config&&
-echo 1 > /sys/devices/platform/bbb00000.virtio_trans/virtio0/vt_control;
+echo ${REGRESS} > /sys/devices/platform/b8400000.virtio_trans/virtio0/vt_regression&&
+echo ${PKT_SIZE} > /sys/devices/platform/b8400000.virtio_trans/virtio0/vt_pkt_size&&
+echo ${CONFIG} > /sys/devices/platform/b8400000.virtio_trans/virtio0/vt_config&&
+echo 1 > /sys/devices/platform/b8400000.virtio_trans/virtio0/vt_control;

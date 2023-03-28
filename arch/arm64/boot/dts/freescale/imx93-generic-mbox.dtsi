@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2023 NXP
+ */
+
+#include "imx8m-generic-mbox.dtsi"
+
+&gen_sw_mbox {
+	/* Use 2 unused SPI interrupts */
+	interrupts = <GIC_SPI 136 IRQ_TYPE_LEVEL_HIGH>, <GIC_SPI 137 IRQ_TYPE_LEVEL_HIGH>;
+};

@@ -800,6 +800,7 @@ struct ocelot_port {
 
 	u8				stp_state;
 	bool				vlan_aware;
+	bool				qinq_mode;
 	bool				is_dsa_8021q_cpu;
 	bool				learn_ena;
 
@@ -899,6 +900,9 @@ struct ocelot {
 	struct ptp_pin_desc		ptp_pins[OCELOT_PTP_PINS_NUM];
 
 	struct ocelot_mm_state		*mm;
+
+	bool				qinq_enable;
+	struct kref			qinq_refcount;
 
 	struct ocelot_fdma		*fdma;
 };

@@ -1,0 +1,53 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2023 NXP
+ */
+
+/dts-v1/;
+#include "imx93-11x11-evk.dts"
+
+/ {
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		cm33_reserved: cm33@a0000000 {
+			reg = <0 0xa0000000 0x0 0x01000000>;
+			no-map;
+		};
+
+		virtio_buffer: virtio-buffer@a1000000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0xa1000000 0 0x3000000>;
+			no-map;
+		};
+
+		virtio_reserved: virtio@a8400000 {
+			reg = <0 0xa8400000 0x0 0x00100000>;
+			no-map;
+		};
+	};
+
+	virtio_net@a8400000 {
+		compatible = "virtio,mmio";
+		reg = <0x0 0xa8400000 0x0 0x1000>;
+		hypervisor_less;
+		memory-region = <&virtio_buffer>;
+		mbox-names = "mmiowr", "mmioirq";
+		mboxes = <&mu1 0 2
+			  &mu1 1 2>;
+	};
+};
+
+&clk {
+	init-on-array = <IMX93_CLK_LPUART2_GATE>;
+};
+
+&lpuart2 {
+	status = "disabled";
+};
+
+&fec {
+	status = "disabled";
+};

@@ -592,7 +592,7 @@ err_ven:
 #ifdef KERNEL_3_4_AND_OLDER
 static int __devexit pn54x_remove(struct i2c_client *client)
 #else
-static int pn54x_remove(struct i2c_client *client)
+static void pn54x_remove(struct i2c_client *client)
 #endif
 {
 	struct pn54x_dev *pn54x_dev;
@@ -614,7 +614,11 @@ static int pn54x_remove(struct i2c_client *client)
 
 	kfree(pn54x_dev);
 
+#ifdef KERNEL_3_4_AND_OLDER
 	return 0;
+#else
+	return;
+#endif
 }
 
 #ifdef CONFIG_OF

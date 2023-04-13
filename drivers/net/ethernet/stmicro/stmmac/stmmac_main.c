@@ -7326,6 +7326,7 @@ static void stmmac_napi_add(struct net_device *dev)
 {
 	struct stmmac_priv *priv = netdev_priv(dev);
 	u32 queue, maxq;
+	char name[NAPINAMSIZ];
 
 	maxq = max(priv->plat->rx_queues_to_use, priv->plat->tx_queues_to_use);
 
@@ -7337,16 +7338,22 @@ static void stmmac_napi_add(struct net_device *dev)
 		spin_lock_init(&ch->lock);
 
 		if (queue < priv->plat->rx_queues_to_use) {
-			netif_napi_add(dev, &ch->rx_napi, stmmac_napi_poll_rx);
+			snprintf(name, NAPINAMSIZ, "rx-%d", queue);
+			netif_napi_add_named(dev, &ch->rx_napi, stmmac_napi_poll_rx,
+					     NAPI_POLL_WEIGHT, name);
 		}
 		if (queue < priv->plat->tx_queues_to_use) {
-			netif_napi_add_tx(dev, &ch->tx_napi,
-					  stmmac_napi_poll_tx);
+			snprintf(name, NAPINAMSIZ, "tx-%d", queue);
+			netif_napi_add_tx_named(dev, &ch->tx_napi,
+						stmmac_napi_poll_tx,
+						NAPI_POLL_WEIGHT, name);
 		}
 		if (queue < priv->plat->rx_queues_to_use &&
 		    queue < priv->plat->tx_queues_to_use) {
-			netif_napi_add(dev, &ch->rxtx_napi,
-				       stmmac_napi_poll_rxtx);
+			snprintf(name, NAPINAMSIZ, "zc-%d", queue);
+			netif_napi_add_named(dev, &ch->rxtx_napi,
+					     stmmac_napi_poll_rxtx,
+					     NAPI_POLL_WEIGHT, name);
 		}
 	}
 }

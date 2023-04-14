@@ -12,6 +12,11 @@
 		#size-cells = <2>;
 		ranges;
 
+		cm4_reserved: cm4@80000000 {
+			reg = <0 0x80000000 0x0 0x01000000>;
+			no-map;
+		};
+
 		virtio_reserved: virtio@b8400000 {
 			no-map;
 			reg = <0 0xb8400000 0x0 0x00100000>;

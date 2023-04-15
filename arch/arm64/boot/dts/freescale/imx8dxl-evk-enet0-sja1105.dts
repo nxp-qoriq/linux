@@ -1,0 +1,166 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright 2023 NXP
+ */
+
+/dts-v1/;
+
+#include "imx8dxl-evk.dts"
+
+&iomuxc {
+	pinctrl_lpspi2: lpspi2grp {
+		fsl,pins = <
+			IMX8DXL_USDHC1_VSELECT_ADMA_SPI2_SDO    0x600004c
+			IMX8DXL_USDHC1_WP_ADMA_SPI2_SDI         0x600004c
+			IMX8DXL_USDHC1_RESET_B_ADMA_SPI2_SCK    0x600004c
+		>;
+	};
+
+	pinctrl_lpspi2_cs: lpspi2cs {
+		fsl,pins = <
+			IMX8DXL_USDHC1_CD_B_LSIO_GPIO4_IO22        0x21
+		>;
+	};
+};
+
+&lpspi2 {
+	fsl,spi-num-chipselects = <1>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpspi2 &pinctrl_lpspi2_cs>;
+	cs-gpios = <&lsio_gpio4 22 GPIO_ACTIVE_LOW>;
+	status = "okay";
+
+	sja1105p@0 {
+		compatible = "nxp,sja1105q";
+		spi-max-frequency = <12500000>;
+		/* SJA1105PQRS operates in SPI MODE 1 : CPOL=0 CPHA=1 */
+		spi-cpha;
+
+		reg = <0>;
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				label = "cpu";
+				ethernet = <&fec1>;
+				phy-mode = "rgmii";
+				rx-internal-delay-ps = <2000>;
+				tx-internal-delay-ps = <2000>;
+
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
+			};
+
+			port@1 {
+				reg = <1>;
+				label = "swp0";
+				phy-handle = <&phy0>;
+				phy-mode = "mii";
+			};
+
+			port@2 {
+				reg = <2>;
+				label = "swp1";
+				phy-handle = <&phy1>;
+				phy-mode = "mii";
+			};
+
+			port@3 {
+				reg = <3>;
+				label = "swp2";
+				phy-handle = <&phy2>;
+				phy-mode = "rmii";
+			};
+
+			port@4 {
+				reg = <4>;
+				label = "swp3";
+				phy-handle = <&phy3>;
+				phy-mode = "rmii";
+			};
+		};
+	};
+};
+
+&ethphy1 {
+	status = "disabled";
+};
+
+&fec1 {
+	assigned-clocks = <&clk IMX_SC_R_ENET_0 IMX_SC_C_CLKDIV>;
+	assigned-clock-rates = <12000000>;
+	phy-supply = <&mii_select>;
+	status = "okay";
+
+	fsl,magic-packet;
+	phy-mode = "rgmii";
+	/delete-property/ rx-internal-delay-ps;
+	/delete-property/ phy-handle;
+
+	fixed-link {
+		speed = <1000>;
+		full-duplex;
+	};
+
+	mdio {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		/* SJA1105Q EVB switch ports : NXP TJA1102
+		the phys SMI addresses on EVB are hard coded giving
+		first TJA device at offset 0x8 and the 2nd once at offet 0xe */
+		phy0: ethernet-phy@8 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x8>;
+			max-speed = <100>;
+			phy1: ethernet-phy@9 {
+				reg = <0x9>;
+				max-speed = <100>;
+			};
+		};
+
+		phy2: ethernet-phy@e {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0xe>;
+			max-speed = <100>;
+			phy3: ethernet-phy@f {
+				reg = <0xf>;
+				max-speed = <100>;
+			};
+		};
+	};
+};
+
+&reg_fec1_sel {
+	status = "okay";
+};
+
+/* This would set max7233 (0) to high (intented for PHY power on) and would
+ * enable LPC SPI/SMI on the switch EVB which interferes with
+ * SPI communcation between the iMX and the SJA1105
+*/
+&reg_fec1_io {
+	status = "disabled";
+};
+
+&max7322 {
+	status = "disabled";
+};
+
+&mii_select {
+	/delete-property/ enable-active-high;
+};
+
+&eqos {
+	status = "disabled";
+};
+
+&usdhc2 {
+	status = "disabled";
+};

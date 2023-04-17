@@ -599,8 +599,6 @@ static inline int virtqueue_add_split(struct virtqueue *_vq,
 		/* FIXME: for historical reasons, we force a notify here if
 		 * there are outgoing parts to the buffer.  Presumably the
 		 * host should service the ring ASAP. */
-		if (out_sgs)
-			vq->notify(&vq->vq);
 		if (indirect)
 			kfree(desc);
 		END_USE(vq);

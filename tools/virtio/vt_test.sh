@@ -27,6 +27,17 @@ setvar()
 	fi
 }
 
+detect_machine ()
+{
+	if grep -q 'i.MX8MM' /sys/devices/soc0/soc_id; then
+		VIRTIO=b8400000
+	elif grep -q 'i.MX8MP' /sys/devices/soc0/soc_id; then
+		VIRTIO=b8400000
+	elif grep -q 'i.MX93' /sys/devices/soc0/soc_id; then
+		VIRTIO=a8400000
+	fi
+}
+
 while getopts 'hs:t:r:b:f:' c
 do
 	case $c in
@@ -62,7 +73,7 @@ fi
 
 CONFIG=$(( $(( TYPE << 0 )) | $(( BACK_COPY << 1 )) | $(( FRONT_COPY << 2 )) ))
 
-echo ${REGRESS} > /sys/devices/platform/b8400000.virtio_trans/virtio0/vt_regression&&
-echo ${PKT_SIZE} > /sys/devices/platform/b8400000.virtio_trans/virtio0/vt_pkt_size&&
-echo ${CONFIG} > /sys/devices/platform/b8400000.virtio_trans/virtio0/vt_config&&
-echo 1 > /sys/devices/platform/b8400000.virtio_trans/virtio0/vt_control;
+echo ${REGRESS} > /sys/devices/platform/${VIRTIO}.virtio_trans/virtio0/vt_regression&&
+echo ${PKT_SIZE} > /sys/devices/platform/${VIRTIO}.virtio_trans/virtio0/vt_pkt_size&&
+echo ${CONFIG} > /sys/devices/platform/${VIRTIO}.virtio_trans/virtio0/vt_config&&
+echo 1 > /sys/devices/platform/${VIRTIO}.virtio_trans/virtio0/vt_control;

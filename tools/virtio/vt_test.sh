@@ -73,6 +73,8 @@ fi
 
 CONFIG=$(( $(( TYPE << 0 )) | $(( BACK_COPY << 1 )) | $(( FRONT_COPY << 2 )) ))
 
+detect_machine
+
 echo ${REGRESS} > /sys/devices/platform/${VIRTIO}.virtio_trans/virtio0/vt_regression&&
 echo ${PKT_SIZE} > /sys/devices/platform/${VIRTIO}.virtio_trans/virtio0/vt_pkt_size&&
 echo ${CONFIG} > /sys/devices/platform/${VIRTIO}.virtio_trans/virtio0/vt_config&&

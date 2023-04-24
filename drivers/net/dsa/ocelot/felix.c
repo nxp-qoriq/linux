@@ -1254,6 +1254,9 @@ static void felix_phylink_mac_link_down(struct phylink_config *config,
 
 	ocelot_phylink_mac_link_down(ocelot, port, link_an_mode, interface,
 				     felix->info->quirks);
+
+	if (felix->info->port_preempt_reset)
+		felix->info->port_preempt_reset(ocelot, port, 0);
 }
 
 static void felix_phylink_mac_link_up(struct phylink_config *config,
@@ -1276,6 +1279,9 @@ static void felix_phylink_mac_link_up(struct phylink_config *config,
 
 	if (felix->info->port_sched_speed_set)
 		felix->info->port_sched_speed_set(ocelot, port, speed);
+
+	if (felix->info->port_preempt_reset)
+		felix->info->port_preempt_reset(ocelot, port, 0);
 }
 
 static int felix_port_enable(struct dsa_switch *ds, int port,
@@ -1397,6 +1403,44 @@ static int felix_get_ts_info(struct dsa_switch *ds, int port,
 	struct ocelot *ocelot = ds->priv;
 
 	return ocelot_get_ts_info(ocelot, port, info);
+}
+
+static int felix_reset_preempt(struct dsa_switch *ds, int port, bool enable)
+{
+	struct ocelot *ocelot = ds->priv;
+	struct felix *felix = ocelot_to_felix(ocelot);
+
+	if (felix->info->port_preempt_reset) {
+		felix->info->port_preempt_reset(ocelot, port, enable);
+
+		return 0;
+	}
+
+	return -EOPNOTSUPP;
+}
+
+static int felix_set_preempt(struct dsa_switch *ds, int port,
+			     struct ethtool_fp *fpcmd)
+{
+	struct ocelot *ocelot = ds->priv;
+	struct felix *felix = ocelot_to_felix(ocelot);
+
+	if (felix->info->port_set_preempt)
+		return felix->info->port_set_preempt(ocelot, port, fpcmd);
+
+	return -EOPNOTSUPP;
+}
+
+static int felix_get_preempt(struct dsa_switch *ds, int port,
+			     struct ethtool_fp *fpcmd)
+{
+	struct ocelot *ocelot = ds->priv;
+	struct felix *felix = ocelot_to_felix(ocelot);
+
+	if (felix->info->port_get_preempt)
+		return felix->info->port_get_preempt(ocelot, port, fpcmd);
+
+	return -EOPNOTSUPP;
 }
 
 static struct regmap *felix_request_regmap_by_name(struct felix *felix,
@@ -2299,6 +2343,9 @@ static const struct dsa_switch_ops felix_switch_ops = {
 	.get_ethtool_stats		= felix_get_ethtool_stats,
 	.get_sset_count			= felix_get_sset_count,
 	.get_ts_info			= felix_get_ts_info,
+	.reset_preempt			= felix_reset_preempt,
+	.set_preempt			= felix_set_preempt,
+	.get_preempt			= felix_get_preempt,
 	.phylink_get_caps		= felix_phylink_get_caps,
 	.port_enable			= felix_port_enable,
 	.port_fast_age			= felix_port_fast_age,

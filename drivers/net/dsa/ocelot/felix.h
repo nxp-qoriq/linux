@@ -65,6 +65,11 @@ struct felix_info {
 	int	(*configure_serdes)(struct ocelot *ocelot, int port,
 				    struct device_node *portnp);
 	int	(*request_irq)(struct ocelot *ocelot);
+	int	(*port_set_preempt)(struct ocelot *ocelot, int port,
+				    struct ethtool_fp *fpcmd);
+	int	(*port_get_preempt)(struct ocelot *ocelot, int port,
+				    struct ethtool_fp *fpcmd);
+	void	(*port_preempt_reset)(struct ocelot *ocelot, int port, bool enable);
 };
 
 /* Methods for initializing the hardware resources specific to a tagging

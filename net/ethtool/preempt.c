@@ -19,6 +19,7 @@ const struct nla_policy preempt_get_policy[ETHTOOL_A_PREEMPT_MAX + 1] = {
 	[ETHTOOL_A_PREEMPT_UNSPEC]		= { .type = NLA_REJECT },
 	[ETHTOOL_A_PREEMPT_HEADER]		= { .type = NLA_NESTED },
 	[ETHTOOL_A_PREEMPT_SUPPORTED]		= { .type = NLA_REJECT },
+	[ETHTOOL_A_PREEMPT_STATUS]		= { .type = NLA_REJECT },
 	[ETHTOOL_A_PREEMPT_ACTIVE]		= { .type = NLA_REJECT },
 	[ETHTOOL_A_PREEMPT_MIN_FRAG_SIZE]	= { .type = NLA_REJECT },
 	[ETHTOOL_A_PREEMPT_QUEUES_SUPPORTED]	= { .type = NLA_REJECT },
@@ -52,6 +53,7 @@ static int preempt_reply_size(const struct ethnl_req_info *req_base,
 	int len = 0;
 
 	len += nla_total_size(sizeof(u8)); /* _PREEMPT_SUPPORTED */
+	len += nla_total_size(sizeof(u8)); /* _PREEMPT_STATUS */
 	len += nla_total_size(sizeof(u8)); /* _PREEMPT_ACTIVE */
 	len += nla_total_size(sizeof(u32)); /* _PREEMPT_QUEUES_SUPPORTED */
 	len += nla_total_size(sizeof(u32)); /* _PREEMPT_QUEUES_PREEMPTIBLE */
@@ -75,7 +77,10 @@ static int preempt_fill_reply(struct sk_buff *skb,
 			  preempt->preemptible_queues_mask))
 		return -EMSGSIZE;
 
-	if (nla_put_u8(skb, ETHTOOL_A_PREEMPT_ACTIVE, preempt->fp_enabled))
+	if (nla_put_u8(skb, ETHTOOL_A_PREEMPT_STATUS, preempt->fp_status))
+		return -EMSGSIZE;
+
+	if (nla_put_u8(skb, ETHTOOL_A_PREEMPT_ACTIVE, preempt->fp_active))
 		return -EMSGSIZE;
 
 	if (nla_put_u8(skb, ETHTOOL_A_PREEMPT_SUPPORTED,
@@ -106,6 +111,8 @@ preempt_set_policy[ETHTOOL_A_PREEMPT_MAX + 1] = {
 	[ETHTOOL_A_PREEMPT_UNSPEC]			= { .type = NLA_REJECT },
 	[ETHTOOL_A_PREEMPT_HEADER]			= { .type = NLA_NESTED },
 	[ETHTOOL_A_PREEMPT_SUPPORTED]			= { .type = NLA_REJECT },
+	[ETHTOOL_A_PREEMPT_STATUS]			= { .type = NLA_REJECT },
+	[ETHTOOL_A_PREEMPT_LLDP_VERIFY]			= { .type = NLA_U8 },
 	[ETHTOOL_A_PREEMPT_ACTIVE]			= { .type = NLA_U8 },
 	[ETHTOOL_A_PREEMPT_MIN_FRAG_SIZE]		= { .type = NLA_U32 },
 	[ETHTOOL_A_PREEMPT_QUEUES_SUPPORTED]		= { .type = NLA_REJECT },
@@ -114,7 +121,7 @@ preempt_set_policy[ETHTOOL_A_PREEMPT_MAX + 1] = {
 
 int ethnl_set_preempt(struct sk_buff *skb, struct genl_info *info)
 {
-	struct nlattr *tb[ETHTOOL_A_LINKINFO_MAX + 1];
+	struct nlattr *tb[ARRAY_SIZE(preempt_set_policy)];
 	struct ethtool_fp preempt = {};
 	struct ethnl_req_info req_info = {};
 	struct net_device *dev;
@@ -151,6 +158,8 @@ int ethnl_set_preempt(struct sk_buff *skb, struct genl_info *info)
 		goto out_ops;
 	}
 
+	ethnl_update_u8(&preempt.fp_lldp_verify,
+			tb[ETHTOOL_A_PREEMPT_LLDP_VERIFY], &mod);
 	ethnl_update_u8(&preempt.fp_enabled,
 			tb[ETHTOOL_A_PREEMPT_ACTIVE], &mod);
 	if (tb[ETHTOOL_A_PREEMPT_MIN_FRAG_SIZE])

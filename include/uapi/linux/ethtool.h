@@ -394,7 +394,10 @@ struct ethtool_eee {
 struct ethtool_fp {
 	__u32	cmd;
 	__u8	fp_supported;
+	__u8	fp_lldp_verify;
 	__u8	fp_enabled;
+	__u8    fp_status;
+	__u8    fp_active;
 	__u32	supported_queues_mask;
 	__u32	preemptible_queues_mask;
 	__u32	min_frag_size;

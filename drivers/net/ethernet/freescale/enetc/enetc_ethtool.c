@@ -2379,10 +2379,10 @@ static int enetc_set_preempt(struct net_device *ndev,
 
 	preempt = pt->preemptible_queues_mask;
 
-	temp = enetc_rd(&priv->si->hw, ENETC_QBV_PTGCR_OFFSET);
-	if (temp & ENETC_QBV_TGE)
-		enetc_wr(&priv->si->hw, ENETC_QBV_PTGCR_OFFSET,
-			 temp & (~ENETC_QBV_TGPE));
+	temp = enetc_rd(&priv->si->hw, ENETC_PTGCR);
+	if (temp & ENETC_PTGCR_TGE)
+		enetc_wr(&priv->si->hw, ENETC_PTGCR,
+			 temp & (~ENETC_PTGCR_TGPE));
 
 	for (i = 0; i < 8; i++) {
 		/* 1 Enabled. Traffic is transmitted on the preemptive MAC. */

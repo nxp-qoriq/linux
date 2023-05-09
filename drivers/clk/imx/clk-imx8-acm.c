@@ -240,11 +240,20 @@ static struct clk_parent_data imx8dxl_mclk_sels[] = {
 	{  }, /* clk_hw pointer of "acm_aud_clk1_sel" */
 };
 
+static const struct clk_parent_data imx8dxl_gpt_mux_clk_sels[] = {
+	{ .fw_name = "aud_pll_div_clk0_lpcg_clk" },
+	{ .fw_name = "aud_pll_div_clk1_lpcg_clk" },
+	{ .fw_name = "acm_aud_clk0_sel" },
+	{ .fw_name = "acm_aud_clk1_sel" },
+	{ .index = -1 },
+};
+
 static struct clk_imx8_acm_sel imx8dxl_sels[] = {
 	{ "acm_aud_clk0_sel", IMX_ADMA_ACM_AUD_CLK0_SEL, imx8dxl_aud_clk_sels, ARRAY_SIZE(imx8dxl_aud_clk_sels), 0x000000, 0, 5 },
 	{ "acm_aud_clk1_sel", IMX_ADMA_ACM_AUD_CLK1_SEL, imx8dxl_aud_clk_sels, ARRAY_SIZE(imx8dxl_aud_clk_sels), 0x010000, 0, 5 },
 	{ "acm_mclkout0_sel", IMX_ADMA_ACM_MCLKOUT0_SEL, imx8dxl_mclk_out_sels, ARRAY_SIZE(imx8dxl_mclk_out_sels), 0x020000, 0, 3 },
 	{ "acm_mclkout1_sel", IMX_ADMA_ACM_MCLKOUT1_SEL, imx8dxl_mclk_out_sels, ARRAY_SIZE(imx8dxl_mclk_out_sels), 0x030000, 0, 3 },
+	{ "acm_gpt0_mux_clk_sel", IMX_ADMA_ACM_GPT0_MUX_CLK_SEL, imx8dxl_gpt_mux_clk_sels, ARRAY_SIZE(imx8dxl_gpt_mux_clk_sels), 0x080000, 0, 3 },
 	{ "acm_sai0_mclk_sel", IMX_ADMA_ACM_SAI0_MCLK_SEL, imx8dxl_mclk_sels, ARRAY_SIZE(imx8dxl_mclk_sels), 0x0E0000, 0, 2 },
 	{ "acm_sai1_mclk_sel", IMX_ADMA_ACM_SAI1_MCLK_SEL, imx8dxl_mclk_sels, ARRAY_SIZE(imx8dxl_mclk_sels), 0x0F0000, 0, 2 },
 	{ "acm_sai2_mclk_sel", IMX_ADMA_ACM_SAI2_MCLK_SEL, imx8dxl_mclk_sels, ARRAY_SIZE(imx8dxl_mclk_sels), 0x100000, 0, 2 },

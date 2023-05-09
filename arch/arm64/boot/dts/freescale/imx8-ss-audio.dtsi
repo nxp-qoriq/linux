@@ -339,8 +339,8 @@ audio_subsys: bus@59000000 {
 
 	gpt5: gpt@590b0000 {
 		reg = <0x590b0000 0x10000>;
-		clocks = <&gpt5_lpcg 0>,
-			<&gpt5_lpcg 0>;
+		clocks = <&gpt5_lpcg 1>,
+			<&gpt5_lpcg 1>;
 		clock-names = "ipg", "per";
 		power-domains = <&pd IMX_SC_R_GPT_5>;
 		status = "disabled";
@@ -538,9 +538,10 @@ audio_subsys: bus@59000000 {
 		compatible = "fsl,imx8qxp-lpcg";
 		reg = <0x594b0000 0x10000>;
 		#clock-cells = <1>;
-		clocks = <&audio_ipg_clk>;
-		bit-offset = <16>;
-		clock-output-names = "gpt5_lpcg_ipg_clk";
+		clocks = <&acm IMX_ADMA_ACM_GPT0_MUX_CLK_SEL>,
+			 <&audio_ipg_clk>;
+		bit-offset = <0 16>;
+		clock-output-names = "gpt5_lpcg_clk_in", "gpt5_lpcg_ipg_clk";
 		power-domains = <&pd IMX_SC_R_GPT_5>;
 	};
 

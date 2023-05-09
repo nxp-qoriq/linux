@@ -32,6 +32,7 @@
 			<&pd IMX_SC_R_AUDIO_PLL_0>,
 			<&pd IMX_SC_R_AUDIO_PLL_1>,
 			<&pd IMX_SC_R_ASRC_0>,
+			<&pd IMX_SC_R_GPT_5>,
 			<&pd IMX_SC_R_SAI_0>,
 			<&pd IMX_SC_R_SAI_1>,
 			<&pd IMX_SC_R_SAI_2>,

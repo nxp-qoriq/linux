@@ -338,6 +338,41 @@ static void clk_imx_acm_detach_pm_domains(struct device *dev,
 	}
 }
 
+/* The number of cells for the GPT capture device tree attribute */
+#define OF_GPT_CAPTURE_CELLS_NB	2
+
+static void clk_imx_acm_gpt_input_mux(struct device_node *np, struct imx8_acm_priv *priv)
+{
+	u32 len, reg_offset, event_sel_control, num_capture_select;
+	int i, offset;
+
+	if (!of_get_property(np, "gpt-capture-select", &len))
+		return;
+
+	num_capture_select = len / (sizeof(u32) * OF_GPT_CAPTURE_CELLS_NB);
+
+	for (i = 0; i < num_capture_select; i++) {
+		offset = i * OF_GPT_CAPTURE_CELLS_NB;
+		if (of_property_read_u32_index(np,
+					       "gpt-capture-select",
+					       offset, &reg_offset)) {
+			pr_err("failed to read gpt register offset cell at offset %d\n",
+				offset);
+			return;
+		}
+
+		if (of_property_read_u32_index(np,
+					       "gpt-capture-select",
+					       offset + 1, &event_sel_control)) {
+			pr_err("failed to read gpt event select control cell at offset %d\n",
+				offset + 1);
+			return;
+		}
+
+		writel_relaxed(event_sel_control,  priv->reg + reg_offset);
+	}
+}
+
 static int imx8_acm_clk_probe(struct platform_device *pdev)
 {
 	struct clk_hw_onecell_data *clk_hw_data;
@@ -408,6 +443,8 @@ static int imx8_acm_clk_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to register hws for ACM\n");
 		goto err_clk_register;
 	}
+
+	clk_imx_acm_gpt_input_mux(dev->of_node, priv);
 
 	pm_runtime_put_sync(&pdev->dev);
 	return 0;

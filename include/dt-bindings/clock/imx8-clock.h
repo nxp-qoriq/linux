@@ -37,4 +37,14 @@
 
 #define IMX_ADMA_ACM_CLK_END				25
 
+/* ACM GPT Event Mux Control Register Offset */
+#define IMX_ADMA_ACM_GPT0_CAPIN1_SEL			0x80004
+#define IMX_ADMA_ACM_GPT0_CAPIN2_SEL			0x80008
+#define IMX_ADMA_ACM_GPT1_CAPIN1_SEL			0x90004
+#define IMX_ADMA_ACM_GPT1_CAPIN2_SEL			0x90008
+
+/* ACM GPT Event Mux Select Control */
+#define IMX_ADMA_ACM_GPT_EVENT_INPUT_ETH0		3
+#define IMX_ADMA_ACM_GPT_EVENT_INPUT_ETH1		4
+
 #endif /* __DT_BINDINGS_CLOCK_IMX_H */

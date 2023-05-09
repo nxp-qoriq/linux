@@ -7,12 +7,43 @@
 
 #include "imx8dxl-evk-enet0.dts"
 
+/* Set GPT Capture input to Ethernet 0 event */
+&acm {
+	gpt-capture-select = <IMX_ADMA_ACM_GPT0_CAPIN1_SEL IMX_ADMA_ACM_GPT_EVENT_INPUT_ETH0>;
+};
+
 /* AVB HW timer*/
 &gpt5 {
 	compatible = "fsl,avb-gpt";
+
+	clocks = <&gpt5_lpcg 1>,
+		<&gpt5_lpcg 1>,
+		<&gpt5_lpcg 0>,
+		<&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_PLL>;
+	clock-names = "ipg", "per", "clk_in", "audio_pll";
+
+	/*  - Set ACM_AUD_CLK0 source to ACM_AUD_REC_CLK0
+	 *  - Set clk_in to Audio PLL0 Divider
+	 *  - Enable Audio PLL and its Master Bus clock (AUD_REC_CLK0): keep this in sync with sai nodes
+	 */
+
+	assigned-clocks =  <&acm IMX_ADMA_ACM_AUD_CLK0_SEL>,
+				<&acm IMX_ADMA_ACM_GPT0_MUX_CLK_SEL>,
+				<&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_PLL>,
+				<&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_MST_BUS>;
+
+	assigned-clock-parents = <&aud_rec0_lpcg 0>,
+					<&acm IMX_ADMA_ACM_AUD_CLK0_SEL>;
+
+	assigned-clock-rates = <0>, <0>, <786432000>, <12288000>;
+
+	/* Audio PLL is controlled through SCU */
+	fsl,pll-scu-controlled;
+
 	timer-channel = <1>; /* Use output compare channel 1*/
 	prescale = <1>;
 	domain = <0>;
+	rec-channel = <1 0 1>; // capture channel, eth port, ENET TC id
 
 	interrupts = <GIC_SPI 268 IRQ_TYPE_LEVEL_HIGH>;
 

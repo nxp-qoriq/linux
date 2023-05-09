@@ -18,6 +18,7 @@
 #include <xen/xen.h>
 
 #include "clk-scu.h"
+#include "clk-pll.h"
 
 #define IMX_SIP_CPUFREQ			0xC2000001
 #define IMX_SIP_SET_CPUFREQ		0x00
@@ -56,6 +57,8 @@ struct clk_scu {
 	u8 parent_index;
 	bool is_enabled;
 	u32 rate;
+	unsigned long original_rate;
+	struct clk_imx_pll imx_pll;
 };
 
 /*
@@ -466,6 +469,82 @@ static const struct clk_ops clk_scu_pi_ops = {
 	.set_rate    = clk_scu_set_rate,
 };
 
+static void imx_scu_init(struct clk_imx_pll *pll)
+{
+	struct clk_scu *clk;
+
+	clk = (struct clk_scu *) container_of(pll, struct clk_scu, imx_pll);
+
+	clk->original_rate = clk_scu_recalc_rate(&clk->hw, 0);
+
+	pr_info("SCU clock %p for PLL API init with original rate %lu\n",
+		clk, clk->original_rate);
+
+	return;
+}
+
+/* SCU is stating possible variation of +/-250Khz which gives around 300 ppm @ 786MHz
+ * Set a maximum adjustement at 250 ppm
+ */
+#define IMX_SCU_MAX_PPB_ADJUSTEMENT	250000
+
+static int imx_scu_adjust(struct clk_imx_pll *pll, int *ppb)
+{
+	struct clk_scu * clk = (struct clk_scu *) container_of(pll,
+			struct clk_scu, imx_pll);
+	unsigned long new_rate;
+	int delta;
+
+	if (!clk->original_rate) {
+		pr_warn_once("failed to get original rate for clock\n");
+		return -IMX_CLK_PLL_LOCK_ERR;
+	}
+
+	if (abs(*ppb) > IMX_SCU_MAX_PPB_ADJUSTEMENT) {
+		return -IMX_CLK_PLL_PREC_ERR;
+	}
+
+	if (*ppb < 0)
+		delta = -1;
+	else
+		delta = 1;
+
+	delta *= (int)div64_u64((u64)clk->original_rate * (u64)abs(*ppb),
+				1000000000);
+
+	new_rate = clk->original_rate + delta;
+
+	if (clk_scu_set_rate(&clk->hw, new_rate, 0) < 0)
+		return -IMX_CLK_PLL_INVALID_PARAM;
+
+	return IMX_CLK_PLL_SUCCESS;
+}
+
+static int imx_scu_set_rate(struct clk_imx_pll *pll, unsigned long rate,
+				unsigned long parent_rate)
+{
+	struct clk_scu * clk = (struct clk_scu *) container_of(pll,
+			struct clk_scu, imx_pll);
+
+	return clk_scu_set_rate(&clk->hw, rate, 0);
+}
+
+static unsigned long imx_scu_get_rate(struct clk_imx_pll *pll,
+					unsigned long parent_rate)
+{
+	struct clk_scu * clk = (struct clk_scu *) container_of(pll,
+			struct clk_scu, imx_pll);
+
+	return clk_scu_recalc_rate(&clk->hw, 0);
+}
+
+static const struct clk_imx_pll_ops imx_clk_scu_ops = {
+	.set_rate	= imx_scu_set_rate,
+	.get_rate	= imx_scu_get_rate,
+	.adjust		= imx_scu_adjust,
+	.init		= imx_scu_init,
+};
+
 struct clk_hw *__imx_clk_scu(struct device *dev, const char *name,
 			     const char * const *parents, int num_parents,
 			     u32 rsrc_id, u8 clk_type)
@@ -513,6 +592,13 @@ struct clk_hw *__imx_clk_scu(struct device *dev, const char *name,
 
 	if (dev)
 		dev_set_drvdata(dev, clk);
+
+	if (rsrc_id == IMX_SC_R_AUDIO_PLL_0 && clk_type == IMX_SC_PM_CLK_PLL) {
+		clk->imx_pll.ops = &imx_clk_scu_ops;
+
+		if (imx_pll_register(&clk->imx_pll, name) < 0)
+			pr_warn("%s: failed to register %s into imx pll\n", __func__, name);
+	}
 
 	return hw;
 }

@@ -10,7 +10,7 @@
 #include <linux/clk/imx-pll.h>
 
 #define MAX_IMX_PLL_NUM		16
-#define MAX_PLL_NAME_SIZE	16
+#define MAX_PLL_NAME_SIZE	64
 
 struct clk_imx_pll;
 

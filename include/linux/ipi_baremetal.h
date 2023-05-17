@@ -2,7 +2,7 @@
 /*
  * include/linux/ipi_baremetal.h
  *
- * Copyright 2018-2022 NXP
+ * Copyright 2018-2023 NXP
  *
  */
 
@@ -11,7 +11,9 @@
 
 #include <linux/kernel.h>
 
-#if defined(CONFIG_LS1021A_BAREMETAL) || defined(CONFIG_LS1028A_BAREMETAL)
+#if defined(CONFIG_LS1021A_BAREMETAL) || \
+    defined(CONFIG_LS1028A_BAREMETAL) || \
+    defined(CONFIG_IMX93_BAREMETAL)
 #define CONFIG_MAX_CPUS 2
 #elif defined(CONFIG_IMX8M_BAREMETAL)
 #define CONFIG_MAX_CPUS 4

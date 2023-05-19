@@ -4,6 +4,7 @@
  */
 
 #include "imx93-11x11-evk-root.dts"
+#include "imx93-rpmsg-ca55.dtsi"
 
 &lpi2c1 {
 	status = "disabled";

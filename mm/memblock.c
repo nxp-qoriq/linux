@@ -1809,6 +1809,7 @@ bool __init_memblock memblock_is_region_memory(phys_addr_t base, phys_addr_t siz
 	return (memblock.memory.regions[idx].base +
 		 memblock.memory.regions[idx].size) >= end;
 }
+EXPORT_SYMBOL(memblock_is_region_memory);
 
 /**
  * memblock_is_region_reserved - check if a region intersects reserved memory

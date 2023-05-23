@@ -113,7 +113,6 @@ preempt_set_policy[ETHTOOL_A_PREEMPT_MAX + 1] = {
 	[ETHTOOL_A_PREEMPT_DISABLED]			= { .type = NLA_FLAG },
 	[ETHTOOL_A_PREEMPT_SUPPORTED]			= { .type = NLA_REJECT },
 	[ETHTOOL_A_PREEMPT_STATUS]			= { .type = NLA_REJECT },
-	[ETHTOOL_A_PREEMPT_LLDP_VERIFY]			= { .type = NLA_U8 },
 	[ETHTOOL_A_PREEMPT_ACTIVE]			= { .type = NLA_U8 },
 	[ETHTOOL_A_PREEMPT_MIN_FRAG_SIZE]		= { .type = NLA_U32 },
 	[ETHTOOL_A_PREEMPT_QUEUES_SUPPORTED]		= { .type = NLA_REJECT },
@@ -156,8 +155,6 @@ int ethnl_set_preempt(struct sk_buff *skb, struct genl_info *info)
 		preempt.disabled = 1;
 		mod = true;
 	}
-	ethnl_update_u8(&preempt.fp_lldp_verify,
-			tb[ETHTOOL_A_PREEMPT_LLDP_VERIFY], &mod);
 	ethnl_update_u8(&preempt.fp_enabled,
 			tb[ETHTOOL_A_PREEMPT_ACTIVE], &mod);
 	if (tb[ETHTOOL_A_PREEMPT_MIN_FRAG_SIZE])

@@ -396,7 +396,6 @@ struct ethtool_fp {
 	__u32	cmd;
 	__u8	disabled;
 	__u8	fp_supported;
-	__u8	fp_lldp_verify;
 	__u8	fp_enabled;
 	__u8    fp_status;
 	__u8    fp_active;

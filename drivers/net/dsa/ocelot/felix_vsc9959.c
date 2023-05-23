@@ -2665,18 +2665,13 @@ static const struct ocelot_ops vsc9959_ops = {
 static void vsc9959_port_preempt_reset(struct ocelot *ocelot, int port, bool enable)
 {
 	struct ocelot_port *ocelot_port = ocelot->ports[port];
-	u32 val;
-
-	val = ocelot_port_readl(ocelot_port, DEV_MM_ENABLE_CONFIG);
-	val &= (DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
-		DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA);
 
 	ocelot_port_rmwl(ocelot_port, 0,
 			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
 			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
 			 DEV_MM_ENABLE_CONFIG);
 
-	if (enable || (!ocelot_port->preemptable_verify && val))
+	if (enable)
 		ocelot_port_rmwl(ocelot_port,
 				 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
 				 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
@@ -2698,7 +2693,7 @@ static int vsc9959_port_set_preempt(struct ocelot *ocelot, int port,
 
 	mm_fragsize = DIV_ROUND_UP((fpcmd->min_frag_size + 4), 64) - 1;
 
-	if (!fpcmd->disabled && !fpcmd->fp_lldp_verify)
+	if (!fpcmd->disabled)
 		val = DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
 		      DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA;
 	else
@@ -2723,8 +2718,6 @@ static int vsc9959_port_set_preempt(struct ocelot *ocelot, int port,
 		       QSYS_PREEMPTION_CFG,
 		       port);
 
-	ocelot_port->preemptable_verify = fpcmd->fp_lldp_verify;
-
 	return 0;
 }
 
@@ -2744,10 +2737,7 @@ static int vsc9959_port_get_preempt(struct ocelot *ocelot, int port,
 
 	val = ocelot_port_readl(ocelot_port, DEV_MM_ENABLE_CONFIG);
 	val &= DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA;
-	if (ocelot_port->preemptable_verify)
-		fpcmd->fp_status = 1;
-	else
-		fpcmd->fp_status = val;
+	fpcmd->fp_status = val;
 
 	val = ocelot_read_rix(ocelot, QSYS_PREEMPTION_CFG, port);
 	fpcmd->preemptible_queues_mask = val & QSYS_PREEMPTION_CFG_P_QUEUES_M;

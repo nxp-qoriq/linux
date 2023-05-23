@@ -15,11 +15,11 @@
 		#size-cells = <2>;
 		ranges;
 
-		rpmsg_reserved: rpmsg@0xb8000000 {
+		rpmsg_reserved: rpmsg@b8000000 {
 			no-map;
 			reg = <0 0xb8000000 0 0x400000>;
 		};
-		bm_reserved: baremetal@0x60000000 {
+		bm_reserved: baremetal@60000000 {
 			no-map;
 			reg = <0 0x60000000 0 0x10000000>;
 		};

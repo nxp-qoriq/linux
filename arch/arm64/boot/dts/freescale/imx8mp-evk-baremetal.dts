@@ -15,13 +15,13 @@
 		#size-cells = <2>;
 		ranges;
 
-		rpmsg_reserved: rpmsg@0x55800000 {
+		rpmsg_reserved: rpmsg@55800000 {
 			no-map;
 			reg = <0 0x55800000 0 0x800000>;
 		};
 
 		/* baremetal: slave cores reserved memory */
-		bm_reserved: baremetal@0x60000000 {
+		bm_reserved: baremetal@60000000 {
 			no-map;
 			reg = <0 0x60000000 0 0x10000000>;
 		};

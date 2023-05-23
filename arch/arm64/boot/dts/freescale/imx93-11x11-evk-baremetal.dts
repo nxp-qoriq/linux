@@ -15,7 +15,7 @@
 		#size-cells = <2>;
 		ranges;
 
-		bm_reserved: baremetal@0xb0000000 {
+		bm_reserved: baremetal@b0000000 {
 			no-map;
 			reg = <0 0xb0000000 0 0x10000000>;
 		};

@@ -1,4 +1,5 @@
 /* Copyright 2008-2012 Freescale Semiconductor, Inc.
+ * Copyright 2023 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -69,6 +70,9 @@ struct bm_portal_config {
 /* Hooks from bman_driver.c to bman_config.c */
 int bman_init_ccsr(struct device_node *node);
 #endif
+
+size_t get_bman_fbpr_size(void);
+dma_addr_t get_bman_fbpr_addr(void);
 
 /* Hooks from bman_driver.c in to bman_high.c */
 struct bman_portal *bman_create_portal(

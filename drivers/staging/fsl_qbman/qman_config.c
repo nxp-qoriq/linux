@@ -1,4 +1,5 @@
 /* Copyright 2008-2012 Freescale Semiconductor, Inc.
+ * Copyright 2023 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -483,6 +484,25 @@ size_t get_qman_fqd_size()
 {
 	return fqd_sz;
 }
+EXPORT_SYMBOL(get_qman_fqd_size);
+
+dma_addr_t get_qman_fqd_addr(void)
+{
+	return fqd_a;
+}
+EXPORT_SYMBOL(get_qman_fqd_addr);
+
+size_t get_qman_pfdr_size(void)
+{
+	return pfdr_sz;
+}
+EXPORT_SYMBOL(get_qman_pfdr_size);
+
+dma_addr_t get_qman_pfdr_addr(void)
+{
+	return pfdr_a;
+}
+EXPORT_SYMBOL(get_qman_pfdr_addr);
 
 /* Parse the <name> property to extract the memory location and size and
  * memblock_reserve() it. If it isn't supplied, memblock_alloc() the default

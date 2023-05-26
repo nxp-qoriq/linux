@@ -1,4 +1,5 @@
 /* Copyright 2008-2012 Freescale Semiconductor, Inc.
+ * Copyright 2023 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -222,6 +223,10 @@ static inline size_t get_qman_fqd_size(void)
 	return (PAGE_SIZE << CONFIG_FSL_QMAN_FQD_SZ);
 }
 #endif
+
+size_t get_qman_pfdr_size(void);
+dma_addr_t get_qman_fqd_addr(void);
+dma_addr_t get_qman_pfdr_addr(void);
 
 int qm_set_wpm(int wpm);
 int qm_get_wpm(int *wpm);

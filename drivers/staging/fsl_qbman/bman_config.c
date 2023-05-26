@@ -1,4 +1,5 @@
 /* Copyright (c) 2009-2012 Freescale Semiconductor, Inc.
+ * Copyright 2023 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -275,6 +276,18 @@ static int bman_fbpr(struct reserved_mem *rmem)
 	return 0;
 }
 RESERVEDMEM_OF_DECLARE(bman_fbpr, "fsl,bman-fbpr", bman_fbpr);
+
+size_t get_bman_fbpr_size(void)
+{
+	return fbpr_sz;
+}
+EXPORT_SYMBOL(get_bman_fbpr_size);
+
+dma_addr_t get_bman_fbpr_addr(void)
+{
+	return fbpr_a;
+}
+EXPORT_SYMBOL(get_bman_fbpr_addr);
 
 static int __init fsl_bman_init(struct device_node *node)
 {

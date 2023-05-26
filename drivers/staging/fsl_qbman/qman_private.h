@@ -224,6 +224,10 @@ static inline size_t get_qman_fqd_size(void)
 }
 #endif
 
+size_t get_qman_pfdr_size(void);
+dma_addr_t get_qman_fqd_addr(void);
+dma_addr_t get_qman_pfdr_addr(void);
+
 int qm_set_wpm(int wpm);
 int qm_get_wpm(int *wpm);
 

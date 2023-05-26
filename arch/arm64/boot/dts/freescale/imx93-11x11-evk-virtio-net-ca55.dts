@@ -13,9 +13,9 @@
 		#size-cells = <2>;
 		ranges;
 
-		virtio_reserved: virtio@a8400000 {
+		virtio_reserved: virtio@fc700000 {
 			no-map;
-			reg = <0 0xa8400000 0x0 0x00100000>;
+			reg = <0 0xfc700000 0x0 0x00100000>;
 		};
 
 		/* 512MB */
@@ -24,15 +24,15 @@
 			reg = <0 0xd0000000 0x0 0x20000000>;
 		};
 
-		virtio_buffer: virtio-buffer@f0000000 {
+		virtio_buffer: virtio-buffer@f8700000 {
 			compatible = "shared-dma-pool";
-			reg = <0 0xf0000000 0 0x4000000>;
+			reg = <0 0xf8700000 0 0x4000000>;
 		};
 	};
 
 	virtio_net@a8400000 {
 		compatible = "virtio,mmio";
-		reg = <0x0 0xa8400000 0x0 0x1000>;
+		reg = <0x0 0xfc700000 0x0 0x1000>;
 		dma-coherent;
 		hypervisor_less;
 		memory-region = <&virtio_buffer>;

@@ -3,9 +3,25 @@
  * Copyright 2023 NXP
  */
 
-#include "imx8m-generic-mbox.dtsi"
+/ {
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
 
-&gen_sw_mbox {
-	/* Use 2 unused SPI interrupts */
-	interrupts = <GIC_SPI 136 IRQ_TYPE_LEVEL_HIGH>, <GIC_SPI 137 IRQ_TYPE_LEVEL_HIGH>;
+		gen_sw_mbox_reserved: gen-sw-mbox@fe000000 {
+			reg = <0 0xfe000000 0 0x1000>;
+			no-map;
+		};
+
+	};
+
+	gen_sw_mbox: generic-software-mailbox@fe000000 {
+		compatible = "fsl,generic-software-mbox";
+		reg = <0 0xfe000000 0 0x1000>;
+		#mbox-cells = <2>;
+		/* Use 2 unused SPI interrupts */
+		interrupts = <GIC_SPI 136 IRQ_TYPE_LEVEL_HIGH>, <GIC_SPI 137 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "irq", "remote_irq";
+	};
 };

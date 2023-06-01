@@ -30,7 +30,7 @@
 		};
 	};
 
-	virtio_net@a8400000 {
+	virtio_net@fc700000 {
 		compatible = "virtio,mmio";
 		reg = <0x0 0xfc700000 0x0 0x1000>;
 		dma-coherent;

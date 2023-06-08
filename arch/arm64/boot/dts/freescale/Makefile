@@ -143,7 +143,8 @@ dtb-$(CONFIG_ARCH_MXC) += imx8mm-evk.dtb imx8mm-evk-rpmsg.dtb imx8mm-evk-rm67191
 			  imx8mm-evk-qca-wifi.dtb \
 			  imx8mm-evk-dpdk.dtb \
 			  imx8mm-evk-rm67199.dtb imx8mm-evk-rm67191-cmd-ram.dtb imx8mm-evk-rm67199-cmd-ram.dtb \
-			  imx8mm-evk-lk.dtb imx8mm-evk-rpmsg-8m-buf.dtb
+			  imx8mm-evk-lk.dtb imx8mm-evk-rpmsg-8m-buf.dtb \
+			  imx8mm-evk-ecat.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8mm-evk-rpmsg-wm8524.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8mm-evk-rpmsg-ca53.dtb \
 			  imx8mm-evk-virtio-perf-ca53.dtb \
@@ -203,7 +204,8 @@ dtb-$(CONFIG_ARCH_MXC) += imx8mp-evk.dtb imx8mp-evk-rm67191.dtb imx8mp-evk-it626
 			  imx8mp-evk-hifiberry-dac2.dtb imx8mp-evk-hifiberry-dacplusadc.dtb \
 			  imx8mp-evk-usdhc1-m2.dtb imx8mp-evk-rm67199.dtb \
 			  imx8mp-evk-dpdk.dtb imx8mp-evk-8mic-swpdm.dtb imx8mp-evk-revA3-8mic-revE.dtb \
-			  imx8mp-evk-baremetal.dtb imx8mp-evk-avb.dtb
+			  imx8mp-evk-baremetal.dtb imx8mp-evk-avb.dtb \
+			  imx8mp-evk-ecat.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8mp-navqp.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8mp-ab2.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8mp-navq.dtb imx8mp-navq-ov5640-ov5645.dtb imx8mp-navq-ov5647-ov5640.dtb
@@ -517,7 +519,8 @@ dtb-$(CONFIG_ARCH_MXC) += imx93-11x11-evk.dtb \
 			  imx93-11x11-evk-8mic-reve.dtb \
 			  imx93-11x11-evk-virtio-net-ca55.dtb \
 			  imx93-11x11-evk-virtio-net-cm33.dtb \
-			  imx93-11x11-evk-baremetal.dtb
+			  imx93-11x11-evk-baremetal.dtb \
+			  imx93-11x11-evk-ecat.dtb
 
 dtb-$(CONFIG_ARCH_MXC) += imx93-11x11-frdm.dtb imx93-11x11-frdm-8mic-reve.dtb \
 			  imx93-11x11-frdm-aud-hat.dtb imx93-11x11-frdm-ld.dtb \

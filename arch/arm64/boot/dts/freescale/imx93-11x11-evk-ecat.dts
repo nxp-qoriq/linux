@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2023 NXP
+ */
+
+#include "imx93-11x11-evk.dts"
+
+
+&fec {
+	compatible = "fsl,imx93-fec-ecat", "fsl,imx8mp-fec-ecat", "fsl,imx8mq-fec-ecat";
+};

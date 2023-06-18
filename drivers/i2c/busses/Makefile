@@ -152,4 +152,6 @@ obj-$(CONFIG_I2C_VIRTIO)	+= i2c-virtio.o
 obj-$(CONFIG_XEN_I2C_FRONTEND)	+= xen-i2cfront.o
 obj-$(CONFIG_XEN_I2C_BACKEND)	+= xen-i2cback.o
 
+obj-$(CONFIG_RFNM_SI5510)	+= i2c-rfnm-si5510.o
+
 ccflags-$(CONFIG_I2C_DEBUG_BUS) := -DDEBUG

@@ -1437,5 +1437,10 @@ config XEN_I2C_BACKEND
 
 	  The corresponding Linux frontend driver is enabled by the
 	  CONFIG_XEN_I2C_FRONTEND configuration option.
+	  
+config RFNM_SI5510
+	tristate "Enable RFNM's Si5510 boot init"
+	help
+	  Fast init to get pcie running at boot
 
 endmenu

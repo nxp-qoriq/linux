@@ -215,10 +215,10 @@
 		};
 
 		/* used only by tuning tool, can be removed for normal case */
-		isp0_reserved: isp0@94400000 {
+		/*isp0_reserved: isp0@94400000 {
 			no-map;
 			reg = <0 0x94400000 0 0x10000000>;
-		};
+		};*/
 	};
 
 	osc_32k: clock-osc-32k {
@@ -1567,7 +1567,7 @@
 					power-domains = <&ispdwp_pd>;
 					id = <0>;
 					gpr = <&media_blk_ctrl>;
-					memory-region = <&isp0_reserved>;
+					//memory-region = <&isp0_reserved>;
 					status = "disabled";
 				};
 

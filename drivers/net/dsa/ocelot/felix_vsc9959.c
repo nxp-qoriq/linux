@@ -2671,13 +2671,16 @@ static void vsc9959_port_preempt_reset(struct ocelot *ocelot, int port, bool ena
 			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
 			 DEV_MM_ENABLE_CONFIG);
 
-	if (enable)
-		ocelot_port_rmwl(ocelot_port,
-				 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
-				 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
-				 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
-				 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
-				 DEV_MM_ENABLE_CONFIG);
+	if (enable) {
+		if (ocelot_port->fp_enabled_admin) {
+			ocelot_port_rmwl(ocelot_port,
+					 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
+					 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
+					 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
+					 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
+					 DEV_MM_ENABLE_CONFIG);
+		}
+	}
 }
 
 static int vsc9959_port_set_preempt(struct ocelot *ocelot, int port,
@@ -2693,11 +2696,14 @@ static int vsc9959_port_set_preempt(struct ocelot *ocelot, int port,
 
 	mm_fragsize = DIV_ROUND_UP((fpcmd->min_frag_size + 4), 64) - 1;
 
-	if (!fpcmd->disabled)
+	if (!fpcmd->disabled) {
 		val = DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
 		      DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA;
-	else
+		ocelot_port->fp_enabled_admin = 1;
+	} else {
 		val = 0;
+		ocelot_port->fp_enabled_admin = 0;
+	}
 
 	ocelot_port_rmwl(ocelot_port, val,
 			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |

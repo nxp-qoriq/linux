@@ -811,6 +811,7 @@ struct ocelot_port {
 	bool				force_forward;
 	u8				cut_thru;
 	u8				cut_thru_selected_by_user;
+	bool				fp_enabled_admin;
 
 	int				speed;
 };

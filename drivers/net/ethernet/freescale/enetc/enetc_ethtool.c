@@ -1568,7 +1568,13 @@ static int enetc_reset_preempt(struct net_device *ndev, bool enable)
 		enetc_wr(&priv->si->hw, ENETC_PTGCR,
 			 temp & (~ENETC_PTGCR_TGPE));
 
-	enetc_configure_port_pmac(&priv->si->hw, enable);
+	if (enable) {
+		if (priv->fp_enabled_admin) {
+			enetc_configure_port_pmac(&priv->si->hw, 1);
+		}
+	} else {
+		enetc_configure_port_pmac(&priv->si->hw, 0);
+	}
 
 	return 0;
 }
@@ -2422,10 +2428,13 @@ static int enetc_set_preempt(struct net_device *ndev,
 		temp |= ENETC_MMCSR_VDIS;
 	enetc_port_wr(&priv->si->hw, ENETC_MMCSR, temp);
 
-	if (pt->disabled)
+	if (pt->disabled) {
 		enetc_configure_port_pmac(&priv->si->hw, 0);
-	else
+		priv->fp_enabled_admin = 0;
+	} else {
 		enetc_configure_port_pmac(&priv->si->hw, 1);
+		priv->fp_enabled_admin = 1;
+	}
 
 	if (pt->disabled) {
 		temp = enetc_port_rd(&priv->si->hw, ENETC_PFPMR);

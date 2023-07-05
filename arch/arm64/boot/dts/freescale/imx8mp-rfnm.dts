@@ -66,6 +66,15 @@
 		enable-active-high;
 	};
 
+	rfnm_wsled {
+		compatible = "rfnm,wsled";
+		wsled1-gpios = <&gpio3 7 GPIO_ACTIVE_HIGH>;
+		wsled2-gpios = <&gpio3 8 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_wsled>;
+		status = "okay";
+	};
+
 
 	sound-hdmi {
 		compatible = "fsl,imx-audio-hdmi";
@@ -704,6 +713,12 @@
     	};
     */
 
+	pinctrl_wsled: wsledgrp {
+		fsl,pins = <
+			MX8MP_IOMUXC_NAND_DATA01__GPIO3_IO07       0x00000016 // needed to enable clocking to this gpio peripheral
+			MX8MP_IOMUXC_NAND_DATA02__GPIO3_IO08       0x00000016 // needed to enable clocking to this gpio peripheral
+		>;
+	};
 
     pinctrl_ecspi1: ecspi1grp {
 		fsl,pins = <

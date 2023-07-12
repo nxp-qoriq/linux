@@ -519,6 +519,7 @@ dtb-$(CONFIG_ARCH_MXC) += imx93-11x11-evk.dtb \
 			  imx93-11x11-evk-8mic-reve.dtb \
 			  imx93-11x11-evk-virtio-net-ca55.dtb \
 			  imx93-11x11-evk-virtio-net-cm33.dtb \
+			  imx93-11x11-evk-uart-sharing-cm33.dtb \
 			  imx93-11x11-evk-baremetal.dtb \
 			  imx93-11x11-evk-ecat.dtb
 

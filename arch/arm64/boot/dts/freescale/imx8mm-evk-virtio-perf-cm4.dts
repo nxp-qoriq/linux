@@ -17,12 +17,6 @@
 			no-map;
 		};
 
-		virtio_buffer: virtio-buffer@b3c00000 {
-			compatible = "shared-dma-pool";
-			reg = <0 0xb3c00000 0 0x4000000>;
-			no-map;
-		};
-
 		virtio_reserved: virtio@b8400000 {
 			no-map;
 			reg = <0 0xb8400000 0x0 0x00100000>;
@@ -33,7 +27,6 @@
 		compatible = "virtio,mmio";
 		reg = <0x0 0xb8400000 0x0 0x1000>;
 		hypervisor_less;
-		memory-region = <&virtio_buffer>;
 		interrupts = <GIC_SPI 88 IRQ_TYPE_LEVEL_HIGH>; //MU IRQ to CA53
 		mbox-names = "mmiowr", "mmioirq";
 		mboxes = <&mu 0 2

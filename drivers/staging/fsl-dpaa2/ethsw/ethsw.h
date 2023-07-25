@@ -39,9 +39,17 @@
 
 #define ETHSW_FEATURE_MAC_ADDR	BIT(0)
 
+#define DPAA2_ETHSW_PORT_MAX_ACL_ENTRIES	16
+
 extern const struct ethtool_ops ethsw_port_ethtool_ops;
 
 struct ethsw_core;
+
+struct dpaa2_switch_acl_tbl {
+	u16			id;
+	u8			num_rules;
+	bool			in_use;
+};
 
 /* Per port private data */
 struct ethsw_port_priv {
@@ -55,6 +63,8 @@ struct ethsw_port_priv {
 	u8			vlans[VLAN_VID_MASK + 1];
 	u16			pvid;
 	struct net_device	*bridge_dev;
+
+	struct dpaa2_switch_acl_tbl *acl_tbl;
 };
 
 /* Switch data */
@@ -74,6 +84,8 @@ struct ethsw_core {
 	struct notifier_block		port_nb;
 	struct notifier_block		port_switchdev_nb;
 	struct workqueue_struct		*workqueue;
+
+	struct dpaa2_switch_acl_tbl	*acls;
 };
 
 bool dpaa2_switch_port_dev_check(const struct net_device *netdev);

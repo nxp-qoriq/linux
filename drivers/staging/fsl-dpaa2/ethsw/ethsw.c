@@ -3,7 +3,7 @@
  * DPAA2 Ethernet Switch driver
  *
  * Copyright 2014-2016 Freescale Semiconductor Inc.
- * Copyright 2017-2021 NXP
+ * Copyright 2017-2021, 2023 NXP
  *
  */
 
@@ -757,6 +757,11 @@ static const struct net_device_ops ethsw_port_ops = {
 	.ndo_start_xmit		= port_dropframe,
 	.ndo_get_phys_port_name = port_get_phys_name,
 };
+
+bool dpaa2_switch_port_dev_check(const struct net_device *netdev)
+{
+	return netdev->netdev_ops == &ethsw_port_ops;
+}
 
 static void ethsw_links_state_update(struct ethsw_core *ethsw)
 {

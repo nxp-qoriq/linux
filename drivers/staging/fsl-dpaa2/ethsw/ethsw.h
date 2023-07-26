@@ -3,7 +3,7 @@
  * DPAA2 Ethernet Switch declarations
  *
  * Copyright 2014-2016 Freescale Semiconductor Inc.
- * Copyright 2017-2018, 2020 NXP
+ * Copyright 2017-2018, 2020, 2023 NXP
  *
  */
 
@@ -75,5 +75,7 @@ struct ethsw_core {
 	struct notifier_block		port_switchdev_nb;
 	struct workqueue_struct		*workqueue;
 };
+
+bool dpaa2_switch_port_dev_check(const struct net_device *netdev);
 
 #endif	/* __ETHSW_H */

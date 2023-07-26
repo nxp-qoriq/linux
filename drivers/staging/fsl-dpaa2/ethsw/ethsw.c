@@ -801,6 +801,7 @@ static int dpaa2_switch_port_acl_tbl_bind(struct ethsw_port_priv *port_priv,
 	acl_tbl->ports |= BIT(port_priv->idx);
 	port_priv->acl_tbl = acl_tbl;
 
+	netdev_dbg(netdev, "Binded to ACL tbl #%d\n", acl_tbl->id);
 	return 0;
 }
 
@@ -828,6 +829,7 @@ dpaa2_switch_port_acl_tbl_unbind(struct ethsw_port_priv *port_priv,
 	acl_tbl->ports &= ~BIT(port_priv->idx);
 	port_priv->acl_tbl = NULL;
 
+	netdev_dbg(netdev, "Unbinded from ACL tbl #%d\n", acl_tbl->id);
 	return 0;
 }
 
@@ -909,8 +911,15 @@ static int dpaa2_switch_setup_tc_block_bind(struct net_device *netdev,
 			return PTR_ERR(block_cb);
 
 		register_block = true;
+
+		netdev_dbg(netdev,
+			   "Using ACL tbl #%d for tc filtering, we are the first port to join this filter block\n",
+			   acl_tbl->id);
 	} else {
 		acl_tbl = tcf_block_cb_priv(block_cb);
+		netdev_dbg(netdev,
+			   "Using ACL tbl #%d for tc filtering, joining an already existent filter block\n",
+			   acl_tbl->id);
 	}
 
 	tcf_block_cb_incref(block_cb);

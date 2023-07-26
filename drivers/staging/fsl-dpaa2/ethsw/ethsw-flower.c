@@ -10,6 +10,65 @@
 #include <net/tc_act/tc_mirred.h>
 #include "ethsw.h"
 
+static void dpaa2_switch_flower_dump_key(struct ethsw_core *ethsw,
+					 struct dpsw_acl_key *acl_key)
+{
+	struct dpsw_acl_fields *acl_h, *acl_m;
+	struct device *dev = ethsw->dev;
+
+	acl_h = &acl_key->match;
+	acl_m = &acl_key->mask;
+
+	dev_dbg(dev, "Key contents:\n");
+
+	dev_dbg(dev, "\t L2 DST MAC: match = %pM, mask %pM\n",
+		acl_h->l2_dest_mac, acl_m->l2_dest_mac);
+	dev_dbg(dev, "\t L2 SRC MAC: match = %pM, mask %pM\n",
+		acl_h->l2_source_mac, acl_m->l2_source_mac);
+	dev_dbg(dev, "\t L2 Ether Type: match = 0x%x, mask 0x%x\n",
+		acl_h->l2_ether_type, acl_m->l2_ether_type);
+
+	dev_dbg(dev, "\t L2 TPID: match = 0x%x, mask 0x%x\n",
+		acl_h->l2_tpid, acl_m->l2_tpid);
+	dev_dbg(dev, "\t L2 PCP+DEI: match = 0x%x, mask 0x%x\n",
+		acl_h->l2_pcp_dei, acl_m->l2_pcp_dei);
+	dev_dbg(dev, "\t L2 VLAN ID: match = 0x%x, mask 0x%x\n",
+		acl_h->l2_vlan_id, acl_m->l2_vlan_id);
+
+	dev_dbg(dev, "\t L3 DSCP: match = 0x%x, mask 0x%x\n",
+		acl_h->l3_dscp, acl_m->l3_dscp);
+	dev_dbg(dev, "\t L3 Protocol: match = 0x%x, mask 0x%x\n",
+		acl_h->l3_protocol, acl_m->l3_protocol);
+	dev_dbg(dev, "\t L3 SRC IP: match = 0x%x, mask 0x%x\n",
+		acl_h->l3_source_ip, acl_m->l3_source_ip);
+	dev_dbg(dev, "\t L3 DST IP: match = 0x%x, mask 0x%x\n",
+		acl_h->l3_dest_ip, acl_m->l3_dest_ip);
+
+	dev_dbg(dev, "\t L4 SRC Port: match = 0x%x, mask 0x%x\n",
+		acl_h->l4_source_port, acl_m->l4_source_port);
+	dev_dbg(dev, "\t L4 DST Port: match = 0x%x, mask 0x%x\n",
+		acl_h->l4_dest_port, acl_m->l4_dest_port);
+}
+
+static void dpaa2_switch_tc_dump_action(struct ethsw_core *ethsw,
+					struct dpsw_acl_result *dpsw_act)
+{
+	struct device *dev = ethsw->dev;
+
+	switch (dpsw_act->action) {
+	case DPSW_ACL_ACTION_DROP:
+		dev_dbg(dev, "Action: DPSW_ACL_ACTION_DROP\n");
+		break;
+	case DPSW_ACL_ACTION_REDIRECT:
+		dev_dbg(dev, "Action: DPSW_ACL_ACTION_REDIRECT to egress of %s (dpsw.%d.%d)\n",
+			netdev_name(ethsw->ports[dpsw_act->if_id]->netdev),
+			ethsw->dev_id, dpsw_act->if_id);
+		break;
+	default:
+		break;
+	}
+}
+
 static int dpaa2_switch_flower_parse_key(struct tc_cls_flower_offload *cls,
 					 struct dpsw_acl_key *acl_key)
 {
@@ -268,7 +327,11 @@ dpaa2_switch_acl_entry_set_precedence(struct dpaa2_switch_acl_tbl *acl_tbl,
 				      struct dpaa2_switch_acl_entry *entry,
 				      int precedence)
 {
+	struct device *dev = acl_tbl->ethsw->dev;
 	int err;
+
+	dev_dbg(dev, "Changing rule (cookie %lu, prio %u) to have precedence %d\n",
+		entry->cookie, entry->prio, precedence);
 
 	err = dpaa2_switch_acl_entry_remove(acl_tbl, entry);
 	if (err)
@@ -281,6 +344,7 @@ dpaa2_switch_acl_entry_set_precedence(struct dpaa2_switch_acl_tbl *acl_tbl,
 static int dpaa2_switch_acl_tbl_add_entry(struct dpaa2_switch_acl_tbl *acl_tbl,
 					  struct dpaa2_switch_acl_entry *entry)
 {
+	struct device *dev = acl_tbl->ethsw->dev;
 	struct dpaa2_switch_acl_entry *tmp;
 	int index, i, precedence, err;
 
@@ -306,6 +370,9 @@ static int dpaa2_switch_acl_tbl_add_entry(struct dpaa2_switch_acl_tbl *acl_tbl,
 	entry->cfg.precedence = precedence;
 	err = dpaa2_switch_acl_entry_add(acl_tbl, entry);
 	acl_tbl->num_rules++;
+
+	dev_dbg(dev, "Setting rule (cookie %lu, prio %u) to have precedence %d\n",
+		entry->cookie, entry->prio, entry->cfg.precedence);
 
 	return err;
 }
@@ -413,6 +480,9 @@ int dpaa2_switch_cls_flower_replace(struct dpaa2_switch_acl_tbl *acl_tbl,
 	struct tc_action *act;
 	int err;
 
+	dev_dbg(ethsw->dev, "Adding rule (cookie %lu, prio %u) into ACL tbl #%d\n",
+		cls->cookie, cls->common.prio, acl_tbl->id);
+
 	if (!tcf_exts_has_one_action(cls->exts)) {
 		NL_SET_ERR_MSG(extack, "Only singular actions are supported");
 		return -EOPNOTSUPP;
@@ -458,6 +528,9 @@ int dpaa2_switch_cls_flower_destroy(struct dpaa2_switch_acl_tbl *acl_tbl,
 {
 	struct device *dev = acl_tbl->ethsw->dev;
 	struct dpaa2_switch_acl_entry *entry;
+
+	dev_dbg(dev, "Removing rule (cookie %lu, prio %u) from ACL tbl #%d\n",
+		cls->cookie, cls->common.prio, acl_tbl->id);
 
 	entry = dpaa2_switch_acl_tbl_find_entry_by_cookie(acl_tbl, cls->cookie);
 	if (!entry)

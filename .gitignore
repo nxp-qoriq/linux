@@ -10,6 +10,7 @@
 # Normal rules (sorted alphabetically)
 #
 .*
+*.mod
 *.a
 *.asn1.[ch]
 *.bin

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright 2014-2016 Freescale Semiconductor Inc.
- * Copyright 2017-2018 NXP
+ * Copyright 2017-2018, 2020, 2021, 2023 NXP
  *
  */
 
@@ -1213,4 +1213,335 @@ int dpsw_get_api_version(struct fsl_mc_io *mc_io,
 	*minor_ver = le16_to_cpu(rsp_params->version_minor);
 
 	return 0;
+}
+
+/**
+ * dpsw_if_get_port_mac_addr()
+ * @mc_io:	Pointer to MC portal's I/O object
+ * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
+ * @token:	Token of DPSW object
+ * @if_id:	Interface Identifier
+ * @mac_addr:	MAC address of the physical port, if any, otherwise 0
+ *
+ * Return:	Completion status. '0' on Success; Error code otherwise.
+ */
+int dpsw_if_get_port_mac_addr(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
+			      u16 if_id, u8 mac_addr[6])
+{
+	struct dpsw_rsp_if_get_mac_addr *rsp_params;
+	struct fsl_mc_command cmd = { 0 };
+	struct dpsw_cmd_if *cmd_params;
+	int err, i;
+
+	/* prepare command */
+	cmd.header = mc_encode_cmd_header(DPSW_CMDID_IF_GET_PORT_MAC_ADDR,
+					  cmd_flags,
+					  token);
+	cmd_params = (struct dpsw_cmd_if *)cmd.params;
+	cmd_params->if_id = cpu_to_le16(if_id);
+
+	/* send command to mc*/
+	err = mc_send_command(mc_io, &cmd);
+	if (err)
+		return err;
+
+	/* retrieve response parameters */
+	rsp_params = (struct dpsw_rsp_if_get_mac_addr *)cmd.params;
+	for (i = 0; i < 6; i++)
+		mac_addr[5 - i] = rsp_params->mac_addr[i];
+
+	return 0;
+}
+
+/**
+ * dpsw_if_get_primary_mac_addr()
+ * @mc_io:	Pointer to MC portal's I/O object
+ * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
+ * @token:	Token of DPSW object
+ * @if_id:	Interface Identifier
+ * @mac_addr:	MAC address of the physical port, if any, otherwise 0
+ *
+ * Return:	Completion status. '0' on Success; Error code otherwise.
+ */
+int dpsw_if_get_primary_mac_addr(struct fsl_mc_io *mc_io, u32 cmd_flags,
+				 u16 token, u16 if_id, u8 mac_addr[6])
+{
+	struct dpsw_rsp_if_get_mac_addr *rsp_params;
+	struct fsl_mc_command cmd = { 0 };
+	struct dpsw_cmd_if *cmd_params;
+	int err, i;
+
+	/* prepare command */
+	cmd.header = mc_encode_cmd_header(DPSW_CMDID_IF_SET_PRIMARY_MAC_ADDR,
+					  cmd_flags,
+					  token);
+	cmd_params = (struct dpsw_cmd_if *)cmd.params;
+	cmd_params->if_id = cpu_to_le16(if_id);
+
+	/* send command to mc*/
+	err = mc_send_command(mc_io, &cmd);
+	if (err)
+		return err;
+
+	/* retrieve response parameters */
+	rsp_params = (struct dpsw_rsp_if_get_mac_addr *)cmd.params;
+	for (i = 0; i < 6; i++)
+		mac_addr[5 - i] = rsp_params->mac_addr[i];
+
+	return 0;
+}
+
+/**
+ * dpsw_if_set_primary_mac_addr()
+ * @mc_io:	Pointer to MC portal's I/O object
+ * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
+ * @token:	Token of DPSW object
+ * @if_id:	Interface Identifier
+ * @mac_addr:	MAC address of the physical port, if any, otherwise 0
+ *
+ * Return:	Completion status. '0' on Success; Error code otherwise.
+ */
+int dpsw_if_set_primary_mac_addr(struct fsl_mc_io *mc_io, u32 cmd_flags,
+				 u16 token, u16 if_id, u8 mac_addr[6])
+{
+	struct dpsw_cmd_if_set_mac_addr *cmd_params;
+	struct fsl_mc_command cmd = { 0 };
+	int i;
+
+	/* prepare command */
+	cmd.header = mc_encode_cmd_header(DPSW_CMDID_IF_SET_PRIMARY_MAC_ADDR,
+					  cmd_flags,
+					  token);
+	cmd_params = (struct dpsw_cmd_if_set_mac_addr *)cmd.params;
+	cmd_params->if_id = cpu_to_le16(if_id);
+	for (i = 0; i < 6; i++)
+		cmd_params->mac_addr[i] = mac_addr[5 - i];
+
+	/* send command to mc*/
+	return mc_send_command(mc_io, &cmd);
+}
+
+/**
+ * dpsw_acl_add() - Create an ACL table
+ * @mc_io:	Pointer to MC portal's I/O object
+ * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
+ * @token:	Token of DPSW object
+ * @acl_id:	Returned ACL ID, for future references
+ * @cfg:	ACL configuration
+ *
+ * Create Access Control List table. Multiple ACLs can be created and
+ * co-exist in L2 switch
+ *
+ * Return:	'0' on Success; Error code otherwise.
+ */
+int dpsw_acl_add(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token, u16 *acl_id,
+		 const struct dpsw_acl_cfg *cfg)
+{
+	struct dpsw_cmd_acl_add *cmd_params;
+	struct dpsw_rsp_acl_add *rsp_params;
+	struct fsl_mc_command cmd = { 0 };
+	int err;
+
+	cmd.header = mc_encode_cmd_header(DPSW_CMDID_ACL_ADD, cmd_flags, token);
+	cmd_params = (struct dpsw_cmd_acl_add *)cmd.params;
+	cmd_params->max_entries = cpu_to_le16(cfg->max_entries);
+
+	err = mc_send_command(mc_io, &cmd);
+	if (err)
+		return err;
+
+	rsp_params = (struct dpsw_rsp_acl_add *)cmd.params;
+	*acl_id = le16_to_cpu(rsp_params->acl_id);
+
+	return 0;
+}
+
+/**
+ * dpsw_acl_remove() - Remove an ACL table from L2 switch.
+ * @mc_io:	Pointer to MC portal's I/O object
+ * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
+ * @token:	Token of DPSW object
+ * @acl_id:	ACL ID
+ *
+ * Return:	'0' on Success; Error code otherwise.
+ */
+int dpsw_acl_remove(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
+		    u16 acl_id)
+{
+	struct dpsw_cmd_acl_remove *cmd_params;
+	struct fsl_mc_command cmd = { 0 };
+
+	cmd.header = mc_encode_cmd_header(DPSW_CMDID_ACL_REMOVE, cmd_flags,
+					  token);
+	cmd_params = (struct dpsw_cmd_acl_remove *)cmd.params;
+	cmd_params->acl_id = cpu_to_le16(acl_id);
+
+	return mc_send_command(mc_io, &cmd);
+}
+
+/**
+ * dpsw_acl_add_if() - Associate interface/interfaces with an ACL table.
+ * @mc_io:	Pointer to MC portal's I/O object
+ * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
+ * @token:	Token of DPSW object
+ * @acl_id:	ACL ID
+ * @cfg:	Interfaces list
+ *
+ * Return:	'0' on Success; Error code otherwise.
+ */
+int dpsw_acl_add_if(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
+		    u16 acl_id, const struct dpsw_acl_if_cfg *cfg)
+{
+	struct dpsw_cmd_acl_if *cmd_params;
+	struct fsl_mc_command cmd = { 0 };
+
+	cmd.header = mc_encode_cmd_header(DPSW_CMDID_ACL_ADD_IF, cmd_flags,
+					  token);
+	cmd_params = (struct dpsw_cmd_acl_if *)cmd.params;
+	cmd_params->acl_id = cpu_to_le16(acl_id);
+	cmd_params->num_ifs = cpu_to_le16(cfg->num_ifs);
+	build_if_id_bitmap(&cmd_params->if_id, cfg->if_id, cfg->num_ifs);
+
+	return mc_send_command(mc_io, &cmd);
+}
+
+/**
+ * dpsw_acl_remove_if() - De-associate interface/interfaces from an ACL table
+ * @mc_io:	Pointer to MC portal's I/O object
+ * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
+ * @token:	Token of DPSW object
+ * @acl_id:	ACL ID
+ * @cfg:	Interfaces list
+ *
+ * Return:	'0' on Success; Error code otherwise.
+ */
+int dpsw_acl_remove_if(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
+		       u16 acl_id, const struct dpsw_acl_if_cfg *cfg)
+{
+	struct dpsw_cmd_acl_if *cmd_params;
+	struct fsl_mc_command cmd = { 0 };
+
+	/* prepare command */
+	cmd.header = mc_encode_cmd_header(DPSW_CMDID_ACL_REMOVE_IF, cmd_flags,
+					  token);
+	cmd_params = (struct dpsw_cmd_acl_if *)cmd.params;
+	cmd_params->acl_id = cpu_to_le16(acl_id);
+	cmd_params->num_ifs = cpu_to_le16(cfg->num_ifs);
+	build_if_id_bitmap(&cmd_params->if_id, cfg->if_id, cfg->num_ifs);
+
+	/* send command to mc*/
+	return mc_send_command(mc_io, &cmd);
+}
+
+/**
+ * dpsw_acl_prepare_entry_cfg() - Setup an ACL entry
+ * @key:		Key
+ * @entry_cfg_buf:	Zeroed 256 bytes of memory before mapping it to DMA
+ *
+ * This function has to be called before adding or removing acl_entry
+ *
+ */
+void dpsw_acl_prepare_entry_cfg(const struct dpsw_acl_key *key,
+				u8 *entry_cfg_buf)
+{
+	struct dpsw_prep_acl_entry *ext_params;
+	int i;
+
+	ext_params = (struct dpsw_prep_acl_entry *)entry_cfg_buf;
+
+	for (i = 0; i < 6; i++) {
+		ext_params->match_l2_dest_mac[i] = key->match.l2_dest_mac[5 - i];
+		ext_params->match_l2_source_mac[i] = key->match.l2_source_mac[5 - i];
+		ext_params->mask_l2_dest_mac[i] = key->mask.l2_dest_mac[5 - i];
+		ext_params->mask_l2_source_mac[i] = key->mask.l2_source_mac[5 - i];
+	}
+
+	ext_params->match_l2_tpid = cpu_to_le16(key->match.l2_tpid);
+	ext_params->match_l2_vlan_id = cpu_to_le16(key->match.l2_vlan_id);
+	ext_params->match_l3_dest_ip = cpu_to_le32(key->match.l3_dest_ip);
+	ext_params->match_l3_source_ip = cpu_to_le32(key->match.l3_source_ip);
+	ext_params->match_l4_dest_port = cpu_to_le16(key->match.l4_dest_port);
+	ext_params->match_l4_source_port = cpu_to_le16(key->match.l4_source_port);
+	ext_params->match_l2_ether_type = cpu_to_le16(key->match.l2_ether_type);
+	ext_params->match_l2_pcp_dei = key->match.l2_pcp_dei;
+	ext_params->match_l3_dscp = key->match.l3_dscp;
+
+	ext_params->mask_l2_tpid = cpu_to_le16(key->mask.l2_tpid);
+	ext_params->mask_l2_vlan_id = cpu_to_le16(key->mask.l2_vlan_id);
+	ext_params->mask_l3_dest_ip = cpu_to_le32(key->mask.l3_dest_ip);
+	ext_params->mask_l3_source_ip = cpu_to_le32(key->mask.l3_source_ip);
+	ext_params->mask_l4_dest_port = cpu_to_le16(key->mask.l4_dest_port);
+	ext_params->mask_l4_source_port = cpu_to_le16(key->mask.l4_source_port);
+	ext_params->mask_l2_ether_type = cpu_to_le16(key->mask.l2_ether_type);
+	ext_params->mask_l2_pcp_dei = key->mask.l2_pcp_dei;
+	ext_params->mask_l3_dscp = key->mask.l3_dscp;
+	ext_params->match_l3_protocol = key->match.l3_protocol;
+	ext_params->mask_l3_protocol = key->mask.l3_protocol;
+}
+
+/**
+ * dpsw_acl_add_entry() - Add a rule to the ACL table.
+ * @mc_io:	Pointer to MC portal's I/O object
+ * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
+ * @token:	Token of DPSW object
+ * @acl_id:	ACL ID
+ * @cfg:	Entry configuration
+ *
+ * warning: This function has to be called after dpsw_acl_prepare_entry_cfg()
+ *
+ * Return:	'0' on Success; Error code otherwise.
+ */
+int dpsw_acl_add_entry(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
+		       u16 acl_id, const struct dpsw_acl_entry_cfg *cfg)
+{
+	struct dpsw_cmd_acl_entry *cmd_params;
+	struct fsl_mc_command cmd = { 0 };
+
+	cmd.header = mc_encode_cmd_header(DPSW_CMDID_ACL_ADD_ENTRY, cmd_flags,
+					  token);
+	cmd_params = (struct dpsw_cmd_acl_entry *)cmd.params;
+	cmd_params->acl_id = cpu_to_le16(acl_id);
+	cmd_params->result_if_id = cpu_to_le16(cfg->result.if_id);
+	cmd_params->precedence = cpu_to_le32(cfg->precedence);
+	cmd_params->key_iova = cpu_to_le64(cfg->key_iova);
+	dpsw_set_field(cmd_params->result_action,
+		       RESULT_ACTION,
+		       cfg->result.action);
+
+	return mc_send_command(mc_io, &cmd);
+}
+
+/**
+ * dpsw_acl_remove_entry() - Removes an entry from ACL.
+ * @mc_io:	Pointer to MC portal's I/O object
+ * @cmd_flags:	Command flags; one or more of 'MC_CMD_FLAG_'
+ * @token:	Token of DPSW object
+ * @acl_id:	ACL ID
+ * @cfg:	Entry configuration
+ *
+ * warning: This function has to be called after dpsw_acl_set_entry_cfg()
+ *
+ * Return:	'0' on Success; Error code otherwise.
+ */
+int dpsw_acl_remove_entry(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
+			  u16 acl_id, const struct dpsw_acl_entry_cfg *cfg)
+{
+	struct dpsw_cmd_acl_entry *cmd_params;
+	struct fsl_mc_command cmd = { 0 };
+
+	/* prepare command */
+	cmd.header = mc_encode_cmd_header(DPSW_CMDID_ACL_REMOVE_ENTRY,
+					  cmd_flags,
+					  token);
+	cmd_params = (struct dpsw_cmd_acl_entry *)cmd.params;
+	cmd_params->acl_id = cpu_to_le16(acl_id);
+	cmd_params->result_if_id = cpu_to_le16(cfg->result.if_id);
+	cmd_params->precedence = cpu_to_le32(cfg->precedence);
+	cmd_params->key_iova = cpu_to_le64(cfg->key_iova);
+	dpsw_set_field(cmd_params->result_action,
+		       RESULT_ACTION,
+		       cfg->result.action);
+
+	/* send command to mc*/
+	return mc_send_command(mc_io, &cmd);
 }

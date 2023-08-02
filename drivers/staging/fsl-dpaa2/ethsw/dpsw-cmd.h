@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright 2014-2016 Freescale Semiconductor Inc.
- * Copyright 2017-2018 NXP
+ * Copyright 2017-2018, 2020, 2021, 2023 NXP
  *
  */
 
@@ -68,6 +68,17 @@
 #define DPSW_CMDID_FDB_REMOVE_MULTICAST     DPSW_CMD_ID(0x087)
 #define DPSW_CMDID_FDB_SET_LEARNING_MODE    DPSW_CMD_ID(0x088)
 #define DPSW_CMDID_FDB_DUMP                 DPSW_CMD_ID(0x08A)
+
+#define DPSW_CMDID_IF_GET_PORT_MAC_ADDR     DPSW_CMD_ID(0x0A7)
+#define DPSW_CMDID_IF_GET_PRIMARY_MAC_ADDR  DPSW_CMD_ID(0x0A8)
+#define DPSW_CMDID_IF_SET_PRIMARY_MAC_ADDR  DPSW_CMD_ID(0x0A9)
+
+#define DPSW_CMDID_ACL_ADD                  DPSW_CMD_ID(0x090)
+#define DPSW_CMDID_ACL_REMOVE               DPSW_CMD_ID(0x091)
+#define DPSW_CMDID_ACL_ADD_ENTRY            DPSW_CMD_ID(0x092)
+#define DPSW_CMDID_ACL_REMOVE_ENTRY         DPSW_CMD_ID(0x093)
+#define DPSW_CMDID_ACL_ADD_IF               DPSW_CMD_ID(0x094)
+#define DPSW_CMDID_ACL_REMOVE_IF            DPSW_CMD_ID(0x095)
 
 /* Macros for accessing command fields smaller than 1byte */
 #define DPSW_MASK(field)        \
@@ -367,6 +378,85 @@ struct dpsw_rsp_fdb_dump {
 struct dpsw_rsp_get_api_version {
 	__le16 version_major;
 	__le16 version_minor;
+};
+
+struct dpsw_rsp_if_get_mac_addr {
+	__le16 pad;
+	u8 mac_addr[6];
+};
+
+struct dpsw_cmd_if_set_mac_addr {
+	__le16 if_id;
+	u8 mac_addr[6];
+};
+
+struct dpsw_cmd_acl_add {
+	__le16 pad;
+	__le16 max_entries;
+};
+
+struct dpsw_rsp_acl_add {
+	__le16 acl_id;
+};
+
+struct dpsw_cmd_acl_remove {
+	__le16 acl_id;
+};
+
+struct dpsw_cmd_acl_if {
+	__le16 acl_id;
+	__le16 num_ifs;
+	__le32 pad;
+	__le64 if_id;
+};
+
+struct dpsw_prep_acl_entry {
+	u8 match_l2_dest_mac[6];
+	__le16 match_l2_tpid;
+
+	u8 match_l2_source_mac[6];
+	__le16 match_l2_vlan_id;
+
+	__le32 match_l3_dest_ip;
+	__le32 match_l3_source_ip;
+
+	__le16 match_l4_dest_port;
+	__le16 match_l4_source_port;
+	__le16 match_l2_ether_type;
+	u8 match_l2_pcp_dei;
+	u8 match_l3_dscp;
+
+	u8 mask_l2_dest_mac[6];
+	__le16 mask_l2_tpid;
+
+	u8 mask_l2_source_mac[6];
+	__le16 mask_l2_vlan_id;
+
+	__le32 mask_l3_dest_ip;
+	__le32 mask_l3_source_ip;
+
+	__le16 mask_l4_dest_port;
+	__le16 mask_l4_source_port;
+	__le16 mask_l2_ether_type;
+	u8 mask_l2_pcp_dei;
+	u8 mask_l3_dscp;
+
+	u8 match_l3_protocol;
+	u8 mask_l3_protocol;
+};
+
+#define DPSW_RESULT_ACTION_SHIFT	0
+#define DPSW_RESULT_ACTION_SIZE		4
+
+struct dpsw_cmd_acl_entry {
+	__le16 acl_id;
+	__le16 result_if_id;
+	__le32 precedence;
+	/* from LSB only the first 4 bits */
+	u8 result_action;
+	u8 pad[7];
+	__le64 pad2[4];
+	__le64 key_iova;
 };
 
 #endif /* __FSL_DPSW_CMD_H */

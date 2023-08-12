@@ -12,6 +12,7 @@
 #include <linux/iio/iio.h>
 #include <linux/iio/iio-opaque.h>
 #include "iio_core.h"
+#include <linux/iio/buffer_impl.h>
 #include <linux/iio/machine.h>
 #include <linux/iio/driver.h>
 #include <linux/iio/consumer.h>
@@ -161,6 +162,7 @@ static int __of_iio_channel_get(struct iio_channel *channel,
 	if (index < 0)
 		goto err_put;
 	channel->channel = &indio_dev->channels[index];
+	channel->channel_index = index;
 
 	return 0;
 
@@ -578,50 +580,28 @@ EXPORT_SYMBOL_GPL(iio_read_channel_average_raw);
 static int iio_convert_raw_to_processed_unlocked(struct iio_channel *chan,
 	int raw, int *processed, unsigned int scale)
 {
-	int scale_type, scale_val, scale_val2;
-	int offset_type, offset_val, offset_val2;
+	int scale_type, scale_val, scale_val2, offset;
 	s64 raw64 = raw;
+	int ret;
 
-	offset_type = iio_channel_read(chan, &offset_val, &offset_val2,
-				       IIO_CHAN_INFO_OFFSET);
-	if (offset_type >= 0) {
-		switch (offset_type) {
-		case IIO_VAL_INT:
-			break;
-		case IIO_VAL_INT_PLUS_MICRO:
-		case IIO_VAL_INT_PLUS_NANO:
-			/*
-			 * Both IIO_VAL_INT_PLUS_MICRO and IIO_VAL_INT_PLUS_NANO
-			 * implicitely truncate the offset to it's integer form.
-			 */
-			break;
-		case IIO_VAL_FRACTIONAL:
-			offset_val /= offset_val2;
-			break;
-		case IIO_VAL_FRACTIONAL_LOG2:
-			offset_val >>= offset_val2;
-			break;
-		default:
-			return -EINVAL;
-		}
-
-		raw64 += offset_val;
-	}
+	ret = iio_channel_read(chan, &offset, NULL, IIO_CHAN_INFO_OFFSET);
+	if (ret >= 0)
+		raw64 += offset;
 
 	scale_type = iio_channel_read(chan, &scale_val, &scale_val2,
 					IIO_CHAN_INFO_SCALE);
 	if (scale_type < 0) {
 		/*
-		 * If no channel scaling is available apply consumer scale to
-		 * raw value and return.
+		 * Just pass raw values as processed if no scaling is
+		 * available.
 		 */
-		*processed = raw * scale;
+		*processed = raw;
 		return 0;
 	}
 
 	switch (scale_type) {
 	case IIO_VAL_INT:
-		*processed = raw64 * scale_val * scale;
+		*processed = raw64 * scale_val;
 		break;
 	case IIO_VAL_INT_PLUS_MICRO:
 		if (scale_val2 < 0)
@@ -914,6 +894,34 @@ int iio_write_channel_raw(struct iio_channel *chan, int val)
 	return iio_write_channel_attribute(chan, val, 0, IIO_CHAN_INFO_RAW);
 }
 EXPORT_SYMBOL_GPL(iio_write_channel_raw);
+
+void iio_buffer_channel_enable(struct iio_buffer *buffer,
+	const struct iio_channel *chan)
+{
+	unsigned int ch;
+
+	set_bit(chan->channel_index, buffer->channel_mask);
+
+	memset(buffer->scan_mask, 0,
+	       BITS_TO_LONGS(chan->indio_dev->masklength) * sizeof(*buffer->scan_mask));
+	for_each_set_bit(ch, buffer->channel_mask, chan->indio_dev->num_channels)
+		set_bit(chan->indio_dev->channels[ch].scan_index, buffer->scan_mask);
+}
+EXPORT_SYMBOL(iio_buffer_channel_enable);
+
+void iio_buffer_channel_disable(struct iio_buffer *buffer,
+	const struct iio_channel *chan)
+{
+	unsigned int ch;
+
+	clear_bit(chan->channel_index, buffer->channel_mask);
+
+	memset(buffer->scan_mask, 0,
+	       BITS_TO_LONGS(chan->indio_dev->masklength) * sizeof(*buffer->scan_mask));
+	for_each_set_bit(ch, buffer->channel_mask, chan->indio_dev->num_channels)
+		set_bit(chan->indio_dev->channels[ch].scan_index, buffer->scan_mask);
+}
+EXPORT_SYMBOL(iio_buffer_channel_disable);
 
 unsigned int iio_get_channel_ext_info_count(struct iio_channel *chan)
 {

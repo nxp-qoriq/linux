@@ -1,0 +1,31 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2023 NXP
+ */
+
+/dts-v1/;
+
+#include "imx93-9x9-qsb.dts"
+
+/ {
+	model = "NXP i.MX93 9X9 QSB board - Baremetal";
+
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		bm_reserved: baremetal@b0000000 {
+			no-map;
+			reg = <0 0xb0000000 0 0x10000000>;
+		};
+	};
+};
+
+&fec {
+	status = "disabled";
+};
+
+&lpuart2 {
+	status = "disabled";
+};

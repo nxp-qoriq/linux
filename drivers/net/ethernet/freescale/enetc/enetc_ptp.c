@@ -10,6 +10,19 @@
 int enetc_phc_index = -1;
 EXPORT_SYMBOL_GPL(enetc_phc_index);
 
+int ptp_enetc_settime(struct ptp_clock_info *ptp, const struct timespec64 *ts)
+{
+	int ret;
+
+	ret = ptp_qoriq_settime(ptp, ts);
+	if (ret)
+		return ret;
+
+	enetc_ptp_clock_update();
+
+	return ret;
+}
+
 static struct ptp_clock_info enetc_ptp_caps = {
 	.owner		= THIS_MODULE,
 	.name		= "ENETC PTP clock",
@@ -22,7 +35,7 @@ static struct ptp_clock_info enetc_ptp_caps = {
 	.adjfine	= ptp_qoriq_adjfine,
 	.adjtime	= ptp_qoriq_adjtime,
 	.gettime64	= ptp_qoriq_gettime,
-	.settime64	= ptp_qoriq_settime,
+	.settime64	= ptp_enetc_settime,
 	.enable		= ptp_qoriq_enable,
 };
 

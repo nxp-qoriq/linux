@@ -5,6 +5,13 @@
 
 #include <net/tsn.h>
 
+struct netdev_list_entry {
+	struct list_head list;
+	struct net_device *dev;
+};
+
+static struct list_head netdev_list = {0};
+
 static int alloc_cbdr(struct enetc_si *si, struct enetc_cbd **curr_cbd)
 {
 	struct enetc_cbdr *ring = &si->cbd_ring;
@@ -86,8 +93,8 @@ static int enetc_qbv_get(struct net_device *ndev,
 {
 	struct tsn_qbv_basic *admin_basic = &admin_conf->admin;
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	u16 data_size, admin_len, oper_len, maxlen;
 	struct enetc_hw *hw = &priv->si->hw;
-	u16 data_size, admin_len, maxlen;
 	struct tgs_gcl_query *gcl_query;
 	struct tgs_gcl_resp *gcl_data;
 	struct enetc_cbd *cbdr;
@@ -120,6 +127,7 @@ static int enetc_qbv_get(struct net_device *ndev,
 	gce = (struct gce *)(gcl_data + 1);
 
 	gcl_query->acl_len = cpu_to_le16(maxlen);
+	gcl_query->ocl_len = cpu_to_le16(maxlen);
 
 	dma_size = cpu_to_le16(data_size);
 	cbdr->length = dma_size;
@@ -142,8 +150,12 @@ static int enetc_qbv_get(struct net_device *ndev,
 
 	/* since cbdr already passed to free, below could be get wrong */
 	admin_len = le16_to_cpu(gcl_query->admin_list_len);
+	oper_len = le16_to_cpu(gcl_query->oper_list_len);
 
-	admin_basic->control_list_length = admin_len;
+	if (!admin_len)
+		admin_basic->control_list_length = oper_len;
+	else
+		admin_basic->control_list_length = admin_len;
 
 	temp = ((u64)le32_to_cpu(gcl_data->abth)) << 32;
 	admin_basic->base_time = le32_to_cpu(gcl_data->abtl) + temp;
@@ -151,7 +163,7 @@ static int enetc_qbv_get(struct net_device *ndev,
 	admin_basic->cycle_time = le32_to_cpu(gcl_data->act);
 	admin_basic->cycle_time_extension = le32_to_cpu(gcl_data->acte);
 
-	admin_basic->control_list = kcalloc(admin_len,
+	admin_basic->control_list = kcalloc(admin_basic->control_list_length,
 					    sizeof(*admin_basic->control_list),
 					    GFP_KERNEL);
 	if (!admin_basic->control_list) {
@@ -160,9 +172,14 @@ static int enetc_qbv_get(struct net_device *ndev,
 		return -ENOMEM;
 	}
 
-	for (i = 0; i < admin_len; i++) {
-		struct gce *temp_gce = gce + i;
+	for (i = 0; i < admin_basic->control_list_length; i++) {
+		struct gce *temp_gce;
 		struct tsn_qbv_entry *temp_entry;
+
+		if (!admin_len)
+			temp_gce = gce + maxlen + i;
+		else
+			temp_gce = gce + i;
 
 		temp_entry = admin_basic->control_list + i;
 
@@ -296,6 +313,120 @@ exit:
 	memset(cbdr, 0, sizeof(*cbdr));
 	kfree(gcl_data);
 	return 0;
+}
+
+static int enetc_qbv_gcl_reset(struct net_device *ndev,
+			       struct tsn_qbv_conf *admin_conf)
+{
+	struct tsn_qbv_basic *admin_basic = &admin_conf->admin;
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_hw *hw = &priv->si->hw;
+	struct tgs_gcl_conf *gcl_config;
+	struct tgs_gcl_data *gcl_data;
+	struct enetc_cbd *cbdr;
+	struct gce *gce;
+	dma_addr_t dma;
+	u16 data_size;
+	int curr_cbd;
+	u16 gcl_len;
+	u32 temp;
+	int i;
+
+	gcl_len = admin_basic->control_list_length;
+	if (gcl_len > enetc_get_max_gcl_len(hw))
+		return -EINVAL;
+
+	temp = enetc_rd(hw, ENETC_PTGCR);
+	if (admin_conf->gate_enabled) {
+		enetc_wr(hw, ENETC_PTGCR, temp & ~ENETC_PTGCR_TGE);
+		usleep_range(10, 20);
+		enetc_wr(hw, ENETC_PTGCR, temp | ENETC_PTGCR_TGE);
+	} else if (!admin_conf->gate_enabled) {
+		return 0;
+	}
+
+	/* Configure the (administrative) gate control list using the
+	 * control BD descriptor.
+	 */
+	curr_cbd = alloc_cbdr(priv->si, &cbdr);
+
+	gcl_config = &cbdr->gcl_conf;
+
+	data_size = struct_size(gcl_data, entry, gcl_len);
+
+	gcl_data = kzalloc(data_size, __GFP_DMA | GFP_KERNEL);
+	if (!gcl_data)
+		return -ENOMEM;
+
+	gce = &gcl_data->entry[0];
+
+	gcl_config->atc = admin_basic->gate_states;
+	gcl_config->acl_len = cpu_to_le16(gcl_len);
+
+	gcl_data->btl = cpu_to_le32(lower_32_bits(admin_basic->base_time));
+	gcl_data->bth = cpu_to_le32(upper_32_bits(admin_basic->base_time));
+
+	gcl_data->ct = cpu_to_le32(admin_basic->cycle_time);
+	gcl_data->cte = cpu_to_le32(admin_basic->cycle_time_extension);
+
+	for (i = 0; i < gcl_len; i++) {
+		struct gce *temp_gce = gce + i;
+		struct tsn_qbv_entry *temp_entry;
+
+		temp_entry = admin_basic->control_list + i;
+
+		temp_gce->gate = temp_entry->gate_state;
+		temp_gce->period = cpu_to_le32(temp_entry->time_interval);
+	}
+
+	cbdr->length = cpu_to_le16(data_size);
+	cbdr->status_flags = 0;
+
+	dma = dma_map_single(&priv->si->pdev->dev, gcl_data,
+			     data_size, DMA_TO_DEVICE);
+	if (dma_mapping_error(&priv->si->pdev->dev, dma)) {
+		netdev_err(priv->si->ndev, "DMA mapping failed!\n");
+		kfree(gcl_data);
+		return -ENOMEM;
+	}
+
+	cbdr->addr[0] = cpu_to_le32(lower_32_bits(dma));
+	cbdr->addr[1] = cpu_to_le32(upper_32_bits(dma));
+	cbdr->cmd = 0;
+	cbdr->cls = BDCR_CMD_PORT_GCL;
+
+	/* Updated by ENETC on completion of the configuration
+	 * command. A zero value indicates success.
+	 */
+	cbdr->status_flags = 0;
+
+	xmit_cbdr(priv->si, curr_cbd);
+
+	memset(cbdr, 0, sizeof(struct enetc_cbd));
+	dma_unmap_single(&priv->si->pdev->dev, dma, data_size, DMA_TO_DEVICE);
+	kfree(gcl_data);
+
+	return 0;
+}
+
+static int enetc_est_reset(struct net_device *ndev)
+{
+	struct tsn_qbv_conf admin_conf = {0};
+	int ret;
+
+	ret = enetc_qbv_get(ndev, &admin_conf);
+	if (ret)
+		return ret;
+
+	return enetc_qbv_gcl_reset(ndev, &admin_conf);
+}
+
+void enetc_ptp_clock_update()
+{
+	struct netdev_list_entry *entry;
+
+	list_for_each_entry(entry, &netdev_list, list)
+		enetc_est_reset(entry->dev);
 }
 
 /* CBD Class 7: Stream Identity Entry Set Descriptor - Long Format */
@@ -1742,6 +1873,33 @@ static const struct tsn_ops enetc_tsn_ops_part = {
 	.qci_fmi_get = enetc_qci_fmi_get,
 };
 
+static void enetc_tsn_netdev_list_add(struct net_device *ndev)
+{
+	struct netdev_list_entry *entry;
+
+	entry = kzalloc(sizeof(*entry), GFP_KERNEL);
+	if (!entry)
+		return;
+
+	entry->dev = ndev;
+
+	if (!netdev_list.next)
+		INIT_LIST_HEAD(&netdev_list);
+
+	list_add_tail(&entry->list, &netdev_list);
+}
+
+static void enetc_tsn_netdev_list_del(struct net_device *ndev)
+{
+	struct netdev_list_entry *tmp, *n;
+
+	list_for_each_entry_safe(tmp, n, &netdev_list, list)
+		if (tmp->dev == ndev) {
+			list_del(&tmp->list);
+			kfree(tmp);
+		}
+}
+
 void enetc_tsn_pf_init(struct net_device *netdev, struct pci_dev *pdev)
 {
 	int port = pdev->devfn & 0x7;
@@ -1752,9 +1910,12 @@ void enetc_tsn_pf_init(struct net_device *netdev, struct pci_dev *pdev)
 	else
 		tsn_port_register(netdev, &enetc_tsn_ops_full,
 				  (u16)pdev->bus->number);
+
+	enetc_tsn_netdev_list_add(netdev);
 }
 
 void enetc_tsn_pf_deinit(struct net_device *netdev)
 {
 	tsn_port_unregister(netdev);
+	enetc_tsn_netdev_list_del(netdev);
 }

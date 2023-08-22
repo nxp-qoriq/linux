@@ -101,6 +101,7 @@ struct spi_imx_data {
 
 	unsigned int bits_per_word;
 	unsigned int spi_drctl;
+	unsigned int csd_ctl;
 
 	unsigned int count, remainder;
 	void (*tx)(struct spi_imx_data *);
@@ -285,6 +286,11 @@ static bool spi_imx_can_dma(struct spi_master *master, struct spi_device *spi,
 
 #define MX51_ECSPI_STAT		0x18
 #define MX51_ECSPI_STAT_RR		(1 <<  3)
+
+#define MX51_ECSPI_PERIODREG   0x1C
+#define MX51_ECSPI_PERIODREG_SAMPLEPERIOD(period)      ((period) & 0x7FFF)
+#define MX51_ECSPI_PERIODREG_CSRC                      BIT(15)
+#define MX51_ECSPI_PERIODREG_CSDCTL(csd)               (((csd) & 0x3f) << 16)
 
 #define MX51_ECSPI_TESTREG	0x20
 #define MX51_ECSPI_TESTREG_LBC	BIT(31)
@@ -584,7 +590,7 @@ static int mx51_ecspi_prepare_message(struct spi_imx_data *spi_imx,
 	struct spi_transfer *xfer;
 	u32 ctrl = MX51_ECSPI_CTRL_ENABLE;
 	u32 min_speed_hz = ~0U;
-	u32 testreg, delay;
+	u32 testreg, delay, period;
 	u32 cfg = readl(spi_imx->base + MX51_ECSPI_CONFIG);
 
 	/* set Master or Slave mode */
@@ -614,7 +620,13 @@ static int mx51_ecspi_prepare_message(struct spi_imx_data *spi_imx,
 	else
 		testreg &= ~MX51_ECSPI_TESTREG_LBC;
 	writel(testreg, spi_imx->base + MX51_ECSPI_TESTREG);
-
+	if (of_machine_is_compatible("fsl,imx8mp-rfnm")) {
+	    /* set chip select delay */
+	    period = readl(spi_imx->base + MX51_ECSPI_PERIODREG);
+	    period &= MX51_ECSPI_PERIODREG_CSDCTL(0x3f);
+	    period |= MX51_ECSPI_PERIODREG_CSDCTL(spi_imx->csd_ctl);
+	    writel(period, spi_imx->base + MX51_ECSPI_PERIODREG);
+	}
 	/*
 	 * eCSPI burst completion by Chip Select signal in Slave mode
 	 * is not functional for imx53 Soc, config SPI burst completed when
@@ -1738,7 +1750,7 @@ static int spi_imx_probe(struct platform_device *pdev)
 	struct spi_master *master;
 	struct spi_imx_data *spi_imx;
 	struct resource *res;
-	int ret, irq, spi_drctl;
+	int ret, irq, spi_drctl, csd_ctl;
 	const struct spi_imx_devtype_data *devtype_data =
 			of_device_get_match_data(&pdev->dev);
 	bool slave_mode;
@@ -1760,6 +1772,14 @@ static int spi_imx_probe(struct platform_device *pdev)
 		/* '11' is reserved */
 		spi_drctl = 0;
 	}
+
+    ret = of_property_read_u32(np, "fsl,spi-csd-ctl", &csd_ctl);
+    if ((ret < 0) || (csd_ctl >= 0x63)) {
+            /* '63' is maximum */
+            csd_ctl = 0;
+    }
+
+    printk("Delaying spi clock from CS by %d clocks\n", csd_ctl);
 
 	platform_set_drvdata(pdev, master);
 
@@ -1809,6 +1829,7 @@ static int spi_imx_probe(struct platform_device *pdev)
 		spi_imx->bitbang.master->mode_bits |= SPI_CS_WORD;
 
 	spi_imx->spi_drctl = spi_drctl;
+	spi_imx->csd_ctl = csd_ctl;
 
 	init_completion(&spi_imx->xfer_done);
 

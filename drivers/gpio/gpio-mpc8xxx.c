@@ -3,6 +3,7 @@
  *
  * Copyright (C) 2008 Peter Korsgaard <jacmet@sunsite.dk>
  * Copyright (C) 2016 Freescale Semiconductor Inc.
+ * Copyright 2023 NXP
  *
  * This file is licensed under the terms of the GNU General Public License
  * version 2.  This program is licensed "as is" without any warranty of any
@@ -325,6 +326,18 @@ static const struct of_device_id mpc8xxx_gpio_ids[] = {
 	{}
 };
 
+static cpumask_var_t gpio_affinity;
+static int do_gpio_affinity;
+
+static int __init gpio_affinity_setup(char *str)
+{
+	zalloc_cpumask_var(&gpio_affinity, GFP_NOWAIT);
+	cpulist_parse(str, gpio_affinity);
+	do_gpio_affinity = 1;
+	return 1;
+}
+__setup("gpio_affinity=", gpio_affinity_setup);
+
 static int mpc8xxx_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
@@ -422,6 +435,13 @@ static int mpc8xxx_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "%s: failed to devm_request_irq(%d), ret = %d\n",
 			np->full_name, mpc8xxx_gc->irqn, ret);
 		goto err;
+	}
+	if (do_gpio_affinity) {
+		ret = irq_set_affinity(mpc8xxx_gc->irqn,
+				cpumask_of(cpumask_any(gpio_affinity)));
+		if (ret)
+			pr_err("%s:irq_set_affinity() failed, ret= %d\n",
+						__func__, ret);
 	}
 
 	return 0;

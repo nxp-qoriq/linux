@@ -886,10 +886,21 @@ static void __tick_nohz_full_update_tick(struct tick_sched *ts,
 #ifdef CONFIG_NO_HZ_FULL
 	int cpu = smp_processor_id();
 
-	if (can_stop_full_tick(cpu, ts))
+	if (likely(can_stop_full_tick(cpu, ts)))
 		tick_nohz_stop_sched_tick(ts, cpu);
-	else if (ts->tick_stopped)
-		tick_nohz_restart_sched_tick(ts, now);
+	else if (ts->tick_stopped) {
+		/* Only restart ticks if task tick dependecy is set along with SCHED event */
+		int val = atomic_read(&ts->tick_dep_mask);
+		if ((val & TICK_DEP_MASK_SCHED) && !atomic_read(&current->tick_dep_mask)) {
+		//	printk("%s: ----- SKIPPING RESTARTING TICK----\n",__func__);
+		//	dump_stack();
+		//	printk("-- inidle=%d idle_active=%d got_idle_tick=%d --\n",ts->inidle, ts->idle_active, ts->got_idle_tick);
+		//	printk("-- task cpu=%d task->tick_dep_mask=%d --\n",current->cpu, atomic_read(&current->tick_dep_mask));
+		} else {
+		//	printk("%s: ----- RESTARTING TICK----\n",__func__);
+			tick_nohz_restart_sched_tick(ts, now);
+		}
+	}
 #endif
 }
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright 2019 NXP
+ * Copyright 2019,2023 NXP
  */
 
 #include <linux/slab.h>
@@ -15,6 +15,7 @@
 #include <linux/module.h>
 #include <linux/notifier.h>
 #include <linux/of_device.h>
+#include <linux/of_address.h>
 #include <linux/of_reserved_mem.h>
 #include <linux/platform_device.h>
 #include <linux/virtio_config.h>
@@ -163,8 +164,12 @@ static struct virtqueue *rp_find_vq(struct virtio_device *vdev,
 		return ERR_PTR(-ENOMEM);
 
 	/* ioremap'ing normal memory, so we cast away sparse's complaints */
-	rpvq->addr = (__force void *) ioremap(virdev->vring[index],
-							RPMSG_RING_SIZE);
+	if (of_dma_is_coherent(dev->of_node))
+		rpvq->addr = (__force void *)ioremap_cache(virdev->vring[index],
+							   RPMSG_RING_SIZE);
+	else
+		rpvq->addr = (__force void *)ioremap(virdev->vring[index],
+						     RPMSG_RING_SIZE);
 	if (!rpvq->addr) {
 		err = -ENOMEM;
 		goto free_rpvq;

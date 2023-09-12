@@ -26,6 +26,7 @@
 	rpmsg-ca53 {
 		compatible = "fsl,imx8mm-rpmsg";
 		reg = <0x0 0xb8600000 0x0 0x10000>; /* 64K for one rpmsg instance */
+		dma-coherent;
 		memory-region = <&vdevbuffer_ca53>;
 		mbox-names = "tx", "rx", "rxdb";
 		mboxes = <&gen_sw_mbox 0 0

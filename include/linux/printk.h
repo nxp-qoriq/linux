@@ -168,6 +168,10 @@ int vprintk_emit(int facility, int level,
 asmlinkage __printf(1, 0)
 int vprintk(const char *fmt, va_list args);
 
+int printk_emit_dmesg_only(int facility, int level,
+		const char *dict, size_t dictlen,
+		const char *fmt, ...);
+
 asmlinkage __printf(5, 6) __cold
 int printk_emit(int facility, int level,
 		const char *dict, size_t dictlen,

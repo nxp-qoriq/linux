@@ -150,6 +150,11 @@ void early_printk(const char *s, ...) { }
 struct dev_printk_info;
 
 #ifdef CONFIG_PRINTK
+
+int printk_emit_dmesg_only(int facility, int level,
+		const struct dev_printk_info *dev_info,
+		size_t dictlen, const char *fmt, ...);
+
 asmlinkage __printf(4, 0)
 int vprintk_emit(int facility, int level,
 		 const struct dev_printk_info *dev_info,

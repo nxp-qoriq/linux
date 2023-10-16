@@ -2184,6 +2184,27 @@ out:
 	return ret;
 }
 
+int printk_emit_dmesg_only(int facility, int level,
+		const struct dev_printk_info *dev_info,
+		size_t dictlen, const char *fmt, ...)
+{
+	va_list args;
+	int r;
+
+	if (unlikely(suppress_printk))
+		return 0;
+
+	if (level == LOGLEVEL_SCHED)
+		level = LOGLEVEL_DEFAULT;
+
+	va_start(args, fmt);
+	r = vprintk_store(facility, level, NULL, fmt, args);
+	va_end(args);
+
+	return r;
+}
+EXPORT_SYMBOL(printk_emit_dmesg_only);
+
 asmlinkage int vprintk_emit(int facility, int level,
 			    const struct dev_printk_info *dev_info,
 			    const char *fmt, va_list args)

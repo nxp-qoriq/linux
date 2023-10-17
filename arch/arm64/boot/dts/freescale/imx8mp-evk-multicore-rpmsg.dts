@@ -5,7 +5,7 @@
 
 /dts-v1/;
 
-#include "imx8mp-evk.dts"
+#include "imx8mp-evk-multicore-rtos.dts"
 #include "imx8mp-rpmsg-ca53.dtsi"
 #include "imx8mp-rpmsg-ca53-1.dtsi"
 
@@ -20,18 +20,6 @@
 		#address-cells = <2>;
 		#size-cells = <2>;
 		ranges;
-
-		/* Reserve 512MB for RTOS running on CA53 */
-		ca53_reserved: ca53@c0000000 {
-			no-map;
-			reg = <0 0xc0000000 0x0 0x20000000>;
-		};
-
-		/* Reserve 16MB for RTOS running on CM7 */
-		m7_reserved: m7@80000000 {
-			no-map;
-			reg = <0 0x80000000 0 0x1000000>;
-		};
 
 		vdev0vring0: vdev0vring0@55000000 {
 			reg = <0 0x55000000 0 0x8000>;
@@ -60,49 +48,14 @@
 	};
 
 	imx8mp-cm7 {
-		compatible = "fsl,imx8mn-cm7";
-		rsc-da = <0x55000000>;
 		clocks = <&clk IMX8MP_CLK_M7_DIV>,
 			 <&audio_blk_ctrl IMX8MP_CLK_AUDIOMIX_AUDPLL_ROOT>;
 		clock-names = "core", "audio";
-		mbox-names = "tx", "rx", "rxdb";
-		mboxes = <&mu 0 1
-			  &mu 1 1
-			  &mu 3 1>;
-		memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>, <&rsc_table>;
-		status = "okay";
-		fsl,startup-delay-ms = <500>;
 	};
-};
-
-&{/busfreq} {
-	/* Disable busfreq to avoid Linux busfreq crash multicore virtio backend */
-	status = "disabled";
 };
 
 &sai3 {
 	status = "disabled";
-};
-
-&uart3 {
-	status = "disabled";
-};
-
-&uart4 {
-	status = "disabled";
-};
-
-&fec {
-	status = "disabled";
-};
-
-&eqos {
-	/delete-property/ clocks;
-	/delete-property/ clock-names;
-	clocks = <&clk IMX8MP_CLK_QOS_ENET_ROOT>,
-		 <&clk IMX8MP_CLK_ENET_QOS_TIMER>,
-		 <&clk IMX8MP_CLK_ENET_QOS>;
-	clock-names = "pclk", "ptp_ref", "tx";
 };
 
 &clk {

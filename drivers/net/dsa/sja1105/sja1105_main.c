@@ -864,7 +864,7 @@ static int sja1105_init_general_params(struct sja1105_private *priv)
 		/* Priority queue for link-local management frames
 		 * (both ingress to and egress from CPU - PTP, STP etc)
 		 */
-		.hostprio = 7,
+		.hostprio = priv->hostprio,
 		.mac_fltres1 = SJA1105_LINKLOCAL_FILTER_A,
 		.mac_flt1    = SJA1105_LINKLOCAL_FILTER_A_MASK,
 		.incl_srcpt1 = true,
@@ -1250,6 +1250,15 @@ static int sja1105_parse_dt(struct sja1105_private *priv)
 		dev_err(dev, "Incorrect bindings: absent \"ports\" node\n");
 		return -ENODEV;
 	}
+
+	if (of_property_read_u32(switch_node, "hostprio", &priv->hostprio) < 0) {
+		priv->hostprio = 7;
+	} else if (priv->hostprio >= SJA1105_NUM_TC) {
+		dev_err(dev, "Out of range hostprio, must be between 0 and %d\n", (SJA1105_NUM_TC - 1));
+		return -ERANGE;
+	}
+
+	dev_info(dev, "Configured hostprio: using queue %u\n", priv->hostprio);
 
 	rc = sja1105_parse_ports_node(priv, ports_node);
 	of_node_put(ports_node);

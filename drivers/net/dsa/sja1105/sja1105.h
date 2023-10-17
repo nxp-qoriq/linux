@@ -255,6 +255,7 @@ struct sja1105_private {
 	unsigned long bcast_egress_floods;
 	unsigned long hwts_tx_en;
 	unsigned long hwts_rx_en;
+	u32 hostprio;
 	const struct sja1105_info *info;
 	size_t max_xfer_len;
 	struct spi_device *spidev;

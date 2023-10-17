@@ -35,6 +35,8 @@
 		spi-max-frequency = <12500000>;
 		/* SJA1105PQRS operates in SPI MODE 1 : CPOL=0 CPHA=1 */
 		spi-cpha;
+		/* use queue 5 for managment traffic */
+		hostprio = <5>;
 
 		reg = <0>;
 

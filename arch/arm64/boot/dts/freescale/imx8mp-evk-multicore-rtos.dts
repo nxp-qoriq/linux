@@ -13,10 +13,13 @@
 		#size-cells = <2>;
 		ranges;
 
-		/* Reserve 64MB for four FreeRTOS instances running on Cortex-A Core, each one uses 16MB */
+		/*
+		 * Reserve up to 48MB (16MB x 3) for three FreeRTOS instances running on
+		 * three Cortex-A Cores when booting Linux on at least on Cortex-A Core.
+		 */
 		ca53_reserved: ca53@c0000000 {
 			no-map;
-			reg = <0 0xc0000000 0x0 0x4000000>;
+			reg = <0 0xc0000000 0x0 0x3000000>;
 		};
 
 		/* Reserve 16MB for RTOS running on CM7 */

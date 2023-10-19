@@ -2071,6 +2071,29 @@ asmlinkage int vprintk(const char *fmt, va_list args)
 }
 EXPORT_SYMBOL(vprintk);
 
+int printk_emit_dmesg_only(int facility, int level,
+		const char *dict, size_t dictlen,
+		const char *fmt, ...)
+{
+	va_list args;
+
+	int printed_len;
+	unsigned long flags;
+
+	if (level == LOGLEVEL_SCHED)
+		level = LOGLEVEL_DEFAULT;
+
+	va_start(args, fmt);
+	/*  This stops the holder of console_sem just where we want him */
+	logbuf_lock_irqsave(flags);
+	printed_len = vprintk_store(facility, level, dict, dictlen, fmt, args);
+	logbuf_unlock_irqrestore(flags);
+	va_end(args);
+
+	return printed_len;
+}
+EXPORT_SYMBOL(printk_emit_dmesg_only);
+
 asmlinkage int printk_emit(int facility, int level,
 			   const char *dict, size_t dictlen,
 			   const char *fmt, ...)

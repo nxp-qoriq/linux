@@ -129,11 +129,11 @@ static irqreturn_t sw_mbox_interrupt(int irq, void *dev_id)
 		rx_status = readl(&mbox->base->rx_status[i]);
 		if (rx_status == S_BUSY) {
 			rx_ch = readl(&mbox->base->rx_ch[i]);
+			mbox_chan_received_data(&mbox->chan[i + RX_CHAN_SHFT],
+						(void *)&rx_ch);
 			writel(S_DONE, &mbox->base->rx_status[i]);
 			irq_set_irqchip_state(mbox->remote_irq,
 					      IRQCHIP_STATE_PENDING, true);
-			mbox_chan_received_data(&mbox->chan[i + RX_CHAN_SHFT],
-						(void *)&rx_ch);
 			ret = IRQ_HANDLED;
 		}
 	}
@@ -141,11 +141,11 @@ static irqreturn_t sw_mbox_interrupt(int irq, void *dev_id)
 	for (i = 0; i < MBOX_RXDB_CHAN; i++) {
 		rxdb_status = readl(&mbox->base->rxdb_status[i]);
 		if (rxdb_status == S_BUSY) {
+			mbox_chan_received_data(&mbox->chan[i + RXDB_CHAN_SHFT],
+						NULL);
 			writel(S_DONE, &mbox->base->rxdb_status[i]);
 			irq_set_irqchip_state(mbox->remote_irq,
 					      IRQCHIP_STATE_PENDING, true);
-			mbox_chan_received_data(&mbox->chan[i + RXDB_CHAN_SHFT],
-						NULL);
 			ret = IRQ_HANDLED;
 		}
 	}

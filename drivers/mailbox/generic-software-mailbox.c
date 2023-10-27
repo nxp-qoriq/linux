@@ -51,6 +51,8 @@ struct sw_mbox_reg {
 	uint32_t rxdb_status[MBOX_RXDB_CHAN];
 	uint32_t tx_ch[MBOX_TX_CHAN];
 	uint32_t rx_ch[MBOX_RX_CHAN];
+	uint32_t rxdb_ch[MBOX_RX_CHAN];
+	uint32_t ch_ack_flags; /*from bit0 each bit for each channel(tx_ch, rx_ch, rxdb_ch), 1: ack, 0:noack */
 };
 
 enum sw_mbox_channel_status {
@@ -131,9 +133,15 @@ static irqreturn_t sw_mbox_interrupt(int irq, void *dev_id)
 			rx_ch = readl(&mbox->base->rx_ch[i]);
 			mbox_chan_received_data(&mbox->chan[i + RX_CHAN_SHFT],
 						(void *)&rx_ch);
-			writel(S_DONE, &mbox->base->rx_status[i]);
-			irq_set_irqchip_state(mbox->remote_irq,
+			if (mbox->base->ch_ack_flags & (1 << (i + RX_CHAN_SHFT))) {
+				/* Sender need ACK */
+				writel(S_DONE, &mbox->base->rx_status[i]);
+				irq_set_irqchip_state(mbox->remote_irq,
 					      IRQCHIP_STATE_PENDING, true);
+			} else {
+				/* set status to be ready if sender doesn't need ACK */
+				writel(S_READY, &mbox->base->rx_status[i]);
+			}
 			ret = IRQ_HANDLED;
 		}
 	}
@@ -143,9 +151,15 @@ static irqreturn_t sw_mbox_interrupt(int irq, void *dev_id)
 		if (rxdb_status == S_BUSY) {
 			mbox_chan_received_data(&mbox->chan[i + RXDB_CHAN_SHFT],
 						NULL);
-			writel(S_DONE, &mbox->base->rxdb_status[i]);
-			irq_set_irqchip_state(mbox->remote_irq,
+			if (mbox->base->ch_ack_flags & (1 << (i + RXDB_CHAN_SHFT))) {
+				/* Sender need ACK */
+				writel(S_DONE, &mbox->base->rxdb_status[i]);
+				irq_set_irqchip_state(mbox->remote_irq,
 					      IRQCHIP_STATE_PENDING, true);
+			} else {
+				/* set status to be ready if sender doesn't need ACK */
+				writel(S_READY, &mbox->base->rxdb_status[i]);
+			}
 			ret = IRQ_HANDLED;
 		}
 	}
@@ -172,9 +186,12 @@ static const struct mbox_chan_ops sw_mbox_ops = {
 static struct mbox_chan *sw_mbox_xlate(struct mbox_controller *mbox,
 				       const struct of_phandle_args *sp)
 {
-	uint32_t type, idx, chan;
+	struct mbox_chan *chan;
+	struct sw_mbox_con_priv *cp;
+	struct sw_mbox *sw_mb;
+	uint32_t type, idx, chan_idx, ack;
 
-	if (sp->args_count != 2) {
+	if (sp->args_count != 3) {
 		dev_err(mbox->dev, "Invalid argument count %d\n",
 			sp->args_count);
 		return ERR_PTR(-EINVAL);
@@ -182,29 +199,38 @@ static struct mbox_chan *sw_mbox_xlate(struct mbox_controller *mbox,
 
 	type = sp->args[0];
 	idx = sp->args[1];
+	ack = sp->args[2];
 
 	switch (type) {
 	case SW_TYPE_TX:
-		chan = idx;
+		chan_idx = idx;
 		break;
 	case SW_TYPE_RX:
-		chan = RX_CHAN_SHFT + idx;
+		chan_idx = RX_CHAN_SHFT + idx;
 		break;
 	case SW_TYPE_RXDB:
-		chan = RXDB_CHAN_SHFT + idx;
+		chan_idx = RXDB_CHAN_SHFT + idx;
 		break;
 	default:
 		dev_err(mbox->dev, "Invalid chan type: %d\n", type);
 		return ERR_PTR(-EINVAL);
 	}
 
-	if (chan >= MBOX_CHAN_MAX) {
+	if (chan_idx >= MBOX_CHAN_MAX) {
 		dev_err(mbox->dev, "Not supported channel number: %d. (type: %d, idx: %d)\n",
-			chan, type, idx);
+			chan_idx, type, idx);
 		return ERR_PTR(-EINVAL);
 	}
 
-	return &mbox->chans[chan];
+	chan = &mbox->chans[chan_idx];
+	cp = chan->con_priv;
+	sw_mb = cp->priv;
+	if (ack)
+		sw_mb->base->ch_ack_flags |= 1 << chan_idx;
+	else
+		sw_mb->base->ch_ack_flags &= ~(1 << chan_idx);
+
+	return chan;
 }
 
 static const struct of_device_id sw_mbox_of_match[] = {

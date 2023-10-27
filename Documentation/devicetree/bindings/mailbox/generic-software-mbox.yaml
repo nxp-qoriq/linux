@@ -23,10 +23,12 @@ properties:
 
   "#mbox-cells":
     description: |
-      <&phandle type channel>
+      <&phandle type channel ack>
       phandle   : Label name of controller
       type      : Channel type
       channel   : Channel index
+      ack       : 0: Receiver doesn't trigger an ACK interrupt to sender after receive message
+                  1: Receiver triggers an ACK interrupt to sender after receive message
 
       This mailbox support 3 type of unidirectional channels, each type
       has 32 channels. Following types are supported:
@@ -56,7 +58,7 @@ examples:
     generic-software-mailbox@b8500000 {
         compatible = "fsl,generic-software-mbox";
         reg = <0 0xb8500000 0 0x1000>;
-        #mbox-cells = <2>;
+        #mbox-cells = <3>;
         interrupts = <GIC_SPI 76 IRQ_TYPE_LEVEL_HIGH>,
                      <GIC_SPI 77 IRQ_TYPE_LEVEL_HIGH>;
         interrupt-names = "irq", "remote_irq";

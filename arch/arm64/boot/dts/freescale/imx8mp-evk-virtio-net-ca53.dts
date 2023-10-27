@@ -37,8 +37,8 @@
 		hypervisor_less;
 		memory-region = <&virtio_buffer>;
 		mbox-names = "mmiowr", "mmioirq";
-		mboxes = <&gen_sw_mbox 0 1
-			  &gen_sw_mbox 1 1>;
+		mboxes = <&gen_sw_mbox 0 1 1		/* TX channel with ACK */
+			  &gen_sw_mbox 1 1 0>;		/* RX channel without ACK */
 	};
 };
 

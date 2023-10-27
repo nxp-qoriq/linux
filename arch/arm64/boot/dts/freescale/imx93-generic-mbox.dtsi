@@ -19,7 +19,7 @@
 	gen_sw_mbox: generic-software-mailbox@fe000000 {
 		compatible = "fsl,generic-software-mbox";
 		reg = <0 0xfe000000 0 0x1000>;
-		#mbox-cells = <2>;
+		#mbox-cells = <3>;
 		/* Use 2 unused SPI interrupts */
 		interrupts = <GIC_SPI 168 IRQ_TYPE_LEVEL_HIGH>, <GIC_SPI 169 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "irq", "remote_irq";

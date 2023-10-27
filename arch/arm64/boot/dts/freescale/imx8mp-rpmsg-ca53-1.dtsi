@@ -29,9 +29,9 @@
 		dma-coherent;
 		memory-region = <&vdevbuffer_ca53_1>;
 		mbox-names = "tx", "rx", "rxdb";
-		mboxes = <&gen_sw_mbox_1 0 0
-			  &gen_sw_mbox_1 1 0
-			  &gen_sw_mbox_1 2 0>;
+		mboxes = <&gen_sw_mbox_1 0 0 1		/* Tx channel with ACK */
+			  &gen_sw_mbox_1 1 0 0		/* Rx channel without ACK */
+			  &gen_sw_mbox_1 2 0 1>;	/* RXDB channel with ACK */
 		vdev-nums = <1>;
 	};
 };

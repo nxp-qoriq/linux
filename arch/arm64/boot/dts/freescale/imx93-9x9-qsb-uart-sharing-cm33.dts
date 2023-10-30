@@ -1,0 +1,96 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2023 NXP
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/rpmsg/imx_srtm.h>
+#include "imx93-9x9-qsb.dts"
+
+/ {
+	uart_rpbus_0: uart-rpbus-0 {
+		compatible = "fsl,uart-rpbus";
+		bus_id = <5>; /* use lpuart5 */
+		flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+		status = "okay";
+	};
+
+	uart_rpbus_1: uart-rpbus-1 {
+		compatible = "fsl,uart-rpbus";
+		bus_id = <5>; /* use lpuart5 */
+		flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+		status = "okay";
+	};
+
+	uart_rpbus_2: uart-rpbus-2 {
+		compatible = "fsl,uart-rpbus";
+		bus_id = <5>; /* use lpuart5 */
+		flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+		status = "okay";
+	};
+
+	uart_rpbus_3: uart-rpbus-3 {
+		compatible = "fsl,uart-rpbus";
+		bus_id = <5>; /* use lpuart5 */
+		flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+		status = "okay";
+	};
+
+	uart_rpbus_4: uart-rpbus-4 {
+		compatible = "fsl,uart-rpbus";
+		bus_id = <5>; /* use lpuart5 */
+		flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+		status = "okay";
+	};
+
+	uart_rpbus_5: uart-rpbus-5 {
+		compatible = "fsl,uart-rpbus";
+		bus_id = <5>; /* use lpuart5 */
+		flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+		status = "okay";
+	};
+
+	uart_rpbus_6: uart-rpbus-6 {
+		compatible = "fsl,uart-rpbus";
+		bus_id = <5>; /* use lpuart5 */
+		flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+		status = "okay";
+	};
+
+	uart_rpbus_7: uart-rpbus-7 {
+		compatible = "fsl,uart-rpbus";
+		bus_id = <5>; /* use lpuart5 */
+		flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+		status = "okay";
+	};
+
+	uart_rpbus_8: uart-rpbus-8 {
+		compatible = "fsl,uart-rpbus";
+		bus_id = <5>; /* use lpuart5 */
+		flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+		status = "okay";
+	};
+
+	uart_rpbus_9: uart-rpbus-9 {
+		compatible = "fsl,uart-rpbus";
+		bus_id = <5>; /* use lpuart5 */
+		flags=<IMX_SRTM_UART_SUPPORT_MULTI_UART_MSG_FLAG>;
+		status = "okay";
+	};
+
+	uart_rpbus_10: uart-rpbus-10 {
+		compatible = "fsl,uart-rpbus";
+		status = "okay"; /* mcore directly print data that receive from acore */
+	};
+};
+
+/*
+ * ATTENTION: M33 may use IPs like below
+ * LPUART5
+ */
+
+/* the lpuart5 is used by m33 to support srtm uart service */
+&lpuart5 {
+	status = "disabled";
+};

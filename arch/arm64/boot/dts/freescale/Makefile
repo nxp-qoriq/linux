@@ -612,6 +612,7 @@ dtb-$(CONFIG_ARCH_MXC) += imx93-9x9-qsb.dtb \
 			  imx93-9x9-qsb-aud-hat.dtb \
 			  imx93-9x9-qsb-ld.dtb \
 			  imx93-9x9-qsb-rpmsg.dtb \
+			  imx93-9x9-qsb-uart-sharing-cm33.dtb \
 			  imx93-9x9-qsb-inmate.dts imx93-9x9-qsb-root.dts
 dtb-$(CONFIG_ARCH_MXC) += imx93-tqma9352-mba93xxca.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx93-tqma9352-mba93xxla.dtb

@@ -2,7 +2,7 @@
 //
 // Device Tree file for LA1224RDB
 //
-// Copyright 2020-2022 NXP
+// Copyright 2020-2023 NXP
 
 /dts-v1/;
 
@@ -404,7 +404,6 @@
 	rtc@51 {
 		compatible = "nxp,pcf2129";
 		reg = <0x51>;
-		interrupts = <0 150 0x4>;
 	};
 
 	temperature-sensor@4c {

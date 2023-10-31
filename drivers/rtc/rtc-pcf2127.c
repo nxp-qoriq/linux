@@ -540,7 +540,6 @@ static irqreturn_t pcf2127_rtc_irq(int irq, void *dev)
 
 	return IRQ_HANDLED;
 }
-
 static const struct rtc_class_ops pcf2127_rtc_ops = {
 	.ioctl            = pcf2127_rtc_ioctl,
 	.read_time        = pcf2127_rtc_read_time,

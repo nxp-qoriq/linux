@@ -1,0 +1,10 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2023 NXP
+ */
+
+#include "imx93-11x11-evk-harpoon.dts"
+
+&eqos {
+	status = "disabled";
+};

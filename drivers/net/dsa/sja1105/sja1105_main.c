@@ -2239,8 +2239,8 @@ static int sja1105_setup_tc_cbs(struct dsa_switch *ds, int port,
 	 * but deduce the port transmit rate from idleslope - sendslope.
 	 */
 	port_transmit_rate_kbps = offload->idleslope - offload->sendslope;
-	cbs->idle_slope = div_s64(offload->idleslope * BYTES_PER_KBIT,
-				  port_transmit_rate_kbps);
+	cbs->idle_slope = DIV_ROUND_UP_ULL(offload->idleslope * BYTES_PER_KBIT,
+					  port_transmit_rate_kbps);
 	cbs->send_slope = div_s64(abs(offload->sendslope * BYTES_PER_KBIT),
 				  port_transmit_rate_kbps);
 	/* Convert the negative values from 64-bit 2's complement

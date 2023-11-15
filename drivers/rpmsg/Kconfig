@@ -81,6 +81,13 @@ config RPMSG_VIRTIO
 	select RPMSG_NS
 	select VIRTIO
 
+config RPMSG_PERF
+	tristate "RPMSG performance test driver"
+	depends on RPMSG
+	default m
+	help
+	  Say Y here to enable the RPMSG performance test driver.
+
 config HAVE_IMX_RPMSG
 	bool "IMX RPMSG driver on the AMP SOCs"
 	default y

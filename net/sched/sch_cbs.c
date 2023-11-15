@@ -379,6 +379,11 @@ static int cbs_change(struct Qdisc *sch, struct nlattr *opt,
 
 	qopt = nla_data(tb[TCA_CBS_PARMS]);
 
+	if (qopt->idleslope < 0 || qopt->sendslope > 0 || qopt->hicredit < 0 || qopt->locredit > 0) {
+		NL_SET_ERR_MSG(extack, "Invalid CBS parameters");
+		return -EINVAL;
+	}
+
 	if (!qopt->offload) {
 		cbs_set_port_rate(dev, q);
 		cbs_disable_offload(dev, q);

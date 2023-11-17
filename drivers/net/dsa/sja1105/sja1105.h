@@ -10,6 +10,7 @@
 #include <linux/dsa/sja1105.h>
 #include <linux/dsa/8021q.h>
 #include <net/dsa.h>
+#include <net/pkt_sched.h>
 #include <linux/mutex.h>
 #include "sja1105_static_config.h"
 
@@ -299,6 +300,7 @@ enum sja1105_reset_reason {
 	SJA1105_SCHEDULING,
 	SJA1105_BEST_EFFORT_POLICING,
 	SJA1105_VIRTUAL_LINKS,
+	SJA1105_VLAN_PCP_TO_TXQ_MAPPING,
 };
 
 int sja1105_static_config_reload(struct sja1105_private *priv,
@@ -306,6 +308,8 @@ int sja1105_static_config_reload(struct sja1105_private *priv,
 int sja1105_vlan_filtering(struct dsa_switch *ds, int port, bool enabled,
 			   struct netlink_ext_ack *extack);
 void sja1105_frame_memory_partitioning(struct sja1105_private *priv);
+int sja1105_setup_tc_mqprio(struct dsa_switch *ds, int port,
+			struct tc_mqprio_qopt_offload *mqprio);
 
 /* From sja1105_mdio.c */
 int sja1105_mdiobus_register(struct dsa_switch *ds);

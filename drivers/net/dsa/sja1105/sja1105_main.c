@@ -2285,6 +2285,7 @@ static const char * const sja1105_reset_reasons[] = {
 	[SJA1105_SCHEDULING] = "Time-aware scheduling",
 	[SJA1105_BEST_EFFORT_POLICING] = "Best-effort policing",
 	[SJA1105_VIRTUAL_LINKS] = "Virtual links",
+	[SJA1105_VLAN_PCP_TO_TXQ_MAPPING] = "VLAN PCP to TX queue mapping",
 };
 
 /* For situations where we need to change a setting at runtime that is only
@@ -2432,6 +2433,56 @@ sja1105_get_tag_protocol(struct dsa_switch *ds, int port,
 	struct sja1105_private *priv = ds->priv;
 
 	return priv->info->tag_proto;
+}
+
+int sja1105_setup_tc_mqprio(struct dsa_switch *ds, int port,
+			    struct tc_mqprio_qopt_offload *mqprio)
+{
+	struct sja1105_l2_forwarding_entry *l2fwd;
+	struct sja1105_private *priv = ds->priv;
+	struct sja1105_table *table;
+	int pcp, tc;
+
+	if (mqprio->qopt.num_tc > SJA1105_MAX_NUM_PCP) {
+		dev_err(ds->dev,
+			"Only a maximum of %u traffic classes are supported by hardware\n",
+			SJA1105_MAX_NUM_PCP);
+		return -ERANGE;
+	}
+
+	table = &priv->static_config.tables[BLK_IDX_L2_FORWARDING];
+
+	l2fwd = table->entries;
+
+	if (!mqprio->qopt.num_tc) {
+		/* Delete qdisc: reset to default 1:1 mapping. */
+		for (pcp = 0; pcp < SJA1105_MAX_NUM_PCP; pcp++)
+			l2fwd[ds->num_ports + pcp].vlan_pmap[port] = pcp;
+	} else {
+		/* We restrict a single TXQ per traffic class
+		 * The SJA1105 doesn't offer round robin among TXQs of the same priority
+		 */
+		for (tc = 0; tc < mqprio->qopt.num_tc; tc++) {
+			if (mqprio->qopt.count[tc] != 1) {
+				dev_err(ds->dev,
+					"Only a single TXQ per traffic class is supported\n");
+				return -EOPNOTSUPP;
+			}
+		}
+
+		/* Use MQPRIO mapping to configure Egress PCP to HW queue mapping. */
+		for (pcp = 0; pcp < SJA1105_MAX_NUM_PCP; pcp++)
+			l2fwd[ds->num_ports + pcp].vlan_pmap[port] = mqprio->qopt.prio_tc_map[pcp];
+	}
+
+	/* Although, the Egress PCP to HW queue mapping (the latter 8 entries)
+	 * should be configured dynamically (once max_dynp is properly set: e.g 7),
+	 * that did not work in practice. The switch (SJA1105Q) kept using
+	 * the old mapping until a switch reset appears and force the reload of
+	 * the static configuration.
+	 * So, force a switch reset on mapping offload from here.
+	 */
+	return sja1105_static_config_reload(priv, SJA1105_VLAN_PCP_TO_TXQ_MAPPING);
 }
 
 /* The TPID setting belongs to the General Parameters table,
@@ -2835,6 +2886,8 @@ static int sja1105_port_setup_tc(struct dsa_switch *ds, int port,
 		return sja1105_setup_tc_taprio(ds, port, type_data);
 	case TC_SETUP_QDISC_CBS:
 		return sja1105_setup_tc_cbs(ds, port, type_data);
+	case TC_SETUP_QDISC_MQPRIO:
+		return sja1105_setup_tc_mqprio(ds, port, type_data);
 	default:
 		return -EOPNOTSUPP;
 	}

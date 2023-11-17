@@ -528,6 +528,8 @@ int sja1105_setup_tc_taprio(struct dsa_switch *ds, int port,
 		if (rc < 0)
 			return rc;
 
+		sja1105_setup_tc_mqprio(ds, port, &admin->mqprio);
+
 		return sja1105_static_config_reload(priv, SJA1105_SCHEDULING);
 	} else if (admin->cmd != TAPRIO_CMD_REPLACE) {
 		return -EOPNOTSUPP;
@@ -577,6 +579,8 @@ int sja1105_setup_tc_taprio(struct dsa_switch *ds, int port,
 	rc = sja1105_init_scheduling(priv);
 	if (rc < 0)
 		return rc;
+
+	sja1105_setup_tc_mqprio(ds, port, &admin->mqprio);
 
 	return sja1105_static_config_reload(priv, SJA1105_SCHEDULING);
 }

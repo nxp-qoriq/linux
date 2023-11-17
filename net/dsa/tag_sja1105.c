@@ -267,9 +267,8 @@ static struct sk_buff *sja1105_xmit(struct sk_buff *skb,
 				    struct net_device *netdev)
 {
 	struct dsa_port *dp = dsa_user_to_port(netdev);
-	u16 queue_mapping = skb_get_queue_mapping(skb);
-	u8 pcp = netdev_txq_to_tc(netdev, queue_mapping);
 	u16 tx_vid = dsa_tag_8021q_standalone_vid(dp);
+	u8 pcp = skb->priority;
 
 	if (skb->offload_fwd_mark)
 		return sja1105_imprecise_xmit(skb, netdev);

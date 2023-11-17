@@ -152,6 +152,7 @@ dtb-$(CONFIG_ARCH_MXC) += imx8mm-evk-rpmsg-ca53.dtb \
 			  imx8mm-evk-virtio-net-ca53.dtb \
 			  imx8mm-evk-virtio-net-cm4.dtb \
 			  imx8mm-evk-multicore-rtos.dtb \
+			  imx8mm-evk-multicore-rpmsg.dtb \
 			  imx8mp-evk-virtio-net-ca53.dtb \
 			  imx8mp-evk-virtio-net-cm7.dtb \
 			  imx8mp-evk-multicore-rtos.dtb \

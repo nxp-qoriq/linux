@@ -1,0 +1,10 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2023 NXP
+ */
+
+/dts-v1/;
+
+#include "imx8mm-evk-multicore-rtos.dts"
+#include "imx8m-rpmsg-ca53.dtsi"
+#include "imx8m-rpmsg-ca53-1.dtsi"

@@ -415,10 +415,12 @@ static int felix_cb_streamid_set(struct net_device *ndev, u32 index, bool enable
 		if (!stream)
 			return -EINVAL;
 
+		dst_idx = stream->dst_idx;
 		ocelot_mact_forget(ocelot, stream->mac, stream->vid);
+
 		felix_stream_table_del(index);
 
-		felix_streamid_force_forward_clear(ocelot, stream->dst_idx);
+		felix_streamid_force_forward_clear(ocelot, dst_idx);
 
 		return 0;
 	}

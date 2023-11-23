@@ -1,0 +1,89 @@
+// SPDX-License-Identifier: GPL-2.0
+//
+// Copyright 2023 NXP
+
+#include "imx8mp-evk.dts"
+
+/delete-node/&spidev1;
+
+&ecspi2 {
+	/delete-property/cs-gpios;
+	status = "okay";
+
+	netcdsa: ethernet-switch@0 {
+		reg = <0x0>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "nxp,netc", "nxp,imxrt1180-netc";
+		/* 500 kHz */
+		spi-max-frequency = <500000>;
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				/* cpu port connected to eqos */
+				ethernet = <&eqos>;
+				reg = <0>;
+				phy-mode = "sgmii";
+
+				fixed-link {
+					speed = <100>;
+					full-duplex;
+				};
+			};
+
+			port@1 {
+				label = "swp1";
+				reg = <1>;
+				phy-mode = "sgmii";
+
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
+			};
+
+			port@2 {
+				label = "swp2";
+				reg = <2>;
+				phy-mode = "sgmii";
+
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
+			};
+
+			port@3 {
+				label = "swp3";
+				reg = <3>;
+				phy-mode = "sgmii";
+
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
+			};
+
+			port@4 {
+				label = "swp4";
+				reg = <4>;
+				phy-mode = "sgmii";
+
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
+			};
+		};
+	};
+};
+
+
+&pinctrl_ecspi2_cs {
+	fsl,pins = <
+		MX8MP_IOMUXC_ECSPI2_SS0__ECSPI2_SS0		0x82
+	>;
+};

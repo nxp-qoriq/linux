@@ -1456,7 +1456,7 @@ static int felix_pcpmap_set(struct net_device *ndev,
 	ocelot = dp->ds->priv;
 	port = dp->index;
 
-	index = (c->pcp & GENMASK(2, 0)) * ((c->dei & BIT(0)) + 1);
+	index = (c->dei & BIT(0)) * 8 + (c->pcp & GENMASK(2, 0));
 
 	ocelot_rmw_ix(ocelot,
 		     (ANA_PORT_PCP_DEI_MAP_DP_PCP_DEI_VAL & (c->dpl << 3)) |

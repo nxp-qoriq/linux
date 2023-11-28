@@ -9,6 +9,7 @@
 #include <linux/delay.h>
 #include <linux/phy/phy.h>
 #include <linux/platform_device.h>
+#include <linux/rfnm-shared.h>
 
 #define PHY_PLL_LOCK_WAIT_MAX_RETRIES	2000
 #define IMX8MP_PCIE_PHY_FLAG_EXT_OSC	BIT(0)
@@ -226,12 +227,25 @@ __setup("pcie_phy_tuned=", imx8_pcie_phy_fine_tune);
 
 static int imx8_pcie_phy_probe(struct platform_device *pdev)
 {
+
 	u32 val = 0;
 	struct phy_provider *phy_provider;
 	struct device *dev = &pdev->dev;
 	struct device_node *np = dev->of_node;
 	struct imx8_pcie_phy *imx8_phy;
 	struct resource *res;
+
+	if (of_machine_is_compatible("fsl,imx8mp-rfnm")) {
+		struct rfnm_bootconfig *cfg;
+		struct rfnm_eeprom_data *eeprom_data;
+		cfg = memremap(RFNM_BOOTCONFIG_PHYADDR, SZ_4M, MEMREMAP_WB);
+
+		if(cfg->pcie_clock_ready == 0xff) {
+			printk("RFNM: Deferring PCIe probe...\n");
+			memunmap(cfg);
+			return -EPROBE_DEFER;
+		}
+	}
 
 	imx8_phy = devm_kzalloc(dev, sizeof(*imx8_phy), GFP_KERNEL);
 	if (!imx8_phy)

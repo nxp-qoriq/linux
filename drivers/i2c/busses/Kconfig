@@ -1443,4 +1443,9 @@ config RFNM_SI5510
 	help
 	  Fast init to get pcie running at boot
 
+config RFNM_BOOTCONFIG
+	tristate "Enable RFNM's EEPROM bootconfig driver"
+	help
+	  Read EEPROM from mother/daughterboards at boot and populate board configs
+
 endmenu

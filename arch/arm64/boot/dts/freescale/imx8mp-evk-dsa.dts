@@ -14,7 +14,7 @@
 		reg = <0x0>;
 		#address-cells = <1>;
 		#size-cells = <0>;
-		compatible = "nxp,netc", "nxp,imxrt1180-netc";
+		compatible = "nxp,imxrt1180-netc";
 		/* 500 kHz */
 		spi-max-frequency = <500000>;
 

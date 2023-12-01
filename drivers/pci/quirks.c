@@ -3631,6 +3631,81 @@ DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_FREESCALE, PCI_DEVICE_ID_LA9310_DISABLE_CI
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_MELLANOX, PCI_ANY_ID,
 			mellanox_check_broken_intx_masking);
 
+#define ENABLE_INBOUND_MEM_ACCESS       0x02
+#define SET_BAR_MASK_VAL                0x3ffffff /*  64MB */
+#define SET_BAR_MASK_MP                 0x18000000
+#define PCIE_RHOM_DBI_BASE              0x3400000
+#define PCIE_CMD_REG_OFFSET             0x4
+#define PCIE_BAR_MASK_REG_0             0x1010
+#define PCIE_BAR_MASK_REG_1             0x10
+#define PCIE_HCTRL_PHY                  0x33B00000
+#define PCIE_HCTRL_OFFSET               0x214
+#define PICE_HCTRL_TRGT_IVAL            0x10000000
+#define PICE_HCTRL_TRGT_FVAL            0x18000000
+#define BOARD_TYPE_DXL                  1
+#define BOARD_TYPE_MP                   2
+
+static void quirk_la9310_config_mem(struct pci_dev *pdev)
+{
+	u32 size = 0;
+	u8 __iomem *vaddr = NULL,
+	   *vaddr_hctrl = NULL;
+	phys_addr_t phys_addr = 0;
+	int8_t board_type = 0;
+
+	if (!(of_machine_is_compatible("fsl,imx8mp"))) {
+		board_type = BOARD_TYPE_MP;
+	} else if (!(of_machine_is_compatible("fsl,imx8dxl") ||
+		of_machine_is_compatible("fsl,imx8mm"))) {
+		board_type = BOARD_TYPE_DXL;
+	} else {
+		pci_err(pdev, "Unkown board !\n");
+		return;
+	}
+	pci_info(pdev, "%s board_type: %s\n",__func__,
+			(board_type == BOARD_TYPE_MP) ? "i.MX8MP" : "i.MX8DXL/i.MX8MM");
+
+	if (pci_enable_device_mem(pdev)) {
+		pci_err(pdev, "Can't enable device memory\n");
+		return;
+	}
+
+	phys_addr = pci_resource_start(pdev,0);
+	size = pci_resource_len(pdev, 0);
+	vaddr = ioremap(phys_addr, size);
+	if (!vaddr) {
+		pci_err(pdev, "ioremap failed !");
+		goto out;
+	}
+
+	if (board_type == BOARD_TYPE_MP) {
+		vaddr_hctrl = ioremap(PCIE_HCTRL_PHY, 1024);
+		iowrite32(PICE_HCTRL_TRGT_IVAL, (u32 *)(vaddr_hctrl +
+					PCIE_HCTRL_OFFSET));
+	}
+
+	iowrite16(ENABLE_INBOUND_MEM_ACCESS, (u32 *)(vaddr +
+				PCIE_RHOM_DBI_BASE + PCIE_CMD_REG_OFFSET));
+	iowrite32(SET_BAR_MASK_VAL, (u32 *)(vaddr +  PCIE_RHOM_DBI_BASE +
+				PCIE_BAR_MASK_REG_0));
+	iowrite32(SET_BAR_MASK_MP,(u32 *)(vaddr +  PCIE_RHOM_DBI_BASE +
+				PCIE_BAR_MASK_REG_1) );
+
+	if (board_type == BOARD_TYPE_MP) {
+		iowrite32(PICE_HCTRL_TRGT_FVAL, (u32*)(vaddr_hctrl +
+					PCIE_HCTRL_OFFSET));
+		iounmap(vaddr_hctrl);
+	}
+
+	iounmap(vaddr);
+out:
+	pci_disable_device(pdev);
+}
+DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_FREESCALE,
+		PCI_DEVICE_ID_LA9310_DISABLE_CIP, quirk_la9310_config_mem);
+DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_FREESCALE,
+		PCI_DEVICE_ID_LA9310, quirk_la9310_config_mem);
+
 static void quirk_no_bus_reset(struct pci_dev *dev)
 {
 	dev->dev_flags |= PCI_DEV_FLAGS_NO_BUS_RESET;

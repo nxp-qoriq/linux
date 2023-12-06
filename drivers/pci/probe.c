@@ -24,6 +24,8 @@
 
 #define CARDBUS_LATENCY_TIMER	176	/* secondary latency timer */
 #define CARDBUS_RESERVE_BUSNR	3
+#define IMX_LA9310_BAR_RSIZE_MASK 0xfc000000 /* For 64MB */
+#define IMX_LA9310_BAR_OFFSET 0x10
 
 static struct resource busn_resource = {
 	.name	= "PCI busn",
@@ -208,6 +210,24 @@ int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 	 */
 	if (sz == 0xffffffff)
 		sz = 0;
+
+	/*
+	 * LA9310 device BAR0 default size 256MB is too large for imx8mp/8dxl
+	 * as workaround we map only first 64MB and we will update EP BAR0_MASK
+	 * at runtime before accessing BAR1-5 and avoid Bus Errors
+	 */
+	if (of_machine_is_compatible("fsl,imx8mp") ||
+			of_machine_is_compatible("fsl,imx8dxl") ||
+			of_machine_is_compatible("fsl,imx8mm")) {
+		if ((sz < IMX_LA9310_BAR_RSIZE_MASK) &&
+			((dev->device == PCI_DEVICE_ID_LA9310) ||
+			(dev->device == PCI_DEVICE_ID_LA9310_DISABLE_CIP)) &&
+			(pos == IMX_LA9310_BAR_OFFSET)) {
+				pci_info(dev, "reg 0x%x: forcing BAR0 readback 0x%08x to 0xfc000000 (i.e.64MB)\n",
+					pos,sz);
+				sz = IMX_LA9310_BAR_RSIZE_MASK;
+		}
+	}
 
 	/*
 	 * I don't know how l can have all bits set.  Copied from old code.

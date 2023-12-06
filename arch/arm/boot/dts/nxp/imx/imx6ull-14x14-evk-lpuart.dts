@@ -1,0 +1,25 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2023 NXP
+ */
+
+#include "imx6ull-14x14-evk.dts"
+
+/* Unbind lpuart2 from Bluetooth, use it for lpuart test. */
+&uart2 {
+    /delete-node/ bluetooth;
+};
+
+/*
+ * uart test port1. Note: don't use Bluetooth at the sametime.
+ * J1703: Pin1--RX Pin2--TX
+ */
+&pinctrl_uart2 {
+    fsl,pins = <
+        MX6UL_PAD_UART2_TX_DATA__UART2_DCE_TX   0x1b0b1
+        MX6UL_PAD_UART2_RX_DATA__UART2_DCE_RX   0x1b0b1
+        MX6UL_PAD_UART3_RX_DATA__UART2_DCE_RTS  0x1b0b1
+        MX6UL_PAD_UART3_TX_DATA__UART2_DCE_CTS  0x1b0b1
+    >;
+};
+

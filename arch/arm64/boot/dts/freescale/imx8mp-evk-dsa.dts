@@ -7,7 +7,6 @@
 /delete-node/&spidev1;
 
 &ecspi2 {
-	/delete-property/cs-gpios;
 	status = "okay";
 
 	netcdsa: ethernet-switch@0 {
@@ -71,9 +70,10 @@
 	};
 };
 
-
-&pinctrl_ecspi2_cs {
+&pinctrl_ecspi2 {
 	fsl,pins = <
-		MX8MP_IOMUXC_ECSPI2_SS0__ECSPI2_SS0		0x82
+		MX8MP_IOMUXC_ECSPI2_SCLK__ECSPI2_SCLK		0x84
+		MX8MP_IOMUXC_ECSPI2_MOSI__ECSPI2_MOSI		0x84
+		MX8MP_IOMUXC_ECSPI2_MISO__ECSPI2_MISO		0x84
 	>;
 };

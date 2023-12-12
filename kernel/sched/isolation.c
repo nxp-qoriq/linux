@@ -11,6 +11,8 @@
 DEFINE_STATIC_KEY_FALSE(housekeeping_overriden);
 EXPORT_SYMBOL_GPL(housekeeping_overriden);
 static cpumask_var_t housekeeping_mask;
+static cpumask_var_t housekeeping_mask_isolcpus;
+static cpumask_var_t housekeeping_mask_nohz_full;
 static unsigned int housekeeping_flags;
 
 bool housekeeping_enabled(enum hk_flags flags)
@@ -19,11 +21,27 @@ bool housekeeping_enabled(enum hk_flags flags)
 }
 EXPORT_SYMBOL_GPL(housekeeping_enabled);
 
+static struct cpumask *housekeeping_get_mask(enum hk_flags flags)
+{
+	if (flags & (HK_FLAG_DOMAIN | HK_FLAG_MANAGED_IRQ))
+		return housekeeping_mask_isolcpus;
+
+	/*   set by isolcpus=nohz only */
+	if ((flags & HK_FLAG_TICK) && !(housekeeping_flags & HK_FLAG_RCU))
+		return housekeeping_mask_isolcpus;
+
+	return housekeeping_mask_nohz_full;
+}
+
 int housekeeping_any_cpu(enum hk_flags flags)
 {
 	if (static_branch_unlikely(&housekeeping_overriden))
-		if (housekeeping_flags & flags)
+		if (housekeeping_flags & flags) {
+			struct cpumask *housekeeping_mask;
+
+			housekeeping_mask = housekeeping_get_mask(flags);
 			return cpumask_any_and(housekeeping_mask, cpu_online_mask);
+		}
 	return smp_processor_id();
 }
 EXPORT_SYMBOL_GPL(housekeeping_any_cpu);
@@ -32,7 +50,7 @@ const struct cpumask *housekeeping_cpumask(enum hk_flags flags)
 {
 	if (static_branch_unlikely(&housekeeping_overriden))
 		if (housekeeping_flags & flags)
-			return housekeeping_mask;
+			return housekeeping_get_mask(flags);
 	return cpu_possible_mask;
 }
 EXPORT_SYMBOL_GPL(housekeeping_cpumask);
@@ -40,16 +58,24 @@ EXPORT_SYMBOL_GPL(housekeeping_cpumask);
 void housekeeping_affine(struct task_struct *t, enum hk_flags flags)
 {
 	if (static_branch_unlikely(&housekeeping_overriden))
-		if (housekeeping_flags & flags)
+		if (housekeeping_flags & flags) {
+			struct cpumask *housekeeping_mask;
+
+			housekeeping_mask = housekeeping_get_mask(flags);
 			set_cpus_allowed_ptr(t, housekeeping_mask);
+		}
 }
 EXPORT_SYMBOL_GPL(housekeeping_affine);
 
 bool housekeeping_test_cpu(int cpu, enum hk_flags flags)
 {
 	if (static_branch_unlikely(&housekeeping_overriden))
-		if (housekeeping_flags & flags)
+		if (housekeeping_flags & flags) {
+			struct cpumask *housekeeping_mask;
+
+			housekeeping_mask = housekeeping_get_mask(flags);
 			return cpumask_test_cpu(cpu, housekeeping_mask);
+		}
 	return true;
 }
 EXPORT_SYMBOL_GPL(housekeeping_test_cpu);
@@ -66,12 +92,18 @@ void __init housekeeping_init(void)
 
 	/* We need at least one CPU to handle housekeeping work */
 	WARN_ON_ONCE(cpumask_empty(housekeeping_mask));
+	if (housekeeping_flags & (HK_FLAG_DOMAIN | HK_FLAG_MANAGED_IRQ))
+		WARN_ON_ONCE(cpumask_empty(housekeeping_mask_isolcpus));
+	if (housekeeping_flags & HK_FLAG_TICK)
+		WARN_ON_ONCE(cpumask_empty(housekeeping_mask_nohz_full));
 }
 
-static int __init housekeeping_setup(char *str, enum hk_flags flags)
+static int __init housekeeping_setup(char *str, enum hk_flags flags,
+		cpumask_var_t *housekeeping_mask)
 {
 	cpumask_var_t non_housekeeping_mask;
 	int err;
+	cpumask_var_t tmp;
 
 	alloc_bootmem_cpumask_var(&non_housekeeping_mask);
 	err = cpulist_parse(str, non_housekeeping_mask);
@@ -81,25 +113,31 @@ static int __init housekeeping_setup(char *str, enum hk_flags flags)
 		return 0;
 	}
 
-	if (!housekeeping_flags) {
-		alloc_bootmem_cpumask_var(&housekeeping_mask);
-		cpumask_andnot(housekeeping_mask,
-			       cpu_possible_mask, non_housekeeping_mask);
-		if (cpumask_empty(housekeeping_mask))
-			cpumask_set_cpu(smp_processor_id(), housekeeping_mask);
-	} else {
-		cpumask_var_t tmp;
+	alloc_bootmem_cpumask_var(&non_housekeeping_mask);
+	cpumask_andnot(*housekeeping_mask, cpu_possible_mask,
+			non_housekeeping_mask);
+	cpumask_andnot(tmp, cpu_present_mask, non_housekeeping_mask);
+	if (cpumask_empty(tmp)) {
+		pr_warn("Housekeeping: must include one present CPU, "
+				"using boot CPU:%d\n", smp_processor_id());
+		__cpumask_set_cpu(smp_processor_id(), *housekeeping_mask);
+		__cpumask_clear_cpu(smp_processor_id(), non_housekeeping_mask);
+	}
 
-		alloc_bootmem_cpumask_var(&tmp);
-		cpumask_andnot(tmp, cpu_possible_mask, non_housekeeping_mask);
-		if (!cpumask_equal(tmp, housekeeping_mask)) {
-			pr_warn("Housekeeping: nohz_full= must match isolcpus=\n");
+	/*   cpus should match when both nohz_full and isolcpus
+	 *   with nohz are passed into kernel
+	 */
+
+	if (housekeeping_flags & flags & HK_FLAG_TICK) {
+		if (!cpumask_equal(housekeeping_mask_nohz_full,
+					housekeeping_mask_isolcpus)) {
+			pr_warn("Housekeeping: nohz_full= must match isolcpus=nohz\n");
 			free_bootmem_cpumask_var(tmp);
 			free_bootmem_cpumask_var(non_housekeeping_mask);
 			return 0;
 		}
-		free_bootmem_cpumask_var(tmp);
 	}
+	free_bootmem_cpumask_var(tmp);
 
 	if ((flags & HK_FLAG_TICK) && !(housekeeping_flags & HK_FLAG_TICK)) {
 		if (IS_ENABLED(CONFIG_NO_HZ_FULL)) {
@@ -126,7 +164,7 @@ static int __init housekeeping_nohz_full_setup(char *str)
 	flags = HK_FLAG_TICK | HK_FLAG_WQ | HK_FLAG_TIMER | HK_FLAG_RCU |
 		HK_FLAG_MISC | HK_FLAG_KTHREAD;
 
-	return housekeeping_setup(str, flags);
+	return housekeeping_setup(str, flags, &housekeeping_mask_nohz_full);
 }
 __setup("nohz_full=", housekeeping_nohz_full_setup);
 
@@ -161,6 +199,6 @@ static int __init housekeeping_isolcpus_setup(char *str)
 	if (!flags)
 		flags |= HK_FLAG_DOMAIN;
 
-	return housekeeping_setup(str, flags);
+	return housekeeping_setup(str, flags, &housekeeping_mask_isolcpus);
 }
 __setup("isolcpus=", housekeeping_isolcpus_setup);

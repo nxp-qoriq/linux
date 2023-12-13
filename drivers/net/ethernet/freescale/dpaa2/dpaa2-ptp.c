@@ -2,7 +2,7 @@
 /*
  * Copyright 2013-2016 Freescale Semiconductor Inc.
  * Copyright 2016-2018 NXP
- * Copyright 2020 NXP
+ * Copyright 2020,2023 NXP
  */
 
 #include <linux/module.h>
@@ -20,7 +20,8 @@ static int dpaa2_ptp_enable(struct ptp_clock_info *ptp,
 	struct fsl_mc_device *mc_dev;
 	struct device *dev;
 	u32 mask = 0;
-	u32 bit;
+	u32 bit = 0;
+	int ret = 0;
 	int err;
 
 	dev = ptp_qoriq->dev;
@@ -43,6 +44,13 @@ static int dpaa2_ptp_enable(struct ptp_clock_info *ptp,
 		break;
 	case PTP_CLK_REQ_PPS:
 		bit = DPRTC_EVENT_PPS;
+		break;
+	case PTP_CLK_REQ_PEROUT:
+		ret = ptp_qoriq_enable_perout(ptp_qoriq, rq, on);
+		if (ret < 0) {
+			pr_debug("ptp_qoriq_enable_perout returned %d\n", ret);
+			return ret;
+		}
 		break;
 	default:
 		return -EOPNOTSUPP;

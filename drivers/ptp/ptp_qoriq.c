@@ -25,7 +25,7 @@ static int pulse_width_1588;
  */
 
 /* Caller must hold ptp_qoriq->lock. */
-static u64 tmr_cnt_read(struct ptp_qoriq *ptp_qoriq)
+u64 tmr_cnt_read(struct ptp_qoriq *ptp_qoriq)
 {
 	struct ptp_qoriq_registers *regs = &ptp_qoriq->regs;
 	u64 ns;
@@ -49,7 +49,7 @@ static void tmr_cnt_write(struct ptp_qoriq *ptp_qoriq, u64 ns)
 	ptp_qoriq->write(&regs->ctrl_regs->tmr_cnt_h, hi);
 }
 
-static u64 tmr_offset_read(struct ptp_qoriq *ptp_qoriq)
+u64 tmr_offset_read(struct ptp_qoriq *ptp_qoriq)
 {
 	struct ptp_qoriq_registers *regs = &ptp_qoriq->regs;
 	u32 lo, hi;
@@ -88,6 +88,52 @@ static void set_alarm(struct ptp_qoriq *ptp_qoriq)
 	lo = ns & 0xffffffff;
 	ptp_qoriq->write(&regs->alarm_regs->tmr_alarm1_l, lo);
 	ptp_qoriq->write(&regs->alarm_regs->tmr_alarm1_h, hi);
+}
+
+void alarm_enable(struct ptp_qoriq *ptp_qoriq, struct ptp_clock_request *rq)
+{
+        struct ptp_qoriq_registers *regs = &ptp_qoriq->regs;
+        s64 ns;
+        u32 lo, hi;
+        s64 start_sec = rq->perout.start.sec;
+
+        ns = start_sec * NSEC_PER_SEC;
+        ns -= ptp_qoriq->tclk_period;
+        hi = ns >> 32;
+        lo = ns & 0xffffffff;
+        ptp_qoriq->write(&regs->alarm_regs->tmr_alarm1_l, lo);
+        ptp_qoriq->write(&regs->alarm_regs->tmr_alarm1_h, hi);
+        ptp_qoriq->perout_disabled = false;
+}
+
+void alarm1_disable(struct ptp_qoriq *ptp_qoriq)
+{
+        struct ptp_qoriq_registers *regs = &ptp_qoriq->regs;
+        u32 ctrl;
+
+        /* Disable timer alarm 1 and re-trigger the timer control
+         * to apply the changes.
+         */
+        ptp_qoriq->write(&regs->alarm_regs->tmr_alarm1_l, 0);
+        ctrl = ptp_qoriq->read(&regs->ctrl_regs->tmr_ctrl);
+        ptp_qoriq->write(&regs->ctrl_regs->tmr_ctrl, ctrl);
+        /* Set flag true to indicate alarm1 is disabled
+         * using perout
+         */
+        ptp_qoriq->perout_disabled = true;
+}
+
+void periodic_pulse_enable(struct ptp_qoriq *ptp_qoriq,
+                           struct ptp_clock_request *rq)
+{
+        struct ptp_qoriq_registers *regs = &ptp_qoriq->regs;
+        u32 tmr_fiper;
+        u32 fiper_period = rq->perout.period.sec * NSEC_PER_SEC;
+
+        alarm_enable(ptp_qoriq, rq);
+        tmr_fiper =  fiper_period - ptp_qoriq->tclk_period;
+        ptp_qoriq->write(&regs->fiper_regs->tmr_fiper1, tmr_fiper);
+        ptp_qoriq->write(&regs->fiper_regs->tmr_fiper2, tmr_fiper);
 }
 
 /* Caller must hold ptp_qoriq->lock. */
@@ -251,8 +297,8 @@ int ptp_qoriq_adjtime(struct ptp_clock_info *ptp, s64 delta)
 		curr_delta += delta;
 		tmr_offset_write(ptp_qoriq, curr_delta);
 	}
-	set_fipers(ptp_qoriq);
-
+	if (!ptp_qoriq->perout_disabled)
+		set_fipers(ptp_qoriq);
 	spin_unlock_irqrestore(&ptp_qoriq->lock, flags);
 
 	return 0;
@@ -298,14 +344,56 @@ int ptp_qoriq_settime(struct ptp_clock_info *ptp,
 }
 EXPORT_SYMBOL_GPL(ptp_qoriq_settime);
 
+int ptp_qoriq_enable_perout(struct ptp_qoriq *ptp_qoriq,
+                            struct ptp_clock_request *rq, int on)
+{
+        int ret = 0;
+
+        if (!on) {
+                if (rq->perout.start.sec != 0)
+                        return -EINVAL;
+                alarm1_disable(ptp_qoriq);
+                return ret;
+        }
+
+        /* Check: Period must be 0 or 1 seconds
+         * period nanoseconds must be 0
+         * start time nanoseconds must be 0
+         */
+        if (rq->perout.start.nsec != 0 || rq->perout.period.sec != 1 ||
+            rq->perout.period.nsec != 0) {
+                ret = -EINVAL;
+        } else {
+                /* If the pps start time is less than current time add 100ms,
+                 * just return. Because the software might not be able to set
+                 * the comparison time into the tmr_alarm register in time
+                 * and miss the start time.
+                 */
+                uint64_t curr_tmr_count = tmr_cnt_read(ptp_qoriq) +
+                        tmr_offset_read(ptp_qoriq);
+                uint64_t ns = rq->perout.start.sec * NSEC_PER_SEC +
+                        rq->perout.start.nsec;
+
+                if (ns < (curr_tmr_count + 100 * NSEC_PER_MSEC)) {
+                        pr_err("Current time is too close to the start time!\n");
+                        ret = -EINVAL;
+                } else {
+                        periodic_pulse_enable(ptp_qoriq, rq);
+                        ret = 0;
+                }
+        }
+
+        return ret;
+}
+
 int ptp_qoriq_enable(struct ptp_clock_info *ptp,
 		     struct ptp_clock_request *rq, int on)
 {
 	struct ptp_qoriq *ptp_qoriq = container_of(ptp, struct ptp_qoriq, caps);
 	struct ptp_qoriq_registers *regs = &ptp_qoriq->regs;
 	unsigned long flags;
-	u32 bit, mask = 0;
-
+	u32 bit = 0, mask = 0;
+	int ret = 0;
 	switch (rq->type) {
 	case PTP_CLK_REQ_EXTTS:
 		switch (rq->extts.index) {
@@ -326,6 +414,14 @@ int ptp_qoriq_enable(struct ptp_clock_info *ptp,
 	case PTP_CLK_REQ_PPS:
 		bit = PP1EN;
 		break;
+	case PTP_CLK_REQ_PEROUT:
+		ret = ptp_qoriq_enable_perout(ptp_qoriq, rq, on);
+		if (ret < 0) {
+			pr_debug("ptp_qoriq_enable_perout returned %d\n", ret);
+			return ret;
+		}
+		break;
+
 	default:
 		return -EOPNOTSUPP;
 	}

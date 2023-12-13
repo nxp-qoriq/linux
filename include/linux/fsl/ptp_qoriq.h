@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (C) 2010 OMICRON electronics GmbH
- * Copyright 2018 NXP
+ * Copyright 2018,2023 NXP
  */
 #ifndef __PTP_QORIQ_H__
 #define __PTP_QORIQ_H__
@@ -150,6 +150,7 @@ struct ptp_qoriq {
 	bool extts_fifo_support;
 	bool fiper3_support;
 	bool etsec;
+	bool perout_disabled;
 	int irq;
 	int phc_index;
 	u32 tclk_period;  /* nanoseconds */
@@ -195,6 +196,14 @@ int ptp_qoriq_settime(struct ptp_clock_info *ptp,
 int ptp_qoriq_enable(struct ptp_clock_info *ptp,
 		     struct ptp_clock_request *rq, int on);
 int extts_clean_up(struct ptp_qoriq *ptp_qoriq, int index, bool update_event);
+void periodic_pulse_enable(struct ptp_qoriq *ptp_qoriq,
+			   struct ptp_clock_request *rq);
+void alarm_enable(struct ptp_qoriq *ptp_qoriq, struct ptp_clock_request *rq);
+void alarm1_disable(struct ptp_qoriq *ptp_qoriq);
+int ptp_qoriq_enable_perout(struct ptp_qoriq *ptp_qoriq,
+			    struct ptp_clock_request *rq, int on);
+u64 tmr_cnt_read(struct ptp_qoriq *ptp_qoriq);
+u64 tmr_offset_read(struct ptp_qoriq *ptp_qoriq);
 #ifdef CONFIG_DEBUG_FS
 void ptp_qoriq_create_debugfs(struct ptp_qoriq *ptp_qoriq);
 void ptp_qoriq_remove_debugfs(struct ptp_qoriq *ptp_qoriq);

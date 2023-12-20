@@ -3653,17 +3653,17 @@ static void quirk_la9310_config_mem(struct pci_dev *pdev)
 	phys_addr_t phys_addr = 0;
 	int8_t board_type = 0;
 
-	if (!(of_machine_is_compatible("fsl,imx8mp"))) {
-		board_type = BOARD_TYPE_MP;
-	} else if (!(of_machine_is_compatible("fsl,imx8dxl") ||
+	if ((of_machine_is_compatible("fsl,imx8mp") ||
 		of_machine_is_compatible("fsl,imx8mm"))) {
+		board_type = BOARD_TYPE_MP;
+	} else if ((of_machine_is_compatible("fsl,imx8dxl"))) {
 		board_type = BOARD_TYPE_DXL;
 	} else {
 		pci_err(pdev, "Unkown board !\n");
 		return;
 	}
 	pci_info(pdev, "%s board_type: %s\n",__func__,
-			(board_type == BOARD_TYPE_MP) ? "i.MX8MP" : "i.MX8DXL/i.MX8MM");
+			(board_type == BOARD_TYPE_MP) ? "i.MX8MP/i.MX8MM" : "i.MX8DXL");
 
 	if (pci_enable_device_mem(pdev)) {
 		pci_err(pdev, "Can't enable device memory\n");

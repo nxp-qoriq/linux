@@ -30,6 +30,9 @@
 #include <linux/usb/role.h>
 #include <linux/usb/tcpm.h>
 #include <linux/usb/typec_altmode.h>
+#include <linux/of.h>
+#include <linux/of_device.h>
+#include <linux/rfnm-shared.h>
 
 #include <uapi/linux/sched/types.h>
 
@@ -848,6 +851,18 @@ static enum typec_cc_status tcpm_rp_cc(struct tcpm_port *port)
 static void tcpm_ams_finish(struct tcpm_port *port)
 {
 	tcpm_log(port, "AMS %s finished", tcpm_ams_str[port->ams]);
+
+	if (of_machine_is_compatible("fsl,imx8mp-rfnm") && port->ams == POWER_NEGOTIATION) {
+		struct rfnm_bootconfig *cfg;
+		struct rfnm_eeprom_data *eeprom_data;
+		cfg = memremap(RFNM_BOOTCONFIG_PHYADDR, SZ_4M, MEMREMAP_WB);
+
+		cfg->usb_pd_negotiation_in_progress = 0xff;
+
+		printk("RFNM: USB PD negotiation finished\n");
+
+		memunmap(cfg);
+	}	
 
 	if (port->pd_capable && port->pwr_role == TYPEC_SOURCE) {
 		if (port->negotiated_rev >= PD_REV30)
@@ -2897,9 +2912,16 @@ static void tcpm_pd_rx_handler(struct kthread_work *work)
 		 */
 		if (!!(le16_to_cpu(msg->header) & PD_HEADER_DATA_ROLE) ==
 		    (port->data_role == TYPEC_HOST)) {
-			tcpm_log(port,
-				 "Data role mismatch, initiating error recovery");
-			tcpm_set_state(port, ERROR_RECOVERY, 0);
+			if (of_machine_is_compatible("fsl,imx8mp-rfnm")) {
+				tcpm_log(port,
+				 "Data role mismatch, initiating error recovery (note: no, forcing it not to)");
+				port->data_role = (port->data_role == TYPEC_DEVICE) ? TYPEC_HOST : TYPEC_DEVICE;
+				tcpm_set_attached_state(port, true);
+			} else {
+				tcpm_log(port,
+					 "Data role mismatch, initiating error recovery");
+				tcpm_set_state(port, ERROR_RECOVERY, 0);
+			}
 		} else {
 			if (le16_to_cpu(msg->header) & PD_HEADER_EXT_HDR)
 				tcpm_pd_ext_msg_request(port, msg);
@@ -4090,9 +4112,21 @@ static void run_state_machine(struct tcpm_port *port)
 		if ((port->cc1 == TYPEC_CC_OPEN &&
 		     port->cc2 != TYPEC_CC_OPEN) ||
 		    (port->cc1 != TYPEC_CC_OPEN &&
-		     port->cc2 == TYPEC_CC_OPEN))
-			tcpm_set_state(port, SNK_DEBOUNCED,
-				       PD_T_CC_DEBOUNCE);
+		     port->cc2 == TYPEC_CC_OPEN)) {
+				tcpm_set_state(port, SNK_DEBOUNCED,
+						PD_T_CC_DEBOUNCE);
+				if (of_machine_is_compatible("fsl,imx8mp-rfnm")) {
+					struct rfnm_bootconfig *cfg;
+					struct rfnm_eeprom_data *eeprom_data;
+					cfg = memremap(RFNM_BOOTCONFIG_PHYADDR, SZ_4M, MEMREMAP_WB);
+
+					cfg->usb_pd_negotiation_in_progress = 1;
+
+					printk("RFNM: USB PD negotiation in progress\n");
+
+					memunmap(cfg);
+				}
+			}
 		else if (tcpm_port_is_disconnected(port))
 			tcpm_set_state(port, SNK_UNATTACHED,
 				       PD_T_PD_DEBOUNCE);
@@ -4231,9 +4265,11 @@ static void run_state_machine(struct tcpm_port *port)
 			port->vbus_never_low = false;
 			tcpm_set_state(port, SNK_SOFT_RESET,
 				       PD_T_SINK_WAIT_CAP);
+			tcpm_log(port, "RFNM first reset...");
 		} else {
 			tcpm_set_state(port, hard_reset_state(port),
 				       PD_T_SINK_WAIT_CAP);
+			tcpm_log(port, "RFNM hard reset :(");
 		}
 		break;
 	case SNK_NEGOTIATE_CAPABILITIES:
@@ -4339,7 +4375,7 @@ static void run_state_machine(struct tcpm_port *port)
 		 * For now, this driver only supports SOP for DISCOVER_IDENTITY, thus using
 		 * port->explicit_contract.
 		 */
-		if (port->explicit_contract)
+		if (port->explicit_contract && port->data_role == TYPEC_HOST)
 			mod_send_discover_delayed_work(port, 0);
 		else
 			port->send_discover = false;
@@ -5845,7 +5881,11 @@ static void tcpm_init(struct tcpm_port *port)
 	 * Should possibly wait for VBUS to settle if it was enabled locally
 	 * since tcpm_reset_port() will disable VBUS.
 	 */
-	port->vbus_present = port->tcpc->get_vbus(port->tcpc);
+	if (of_machine_is_compatible("fsl,imx8mp-rfnm"))
+		port->vbus_present = true;
+	else
+		port->vbus_present = port->tcpc->get_vbus(port->tcpc);
+
 	if (port->vbus_present)
 		port->vbus_never_low = true;
 
@@ -5876,7 +5916,8 @@ static void tcpm_init(struct tcpm_port *port)
 	 * Some adapters need a clean slate at startup, and won't recover
 	 * otherwise. So do not try to be fancy and force a clean disconnect.
 	 */
-	tcpm_set_state(port, PORT_RESET, 0);
+	if (!of_machine_is_compatible("fsl,imx8mp-rfnm"))
+		tcpm_set_state(port, PORT_RESET, 0);
 }
 
 static int tcpm_port_type_set(struct typec_port *p, enum typec_port_type type)

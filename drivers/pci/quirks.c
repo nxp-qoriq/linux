@@ -3688,10 +3688,9 @@ static void quirk_la9310_config_mem(struct pci_dev *pdev)
 				PCIE_RHOM_DBI_BASE + PCIE_CMD_REG_OFFSET));
 	iowrite32(SET_BAR_MASK_VAL, (u32 *)(vaddr +  PCIE_RHOM_DBI_BASE +
 				PCIE_BAR_MASK_REG_0));
-	iowrite32(SET_BAR_MASK_MP,(u32 *)(vaddr +  PCIE_RHOM_DBI_BASE +
-				PCIE_BAR_MASK_REG_1) );
-
 	if (board_type == BOARD_TYPE_MP) {
+		iowrite32(SET_BAR_MASK_MP,(u32 *)(vaddr +  PCIE_RHOM_DBI_BASE +
+				PCIE_BAR_MASK_REG_1) );
 		iowrite32(PICE_HCTRL_TRGT_FVAL, (u32*)(vaddr_hctrl +
 					PCIE_HCTRL_OFFSET));
 		iounmap(vaddr_hctrl);

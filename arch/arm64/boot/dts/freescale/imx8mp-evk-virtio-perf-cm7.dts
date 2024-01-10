@@ -1,0 +1,56 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2024 NXP
+ */
+
+/dts-v1/;
+#include "imx8mp-evk.dts"
+
+/ {
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		linux,cma {
+			size = <0 0x20000000>;
+			alloc-ranges = <0 0x40000000 0 0x80000000>;
+		};
+
+		cm7_reserved: cm7@80000000 {
+			reg = <0 0x80000000 0x0 0x01000000>;
+			no-map;
+		};
+
+		virtio_reserved: virtio@b8400000 {
+			no-map;
+			reg = <0 0xb8400000 0x0 0x00100000>;
+		};
+	};
+
+	virtio_trans@b8400000 {
+		compatible = "virtio,mmio";
+		reg = <0x0 0xb8400000 0x0 0x1000>;
+		hypervisor_less;
+		mbox-names = "mmiowr", "mmioirq";
+		mboxes = <&mu 0 2
+			  &mu 1 2>;
+	};
+};
+
+&{/busfreq} {
+	/* Disable busfreq to avoid Linux busfreq crash multicore virtio backend */
+	status = "disabled";
+};
+
+&uart4 {
+	status = "disabled";
+};
+
+&i2c3 {
+	status = "disabled";
+};
+
+&sai3 {
+	status = "disabled";
+};

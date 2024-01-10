@@ -1,0 +1,68 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2024 NXP
+ */
+
+/dts-v1/;
+#include "imx8mp-evk.dts"
+#include "imx8mp-generic-mbox.dtsi"
+
+/ {
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		virtio_reserved: virtio@fc700000 {
+			no-map;
+			reg = <0 0xfc700000 0x0 0x00100000>;
+		};
+
+		/* 512MB */
+		freertos_reserved: inmate@c0000000 {
+			no-map;
+			reg = <0 0xc0000000 0x0 0x20000000>;
+		};
+
+		virtio_buffer: virtio-buffer@f8700000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0xf8700000 0 0x4000000>;
+		};
+	};
+
+	virtio_trans@fc700000 {
+		compatible = "virtio,mmio";
+		reg = <0x0 0xfc700000 0x0 0x1000>;
+		dma-coherent;
+		hypervisor_less;
+		memory-region = <&virtio_buffer>;
+		mbox-names = "mmiowr", "mmioirq";
+		mboxes = <&gen_sw_mbox 0 1 1		/* TX channel with ACK */
+			  &gen_sw_mbox 1 1 0>;		/* RX channel without ACK */
+	};
+};
+
+&{/busfreq} {
+	/* Disable busfreq to avoid Linux busfreq crash multicore virtio backend */
+	status = "disabled";
+};
+
+&uart4 {
+	status = "disabled";
+};
+
+&clk {
+	init-on-array = <IMX8MP_CLK_USDHC3_ROOT
+			 IMX8MP_CLK_NAND_USDHC_BUS
+			 IMX8MP_CLK_HSIO_ROOT
+			 IMX8MP_CLK_UART4_ROOT>;
+};
+
+&iomuxc {
+	pinctrl_uart4: uart4grp {
+		fsl,pins = <
+			MX8MP_IOMUXC_UART4_RXD__UART4_DCE_RX	0x140
+			MX8MP_IOMUXC_UART4_TXD__UART4_DCE_TX	0x140
+		>;
+	};
+};

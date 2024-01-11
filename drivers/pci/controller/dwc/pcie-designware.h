@@ -191,7 +191,6 @@ struct pcie_port {
 	int			msi_irq;
 	struct irq_domain	*irq_domain;
 	struct irq_domain	*msi_domain;
-	u16			msi_msg;
 	dma_addr_t		msi_data;
 	struct irq_chip		*msi_irq_chip;
 	u32			num_vectors;

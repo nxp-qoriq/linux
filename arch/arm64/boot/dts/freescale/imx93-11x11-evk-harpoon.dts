@@ -10,6 +10,10 @@
 	status = "disabled";
 };
 
+&lpi2c4 {
+	status = "disabled";
+};
+
 &sai1 {
 	status = "disabled";
 };
@@ -19,5 +23,9 @@
 };
 
 &sai3 {
+	status = "disabled";
+};
+
+&flexcan2 {
 	status = "disabled";
 };

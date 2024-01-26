@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Copyright 2023-2024 NXP
+ * Copyright 2024 NXP
  */
 
 /dts-v1/;
 
-#include "imx93-11x11-evk.dts"
+#include "imx93-14x14-evk-aud-hat.dts"
 #include "imx93-evk-avb.dtsi"

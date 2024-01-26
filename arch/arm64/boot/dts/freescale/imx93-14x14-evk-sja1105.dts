@@ -96,6 +96,7 @@
 		spi-cpha;
 		clocks = <&clock_sja1105>;
 		pinctrl-assert-gpios = <&max7322 0 GPIO_ACTIVE_LOW>;
+		hostprio = <5>;
 
 		ports {
 			#address-cells = <1>;

@@ -3,17 +3,14 @@
  * Copyright 2024 NXP
  */
 
-#include "imx8mp-evk.dts"
+#include "imx8mp-rfnm.dts"
 
-&ethphy1 {
+&ethphy0 {
 	/delete-property/ reset-gpios;
 	/delete-property/ reset-assert-us;
 	/delete-property/ reset-deassert-us;
 };
 
-&fec {
-	compatible = "fsl,imx8mm-fec-uio";
-};
 
 &eqos {
 	compatible = "fsl,imx-enet-qos", "snps,dwmac-5.10a";

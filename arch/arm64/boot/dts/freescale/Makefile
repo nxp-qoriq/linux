@@ -481,7 +481,8 @@ dtb-$(CONFIG_ARCH_MXC) += imx93-14x14-evk.dtb imx93-14x14-evk-avb.dtb \
 			  imx93-14x14-evk-mqs.dtb imx93-14x14-evk-aud-hat.dtb \
 			  imx93-14x14-evk-lvds-it6263.dtb imx93-14x14-evk-sja1105.dtb imx93-14x14-evk-sja1105-avb.dtb \
 			  imx93-14x14-evk-flexspi-m2.dtb imx93-14x14-evk-dsi-serdes.dtb \
-			  imx93-14x14-evk-i3c.dtb imx93-14x14-evk-8mic-reve.dtb
+			  imx93-14x14-evk-i3c.dtb imx93-14x14-evk-8mic-reve.dtb \
+			  imx93-14x14-evk-imxai2eth-ath.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx93-11x11-evk.dtb \
 			  imx93-11x11-evk-avb.dtb \
 			  imx93-11x11-evk-inmate.dtb imx93-11x11-evk-root.dtb imx93-11x11-evk-flexio-i2c.dtb \

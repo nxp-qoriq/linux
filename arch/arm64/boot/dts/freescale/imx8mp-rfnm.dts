@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Copyright 2019-2023 NXP
+ * Copyright 2019-2024 NXP
  */
 
 /dts-v1/;
@@ -40,7 +40,7 @@
 			*/
 			la93: la93@92400000 {
 				reg = <0 0x92400000 0 0x4000000>;
-				no-map;
+				compatible = "shared-dma-pool";
 			};
 			iqflood: iq@96400000 {
 				reg = <0 0x96400000 0 0xD000000>;

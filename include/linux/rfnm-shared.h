@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0+
+
 #ifndef INCLUDE_LINUX_RFNM_SHARED_H_
 #define INCLUDE_LINUX_RFNM_SHARED_H_
 
@@ -8,9 +10,9 @@
 #define RFNM_DAUGHTERBOARD_PRESENT (0x10)
 #define RFNM_DAUGHTERBOARD_NOT_FOUND (0x20)
 #define RFNM_DAUGHTERBOARD_NOT_CHECKED_YET (0xff)
+#define RFNM_DTB_NODE_NOT_FOUND (-1)
 
-#define RFNM_BOOTCONFIG_PHYADDR (0xA3400000)
-
+extern int la9310_read_dtb_node_mem_region(const char *node_name, struct resource *get_mem_res);
 
 struct __packed rfnm_eeprom_data {
 	uint8_t magic_header[4];

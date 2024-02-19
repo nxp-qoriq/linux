@@ -31,13 +31,12 @@
 
 
 	reserved-memory {
-           /* /delete-node/ dsp_reserved;
+            /delete-node/ dsp_reserved;
             /delete-node/ dsp_reserved_heap;
             /delete-node/ dsp_vdev0vring0;
             /delete-node/ dsp_vdev0vring1;
             /delete-node/ dsp_vdev0buffer;
-           // /delete-note/ isp0_reserved;
-			*/
+
 			la93: la93@92400000 {
 				reg = <0 0x92400000 0 0x4000000>;
 				compatible = "shared-dma-pool";

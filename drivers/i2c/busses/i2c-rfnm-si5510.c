@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0+
+
 #include <linux/interrupt.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
@@ -7,7 +9,9 @@
 #include <linux/rfnm-si5510.h>
 #include <linux/printk.h>
 #include <linux/i2c.h>
-
+#include <linux/of.h>
+#include <linux/of_address.h>
+#include <linux/of_device.h>
 #include <linux/ktime.h>
 
 
@@ -131,6 +135,41 @@ void rfnm_si5510_host_load(struct i2c_client *client, char *data, int datalen, i
 
 	kfree(host_load_command);
 }
+
+int
+la9310_read_dtb_node_mem_region(const char *node_name, struct resource *get_mem_res)
+{
+        int rc = 0;
+        struct device_node *memnp;
+        struct resource mem_res;
+
+        /* Get pointer to device node */
+        memnp = of_find_node_by_name(NULL,node_name);;
+        if (!memnp) {
+                printk("Node %s not found\n",node_name);
+                rc = RFNM_DTB_NODE_NOT_FOUND;
+        }
+        else {
+                /* Convert memory region to a struct resource */
+                rc = of_address_to_resource(memnp, 0, &mem_res);
+                /* finished with memnp */
+                of_node_put(memnp);
+                if (rc) {
+                        printk("Failed to translate memory-region to a resource for node %s\n",node_name);
+                        rc = RFNM_DTB_NODE_NOT_FOUND;
+                }
+                else {
+                        pr_info("RFNM: func %s Node Name %s\n",__func__,node_name);
+                        pr_info("MemRegion Start 0x%08X\n", mem_res.start);
+                        pr_info("MemRegion Size 0x%08X\n", resource_size(&mem_res));
+                        get_mem_res->start= mem_res.start;
+                        memcpy(get_mem_res,&mem_res, sizeof(struct resource));
+                }
+        }
+        return rc;
+}
+
+EXPORT_SYMBOL(la9310_read_dtb_node_mem_region);
 
 extern void rfnm_wsled_send_chain(uint8_t);
 extern void rfnm_wsled_set(uint8_t, uint8_t, uint8_t, uint8_t, uint8_t);
@@ -274,8 +313,19 @@ static int rfnm_si5510_probe(struct i2c_client *client)
 
 	struct rfnm_bootconfig *cfg;
 	struct rfnm_eeprom_data *eeprom_data;
+	struct resource mem_res;
+	char node_name[10];
+	int ret;
 
-	cfg = memremap(RFNM_BOOTCONFIG_PHYADDR, SZ_4M, MEMREMAP_WB);
+	strncpy(node_name,"bootconfig",10 );
+	ret = la9310_read_dtb_node_mem_region(node_name,&mem_res);
+	if(ret != RFNM_DTB_NODE_NOT_FOUND){
+		cfg = memremap(mem_res.start, SZ_4M, MEMREMAP_WB);
+	}
+	else {
+		printk("RFNM: func %s Node name %s not found..\n",__func__,node_name);
+		return ret;
+	}
 
 	// when rebooted without hard power reset, this memory section doesn't get inited to 0xff...
 	// move memory reset to uboot?

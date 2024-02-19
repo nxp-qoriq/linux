@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0+
+
 #include <linux/interrupt.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
@@ -183,8 +185,19 @@ static int rfnm_bootconfig_probe(struct i2c_client *client)
 
 	struct rfnm_bootconfig *cfg;
 	struct rfnm_eeprom_data *eeprom_data;
+        struct resource mem_res;
+	char node_name[10];
+	int ret;
 
-	cfg = memremap(RFNM_BOOTCONFIG_PHYADDR, SZ_4M, MEMREMAP_WB);
+	strncpy(node_name,"bootconfig",10 );
+	ret = la9310_read_dtb_node_mem_region(node_name,&mem_res);
+	if(ret != RFNM_DTB_NODE_NOT_FOUND) {
+		cfg = memremap(mem_res.start, SZ_4M, MEMREMAP_WB);
+	}
+	else {
+		printk("RFNM: func %s Node name %s not found..\n",__func__,node_name);
+		return ret;
+	}
 
 	if (adapter->nr == 0) {
 		eeprom_data = &cfg->motherboard_eeprom;

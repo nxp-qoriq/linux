@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright 2020 NXP
+ * Copyright 2020, 2024 NXP
  */
 
 #include <linux/clk.h>
@@ -238,7 +238,19 @@ static int imx8_pcie_phy_probe(struct platform_device *pdev)
 	if (of_machine_is_compatible("fsl,imx8mp-rfnm")) {
 		struct rfnm_bootconfig *cfg;
 		struct rfnm_eeprom_data *eeprom_data;
-		cfg = memremap(RFNM_BOOTCONFIG_PHYADDR, SZ_4M, MEMREMAP_WB);
+		struct resource mem_res;
+		char node_name[10];
+		int ret;
+
+		strncpy(node_name,"bootconfig",10 );
+		ret = la9310_read_dtb_node_mem_region(node_name,&mem_res);
+		if(ret != RFNM_DTB_NODE_NOT_FOUND) {
+			cfg = memremap(mem_res.start, SZ_4M, MEMREMAP_WB);
+		}
+		else {
+			printk("RFNM: func %s Node name %s not found..\n",__func__,node_name);
+			return ret;
+		}
 
 		if(cfg->pcie_clock_ready == 0xff) {
 			printk("RFNM: Deferring PCIe probe...\n");

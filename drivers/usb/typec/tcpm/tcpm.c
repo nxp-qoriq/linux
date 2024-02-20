@@ -851,31 +851,29 @@ static enum typec_cc_status tcpm_rp_cc(struct tcpm_port *port)
 static void tcpm_ams_finish(struct tcpm_port *port)
 {
 	tcpm_log(port, "AMS %s finished", tcpm_ams_str[port->ams]);
-
+#ifdef CONFIG_RFNM_BOOTCONFIG
 	if (of_machine_is_compatible("fsl,imx8mp-rfnm") && port->ams == POWER_NEGOTIATION) {
-		struct rfnm_bootconfig *cfg;
-		struct rfnm_eeprom_data *eeprom_data;
+		struct rfnm_bootconfig *cfg=NULL;
 		struct resource mem_res;
 		char node_name[10];
 		int ret;
 
 		strncpy(node_name,"bootconfig",10 );
 		ret = la9310_read_dtb_node_mem_region(node_name,&mem_res);
-		if(ret != RFNM_DTB_NODE_NOT_FOUND){
+		if (ret != RFNM_DTB_NODE_NOT_FOUND) {
 			cfg = memremap(mem_res.start, SZ_4M, MEMREMAP_WB);
 		}
 		else {
 			printk("RFNM: func %s Node name %s not found..\n",__func__,node_name);
-			return ret;
 		}
 
-		cfg->usb_pd_negotiation_in_progress = 0xff;
-
+		if (cfg) {
+			cfg->usb_pd_negotiation_in_progress = 0xff;
+			memunmap(cfg);
+		}
 		printk("RFNM: USB PD negotiation finished\n");
-
-		memunmap(cfg);
 	}	
-
+#endif
 	if (port->pd_capable && port->pwr_role == TYPEC_SOURCE) {
 		if (port->negotiated_rev >= PD_REV30)
 			tcpm_set_cc(port, SINK_TX_OK);
@@ -4127,9 +4125,9 @@ static void run_state_machine(struct tcpm_port *port)
 		     port->cc2 == TYPEC_CC_OPEN)) {
 				tcpm_set_state(port, SNK_DEBOUNCED,
 						PD_T_CC_DEBOUNCE);
+#ifdef CONFIG_RFNM_BOOTCONFIG
 				if (of_machine_is_compatible("fsl,imx8mp-rfnm")) {
-					struct rfnm_bootconfig *cfg;
-					struct rfnm_eeprom_data *eeprom_data;
+					struct rfnm_bootconfig *cfg=NULL;
 					struct resource mem_res;
 					char node_name[10];
 					int ret;
@@ -4141,17 +4139,16 @@ static void run_state_machine(struct tcpm_port *port)
 					}
 					else {
 						printk("RFNM: func %s Node name %s not found..\n",__func__,node_name);
-						return ret;
 					}
 
-
-					cfg->usb_pd_negotiation_in_progress = 1;
-
+					if (cfg) {
+						cfg->usb_pd_negotiation_in_progress = 1;
+						memunmap(cfg);
+					}
 					printk("RFNM: USB PD negotiation in progress\n");
-
-					memunmap(cfg);
 				}
-			}
+#endif
+		}
 		else if (tcpm_port_is_disconnected(port))
 			tcpm_set_state(port, SNK_UNATTACHED,
 				       PD_T_PD_DEBOUNCE);

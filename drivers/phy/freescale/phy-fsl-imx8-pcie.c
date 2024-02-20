@@ -234,10 +234,9 @@ static int imx8_pcie_phy_probe(struct platform_device *pdev)
 	struct device_node *np = dev->of_node;
 	struct imx8_pcie_phy *imx8_phy;
 	struct resource *res;
-
+#ifdef CONFIG_RFNM_BOOTCONFIG
 	if (of_machine_is_compatible("fsl,imx8mp-rfnm")) {
 		struct rfnm_bootconfig *cfg;
-		struct rfnm_eeprom_data *eeprom_data;
 		struct resource mem_res;
 		char node_name[10];
 		int ret;
@@ -258,7 +257,7 @@ static int imx8_pcie_phy_probe(struct platform_device *pdev)
 			return -EPROBE_DEFER;
 		}
 	}
-
+#endif
 	imx8_phy = devm_kzalloc(dev, sizeof(*imx8_phy), GFP_KERNEL);
 	if (!imx8_phy)
 		return -ENOMEM;

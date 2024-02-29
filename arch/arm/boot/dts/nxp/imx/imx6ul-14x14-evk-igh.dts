@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright 2024 NXP
+ */
+
+#include "imx6ul-14x14-evk.dts"
+
+
+&fec1 {
+	compatible = "fsl,imx6ul-fec-igh-native", "fsl,imx6q-fec-igh-native";
+};

@@ -5,6 +5,19 @@
 
 #include "imx8mp-evk.dts"
 
+/{
+       reserved-memory {
+               #address-cells = <2>;
+               #size-cells = <2>;
+               ranges;
+	       /* Limit memory in 4G Bytes for user space EtherCAT */
+       	       ecat_reserved: ecat@142000000 {
+       	               no-map;
+       	               reg = <0x1 0x42000000 0x0 0x80000000>;
+       	       };
+       };
+};
+
 &ethphy1 {
 	/delete-property/ reset-gpios;
 	/delete-property/ reset-assert-us;
@@ -13,4 +26,8 @@
 
 &fec {
 	compatible = "fsl,imx8mm-fec-uio";
+};
+
+&eqos {
+	compatible = "nxp,imx8mp-dwmac-eqos","snps,dwmac-5.10a";
 };

@@ -327,6 +327,7 @@ static void
 ocelot_populate_ipv4_ptp_event_trap_key(struct ocelot_vcap_filter *trap)
 {
 	trap->key_type = OCELOT_VCAP_KEY_IPV4;
+	trap->key.ipv4.fragment = OCELOT_VCAP_BIT_0;
 	trap->key.ipv4.proto.value[0] = IPPROTO_UDP;
 	trap->key.ipv4.proto.mask[0] = 0xff;
 	trap->key.ipv4.dport.value = PTP_EV_PORT;
@@ -347,6 +348,7 @@ static void
 ocelot_populate_ipv4_ptp_general_trap_key(struct ocelot_vcap_filter *trap)
 {
 	trap->key_type = OCELOT_VCAP_KEY_IPV4;
+	trap->key.ipv4.fragment = OCELOT_VCAP_BIT_0;
 	trap->key.ipv4.proto.value[0] = IPPROTO_UDP;
 	trap->key.ipv4.proto.mask[0] = 0xff;
 	trap->key.ipv4.dport.value = PTP_GEN_PORT;

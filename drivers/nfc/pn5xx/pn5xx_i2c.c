@@ -366,7 +366,6 @@ static int pn54x_get_pdata(struct device *dev,
 			   struct pn544_i2c_platform_data *pdata)
 {
 	struct device_node *node;
-	u32 flags;
 	int val;
 
 	/* make sure there is actually a device tree node */
@@ -380,7 +379,7 @@ static int pn54x_get_pdata(struct device *dev,
 	 * read the dev tree data
 	 * firm pin - controls firmware download - OPTIONAL
 	 */
-	val = of_get_named_gpio_flags(node, "firmware-gpios", 0, &flags);
+	val = of_get_named_gpio(node, "firmware-gpios", 0);
 	if (val >= 0) {
 		pdata->firm_gpio = val;
 	} else {
@@ -389,7 +388,7 @@ static int pn54x_get_pdata(struct device *dev,
 	}
 
 	/* clkreq pin - controls the clock to the PN547 - OPTIONAL */
-	val = of_get_named_gpio_flags(node, "nxp,pn54x-clkreq", 0, &flags);
+	val = of_get_named_gpio(node, "nxp,pn54x-clkreq", 0);
 	if (val >= 0) {
 		pdata->clkreq_gpio = val;
 	} else {
@@ -451,11 +450,9 @@ static int pn54x_get_pdata(struct device *dev,
 
 /* pn54x_probe */
 #ifdef KERNEL_3_4_AND_OLDER
-static int __devinit pn54x_probe(struct i2c_client *client,
-		const struct i2c_device_id *id)
+static int __devinit pn54x_probe(struct i2c_client *client)
 #else
-static int pn54x_probe(struct i2c_client *client,
-		const struct i2c_device_id *id)
+static int pn54x_probe(struct i2c_client *client)
 #endif
 {
 	int ret;

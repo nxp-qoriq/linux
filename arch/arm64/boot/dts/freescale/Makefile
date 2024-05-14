@@ -520,6 +520,8 @@ dtb-$(CONFIG_ARCH_MXC) += imx93-14x14-evk.dtb imx93-14x14-evk-aud-hat-avb.dtb \
 			  imx93-14x14-evk-flexspi-m2.dtb imx93-14x14-evk-dsi-serdes.dtb \
 			  imx93-14x14-evk-i3c.dtb imx93-14x14-evk-8mic-reve.dtb \
 			  imx93-14x14-evk-imxai2eth-ath.dtb \
+			  imx93-14x14-evk-virtio-net-ca55.dtb \
+			  imx93-14x14-evk-virtio-net-cm33.dtb \
 			  imx93-14x14-evk-multicore-rtos.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx93-11x11-evk.dtb \
 			  imx93-11x11-evk-avb.dtb \

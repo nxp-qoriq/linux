@@ -3339,7 +3339,6 @@ out_unlock:
 static int packet_bind_spkt(struct socket *sock, struct sockaddr *uaddr,
 			    int addr_len)
 {
-	struct sock *sk = sock->sk;
 	char name[sizeof(uaddr->sa_data_min) + 1];
 
 	/*
@@ -3361,7 +3360,6 @@ static int packet_bind_spkt(struct socket *sock, struct sockaddr *uaddr,
 static int packet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 {
 	struct sockaddr_ll *sll = (struct sockaddr_ll *)uaddr;
-	struct sock *sk = sock->sk;
 
 	/*
 	 *	Check legality

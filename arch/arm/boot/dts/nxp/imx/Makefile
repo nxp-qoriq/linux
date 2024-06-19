@@ -439,6 +439,7 @@ imx6ul-14x14-evk-reve-ecspi-slave-dtbs := imx6ul-14x14-evk-ecspi-slave.dtb imx6u
 imx6ul-14x14-evk-reve-ecspi-dtbs := imx6ul-14x14-evk-ecspi.dtb imx6ul-14x14-evk-reve.dtbo
 imx6ul-14x14-evk-reve-gpmi-weim-dtbs := imx6ul-14x14-evk-gpmi-weim.dtb imx6ul-14x14-evk-reve.dtbo
 imx6ull-14x14-evk-reve-dtbs := imx6ull-14x14-evk.dtb imx6ul-14x14-evk-reve.dtbo
+imx6ull-14x14-evk-reve-avb-dtbs := imx6ull-14x14-evk-avb.dtb imx6ul-14x14-evk-reve.dtbo imx6ull-14x14-evk-reve.dtbo
 imx6ull-14x14-evk-reve-emmc-dtbs := imx6ull-14x14-evk-emmc.dtb imx6ul-14x14-evk-reve.dtbo
 imx6ull-14x14-evk-reve-btwifi-dtbs := imx6ull-14x14-evk-btwifi.dtb imx6ul-14x14-evk-reve.dtbo
 imx6ull-14x14-evk-reve-gpmi-weim-dtbs := imx6ull-14x14-evk-gpmi-weim.dtb imx6ul-14x14-evk-reve.dtbo
@@ -455,6 +456,7 @@ dtb-$(CONFIG_SOC_IMX6UL) += \
 	imx6ul-14x14-evk-reve-ecspi.dtb \
 	imx6ul-14x14-evk-reve-gpmi-weim.dtb \
 	imx6ull-14x14-evk-reve.dtb \
+	imx6ull-14x14-evk-reve-avb.dtb \
 	imx6ull-14x14-evk-reve-emmc.dtb \
 	imx6ull-14x14-evk-reve-btwifi.dtb \
 	imx6ull-14x14-evk-reve-gpmi-weim.dtb \

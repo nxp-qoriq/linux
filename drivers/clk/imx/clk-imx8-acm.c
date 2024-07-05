@@ -241,10 +241,10 @@ static struct clk_parent_data imx8dxl_mclk_sels[] = {
 };
 
 static const struct clk_parent_data imx8dxl_gpt_mux_clk_sels[] = {
-	{ .fw_name = "aud_pll_div_clk0_lpcg_clk" },
-	{ .fw_name = "aud_pll_div_clk1_lpcg_clk" },
-	{ .fw_name = "acm_aud_clk0_sel" },
-	{ .fw_name = "acm_aud_clk1_sel" },
+	{ .fw_name = "aud_pll_div_clk0_lpcg_clk", .name = "aud_pll_div_clk0_lpcg_clk" },
+	{ .fw_name = "aud_pll_div_clk1_lpcg_clk", .name = "aud_pll_div_clk1_lpcg_clk" },
+	{ .fw_name = "acm_aud_clk0_sel", .name = "acm_aud_clk0_sel" },
+	{ .fw_name = "acm_aud_clk1_sel", .name = "acm_aud_clk1_sel" },
 	{ .index = -1 },
 };
 

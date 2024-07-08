@@ -25,7 +25,7 @@
 	snps,mtl-tx-config = <&mtl_tx_setup>;
 	snps,mtl-rx-config = <&mtl_rx_setup>;
 
-	clk_csr = <5>;
+	snps,clk-csr = <5>;
 	status = "okay";
 
 	mdio {

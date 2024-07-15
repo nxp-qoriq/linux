@@ -145,6 +145,7 @@ void driver_deferred_probe_del(struct device *dev)
 }
 
 static bool driver_deferred_probe_enable = false;
+
 /**
  * driver_deferred_probe_trigger() - Kick off re-probing deferred devices
  *
@@ -185,6 +186,16 @@ static void driver_deferred_probe_trigger(void)
 	 */
 	queue_work(system_unbound_wq, &deferred_probe_work);
 }
+
+/**
+ * deferred_probe_tigger() - Trigger a deferred probe
+ */
+void deferred_probe_trigger(void)
+{
+        driver_deferred_probe_trigger();
+}
+
+EXPORT_SYMBOL(deferred_probe_trigger);
 
 /**
  * device_block_probing() - Block/defer device's probes

@@ -19,6 +19,8 @@
 typedef unsigned char       uint8_t;
 typedef   signed char        int8_t;
 
+static bool attr_deferred_probe_trigger = false;
+
 void rfnm_si5510_i2c_read(struct i2c_client *client, uint8_t * buf, int cnt) {
 
 	uint8_t CTS[6] = {0xf0, 0x0f};
@@ -307,6 +309,18 @@ si5510_freq_correction_store(struct device *dev,
 
 static DEVICE_ATTR_WO(si5510_freq_correction);
 
+static ssize_t deferred_probe_trigger_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	// Ensure the input buffer not NULL and is exactly "1\n"
+	if (!buf || count != 2 || strncmp(buf, "1\n", 2) != 0) {
+		return -EINVAL;
+	}
+	// Perform the deferred probe trigger
+	deferred_probe_trigger();
+	return count;
+}
+static DEVICE_ATTR_WO(deferred_probe_trigger);
+
 struct gpio_desc *si5510_rst_gpio;
 struct gpio_desc *la9310_trst_gpio;
 struct gpio_desc *la9310_hrst_gpio;
@@ -370,10 +384,11 @@ EXPORT_SYMBOL(la9310_read_dtb_node_mem_region);
 
 static int rfnm_si5510_probe(struct i2c_client *client) {
 
-	int i;
+	int err,i;
 	struct rfnm_bootconfig *cfg;
 	struct rfnm_eeprom_data *eeprom_data;
 	struct resource mem_res;
+	s64  uptime_ms;
 	char node_name[10];
 	int ret;
 
@@ -405,8 +420,20 @@ static int rfnm_si5510_probe(struct i2c_client *client) {
 		return -EPROBE_DEFER;
 	}
 
-	s64  uptime_ms;
-    uptime_ms = ktime_to_ms(ktime_get_boottime());
+	if (attr_deferred_probe_trigger) {
+		printk("RFNM: device file for deferred probe trigger already exists\n");
+	} else {
+		// Attempt to create the device file
+		err = device_create_file(&client->dev, &dev_attr_deferred_probe_trigger);
+		if (err < 0) {
+			printk("RFNM: failed to create device file for deferred probe trigger\n");
+		} else {
+			attr_deferred_probe_trigger = true;
+			printk("RFNM: created device file for deferred probe trigger\n");
+		}
+	}
+
+	uptime_ms = ktime_to_ms(ktime_get_boottime());
 
 	if(uptime_ms < 1000) {
 		// complete hack: most PD devices are going to keep probing between 0.7-1 second, so do not start there...
@@ -586,8 +613,6 @@ repeat_search:
 	// cannot load wsled because it's not init'd yet... not sure why the order changed
 	//rfnm_wsled_set(0, 0, 0, 0, 0xff);
 	//rfnm_wsled_send_chain(0);
-
-	int err;
 
 	err = device_create_file(&client->dev, &dev_attr_rfnm_ext_ref_out);
 	if (err < 0) {

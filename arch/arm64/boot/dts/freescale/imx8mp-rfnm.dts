@@ -626,6 +626,13 @@
 	status = "okay";
 };
 
+&uart3 {
+	/* console */
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart3>;
+	status = "okay";
+};
+
 &wdog1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_wdog>;
@@ -997,6 +1004,13 @@
             fsl,pins = <
                 MX8MP_IOMUXC_SD1_DATA2__UART2_DCE_TX       0x00000146
                 MX8MP_IOMUXC_SD1_DATA3__UART2_DCE_RX       0x00000146
+            >;
+        };
+        pinctrl_uart3: uart3grp {
+
+            fsl,pins = <
+                MX8MP_IOMUXC_NAND_ALE__UART3_DCE_RX       0x00000146
+                MX8MP_IOMUXC_NAND_CE0_B__UART3_DCE_TX       0x00000146
             >;
         };
         pinctrl_i2c1: i2c1grp {

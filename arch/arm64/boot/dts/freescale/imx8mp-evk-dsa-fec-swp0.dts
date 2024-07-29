@@ -1,0 +1,92 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2023-2024 NXP
+ */
+
+#include "imx8mp-evk.dts"
+
+/delete-node/&spidev1;
+
+&ecspi2 {
+	status = "okay";
+
+	netcdsa: ethernet-switch@0 {
+		reg = <0x0>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "nxp,imxrt1180-netc";
+		/* 500 kHz */
+		spi-max-frequency = <500000>;
+
+		netcdsa_ports: ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			netcdsa_port0: port@0 {
+				/* cpu port connected to fec */
+				ethernet = <&fec>;
+				label = "cpu";
+				reg = <0>;
+				phy-mode = "sgmii";
+
+				fixed-link {
+					speed = <100>;
+					full-duplex;
+				};
+			};
+
+			netcdsa_port1: port@1 {
+				label = "swp1";
+				reg = <1>;
+				phy-mode = "sgmii";
+
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
+			};
+
+			netcdsa_port2: port@2 {
+				label = "swp2";
+				reg = <2>;
+				phy-mode = "sgmii";
+
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
+			};
+
+			netcdsa_port3: port@3 {
+				label = "swp3";
+				reg = <3>;
+				phy-mode = "sgmii";
+
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
+			};
+
+			netcdsa_port4: port@4 {
+				label = "swp4";
+				reg = <4>;
+				phy-mode = "sgmii";
+				status = "disabled";
+
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
+			};
+		};
+	};
+};
+
+&pinctrl_ecspi2 {
+	fsl,pins = <
+		MX8MP_IOMUXC_ECSPI2_SCLK__ECSPI2_SCLK		0x84
+		MX8MP_IOMUXC_ECSPI2_MOSI__ECSPI2_MOSI		0x84
+		MX8MP_IOMUXC_ECSPI2_MISO__ECSPI2_MISO		0x84
+	>;
+};

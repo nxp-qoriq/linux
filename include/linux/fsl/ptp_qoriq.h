@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (C) 2010 OMICRON electronics GmbH
- * Copyright 2018,2023 NXP
+ * Copyright 2018,2023-2024 NXP
  */
 #ifndef __PTP_QORIQ_H__
 #define __PTP_QORIQ_H__
@@ -123,6 +123,7 @@ struct ptp_qoriq_registers {
 #define STAT_VEC_MASK         (0x3f)
 #define ETS1_VLD              (1<<24)
 #define ETS2_VLD              (1<<25)
+#define RCD		      (1<<31) /* Timer reference clock detect */
 
 /* Bit definitions for the TMR_PRSC register */
 #define PRSC_OCK_SHIFT        (0) /* Output clock division/prescale factor. */

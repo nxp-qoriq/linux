@@ -3,6 +3,7 @@
  * PTP 1588 clock for Freescale QorIQ 1588 timer
  *
  * Copyright (C) 2010 OMICRON electronics GmbH
+ * Copyright 2024 NXP
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -665,6 +666,10 @@ int ptp_qoriq_init(struct ptp_qoriq *ptp_qoriq, void __iomem *base,
 			 tmr_ctrl|FIPERST|RTPE|TE|FRD);
 
 	spin_unlock_irqrestore(&ptp_qoriq->lock, flags);
+
+	if (!(ptp_qoriq->read(&regs->ctrl_regs->tmr_stat) & RCD))
+		pr_err("Error reference clock has not been detected as active\n");
+	return ENODEV;
 
 	ptp_qoriq->clock = ptp_clock_register(&ptp_qoriq->caps, ptp_qoriq->dev);
 	if (IS_ERR(ptp_qoriq->clock))

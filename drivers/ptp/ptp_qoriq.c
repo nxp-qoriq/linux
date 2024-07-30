@@ -386,6 +386,7 @@ int ptp_qoriq_enable_perout(struct ptp_qoriq *ptp_qoriq,
 
         return ret;
 }
+EXPORT_SYMBOL_GPL(ptp_qoriq_enable_perout);
 
 int ptp_qoriq_enable(struct ptp_clock_info *ptp,
 		     struct ptp_clock_request *rq, int on)
@@ -784,6 +785,7 @@ static struct platform_driver ptp_qoriq_driver = {
 
 module_platform_driver(ptp_qoriq_driver);
 
+#if defined (CONFIG_PTP_1588_CLOCK_QORIQ)
 /* Get pulse_width_1588 from bootargs to change pulse width */
 static int __init tmr_pulse_width_fetch(char *str)
 {
@@ -795,6 +797,7 @@ static int __init tmr_pulse_width_fetch(char *str)
 	return ret;
 }
 early_param("pulse_width_1588", tmr_pulse_width_fetch);
+#endif
 
 MODULE_AUTHOR("Richard Cochran <richardcochran@gmail.com>");
 MODULE_DESCRIPTION("PTP clock for Freescale QorIQ 1588 timer");

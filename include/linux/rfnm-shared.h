@@ -148,6 +148,7 @@ struct rfnm_dgb {
 	uint8_t dac_ifs;
 	uint8_t adc_iqswap[2];
 	uint8_t dac_iqswap[2];
+	int (*reset)(struct rfnm_dgb *);// Function pointer for reset sequence
 };
 
 RFNM_PACKED_STRUCT(

@@ -5,13 +5,6 @@
 
 #include "imx8mp-rfnm.dts"
 
-&ethphy0 {
-	/delete-property/ reset-gpios;
-	/delete-property/ reset-assert-us;
-	/delete-property/ reset-deassert-us;
-};
-
-
 &eqos {
 	compatible = "fsl,imx-enet-qos", "snps,dwmac-5.10a";
 };

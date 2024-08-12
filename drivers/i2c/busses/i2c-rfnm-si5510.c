@@ -525,7 +525,11 @@ repeat_search:
 		goto repeat_search;
 	}
 
-	if(can_use_si5510_config(cfg, RFNM_DAUGHTERBOARD_GRANITA, RFNM_DAUGHTERBOARD_GRANITA)) {
+	if(can_use_si5510_config(cfg, RFNM_DAUGHTERBOARD_YUCCA, RFNM_DAUGHTERBOARD_YUCCA)) {
+		rfnm_si5510_load_from_map(client, dcs_map_offset, 1, CMD_BUFFER_SIZE);
+		//rfnm_si5510_host_load(client, Q_Plan1_boot_bin, Q_Plan1_boot_bin_len, CMD_BUFFER_SIZE);
+		printk("RFNM: Selected plan 1 RFNM_DAUGHTERBOARD_YUCCA, RFNM_DAUGHTERBOARD_YUCCA\n");
+	} else if(can_use_si5510_config(cfg, RFNM_DAUGHTERBOARD_GRANITA, RFNM_DAUGHTERBOARD_GRANITA)) {
 		rfnm_si5510_load_from_map(client, dcs_map_offset, 1, CMD_BUFFER_SIZE);
 		//rfnm_si5510_host_load(client, Q_Plan1_boot_bin, Q_Plan1_boot_bin_len, CMD_BUFFER_SIZE);
 		printk("RFNM: Selected plan 1 RFNM_DAUGHTERBOARD_GRANITA, RFNM_DAUGHTERBOARD_GRANITA\n");

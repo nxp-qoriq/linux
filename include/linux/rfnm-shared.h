@@ -7,6 +7,7 @@
 #define RFNM_DAUGHTERBOARD_GRANITA (2)
 #define RFNM_DAUGHTERBOARD_LIME (3)
 #define RFNM_MOTHERBOARD_BLUE (4)
+#define RFNM_DAUGHTERBOARD_YUCCA (5)
 
 #define RFNM_BOARD_ID_TO_USER_READABLE_NAME (char[][30]){"", "Breakout", "Granita", "Lime", "Motherboard"}
 

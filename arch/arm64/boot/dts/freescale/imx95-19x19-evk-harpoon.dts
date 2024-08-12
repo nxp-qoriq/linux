@@ -6,6 +6,7 @@
 /dts-v1/;
 
 #include "imx95-19x19-evk-root.dts"
+#include "imx95-rpmsg-ca55.dtsi"
 
 &lpuart3 {
 	/* To use this, needs dedicated SM to allow RTOS access lpuart3 and lpuart3 pinmux */

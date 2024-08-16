@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 //
 // Copyright 2016 Freescale Semiconductor, Inc.
-// Copyright 2022 NXP
+// Copyright 2022, 2024 NXP
 
 #include <linux/clk.h>
 #include <linux/device_cooling.h>
@@ -77,6 +77,13 @@
 #define REGS_V2_TMLTATR	0x64	/* Monitor low temperature average threshold register */
 #define REGS_V2_TMLTACTR	0x68	/* Monitor low temperature average crit threshold register */
 
+#define TMRTRCTR	0x70
+#define TMRTRCTR_EN	BIT(31)
+#define TMRTRCTR_TEMP(x)	((x) & 0xFF)
+#define TMFTRCTR	0x74
+#define TMFTRCTR_EN	BIT(31)
+#define TMFTRCTR_TEMP(x)	((x) & 0xFF)
+
 #define REGS_TTCFGR	0x080	/* Temperature Configuration Register */
 #define REGS_TSCFGR	0x084	/* Sensor Configuration Register */
 
@@ -146,9 +153,22 @@ static struct qoriq_tmu_data *qoriq_sensor_to_data(struct qoriq_sensor *s)
 static void send_call_back(ctd_event_id_t thermal_event)
 {
 	struct ctd_thermal_event cbk_data;
+	int32_t ctd_temp = 0, ret = 0;
 
 	cbk_data.thermal_event_id = thermal_event;
-	cbk_data.temp = ctd_get_temp();
+
+	ret = ctd_get_temp_v2(&ctd_temp);
+	if (ret == -EAGAIN) {
+		ret = ctd_get_temp_v2(&ctd_temp);
+		if (ret < 0) {
+			pr_err("%s: Invalid ctd temp\n", __func__);
+			ctd_temp = INVALID_CTD_TEMP;
+		}
+	} else if (ret & BIT(31)) {
+		pr_err("%s: Invalid ctd temp\n", __func__);
+		ctd_temp = INVALID_CTD_TEMP;
+	}
+	cbk_data.temp = ctd_temp;
 	if (ctd_tvd_callback != NULL)
 		ctd_tvd_callback(&cbk_data);
 }
@@ -173,8 +193,11 @@ irqreturn_t qoriq_tmu_irq_handler_avg_temp(int irq, void *data)
 			regmap_write(qdata->regmap, REGS_TIER, (~TIER_AVERAGE_THRESHOLD_ENABLED & tier));
 			regmap_write(qdata->regmap, REGS_TMR, (tmr | TMR_ME));
 		} else {
+			/* ERR052243: If there raising or falling edge happens, try later */
 			regmap_read(qdata->regmap, REGS_TIDR, &tidr);
-			if (tidr & TIER_AVERAGE_THRESHOLD_ENABLED) {
+			if (tidr & GENMASK(25, 24)) {
+				regmap_write(qdata->regmap, REGS_TIDR, GENMASK(25, 24));
+			} else if (tidr & TIER_AVERAGE_THRESHOLD_ENABLED) {
 				qoriq_thermal_event |= (1 << CTD_HIGH_AVG_TEMP_EVENT);
 				regmap_read(qdata->regmap, REGS_TIER, &tier);
 				regmap_write(qdata->regmap, REGS_TIER, (~TIER_AVERAGE_THRESHOLD_ENABLED & tier));
@@ -214,8 +237,11 @@ irqreturn_t qoriq_tmu_irq_handler_crit_temp(int irq, void *data)
 			regmap_write(qdata->regmap, REGS_TIER, (~TIER_CRITICAL_THRESHOLD_ENABLED & tier));
 			regmap_write(qdata->regmap, REGS_TMR, (tmr | TMR_ME));
 		} else {
+			/* ERR052243: If there raising or falling edge happens, try later */
 			regmap_read(qdata->regmap, REGS_TIDR, &tidr);
-			if (tidr & TIER_CRITICAL_THRESHOLD_ENABLED) {
+			if (tidr & GENMASK(25, 24)) {
+				regmap_write(qdata->regmap, REGS_TIDR, GENMASK(25, 24));
+			} else if (tidr & TIER_CRITICAL_THRESHOLD_ENABLED) {
 				qoriq_thermal_event |= (1 << CTD_HIGH_CRITICAL_TEMP_EVENT);
 				regmap_read(qdata->regmap, REGS_TIER, &tier);
 				regmap_write(qdata->regmap, REGS_TIER, (~TIER_CRITICAL_THRESHOLD_ENABLED & tier));
@@ -237,10 +263,22 @@ irqreturn_t qoriq_tmu_irq_handler_crit_temp(int irq, void *data)
 
 int ctd_get_temp(void)
 {
+	s32 temp = 0;
+
+	if (ctd_get_temp_v2(&temp))
+		pr_err("%s :Invalid temperature, Try again !\n", __func__);
+
+	return temp;
+}
+EXPORT_SYMBOL_GPL(ctd_get_temp);
+
+int ctd_get_temp_v2(int32_t *temp)
+{
 	int i, max_temp = 0;
 	u32 ctd_curent_temp[MAX_TMUv2_CTD_MONITORING_SITE];
 	struct qoriq_tmu_data *data = platform_get_drvdata(pdev_tmu);
-	u32 tritsr = 0;
+	u32 tritsr = 0, tidr = 0;
+
 
 	if (data->ver == TMU_VER1) {
 		for (i = 0; i < MAX_CTD_MONITORING_SITE; i++) {
@@ -259,9 +297,16 @@ int ctd_get_temp(void)
 			return INVALID_CTD_TEMP;
 		}
 
-		return max_temp;
+		*temp = max_temp;
 	} else {
 		for (i = 0; i < MAX_TMUv2_CTD_MONITORING_SITE; i++) {
+			/* ERR052243: If there raising or falling edge happens, try later */
+			regmap_read(data->regmap, REGS_TIDR, &tidr);
+			if (tidr & GENMASK(25, 24)) {
+				regmap_write(data->regmap, REGS_TIDR, GENMASK(25, 24));
+				return -EAGAIN;
+			}
+
 			regmap_read(data->regmap, REGS_TRITSR(i), &tritsr);
 			if (!(tritsr & 0x80000000))
 				break;
@@ -278,17 +323,18 @@ int ctd_get_temp(void)
 			    __func__, (tritsr & 0x80000000), max_temp);
 			return INVALID_CTD_TEMP;
 		}
-		return max_temp;
+		*temp = max_temp;
 	}
+	return 0;
 }
-EXPORT_SYMBOL_GPL(ctd_get_temp);
+EXPORT_SYMBOL_GPL(ctd_get_temp_v2);
 #endif
 
 static int tmu_get_temp(void *p, int *temp)
 {
 	struct qoriq_sensor *qsensor = p;
 	struct qoriq_tmu_data *qdata = qoriq_sensor_to_data(qsensor);
-	u32 val;
+	u32 val, tidr;
 	/*
 	 * REGS_TRITSR(id) has the following layout:
 	 *
@@ -315,6 +361,15 @@ static int tmu_get_temp(void *p, int *temp)
 				     USEC_PER_MSEC,
 				     10 * USEC_PER_MSEC))
 		return -ENODATA;
+
+	/*ERR052243: If there raising or falling edge happens, try later */
+	if (qdata->ver == TMU_VER2) {
+		regmap_read(qdata->regmap, REGS_TIDR, &tidr);
+		if (tidr & GENMASK(25, 24)) {
+			regmap_write(qdata->regmap, REGS_TIDR, GENMASK(25, 24));
+			return -EAGAIN;
+		}
+	}
 
 	if (qdata->ver == TMU_VER1) {
 		*temp = (val & GENMASK(7, 0)) * MILLIDEGREE_PER_DEGREE;
@@ -524,6 +579,9 @@ static void qoriq_tmu_init_device(struct qoriq_tmu_data *data)
 	} else {
 		regmap_write(data->regmap, REGS_V2_TMTMIR, TMTMIR_DEFAULT);
 		regmap_write(data->regmap, REGS_V2_TEUMR(0), TEUMR0_V2);
+		/* ERR052243: Set the raising & falling edge monitor */
+		regmap_write(data->regmap, TMRTRCTR, TMRTRCTR_EN | TMRTRCTR_TEMP(0x7));
+		regmap_write(data->regmap, TMFTRCTR, TMFTRCTR_EN | TMFTRCTR_TEMP(0x7));
 	}
 
 	/* Disable monitoring */

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright 2019-2022 NXP
+ * Copyright 2019-2022, 2024 NXP
  */
 
 #ifndef _QORIQ_THERMAL_INTERRUPT_
@@ -92,6 +92,15 @@ int qoriq_tmu_register_interrupt(struct platform_device *pdev,
  * @return : Max temp of all monitoring site
  */
 int ctd_get_temp(void);
+
+/*
+ * @brief : Function to get current temperature
+ * @param : temp : Max temp of all monitoring site
+ *
+ * @return : 0 on success, -ve on failure
+ */
+int ctd_get_temp_v2(int32_t *temp);
+
 /**
  * @brief : Function to update hystesis value
  * @param hysteresis_val : Value to be updated

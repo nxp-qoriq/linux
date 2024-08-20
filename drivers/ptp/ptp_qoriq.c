@@ -668,9 +668,10 @@ int ptp_qoriq_init(struct ptp_qoriq *ptp_qoriq, void __iomem *base,
 
 	spin_unlock_irqrestore(&ptp_qoriq->lock, flags);
 
-	if (!(ptp_qoriq->read(&regs->ctrl_regs->tmr_stat) & RCD))
+	if (!(ptp_qoriq->read(&regs->ctrl_regs->tmr_stat) & RCD)) {
 		pr_err("Error reference clock has not been detected as active\n");
-	return ENODEV;
+		return -ENODEV;
+	}
 
 	ptp_qoriq->clock = ptp_clock_register(&ptp_qoriq->caps, ptp_qoriq->dev);
 	if (IS_ERR(ptp_qoriq->clock))

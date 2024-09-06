@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 #ifndef INCLUDE_LINUX_RFNM_API_H_
 #define INCLUDE_LINUX_RFNM_API_H_
 
@@ -64,6 +65,7 @@ RFNM_PACKED_STRUCT(
 	int64_t freq_min;
 	int64_t freq_max;
 	int64_t freq;
+	int64_t gain_db;
 	int16_t rfic_lpf_bw;
 	int16_t samp_freq_div_m;
 	int16_t samp_freq_div_n;
@@ -89,6 +91,7 @@ RFNM_PACKED_STRUCT(
 	int64_t freq_min;
 	int64_t freq_max;
 	int64_t freq;
+	int64_t gain_db;
 	int16_t rfic_lpf_bw; // iq low pass filter in mhz
 	int16_t samp_freq_div_m; // unused, multiplier for ddc
 	int16_t samp_freq_div_n; // either 1 or 2, divider for ddc

@@ -27,7 +27,7 @@
 #define MAX_TEST_LEN	2048
 #define VT_TIMES	1000
 #define INDIRECT_NUM	1
-#define WAIT_TO_MS	2000
+#define WAIT_TO_MS	2
 
 #define VT_TXRX_BIT	(1 << 0)
 #define VT_B_COPY_BIT	(1 << 1)

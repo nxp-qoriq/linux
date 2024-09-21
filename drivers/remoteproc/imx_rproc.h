@@ -26,6 +26,8 @@ enum imx_rproc_method {
 	IMX_RPROC_SCU_API,
 	/* Through System Manager */
 	IMX_RPROC_SM,
+	/* Through ARM64 PSCI */
+	IMX_RPROC_PSCI,
 };
 
 /* dcfg flags */

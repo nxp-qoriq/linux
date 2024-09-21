@@ -6,6 +6,7 @@
 #include <dt-bindings/firmware/imx/rsrc.h>
 #include <linux/arm-smccc.h>
 #include <linux/clk.h>
+#include <linux/cpu.h>
 #include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/firmware.h>
@@ -21,11 +22,16 @@
 #include <linux/of_reserved_mem.h>
 #include <linux/platform_device.h>
 #include <linux/pm_domain.h>
+#include <linux/psci.h>
 #include <linux/reboot.h>
 #include <linux/regmap.h>
 #include <linux/remoteproc.h>
 #include <linux/scmi_imx_protocol.h>
 #include <linux/workqueue.h>
+
+#include <uapi/linux/psci.h>
+
+#include <asm/smp_plat.h>
 
 #include "remoteproc_elf_helpers.h"
 #include "remoteproc_internal.h"
@@ -74,6 +80,8 @@
 #define IMX_SIP_RPROC_START		0x00
 #define IMX_SIP_RPROC_STARTED		0x01
 #define IMX_SIP_RPROC_STOP		0x02
+
+#define IMX_SIP_CPU_OFF			0xC200000D
 
 #define IMX_SC_IRQ_GROUP_REBOOTED	5
 
@@ -128,6 +136,8 @@ struct imx_rproc {
 	u32				core_index;
 	struct dev_pm_domain_list	*pd_list;
 	u32				startup_delay;
+	cpumask_t			cpus;
+	cpumask_t			offlined_cpus;
 	/* For i.MX System Manager based systems */
 	u32				cpuid;
 	u32				lmid;
@@ -427,6 +437,12 @@ static const struct imx_rproc_dcfg imx_rproc_cfg_imx93 = {
 	.method		= IMX_RPROC_SMC,
 };
 
+static const struct imx_rproc_dcfg imx_rproc_cfg_psci = {
+	.att		= NULL,
+	.att_size	= 0,
+	.method		= IMX_RPROC_PSCI,
+};
+
 static const struct imx_rproc_dcfg imx_rproc_cfg_imx95_m7 = {
 	.att		= imx_rproc_att_imx95_m7,
 	.att_size	= ARRAY_SIZE(imx_rproc_att_imx95_m7),
@@ -445,6 +461,88 @@ static const struct imx_rproc_dcfg imx_rproc_cfg_imx94_m33s = {
 	.method		= IMX_RPROC_SM,
 };
 
+static int imx_rproc_psci_start(struct rproc *rproc)
+{
+	struct imx_rproc *priv = rproc->priv;
+	struct device *dev = priv->dev;
+	unsigned int cpu;
+	int ret;
+
+	if (cpumask_empty(&priv->cpus)) {
+		dev_err(dev, "No CPU Core assigned!\n");
+		return -ENODEV;
+	}
+
+	for_each_cpu(cpu, &priv->cpus) {
+		if (cpu_online(cpu)) {
+			ret = remove_cpu(cpu);
+			if (ret)
+				goto err;
+			cpumask_set_cpu(cpu, &priv->offlined_cpus);
+		}
+	}
+
+	cpu = cpumask_first(&priv->cpus);
+	ret = psci_ops.cpu_on(cpu_logical_map(cpu), rproc->bootaddr);
+	if (ret) {
+		dev_err(dev, "Boot failed on CPU Core %d\n", cpu);
+		goto err;
+	}
+
+	return 0;
+
+err:
+	for_each_cpu(cpu, &priv->cpus) {
+		if (!cpu_online(cpu) && add_cpu(cpu) == 0)
+			cpumask_clear_cpu(cpu, &priv->offlined_cpus);
+	}
+
+	return ret;
+}
+
+static int imx_rproc_psci_stop(struct rproc *rproc)
+{
+	struct imx_rproc *priv = rproc->priv;
+	struct device *dev = priv->dev;
+	struct arm_smccc_res res;
+	unsigned int cpu;
+	unsigned long start, end;
+	int err;
+
+	for_each_cpu(cpu, &priv->cpus) {
+		/* Check CPU status */
+		err = psci_ops.affinity_info(cpu_logical_map(cpu), 0);
+		if (err == PSCI_0_2_AFFINITY_LEVEL_OFF)
+			continue;
+
+		/* Bring CPU to be off */
+		arm_smccc_smc(IMX_SIP_CPU_OFF, cpu, 0,
+			0, 0, 0, 0, 0, &res);
+		start = jiffies;
+		end = start + msecs_to_jiffies(100);
+		do {
+			err = psci_ops.affinity_info(cpu_logical_map(cpu), 0);
+			if (err == PSCI_0_2_AFFINITY_LEVEL_OFF) {
+				pr_info("CPU%d is killed (polled %d ms)\n", cpu,
+					jiffies_to_msecs(jiffies - start));
+				break;
+			}
+
+			usleep_range(100, 1000);
+		} while (time_before(jiffies, end));
+	}
+
+	/* Return back freed CPU Core to Linux kernel */
+	for_each_cpu(cpu, &priv->cpus) {
+		if (cpumask_test_cpu(cpu, &priv->offlined_cpus)) {
+			if (add_cpu(cpu) != 0)
+				dev_err(dev, "Failed to bring CPU %d back to be online", cpu);
+			cpumask_clear_cpu(cpu, &priv->offlined_cpus);
+		}
+	}
+
+	return 0;
+}
 
 static int imx_rproc_start(struct rproc *rproc)
 {
@@ -506,6 +604,9 @@ static int imx_rproc_start(struct rproc *rproc)
 				dev_err(dev, "Failed to boot lmm(%d): %d\n", ret, priv->lmid);
 			}
 		break;
+	case IMX_RPROC_PSCI:
+		ret = imx_rproc_psci_start(rproc);
+		break;
 	default:
 		return -EOPNOTSUPP;
 	}
@@ -561,6 +662,9 @@ static int imx_rproc_stop(struct rproc *rproc)
 		else
 			ret = scmi_imx_cpu_stop(priv->cpuid);
 		break;
+	case IMX_RPROC_PSCI:
+		ret = imx_rproc_psci_stop(rproc);
+		break;
 	default:
 		return -EOPNOTSUPP;
 	}
@@ -578,6 +682,12 @@ static int imx_rproc_da_to_sys(struct imx_rproc *priv, u64 da,
 {
 	const struct imx_rproc_dcfg *dcfg = priv->dcfg;
 	int i;
+
+	/* No need to translate for Cortex-A Core */
+	if (dcfg->method == IMX_RPROC_PSCI) {
+		*sys = da;
+		return 0;
+	}
 
 	/* parse address translation table */
 	for (i = 0; i < dcfg->att_size; i++) {
@@ -1168,6 +1278,9 @@ static int imx_rproc_detect_mode(struct imx_rproc *priv)
 	case IMX_RPROC_NONE:
 		priv->rproc->state = RPROC_DETACHED;
 		return 0;
+	case IMX_RPROC_PSCI:
+		priv->rproc->state = RPROC_OFFLINE;
+		return 0;
 	case IMX_RPROC_SMC:
 		ret = of_property_read_u32(dev->of_node, "fsl,core-index", &priv->core_index);
 		if (ret)
@@ -1337,6 +1450,8 @@ static int imx_rproc_probe(struct platform_device *pdev)
 	struct imx_rproc *priv;
 	struct rproc *rproc;
 	const struct imx_rproc_dcfg *dcfg;
+	unsigned int cpus;
+	unsigned long cpus_bits;
 	int ret;
 
 	/* set some other name then imx */
@@ -1412,6 +1527,17 @@ static int imx_rproc_probe(struct platform_device *pdev)
 	if (ret)
 		priv->startup_delay = 0;
 
+	ret = of_property_read_u32(dev->of_node, "fsl,cpus-bits", &cpus);
+	if (ret) {
+		cpumask_clear(&priv->cpus);
+	} else {
+		cpus_bits = cpus;
+		bitmap_copy(cpumask_bits(&priv->cpus), &cpus_bits,
+				min((unsigned int)nr_cpumask_bits,
+				    (unsigned int)sizeof(unsigned long)));
+		rproc->auto_boot = false;
+	}
+
 	ret = rproc_add(rproc);
 	if (ret) {
 		dev_err(dev, "rproc_add failed\n");
@@ -1461,6 +1587,7 @@ static const struct of_device_id imx_rproc_of_match[] = {
 	{ .compatible = "fsl,imx95-cm7", .data = &imx_rproc_cfg_imx95_m7 },
 	{ .compatible = "fsl,imx94-cm7", .data = &imx_rproc_cfg_imx94_m7 },
 	{ .compatible = "fsl,imx94-cm33s", .data = &imx_rproc_cfg_imx94_m33s },
+	{ .compatible = "fsl,imx-rproc-psci", .data = &imx_rproc_cfg_psci },
 	{},
 };
 MODULE_DEVICE_TABLE(of, imx_rproc_of_match);

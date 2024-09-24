@@ -1640,7 +1640,6 @@ static int enetc_config_clsflower(struct enetc_ndev_priv *priv,
 	if (fwd->output & FILTER_ACTION_TYPE_PSFP) {
 		err = enetc_psfp_parse_clsflower(priv, cls_flower);
 		if (err) {
-			NL_SET_ERR_MSG_MOD(extack, "Invalid PSFP inputs");
 			return err;
 		}
 	} else {

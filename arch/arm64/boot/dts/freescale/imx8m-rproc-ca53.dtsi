@@ -1,0 +1,34 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2024 NXP
+ */
+
+/ {
+	ca53_1: remoteproc-ca53-1 {
+		compatible = "fsl,imx-rproc-psci";
+		/* bitmask:0b0010, assign A53 Core 1 */
+		fsl,cpus-bits = <0x2>;
+		memory-region = <&rtos_ca53_reserved>;
+	};
+
+	ca53_2: remoteproc-ca53-2 {
+		compatible = "fsl,imx-rproc-psci";
+		/* bitmask:0b0100, assign A53 Core 2 */
+		fsl,cpus-bits = <0x4>;
+		memory-region = <&rtos_ca53_reserved>;
+	};
+
+	ca53_3: remoteproc-ca53-3 {
+		compatible = "fsl,imx-rproc-psci";
+		/* bitmask:0b1000, assign A53 Core 3 */
+		fsl,cpus-bits = <0x8>;
+		memory-region = <&rtos_ca53_reserved>;
+	};
+
+	ca53_2_3: remoteproc-ca53-2-3 {
+		compatible = "fsl,imx-rproc-psci";
+		/* bitmask:0b1100, assign A53 Core 2 and Core 3 */
+		fsl,cpus-bits = <0xc>;
+		memory-region = <&rtos_ca53_reserved>;
+	};
+};

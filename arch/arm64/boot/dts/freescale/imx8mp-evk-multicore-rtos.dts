@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: (GPL-2.0 OR MIT)
 /*
- * Copyright 2023 NXP
+ * Copyright 2023-2024 NXP
  */
 
 /dts-v1/;
 
 #include "imx8mp-evk.dts"
+#include "imx8m-rproc-ca53.dtsi"
 
 / {
 	reserved-memory {
@@ -17,7 +18,7 @@
 		 * Reserve up to 48MB (16MB x 3) for three FreeRTOS instances running on
 		 * three Cortex-A Cores when booting Linux on at least on Cortex-A Core.
 		 */
-		ca53_reserved: ca53@c0000000 {
+		rtos_ca53_reserved: rtos-ca53@c0000000 {
 			no-map;
 			reg = <0 0xc0000000 0x0 0x3000000>;
 		};

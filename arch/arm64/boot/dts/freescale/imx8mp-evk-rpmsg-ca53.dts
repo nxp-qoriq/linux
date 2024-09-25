@@ -7,6 +7,7 @@
 
 #include "imx8mp-evk.dts"
 #include "imx8mp-rpmsg-ca53.dtsi"
+#include "imx8m-rproc-ca53.dtsi"
 
 / {
 	reserved-memory {

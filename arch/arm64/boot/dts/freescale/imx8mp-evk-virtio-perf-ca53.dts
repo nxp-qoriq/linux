@@ -6,6 +6,7 @@
 /dts-v1/;
 #include "imx8mp-evk.dts"
 #include "imx8mp-generic-mbox.dtsi"
+#include "imx8m-rproc-ca53.dtsi"
 
 / {
 	reserved-memory {
@@ -19,7 +20,7 @@
 		};
 
 		/* 512MB */
-		freertos_reserved: inmate@c0000000 {
+		rtos_ca53_reserved: rtos-ca53@c0000000 {
 			no-map;
 			reg = <0 0xc0000000 0x0 0x20000000>;
 		};

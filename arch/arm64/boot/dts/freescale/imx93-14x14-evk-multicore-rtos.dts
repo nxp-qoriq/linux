@@ -5,6 +5,7 @@
 
 /dts-v1/;
 #include "imx93-14x14-evk.dts"
+#include "imx93-rproc-ca55.dtsi"
 
 / {
 	reserved-memory {

@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: (GPL-2.0 OR MIT)
 /*
- * Copyright 2023 NXP
+ * Copyright 2023-2024 NXP
  */
 
 /dts-v1/;
 #include "imx93-11x11-evk.dts"
 #include "imx93-generic-mbox.dtsi"
+#include "imx93-rproc-ca55.dtsi"
 
 / {
 	reserved-memory {
@@ -19,7 +20,7 @@
 		};
 
 		/* 512MB */
-		freertos_reserved: inmate@d0000000 {
+		rtos_ca55_reserved: rtos-ca55@d0000000 {
 			no-map;
 			reg = <0 0xd0000000 0x0 0x20000000>;
 		};

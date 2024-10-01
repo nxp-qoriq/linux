@@ -144,6 +144,8 @@ dtb-$(CONFIG_ARCH_MXC) += imx8mm-evk.dtb imx8mm-evk-rpmsg.dtb imx8mm-evk-rm67191
 			  imx8mm-evk-dpdk.dtb \
 			  imx8mm-evk-harpoon.dtb imx8mm-evk-harpoon-industrial.dtb imx8mm-evk-harpoon-avb.dtb \
 			  imx8mm-evk-harpoon-virtio-net.dtb \
+			  imx8mm-evk-qca-wifi-harpoon.dtb imx8mm-evk-qca-wifi-harpoon-industrial.dtb \
+			  imx8mm-evk-qca-wifi-harpoon-avb.dtb imx8mm-evk-qca-wifi-harpoon-virtio-net.dtb \
 			  imx8mm-evk-rm67199.dtb imx8mm-evk-rm67191-cmd-ram.dtb imx8mm-evk-rm67199-cmd-ram.dtb \
 			  imx8mm-evk-lk.dtb imx8mm-evk-rpmsg-8m-buf.dtb \
 			  imx8mm-evk-ecat.dtb \

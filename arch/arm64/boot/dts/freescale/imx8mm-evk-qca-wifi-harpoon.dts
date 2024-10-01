@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Copyright 2019, 2024 NXP
+ * Copyright 2024 NXP
  */
 
-/dts-v1/;
-
-#include "imx8mm-evk.dts"
+#include "imx8mm-evk-harpoon.dts"
 #include "imx8mm-evk-qca-wifi.dtsi"

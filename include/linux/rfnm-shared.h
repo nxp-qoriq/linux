@@ -110,15 +110,13 @@ struct __attribute__((__packed__)) rfnm_bootconfig {
 
 
 
-RFNM_PACKED_STRUCT(
-	struct fe_s {
+	struct __attribute__((__packed__)) fe_s {
 		uint32_t latch_val[6];
 		uint32_t latch_val_last_written[6];
 		uint32_t num_latches[7];
 		uint32_t align[1];
 		uint32_t load_order[8];
 	};
-);
 
 struct rfnm_dgb {
 	struct rfnm_api_rx_ch *rx_ch[4];
@@ -152,15 +150,13 @@ struct rfnm_dgb {
 	int (*reset)(struct rfnm_dgb *);// Function pointer for reset sequence
 };
 
-RFNM_PACKED_STRUCT(
-	struct rfnm_m7_dgb {
+	struct __attribute__((__packed__)) rfnm_m7_dgb {
 		struct fe_s fe;
 		struct fe_s fe_tdd[2];
 		uint32_t m7_tdd_initialized;
         uint32_t dgb_id;
         uint32_t tdd_available;
-	} 
-); 
+	};
 
 
 void rfnm_dgb_reg_rx_ch(struct rfnm_dgb *dgb_dt, struct rfnm_api_rx_ch * rx_ch, struct rfnm_api_rx_ch * rx_s);

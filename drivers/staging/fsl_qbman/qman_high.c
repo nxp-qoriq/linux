@@ -789,13 +789,14 @@ static DEFINE_SPINLOCK(ethercat_mask_lock);
 
 struct qman_portal *qman_create_affine_portal_ethercat
 			(const struct qm_portal_config *config,
-			const struct qman_cgrs *cgrs, int cpu)
+			const struct qman_cgrs *cgrs, int cpu, 
+			bool need_cleanup)
 {
 	struct qman_portal *res;
 	struct qman_portal *portal = NULL;
 
 	portal = &ethercat_portal[cpu];
-	res = qman_create_portal(portal, config, cgrs);
+	res = qman_create_portal(portal, config, cgrs, need_cleanup);
 	if (res) {
 		spin_lock(&ethercat_mask_lock);
 		ethercat_channel[cpu] = config->public_cfg.channel;

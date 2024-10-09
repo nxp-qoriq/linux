@@ -636,7 +636,7 @@ static int qman_online_cpu(unsigned int cpu)
 #endif /* CONFIG_HOTPLUG_CPU */
 
 #ifdef CONFIG_FSL_DPAA_ETHERCAT
-__init void qman_ethercat_portal_init(int cpu)
+__init void qman_ethercat_portal_init(int cpu, bool need_cleanup)
 {
 	struct qm_portal_config *pcfg;
 	struct qman_portal *p;
@@ -648,7 +648,7 @@ __init void qman_ethercat_portal_init(int cpu)
 
 		pcfg->iommu_domain = NULL;
 		portal_set_cpu(pcfg, pcfg->public_cfg.cpu);
-		p = qman_create_affine_portal_ethercat(pcfg, NULL, cpu);
+		p = qman_create_affine_portal_ethercat(pcfg, NULL, cpu, need_cleanup);
 		if (p) {
 			pr_info("Qman portal %sinitialised, cpu %d\n",
 				pcfg->public_cfg.is_shared ? "(shared) " : "",
@@ -668,13 +668,13 @@ u32 qman_get_affine_last_cpu(void)
 	return qman_affine_last_cpu;
 }
 
-__init void qman_ethercat_portal_init_on_cpu(void)
+__init void qman_ethercat_portal_init_on_cpu(bool need_cleanup)
 {
 	int cpu = 0;
 
 	for_each_online_cpu(cpu) {
 		qman_affine_last_cpu = cpu;
-		qman_ethercat_portal_init(cpu);
+		qman_ethercat_portal_init(cpu, need_cleanup);
 	}
 }
 #endif
@@ -854,7 +854,7 @@ __init int qman_init(void)
 	}
 
 #ifdef CONFIG_FSL_DPAA_ETHERCAT
-	qman_ethercat_portal_init_on_cpu();
+	qman_ethercat_portal_init_on_cpu(need_cleanup);
 #endif
 
 	return 0;

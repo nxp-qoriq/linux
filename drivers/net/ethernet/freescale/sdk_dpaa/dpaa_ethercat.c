@@ -494,7 +494,6 @@ static const struct net_device_ops dpa_private_ops = {
 	.ndo_set_rx_mode = dpa_set_rx_mode,
 	.ndo_init = dpa_ndo_init,
 	.ndo_set_features = dpa_set_features,
-	.ndo_fix_features = dpa_fix_features,
 	.ndo_do_ioctl = dpa_ioctl,
 };
 

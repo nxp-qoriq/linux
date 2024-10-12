@@ -1561,14 +1561,14 @@ static void vsc9959_tas_clock_adjust(struct ocelot *ocelot)
 		if (!taprio)
 			continue;
 
+		/* Disable time-aware shaper */
+		ocelot_rmw_rix(ocelot, 0, QSYS_TAG_CONFIG_ENABLE,
+			       QSYS_TAG_CONFIG, port);
+
 		ocelot_rmw(ocelot,
 			   QSYS_TAS_PARAM_CFG_CTRL_PORT_NUM(port),
 			   QSYS_TAS_PARAM_CFG_CTRL_PORT_NUM_M,
 			   QSYS_TAS_PARAM_CFG_CTRL);
-
-		/* Disable time-aware shaper */
-		ocelot_rmw_rix(ocelot, 0, QSYS_TAG_CONFIG_ENABLE,
-			       QSYS_TAG_CONFIG, port);
 
 		vsc9959_new_base_time(ocelot, taprio->base_time,
 				      taprio->cycle_time, &base_ts);

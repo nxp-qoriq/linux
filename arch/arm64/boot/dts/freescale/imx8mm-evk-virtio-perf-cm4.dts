@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: (GPL-2.0 OR MIT)
 /*
- * Copyright 2022-2023 NXP
+ * Copyright 2022-2024 NXP
  */
 
 /dts-v1/;
@@ -31,6 +31,19 @@
 		mbox-names = "mmiowr", "mmioirq";
 		mboxes = <&mu 0 2
 			  &mu 1 2>;
+	};
+
+	imx8mm-cm4 {
+		compatible = "fsl,imx8mm-cm4";
+		clocks = <&clk IMX8MM_CLK_M4_DIV>;
+		mbox-names = "tx", "rx", "rxdb";
+		mboxes = <&mu 0 1
+			  &mu 1 1
+			  &mu 3 1>;
+		memory-region = <&cm4_reserved>;
+		syscon = <&src>;
+		fsl,startup-delay-ms = <500>;
+		status = "okay";
 	};
 };
 

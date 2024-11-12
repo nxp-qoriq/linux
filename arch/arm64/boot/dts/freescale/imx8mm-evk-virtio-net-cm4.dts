@@ -69,26 +69,6 @@
 			IMX8MM_CLK_UART4_ROOT>;
 };
 
-&iomuxc {
-	/*
-	 * Used for the 2nd Linux.
-	 * TODO: M4 may use these pins.
-	 */
-	pinctrl_uart4: uart4grp {
-		fsl,pins = <
-			MX8MM_IOMUXC_UART4_RXD_UART4_DCE_RX	0x140
-			MX8MM_IOMUXC_UART4_TXD_UART4_DCE_TX	0x140
-		>;
-	};
-};
-
-&uart2 {
-	/* uart2 is used by the 2nd OS, so configure pin and clk */
-	pinctrl-0 = <&pinctrl_uart2>, <&pinctrl_uart4>;
-	assigned-clocks = <&clk IMX8MM_CLK_UART4>;
-	assigned-clock-parents = <&clk IMX8MM_CLK_24M>;
-};
-
 &fec1 {
 	status = "disabled";
 };

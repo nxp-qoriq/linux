@@ -36,6 +36,19 @@
 		mboxes = <&mu 0 2
 			  &mu 1 2>;
 	};
+
+	imx8mp-cm7 {
+		compatible = "fsl,imx8mn-cm7";
+		clocks = <&clk IMX8MP_CLK_M7_DIV>;
+		clock-names = "core";
+		mbox-names = "tx", "rx", "rxdb";
+		mboxes = <&mu 0 1
+			  &mu 1 1
+			  &mu 3 1>;
+		memory-region = <&cm7_reserved>;
+		status = "okay";
+		fsl,startup-delay-ms = <500>;
+	};
 };
 
 &{/busfreq} {

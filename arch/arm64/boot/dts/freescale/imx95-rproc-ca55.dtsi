@@ -1,0 +1,48 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2024 NXP
+ */
+
+/ {
+	ca55_1: remoteproc-ca55-1 {
+		compatible = "fsl,imx-rproc-psci";
+		/* bitmask:0b000010, assign A55 Core 1 */
+		fsl,cpus-bits = <0x2>;
+		memory-region = <&rtos_ca55_reserved>;
+	};
+
+	ca55_2: remoteproc-ca55-2 {
+		compatible = "fsl,imx-rproc-psci";
+		/* bitmask:0b000100, assign A55 Core 2 */
+		fsl,cpus-bits = <0x4>;
+		memory-region = <&rtos_ca55_reserved>;
+	};
+
+	ca55_3: remoteproc-ca55-3 {
+		compatible = "fsl,imx-rproc-psci";
+		/* bitmask:0b001000, assign A55 Core 3 */
+		fsl,cpus-bits = <0x8>;
+		memory-region = <&rtos_ca55_reserved>;
+	};
+
+	ca55_4: remoteproc-ca55-4 {
+		compatible = "fsl,imx-rproc-psci";
+		/* bitmask:0b010000, assign A55 Core 4 */
+		fsl,cpus-bits = <0x10>;
+		memory-region = <&rtos_ca55_reserved>;
+	};
+
+	ca55_5: remoteproc-ca55-5 {
+		compatible = "fsl,imx-rproc-psci";
+		/* bitmask:0b100000, assign A55 Core 5 */
+		fsl,cpus-bits = <0x20>;
+		memory-region = <&rtos_ca55_reserved>;
+	};
+
+	ca55_4_5: remoteproc-ca55-4-5 {
+		compatible = "fsl,imx-rproc-psci";
+		/* bitmask:0b110000, assign A55 Core 4 and 5 */
+		fsl,cpus-bits = <0x30>;
+		memory-region = <&rtos_ca55_reserved>;
+	};
+};

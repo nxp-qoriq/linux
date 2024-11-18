@@ -321,13 +321,13 @@ static ssize_t deferred_probe_trigger_store(struct device *dev, struct device_at
 }
 static DEVICE_ATTR_WO(deferred_probe_trigger);
 
-struct gpio_desc *si5510_rst_gpio;
-struct gpio_desc *la9310_trst_gpio;
-struct gpio_desc *la9310_hrst_gpio;
-struct gpio_desc *la9310_bootstrap_en_gpio;
+static struct gpio_desc *si5510_rst_gpio;
+static struct gpio_desc *la9310_trst_gpio;
+static struct gpio_desc *la9310_hrst_gpio;
+static struct gpio_desc *la9310_bootstrap_en_gpio;
 
-struct gpio_desc *power_en_09_gpio;
-struct gpio_desc *la9310_power_en_gpio;
+static struct gpio_desc *power_en_09_gpio;
+static struct gpio_desc *la9310_power_en_gpio;
 
 uint32_t rfnm_si5510_plan_map[RFNM_NUM_DCS_FREQ][3] = {
 	{300, 38, 38912000},{285, 40, 40960000},{256, 45, 45600000},
@@ -347,40 +347,6 @@ void rfnm_si5510_load_from_map(struct i2c_client *client, int offset, int map, i
 	offset *= 4;
 	rfnm_si5510_host_load(client, rfnm_q_plan_map[offset+map], rfnm_q_plan_map_sizes[offset+map], CMD_BUFFER_SIZE);
 }
-
-int la9310_read_dtb_node_mem_region(const char *node_name, struct resource *get_mem_res)
-{
-        int rc = 0;
-        struct device_node *memnp;
-        struct resource mem_res;
-
-        /* Get pointer to device node */
-        memnp = of_find_node_by_name(NULL,node_name);;
-        if (!memnp) {
-                printk("Node %s not found\n",node_name);
-                rc = RFNM_DTB_NODE_NOT_FOUND;
-        }
-        else {
-                /* Convert memory region to a struct resource */
-                rc = of_address_to_resource(memnp, 0, &mem_res);
-                /* finished with memnp */
-                of_node_put(memnp);
-                if (rc) {
-                        printk("Failed to translate memory-region to a resource for node %s\n",node_name);
-                        rc = RFNM_DTB_NODE_NOT_FOUND;
-                }
-                else {
-                        pr_info("RFNM: func %s Node Name %s\n",__func__,node_name);
-                        pr_info("MemRegion Start 0x%08X\n", mem_res.start);
-                        pr_info("MemRegion Size 0x%08X\n", resource_size(&mem_res));
-                        get_mem_res->start= mem_res.start;
-                        memcpy(get_mem_res,&mem_res, sizeof(struct resource));
-                }
-        }
-        return rc;
-}
-
-EXPORT_SYMBOL(la9310_read_dtb_node_mem_region);
 
 static int rfnm_si5510_probe(struct i2c_client *client) {
 

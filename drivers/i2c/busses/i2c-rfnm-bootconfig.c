@@ -3,6 +3,7 @@
 #include <linux/interrupt.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
+#include <linux/of_address.h>
 #include <linux/regmap.h>
 
 #include <linux/i2c.h>
@@ -14,6 +15,40 @@
 
 typedef unsigned char       uint8_t;
 typedef   signed char        int8_t;
+
+int la9310_read_dtb_node_mem_region(const char *node_name, struct resource *get_mem_res)
+{
+        int rc = 0;
+        struct device_node *memnp;
+        struct resource mem_res;
+
+        /* Get pointer to device node */
+        memnp = of_find_node_by_name(NULL,node_name);;
+        if (!memnp) {
+                printk("Node %s not found\n",node_name);
+                rc = RFNM_DTB_NODE_NOT_FOUND;
+        }
+        else {
+                /* Convert memory region to a struct resource */
+                rc = of_address_to_resource(memnp, 0, &mem_res);
+                /* finished with memnp */
+                of_node_put(memnp);
+                if (rc) {
+                        printk("Failed to translate memory-region to a resource for node %s\n",node_name);
+                        rc = RFNM_DTB_NODE_NOT_FOUND;
+                }
+                else {
+                        pr_info("RFNM: func %s Node Name %s\n",__func__,node_name);
+                        pr_info("MemRegion Start 0x%08X\n", mem_res.start);
+                        pr_info("MemRegion Size 0x%08X\n", resource_size(&mem_res));
+                        get_mem_res->start= mem_res.start;
+                        memcpy(get_mem_res,&mem_res, sizeof(struct resource));
+                }
+        }
+        return rc;
+}
+
+EXPORT_SYMBOL(la9310_read_dtb_node_mem_region);
 
 /*
 	EEPROM memory layout

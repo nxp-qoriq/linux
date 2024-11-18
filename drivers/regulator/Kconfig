@@ -508,6 +508,13 @@ config REGULATOR_LP87565
 	  provides four step-down converters. It supports software based
 	  voltage control for different voltage domains
 
+config REGULATOR_LP8758
+       tristate "TI LP8758 Step-Down DC-DC Regulator driver"
+       depends on I2C
+       select REGMAP_I2C
+       help
+         This driver supports LP8758 Step-Down DC-DC Regulator driver.
+
 config REGULATOR_LP8788
 	tristate "TI LP8788 Power Regulators"
 	depends on MFD_LP8788

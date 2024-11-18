@@ -1443,6 +1443,11 @@ config RFNM_SI5510
 	help
 	  Fast init to get pcie running at boot
 
+config RFNM_SI5332
+       tristate "Enable RFNM's Si5332 boot init"
+       help
+         Fast init to get pcie running at boot
+
 config RFNM_BOOTCONFIG
 	tristate "Enable RFNM's EEPROM bootconfig driver"
 	help

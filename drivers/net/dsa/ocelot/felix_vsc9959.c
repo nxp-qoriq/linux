@@ -2687,47 +2687,38 @@ static int vsc9959_port_set_preempt(struct ocelot *ocelot, int port,
 				    struct ethtool_fp *fpcmd)
 {
 	struct ocelot_port *ocelot_port = ocelot->ports[port];
-	int p_queues = fpcmd->preemptible_queues_mask;
-	int mm_fragsize, val;
+	u8 preemptible_tcs = fpcmd->preemptible_queues_mask;
+	struct ethtool_mm_cfg cfg;
+	int ret;
 
 	if (!fpcmd->disabled &&
 	    (fpcmd->min_frag_size < 60 || fpcmd->min_frag_size > 252))
 		return -EINVAL;
 
-	mm_fragsize = DIV_ROUND_UP((fpcmd->min_frag_size + 4), 64) - 1;
+	cfg.tx_min_frag_size = fpcmd->min_frag_size;
 
 	if (!fpcmd->disabled) {
-		val = DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
-		      DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA;
 		ocelot_port->fp_enabled_admin = 1;
+		cfg.pmac_enabled = 1;
+		cfg.tx_enabled = 1;
 	} else {
-		val = 0;
 		ocelot_port->fp_enabled_admin = 0;
+		cfg.pmac_enabled = 0;
+		cfg.tx_enabled = 0;
 	}
 
-	ocelot_port_rmwl(ocelot_port, val,
-			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
-			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
-			 DEV_MM_ENABLE_CONFIG);
+	cfg.verify_enabled = fpcmd->fp_enabled;
+	cfg.verify_time = 0xa;
 
-	ocelot_port_rmwl(ocelot_port,
-			 (fpcmd->fp_enabled ?
-			  0 : DEV_MM_CONFIG_VERIF_CONFIG_PRM_VERIFY_DIS),
-			 DEV_MM_CONFIG_VERIF_CONFIG_PRM_VERIFY_DIS,
-			 DEV_MM_VERIF_CONFIG);
+	ret = ocelot_port_set_mm(ocelot, port, &cfg, NULL);
+	if (ret)
+		return ret;
 
-	ocelot_rmw_rix(ocelot,
-		       QSYS_PREEMPTION_CFG_MM_ADD_FRAG_SIZE(mm_fragsize) |
-		       QSYS_PREEMPTION_CFG_P_QUEUES(p_queues),
-		       QSYS_PREEMPTION_CFG_MM_ADD_FRAG_SIZE_M |
-		       QSYS_PREEMPTION_CFG_P_QUEUES_M,
-		       QSYS_PREEMPTION_CFG,
-		       port);
+	mutex_lock(&ocelot->fwd_domain_lock);
+	ret = ocelot_port_change_fp(ocelot, port, preemptible_tcs);
+	mutex_unlock(&ocelot->fwd_domain_lock);
 
-	if (ocelot_port->taprio && ocelot->ops->tas_guard_bands_update)
-		ocelot->ops->tas_guard_bands_update(ocelot, port);
-
-	return 0;
+	return ret;
 }
 
 static int vsc9959_port_get_preempt(struct ocelot *ocelot, int port,

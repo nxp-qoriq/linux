@@ -1279,6 +1279,9 @@ static void felix_phylink_mac_link_up(struct phylink_config *config,
 
 	if (felix->info->port_sched_speed_set)
 		felix->info->port_sched_speed_set(ocelot, port, speed);
+
+	if (felix->info->port_preempt_reset)
+		felix->info->port_preempt_reset(ocelot, port, 1);
 }
 
 static int felix_port_enable(struct dsa_switch *ds, int port,

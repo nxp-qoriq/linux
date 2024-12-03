@@ -33,6 +33,11 @@ config THERMAL_STATISTICS
 
 	  If in doubt, say N.
 
+config THERMAL_CRITICAL_REBOOT
+  bool "Thermal critical temperature reboot"
+  help
+    Reboot the system if critical temperature reaches.
+
 config THERMAL_EMERGENCY_POWEROFF_DELAY_MS
 	int "Emergency poweroff delay in milli-seconds"
 	default 0

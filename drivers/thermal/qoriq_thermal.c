@@ -51,6 +51,7 @@
 #define TEMP_KELVIN_TO_CELSIUS(val)		DECI_KELVIN_TO_CELSIUS(val * 10)
 
 #define REGS_TMR	0x000	/* Mode Register */
+#define REGS_TSR  	0x04  	/* Status Register */
 #define TMR_DISABLE	0x0
 #define TMR_ME		0x80000000
 #define TMR_ALPF	0x0c000000
@@ -334,6 +335,7 @@ static int tmu_get_temp(void *p, int *temp)
 {
 	struct qoriq_sensor *qsensor = p;
 	struct qoriq_tmu_data *qdata = qoriq_sensor_to_data(qsensor);
+	static bool flag = false;
 	u32 val, tidr;
 	/*
 	 * REGS_TRITSR(id) has the following layout:
@@ -359,8 +361,20 @@ static int tmu_get_temp(void *p, int *temp)
 				     val,
 				     val & TRITSR_V,
 				     USEC_PER_MSEC,
-				     10 * USEC_PER_MSEC))
-		return -ENODATA;
+				     10 * USEC_PER_MSEC)) {
+		regmap_read(qdata->regmap, REGS_TSR, &val);
+		if (val & GENMASK(29,29)) {
+			val = 0;
+			if (!flag) {
+				pr_err("Out of Range lowest temperature measurement detected!\n");
+				flag = true;
+			}
+		} else {
+			return -ENODATA;
+		}
+	} else {
+		flag = false;
+	}
 
 	/*ERR052243: If there raising or falling edge happens, try later */
 	if (qdata->ver == TMU_VER2) {

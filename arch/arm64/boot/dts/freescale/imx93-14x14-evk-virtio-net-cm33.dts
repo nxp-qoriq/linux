@@ -51,3 +51,8 @@
 &fec {
 	status = "disabled";
 };
+
+&cm33 {
+	memory-region = <&cm33_reserved>;
+	status = "okay";
+};

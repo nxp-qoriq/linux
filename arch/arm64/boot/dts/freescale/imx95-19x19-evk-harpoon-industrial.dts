@@ -1,0 +1,29 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2024 NXP
+ */
+
+#include "imx95-19x19-evk-root.dts"
+#include "imx95-rpmsg-ca55.dtsi"
+
+&lpuart3 {
+	/* To use this, needs dedicated SM to allow RTOS access lpuart3 and lpuart3 pinmux */
+	status = "disabled";
+};
+
+/* This Message Unit is used for communication between the RTOS cell and the SM */
+&mu3 {
+	status = "disabled";
+};
+
+&flexcan2 {
+	status = "disabled";
+};
+
+&reg_can2_en {
+	status = "disabled";
+};
+
+&reg_can2_stby {
+	status = "disabled";
+};

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0+
+
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 #include <linux/leds.h>
@@ -6,8 +8,10 @@
 #include <linux/of_device.h>
 #include <linux/gpio/consumer.h>
 
+#define MAX_CHAIN_ID   2
+#define MAX_LED_ID     4
 
-uint32_t chain[2][4] = {
+uint32_t chain[MAX_CHAIN_ID][MAX_LED_ID] = {
 	// first is the arm cycle prefetch
 	// 4th is the first LED (motherboard)
 	// 3rd is the first LED on daughterboard
@@ -290,15 +294,15 @@ static int rfnm_wsled_probe(struct platform_device *pdev)
 }
 
 void rfnm_wsled_set(uint8_t chain_id, uint8_t led_id, uint8_t r, uint8_t g, uint8_t b) {
-	if(led_id > 3) {
+	if(led_id >= MAX_LED_ID) {
 		printk("wrong led_id");
 		return;
 	}
-	if(chain_id > 1) {
+	if(chain_id >= MAX_CHAIN_ID) {
 		printk("wrong chain_id");
 		return;
 	}
-	chain[chain_id][1 + led_id] = b | (r << 8) | (g << 16);
+	chain[chain_id][led_id] = b | (r << 8) | (g << 16);
 }
 
 EXPORT_SYMBOL(rfnm_wsled_set);

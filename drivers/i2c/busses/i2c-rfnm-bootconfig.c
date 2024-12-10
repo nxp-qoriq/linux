@@ -12,7 +12,7 @@
 #include <linux/crc32.h>
 #include <linux/rfnm-shared.h>
 
-
+#define MAX_NODE_NAME_LEN 10
 typedef unsigned char       uint8_t;
 typedef   signed char        int8_t;
 
@@ -350,10 +350,11 @@ static int rfnm_bootconfig_probe(struct i2c_client *client) {
 	
 	struct rfnm_eeprom_user_config *eeprom_user;
 	struct resource mem_res;
-	char node_name[10];
+	char node_name[MAX_NODE_NAME_LEN + 1];
 	int ret;
 
-	strncpy(node_name,"bootconfig",10 );
+	strncpy(node_name,"bootconfig",MAX_NODE_NAME_LEN );
+	node_name[MAX_NODE_NAME_LEN] = '\0';
 	ret = la9310_read_dtb_node_mem_region(node_name,&mem_res);
 	if(ret != RFNM_DTB_NODE_NOT_FOUND) {
 		cfg = memremap(mem_res.start, SZ_4M, MEMREMAP_WB);

@@ -15,7 +15,7 @@
 
 #include <linux/ktime.h>
 
-
+#define MAX_NODE_NAME_LEN 10
 typedef unsigned char       uint8_t;
 typedef   signed char        int8_t;
 
@@ -148,7 +148,7 @@ static void rfnm_si5510_boot(struct i2c_client *client) {
 
 
 uint8_t rfnm_si5510_reference_status(struct i2c_client *client) {
-	uint8_t i2c_read_buf[100];
+	uint8_t i2c_read_buf[100] = {0x00};
 
 	uint8_t reference_status_request[] = { 0xF0, 0x0F, 0x16 };
 	rfnm_si5510_i2c_write(client, reference_status_request, 3);
@@ -197,7 +197,7 @@ int can_use_si5510_config(struct rfnm_bootconfig *cfg, int daughterboard_1, int 
 }
 
 void rfnm_si5510_set_output_status(struct i2c_client *client, int output_id, int enable_disable) {
-	uint8_t i2c_read_buf[100];
+	uint8_t i2c_read_buf[100] = {0x00};
 	uint8_t send_output_status_request[] = { 0xF0, 0x0F, 0x29, 0x00, 0x00, 0x00, 0x00, 0x00 };
 	uint32_t output_req = output_req = 1 << output_id;
 
@@ -355,10 +355,11 @@ static int rfnm_si5510_probe(struct i2c_client *client) {
 	struct rfnm_eeprom_data *eeprom_data;
 	struct resource mem_res;
 	s64  uptime_ms;
-	char node_name[10];
+	char node_name[MAX_NODE_NAME_LEN + 1];
 	int ret;
 
-	strncpy(node_name,"bootconfig",10 );
+	strncpy(node_name,"bootconfig",MAX_NODE_NAME_LEN );
+	node_name[MAX_NODE_NAME_LEN] = '\0';
 	ret = la9310_read_dtb_node_mem_region(node_name,&mem_res);
 	if(ret != RFNM_DTB_NODE_NOT_FOUND){
 		cfg = memremap(mem_res.start, SZ_4M, MEMREMAP_WB);

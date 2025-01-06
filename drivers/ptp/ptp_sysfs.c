@@ -222,13 +222,20 @@ static ssize_t n_vclocks_store(struct device *dev,
 
 	/* Need to create more vclocks */
 	if (num > ptp->n_vclocks) {
-		for (i = 0; i < num - ptp->n_vclocks; i++) {
-			vclock = ptp_vclock_register(ptp);
-			if (!vclock)
-				goto out;
+		unsigned int nb_vclocks = num - ptp->n_vclocks;
 
-			*(ptp->vclock_index + ptp->n_vclocks + i) =
+		for (i = 0; i < nb_vclocks; i++) {
+			vclock = ptp_vclock_register(ptp);
+			if (!vclock) {
+				dev_err(dev, "failed to create more than %u (out of %u) virtual clocks for ptp%d\n",
+					i, nb_vclocks, ptp->index);
+				goto out;
+			}
+
+			*(ptp->vclock_index + ptp->n_vclocks) =
 				vclock->clock->index;
+
+			ptp->n_vclocks++;
 
 			dev_info(dev, "new virtual clock ptp%d\n",
 				 vclock->clock->index);
@@ -243,6 +250,8 @@ static ssize_t n_vclocks_store(struct device *dev,
 
 		for (i = 1; i <= ptp->n_vclocks - num; i++)
 			*(ptp->vclock_index + ptp->n_vclocks - i) = -1;
+
+		ptp->n_vclocks = num;
 	}
 
 	/* Need to inform about changed physical clock behavior */
@@ -253,7 +262,6 @@ static ssize_t n_vclocks_store(struct device *dev,
 			dev_info(dev, "guarantee physical clock free running\n");
 	}
 
-	ptp->n_vclocks = num;
 	mutex_unlock(&ptp->n_vclocks_mux);
 
 	return count;

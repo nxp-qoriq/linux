@@ -184,4 +184,11 @@ config NET_DSA_TAG_NETC
 	  Say Y or M if you want to enable support for the NXP Switch Tag (NST),
 	  as implemented by NXP NETC switches having version 4.3 or later.
 
+config NET_DSA_TAG_HMS
+	tristate "Tag driver for Heterogeneous Multi-soc switches"
+	help
+	  Say Y or M if you want to enable support for tagging frames with a
+	  NXP Heterogeneous Multi-soc switch family. The custom 802.1Q
+	  VLAN header is available.
+
 endif

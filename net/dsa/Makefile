@@ -40,6 +40,7 @@ obj-$(CONFIG_NET_DSA_TAG_TRAILER) += tag_trailer.o
 obj-$(CONFIG_NET_DSA_TAG_VSC73XX_8021Q) += tag_vsc73xx_8021q.o
 obj-$(CONFIG_NET_DSA_TAG_XRS700X) += tag_xrs700x.o
 obj-$(CONFIG_NET_DSA_TAG_NETC) += tag_netc.o
+obj-$(CONFIG_NET_DSA_TAG_HMS) += tag_hms.o
 
 # for tracing framework to find trace.h
 CFLAGS_trace.o := -I$(src)

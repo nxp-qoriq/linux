@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+config NET_DSA_HMS_SWITCH
+	tristate "NXP HMS Ethernet switch family support"
+	depends on NET_DSA && SPI
+	select NET_DSA_TAG_HMS
+	help
+	  This is the driver for the NXP ENTC Ethernet switch family.
+	  These are managed over an SPI interface. Probing is handled
+	  based on OF bindings and so is the linkage to PHYLINK.
+
+config NET_DSA_HMS_PTP
+	bool "Support for the PTP clock on the NXP HMS Ethernet switch"
+	depends on NET_DSA_HMS_SWITCH
+	depends on PTP_1588_CLOCK
+	help
+	  This enables support for timestamping and PTP clock manipulations in
+	  the HMS DSA driver.

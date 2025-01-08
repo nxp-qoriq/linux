@@ -1,0 +1,94 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2025 NXP
+ */
+
+#include "imx943-evk.dts"
+
+/*
+ * SPI3 as master and i.MXRT1180 as target.
+ * MOSI: J47.8  <--> SPI3_SIN J44.10
+ * MISO: J47.10 <--> SPI3_SOUT J44.8
+ * SCLK: J47.12 <--> SPI3_SCK J44.12
+ * SS:   J47.6  <--> SPI3_PCS0 J44.6
+ * GND:   GND   <--> GND J44.14
+ */
+&lpspi3 {
+	cs-gpios = <&gpio2 8 GPIO_ACTIVE_LOW>;
+	num-cs = <2>;
+	pinctrl-0 = <&pinctrl_lpspi3>;
+	pinctrl-names = "default";
+	status = "okay";
+
+	/delete-node/ spi@0;
+
+	hmsdsa: ethernet-switch@0 {
+		reg = <0x0>;
+		dsa,member = <1 0>;
+		compatible = "nxp,imxrt1180-hms";
+		spi-max-frequency = <12000000>;
+
+		hmsdsa_ports: ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			hmsdsa_port0: port@0 {
+				label = "hms0p0";
+				reg = <0>;
+				phy-mode = "sgmii";
+
+				fixed-link {
+					speed = <100>;
+					full-duplex;
+				};
+			};
+
+			hmsdsa_port1: port@1 {
+				label = "hms0p1";
+				reg = <1>;
+				phy-mode = "sgmii";
+
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
+			};
+
+			hmsdsa_port2: port@2 {
+				label = "hms0p2";
+				reg = <2>;
+				phy-mode = "sgmii";
+
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
+			};
+
+			hmsdsa_port3: port@3 {
+				/* cpu port connected to eqos */
+				ethernet = <&enetc2>;
+				label = "cpu";
+				reg = <3>;
+				phy-mode = "sgmii";
+
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
+			};
+
+			hmsdsa_port4: port@4 {
+				label = "hms0p4";
+				reg = <4>;
+				phy-mode = "sgmii";
+				status = "disabled";
+
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
+			};
+		};
+	};
+};

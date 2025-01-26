@@ -536,6 +536,7 @@ dtb-$(CONFIG_ARCH_MXC) += imx93-14x14-evk.dtb imx93-14x14-evk-aud-hat-avb.dtb \
 			  imx93-14x14-evk-virtio-net-ca55.dtb \
 			  imx93-14x14-evk-virtio-net-cm33.dtb \
 			  imx93-14x14-evk-uart-sharing-cm33.dtb \
+			  imx93-14x14-evk-multicore-rpmsg.dtb \
 			  imx93-14x14-evk-multicore-rtos.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx93-11x11-evk.dtb \
 			  imx93-11x11-evk-avb.dtb \
@@ -559,6 +560,7 @@ dtb-$(CONFIG_ARCH_MXC) += imx93-11x11-evk.dtb \
 			  imx93-11x11-evk-ecat.dtb \
 			  imx93-11x11-evk-igh.dtb \
 			  imx93-11x11-evk-ecat-userspace.dtb \
+			  imx93-11x11-evk-multicore-rpmsg.dtb \
 			  imx93-11x11-evk-multicore-rtos.dtb \
 			  imx93-11x11-evk-dsa.dtb \
 			  imx93-11x11-evk-dsa-enetc.dtb \

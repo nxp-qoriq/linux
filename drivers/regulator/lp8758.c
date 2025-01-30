@@ -356,9 +356,27 @@ static struct regulator_desc lp8758_buck_slave_config[LP8758_BUCK_MAX] = {
  * select regulator description for each buck
  * and write configuration value into control register
  */
+
+static struct gpio_desc *lp8758_nreset_gpio;
+
 static int lp8758_regulator_init(struct lp8758_chip *pchip){
        int icnt, ret, bctrl_mode;
        struct regulator_desc *reg;
+
+       lp8758_nreset_gpio  = devm_gpiod_get(pchip->dev, "lp8758-nrst", GPIOD_OUT_LOW);
+       if (IS_ERR(lp8758_nreset_gpio)) {
+               ret = PTR_ERR(lp8758_nreset_gpio);
+               printk("RFNM: Failed to get deassert lp8758-nrst: %d\n", ret);
+       }
+       if(lp8758_nreset_gpio>0)
+	       pr_info("lp8758: lp8758_nreset_gpio = %d\n", gpiod_get_raw_value(lp8758_nreset_gpio));
+
+       msleep(1);
+
+       if(lp8758_nreset_gpio>0){
+               gpiod_set_value(lp8758_nreset_gpio, 1);
+               pr_info("lp8758: lp8758_nreset_gpio = %d\n", gpiod_get_raw_value(lp8758_nreset_gpio));
+       }
 
        if(pchip->pdata->sub_version > LP8758_SUB_VER_MAX-1)
                return -EINVAL;

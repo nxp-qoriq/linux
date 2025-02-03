@@ -10,7 +10,7 @@
 #include <linux/printk.h>
 
 #include <linux/crc32.h>
-#include <linux/rfnm-shared.h>
+#include <linux/sdr-shared.h>
 
 #define MAX_NODE_NAME_LEN 10
 typedef unsigned char       uint8_t;

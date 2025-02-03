@@ -8,7 +8,7 @@
 #include <linux/regmap.h>
 #include <linux/of_address.h>
 
-#include <linux/rfnm-shared.h>
+#include <linux/sdr-shared.h>
 #include <linux/rfnm-si5332.h>
 #include <linux/printk.h>
 #include <linux/i2c.h>

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0+
 
-#ifndef INCLUDE_LINUX_RFNM_SHARED_H_
-#define INCLUDE_LINUX_RFNM_SHARED_H_
+#ifndef INCLUDE_LINUX_SDR_SHARED_H_
+#define INCLUDE_LINUX_SDR_SHARED_H_
 
 #define RFNM_DAUGHTERBOARD_BREAKOUT (1)
 #define RFNM_DAUGHTERBOARD_GRANITA (2)
@@ -57,9 +57,6 @@ extern int la9310_read_dtb_node_mem_region(const char *node_name, struct resourc
 #define RFNM_NUM_DCS_FREQ 25
 extern uint32_t rfnm_si5510_plan_map[RFNM_NUM_DCS_FREQ][3];
 
-
-
-
 struct __attribute__((__packed__)) rfnm_eeprom_data {
 	uint8_t magic_header[4];
 	uint8_t pad1[6];
@@ -88,27 +85,8 @@ struct __attribute__((__packed__)) rfnm_bootconfig {
 	struct rfnm_eeprom_user_config user_eeprom;
 };
 
-
-
-
-
-
-
-
-
-
-
-
-
 #include <linux/rfnm-api.h>
-
-
-
-
-
 //#define RFNM_MAX_TRX_CH_CNT (8)
-
-
 
 	struct __attribute__((__packed__)) fe_s {
 		uint32_t latch_val[6];
@@ -177,7 +155,5 @@ int rfnm_la9310_stream(uint8_t tx, uint8_t *rx);
 int rfnm_la9310_stream(uint8_t tx, uint8_t *rx);
 void rfnm_populate_dev_status(struct rfnm_dev_status * r_stat);
 void rfnm_restart_sm(int hard);
-
-
 
 #endif

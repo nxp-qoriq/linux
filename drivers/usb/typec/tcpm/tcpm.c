@@ -32,7 +32,7 @@
 #include <linux/usb/typec_altmode.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
-#include <linux/rfnm-shared.h>
+#include <linux/sdr-shared.h>
 
 #include <uapi/linux/sched/types.h>
 

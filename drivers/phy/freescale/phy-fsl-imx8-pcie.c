@@ -9,7 +9,7 @@
 #include <linux/delay.h>
 #include <linux/phy/phy.h>
 #include <linux/platform_device.h>
-#include <linux/rfnm-shared.h>
+#include <linux/sdr-shared.h>
 
 #define PHY_PLL_LOCK_WAIT_MAX_RETRIES	2000
 #define IMX8MP_PCIE_PHY_FLAG_EXT_OSC	BIT(0)

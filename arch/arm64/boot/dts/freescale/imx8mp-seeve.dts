@@ -9,8 +9,8 @@
 #include "imx8mp.dtsi"
 
 / {
-	model = "RFNM imx8mp";
-	compatible = "fsl,imx8mp-rfnm", "fsl,imx8mp-evk", "fsl,imx8mp";
+	model = "SEEVE imx8mp";
+	compatible = "fsl,imx8mp-sdr", "fsl,imx8mp-evk", "fsl,imx8mp";
 
 	chosen {
 		stdout-path = &uart2;

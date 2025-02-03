@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Copyright 2019-2024 NXP
+ * Copyright 2019-2025 NXP
  */
 
 /dts-v1/;
@@ -9,8 +9,8 @@
 #include "imx8mp.dtsi"
 
 / {
-	model = "RFNM imx8mp";
-	compatible = "fsl,imx8mp-rfnm", "fsl,imx8mp-evk", "fsl,imx8mp";
+	model = "SDR imx8mp";
+	compatible = "fsl,imx8mp-sdr", "fsl,imx8mp-evk", "fsl,imx8mp";
 
 	chosen {
 		stdout-path = &uart2;

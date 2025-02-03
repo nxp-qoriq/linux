@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Copyright 2019-2024 NXP
+ * Copyright 2019-2025 NXP
  */
 
 /dts-v1/;
@@ -20,7 +20,6 @@
         compatible = "la9310_wdog";
         la9310-trst-gpios = <&gpio3 9 GPIO_ACTIVE_HIGH>;
 		la9310-hrst-gpios = <&gpio3 14 GPIO_ACTIVE_HIGH>;
-		la9310-bootstrap-en-gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
     };
 
 /* Will be used only when the gpio is directly connect to the A53 core and
@@ -453,13 +452,14 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_si5332>;
 
-		09v-power-en-gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;
+		mt1-1p67v-en-gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;
 		la9310-power-en-gpios = <&gpio1 13 GPIO_ACTIVE_HIGH>;
 
+                mt1-trx-gpios =  <&gpio1 1 GPIO_ACTIVE_HIGH>;
 		la9310-trst-gpios = <&gpio3 9 GPIO_ACTIVE_HIGH>;
 		la9310-hrst-gpios = <&gpio3 14 GPIO_ACTIVE_HIGH>;
-		la9310-bootstrap-en-gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
-	};
+	        mt1-nrst-gpios =  <&gpio1 8 GPIO_ACTIVE_LOW>;
+        };
 
 	bootconfig@50{
 		compatible = "rfnm,bootconfig";
@@ -470,7 +470,7 @@
 	lp8758@60 {
 		compatible = "ti,lp8758";
 		reg = <0x60>;
-
+ 
 		/*
 		* sub version info
 		* 0 : b0
@@ -500,6 +500,7 @@
 		* For example, following GPIO means GPIO60 in OMAP335x.
 		*/
 		irq-gpio = <&gpio2 10 0>;
+                lp8758-nrst-gpios =  <&gpio3 1 GPIO_ACTIVE_HIGH>;
 
 		buck0 {
 			regulator-name = "lp8758-1v8";
@@ -511,7 +512,7 @@
 			regulator-name = "lp8758-09v";
 			regulator-min-microvolt = <900000>;
 			regulator-max-microvolt = <900000>;
-			regulator-always-on;
+			//regulator-always-on;
 		};
 		buck2 {
 			regulator-name = "lp8758-2v";
@@ -523,7 +524,7 @@
 			regulator-name = "lp8758-1v67";
 			regulator-min-microvolt = <1660000>;
 			regulator-max-microvolt = <1680000>;
-			regulator-always-on;
+			//regulator-always-on;
 		};
 	};
 
@@ -641,26 +642,6 @@
 	};
 };
 
-&i2c3 {
-	clock-frequency = <400000>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_i2c3>;
-	status = "okay";
-
-	bootconfig@50{
-		compatible = "rfnm,bootconfig";
-		reg = <0x50>;
-		status = "okay";
-	};
-
-	tmp102@48{
-		compatible = "ti,tmp102";
-		reg = <0x48>;
-	};
-};
-
-
-
 
 &pcie{
 	//pinctrl-names = "default";
@@ -731,13 +712,6 @@
 	/* console */
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart2>;
-	status = "okay";
-};
-
-&uart3 {
-	/* console */
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart3>;
 	status = "okay";
 };
 
@@ -980,9 +954,10 @@
 				MX8MP_IOMUXC_NAND_DATA03__GPIO3_IO09    0x6
 				MX8MP_IOMUXC_NAND_DQS__GPIO3_IO14       0x6
 				MX8MP_IOMUXC_GPIO1_IO08__GPIO1_IO08     0x6
-
+ 
 				MX8MP_IOMUXC_GPIO1_IO07__GPIO1_IO07     0x6
 				MX8MP_IOMUXC_GPIO1_IO13__GPIO1_IO13     0x6
+				MX8MP_IOMUXC_GPIO1_IO01__GPIO1_IO01     0x6
 			>;
 		};
 
@@ -1110,13 +1085,6 @@
                 MX8MP_IOMUXC_SD1_DATA3__UART2_DCE_RX       0x00000146
             >;
         };
-        pinctrl_uart3: uart3grp {
-
-            fsl,pins = <
-                MX8MP_IOMUXC_NAND_ALE__UART3_DCE_RX       0x00000146
-                MX8MP_IOMUXC_NAND_CE0_B__UART3_DCE_TX       0x00000146
-            >;
-        };
         pinctrl_i2c1: i2c1grp {
 
             fsl,pins = <
@@ -1130,14 +1098,6 @@
             fsl,pins = <
                 MX8MP_IOMUXC_SD1_DATA6__I2C2_SCL           0x400001c2
                 MX8MP_IOMUXC_SD1_DATA7__I2C2_SDA           0x400001c2
-            >;
-        };
-
-		pinctrl_i2c3: i2c3grp {
-
-            fsl,pins = <
-                MX8MP_IOMUXC_SD1_RESET_B__I2C3_SCL         0x400001c2
-                MX8MP_IOMUXC_SD1_STROBE__I2C3_SDA          0x400001c2
             >;
         };
 

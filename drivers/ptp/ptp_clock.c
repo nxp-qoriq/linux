@@ -235,6 +235,25 @@ static void ptp_aux_kworker(struct kthread_work *work)
 		kthread_queue_delayed_work(ptp->kworker, &ptp->aux_work, delay);
 }
 
+/* Convert from physical to virtual time domains. */
+int ptp_clock_convert_timestamps(struct ptp_clock *ptp,
+	struct ptp_clock_time *src_ts, unsigned int n_ts, int dst_phc_index,
+	struct ptp_clock_time *dst_ts)
+{
+	int rc;
+
+	/* If the destination time domain is the same as the source, quick return. */
+	if (ptp->index == dst_phc_index) {
+		memcpy(dst_ts, src_ts, n_ts * sizeof(struct ptp_clock_time));
+		return 0;
+	}
+
+	rc = ptp_vclock_convert_from_hw_timestamps(ptp, src_ts, n_ts,
+							dst_phc_index, dst_ts);
+
+	return rc;
+}
+
 /* public interface */
 
 struct ptp_clock *ptp_clock_register(struct ptp_clock_info *info,

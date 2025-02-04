@@ -218,6 +218,17 @@ struct ptp_pin_desc {
 	unsigned int rsv[5];
 };
 
+#define PTP_MAX_CONVERT_TS_NUM 16 /* Maximum allowed number of timestamps to convert. */
+
+struct ptp_convert_timestamps {
+	/* src timestamp to convert in the ptp device clock domain. */
+	struct ptp_clock_time src_ts[PTP_MAX_CONVERT_TS_NUM];
+	/* converted timestamp in the destination ptp device clock domain. */
+	struct ptp_clock_time dst_ts[PTP_MAX_CONVERT_TS_NUM];
+	unsigned int dst_phc_index;  /* destination ptp clock domain. */
+	unsigned int n_ts; /* Number of timestamps in src_ts array. */
+};
+
 #define PTP_CLK_MAGIC '='
 
 #define PTP_CLOCK_GETCAPS  _IOR(PTP_CLK_MAGIC, 1, struct ptp_clock_caps)
@@ -243,6 +254,7 @@ struct ptp_pin_desc {
 	_IOWR(PTP_CLK_MAGIC, 17, struct ptp_sys_offset_precise)
 #define PTP_SYS_OFFSET_EXTENDED2 \
 	_IOWR(PTP_CLK_MAGIC, 18, struct ptp_sys_offset_extended)
+#define PTP_CONVERT_TIMESTAMPS  _IOW(PTP_CLK_MAGIC, 19, struct ptp_convert_timestamps)
 #define PTP_MASK_CLEAR_ALL  _IO(PTP_CLK_MAGIC, 19)
 #define PTP_MASK_EN_SINGLE  _IOW(PTP_CLK_MAGIC, 20, unsigned int)
 

@@ -174,6 +174,7 @@ long ptp_ioctl(struct posix_clock_context *pccontext, unsigned int cmd,
 	struct ptp_clock_time *pct;
 	unsigned int i, pin_index;
 	struct ptp_pin_desc pd;
+	struct ptp_convert_timestamps convert_ts;
 	struct timespec64 ts;
 	int enable, err = 0;
 
@@ -500,6 +501,28 @@ long ptp_ioctl(struct posix_clock_context *pccontext, unsigned int cmd,
 		set_bit(i, tsevq->mask);
 		break;
 
+	case PTP_CONVERT_TIMESTAMPS:
+		if (copy_from_user(&convert_ts, (void __user *)arg, sizeof(convert_ts))) {
+			err = -EFAULT;
+			break;
+		}
+
+		if (convert_ts.n_ts > PTP_MAX_CONVERT_TS_NUM) {
+			err = -EINVAL;
+			break;
+		}
+
+		if (ptp->is_virtual_clock)
+			err = ptp_vclock_convert_timestamps(ptp, convert_ts.src_ts, convert_ts.n_ts,
+						      convert_ts.dst_phc_index, convert_ts.dst_ts);
+		else
+			err = ptp_clock_convert_timestamps(ptp, convert_ts.src_ts, convert_ts.n_ts,
+						     convert_ts.dst_phc_index, convert_ts.dst_ts);
+
+		if (!err && copy_to_user((void __user *)arg, &convert_ts, sizeof(convert_ts)))
+			err = -EFAULT;
+
+		break;
 	default:
 		err = -ENOTTY;
 		break;

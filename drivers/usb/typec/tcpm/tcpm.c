@@ -852,7 +852,7 @@ static void tcpm_ams_finish(struct tcpm_port *port)
 {
 	tcpm_log(port, "AMS %s finished", tcpm_ams_str[port->ams]);
 #ifdef CONFIG_RFNM_BOOTCONFIG
-	if (of_machine_is_compatible("fsl,imx8mp-rfnm") && port->ams == POWER_NEGOTIATION) {
+	if (of_machine_is_compatible("fsl,imx8mp-sdr") && port->ams == POWER_NEGOTIATION) {
 		struct rfnm_bootconfig *cfg=NULL;
 		struct resource mem_res;
 		char node_name[10];
@@ -2922,7 +2922,7 @@ static void tcpm_pd_rx_handler(struct kthread_work *work)
 		 */
 		if (!!(le16_to_cpu(msg->header) & PD_HEADER_DATA_ROLE) ==
 		    (port->data_role == TYPEC_HOST)) {
-			if (of_machine_is_compatible("fsl,imx8mp-rfnm")) {
+			if (of_machine_is_compatible("fsl,imx8mp-sdr")) {
 				tcpm_log(port,
 				 "Data role mismatch, initiating error recovery (note: no, forcing it not to)");
 				port->data_role = (port->data_role == TYPEC_DEVICE) ? TYPEC_HOST : TYPEC_DEVICE;
@@ -4126,7 +4126,7 @@ static void run_state_machine(struct tcpm_port *port)
 				tcpm_set_state(port, SNK_DEBOUNCED,
 						PD_T_CC_DEBOUNCE);
 #ifdef CONFIG_RFNM_BOOTCONFIG
-				if (of_machine_is_compatible("fsl,imx8mp-rfnm")) {
+				if (of_machine_is_compatible("fsl,imx8mp-sdr")) {
 					struct rfnm_bootconfig *cfg=NULL;
 					struct resource mem_res;
 					char node_name[10];
@@ -5903,7 +5903,7 @@ static void tcpm_init(struct tcpm_port *port)
 	 * Should possibly wait for VBUS to settle if it was enabled locally
 	 * since tcpm_reset_port() will disable VBUS.
 	 */
-	if (of_machine_is_compatible("fsl,imx8mp-rfnm"))
+	if (of_machine_is_compatible("fsl,imx8mp-sdr"))
 		port->vbus_present = true;
 	else
 		port->vbus_present = port->tcpc->get_vbus(port->tcpc);
@@ -5938,7 +5938,7 @@ static void tcpm_init(struct tcpm_port *port)
 	 * Some adapters need a clean slate at startup, and won't recover
 	 * otherwise. So do not try to be fancy and force a clean disconnect.
 	 */
-	if (!of_machine_is_compatible("fsl,imx8mp-rfnm"))
+	if (!of_machine_is_compatible("fsl,imx8mp-sdr"))
 		tcpm_set_state(port, PORT_RESET, 0);
 }
 

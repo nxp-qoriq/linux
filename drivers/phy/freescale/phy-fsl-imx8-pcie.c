@@ -235,7 +235,7 @@ static int imx8_pcie_phy_probe(struct platform_device *pdev)
 	struct imx8_pcie_phy *imx8_phy;
 	struct resource *res;
 #ifdef CONFIG_RFNM_BOOTCONFIG
-	if (of_machine_is_compatible("fsl,imx8mp-rfnm")) {
+	if (of_machine_is_compatible("fsl,imx8mp-sdr")) {
 		struct rfnm_bootconfig *cfg;
 		struct resource mem_res;
 		char node_name[10];

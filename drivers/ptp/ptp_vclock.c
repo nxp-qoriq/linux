@@ -40,6 +40,24 @@ static void ptp_vclock_hash_del(struct ptp_vclock *vclock)
 	synchronize_rcu();
 }
 
+/* This function and its return value (the vclock pointer) must be used
+ * inside the same RCU read critical section
+ */
+static struct ptp_vclock *ptp_vclock_lookup(int vclock_index)
+{
+	unsigned int hash = vclock_index % HASH_SIZE(vclock_hash);
+	struct ptp_vclock *vclock;
+
+	hlist_for_each_entry_rcu(vclock, &vclock_hash[hash], vclock_hash_node) {
+		if (vclock->clock->index != vclock_index)
+			continue;
+
+		return vclock;
+	}
+
+	return NULL;
+}
+
 static int ptp_vclock_adjfine(struct ptp_clock_info *ptp, long scaled_ppm)
 {
 	struct ptp_vclock *vclock = info_to_vclock(ptp);
@@ -209,7 +227,6 @@ int ptp_vclock_convert_timestamps(struct ptp_clock *ptp, struct ptp_clock_time *
 	unsigned int hash = dst_phc_index % HASH_SIZE(vclock_hash);
 	struct ptp_vclock *vclock = info_to_vclock(ptp->info);
 	struct ptp_vclock *vclock_dst;
-	bool dst_phc_is_virtual = false;
 	int i, rc = 0;
 	u64 dst_ns;
 
@@ -221,15 +238,9 @@ int ptp_vclock_convert_timestamps(struct ptp_clock *ptp, struct ptp_clock_time *
 
 	rcu_read_lock();
 
-	hlist_for_each_entry_rcu(vclock_dst, &vclock_hash[hash], vclock_hash_node) {
-		if (vclock_dst->clock->index != dst_phc_index)
-			continue;
+	vclock_dst = ptp_vclock_lookup(dst_phc_index);
 
-		dst_phc_is_virtual = true;
-		break;
-	}
-
-	if (dst_phc_is_virtual) {
+	if (vclock_dst) {
 		/* Check that both virtual clocks share the same physical parent. */
 		if (vclock_dst->pclock != vclock->pclock) {
 			rc = -EINVAL;
@@ -298,22 +309,15 @@ int ptp_vclock_convert_from_hw_timestamps(struct ptp_clock *ptp, struct ptp_cloc
 {
 	unsigned int hash = dst_vclock_index % HASH_SIZE(vclock_hash);
 	struct ptp_vclock *vclock;
-	bool found = false;
 	int i, rc = 0;
 	u64 dst_ns;
 
 	rcu_read_lock();
 
-	hlist_for_each_entry_rcu(vclock, &vclock_hash[hash], vclock_hash_node) {
-		if (vclock->clock->index != dst_vclock_index)
-			continue;
-
-		found = true;
-		break;
-	}
+	vclock = ptp_vclock_lookup(dst_vclock_index);
 
 	/* Check that dst_vclock_index point to a virtual clock. */
-	if (!found) {
+	if (!vclock) {
 		rc = -EINVAL;
 		goto out_unlock_rcu;
 	}
@@ -466,17 +470,15 @@ ktime_t ptp_convert_timestamp(const ktime_t *hwtstamp, int vclock_index)
 
 	rcu_read_lock();
 
-	hlist_for_each_entry_rcu(vclock, &vclock_hash[hash], vclock_hash_node) {
-		if (vclock->clock->index != vclock_index)
-			continue;
-
+	vclock = ptp_vclock_lookup(vclock_index);
+	if (vclock) {
 		if (mutex_lock_interruptible(&vclock->lock))
-			break;
+			goto out_unlock_rcu;
 		vclock_ns = timecounter_cyc2time(&vclock->tc, ns);
 		mutex_unlock(&vclock->lock);
-		break;
 	}
 
+out_unlock_rcu:
 	rcu_read_unlock();
 
 	return ns_to_ktime(vclock_ns);

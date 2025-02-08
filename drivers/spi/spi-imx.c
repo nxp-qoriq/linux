@@ -620,7 +620,7 @@ static int mx51_ecspi_prepare_message(struct spi_imx_data *spi_imx,
 	else
 		testreg &= ~MX51_ECSPI_TESTREG_LBC;
 	writel(testreg, spi_imx->base + MX51_ECSPI_TESTREG);
-	if (of_machine_is_compatible("fsl,imx8mp-rfnm")) {
+	if (of_machine_is_compatible("fsl,imx8mp-sdr")) {
 	    /* set chip select delay */
 	    period = readl(spi_imx->base + MX51_ECSPI_PERIODREG);
 	    period &= MX51_ECSPI_PERIODREG_CSDCTL(0x3f);

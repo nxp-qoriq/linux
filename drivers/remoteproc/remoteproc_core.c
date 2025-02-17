@@ -39,6 +39,7 @@
 #include <linux/virtio_ring.h>
 #include <asm/byteorder.h>
 #include <linux/platform_device.h>
+#include <linux/dma-map-ops.h>
 
 #include "remoteproc_internal.h"
 
@@ -522,6 +523,9 @@ static int rproc_handle_vdev(struct rproc *rproc, void *ptr,
 		dev_err(dev, "failed to create rproc-virtio device\n");
 		return PTR_ERR(pdev);
 	}
+
+	/* inherit parent's dma_coherent */
+	pdev->dev.dma_coherent = dev_is_dma_coherent(dev);
 
 	return 0;
 }
@@ -2487,6 +2491,8 @@ struct rproc *rproc_alloc(struct device *dev, const char *name,
 	rproc->dev.type = &rproc_type;
 	rproc->dev.class = &rproc_class;
 	rproc->dev.driver_data = rproc;
+	/* inherit parent's dma_coherent */
+	rproc->dev.dma_coherent = dev_is_dma_coherent(dev);
 	idr_init(&rproc->notifyids);
 
 	/* Assign a unique device index and name */

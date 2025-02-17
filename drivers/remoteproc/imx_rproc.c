@@ -794,19 +794,15 @@ static int imx_rproc_prepare(struct rproc *rproc)
 	struct reserved_mem *rmem;
 	int ret;
 	u32 da;
+	int index = 0;
 
 	/* Register associated reserved memory regions */
 	of_phandle_iterator_init(&it, np, "memory-region", NULL, 0);
 	while (of_phandle_iterator_next(&it) == 0) {
-		/*
-		 * Ignore the first memory region which will be used vdev buffer.
-		 * No need to do extra handlings, rproc_add_virtio_dev will handle it.
-		 */
-		if (!strcmp(it.node->name, "vdev0buffer"))
+		if (!strcmp(it.node->name, "rsc-table")) {
+			index++;
 			continue;
-
-		if (!strcmp(it.node->name, "rsc-table"))
-			continue;
+		}
 
 		rmem = of_reserved_mem_lookup(it.node);
 		if (!rmem) {
@@ -818,19 +814,28 @@ static int imx_rproc_prepare(struct rproc *rproc)
 		/* No need to translate pa to da, i.MX use same map */
 		da = rmem->base;
 
-		/* Register memory region */
-		mem = rproc_mem_entry_init(priv->dev, NULL, (dma_addr_t)rmem->base, rmem->size, da,
-					   imx_rproc_mem_alloc, imx_rproc_mem_release,
-					   it.node->name);
+		if (strcmp(it.node->name, "vdev0buffer")) {
+			/* Register memory region */
+			mem = rproc_mem_entry_init(priv->dev, NULL, (dma_addr_t)rmem->base,
+						   rmem->size, da, imx_rproc_mem_alloc,
+						   imx_rproc_mem_release, it.node->name);
 
-		if (mem) {
-			rproc_coredump_add_segment(rproc, da, rmem->size);
+			if (mem) {
+				rproc_coredump_add_segment(rproc, da, rmem->size);
+			}
 		} else {
+
+			/* Register reserved memory for vdev buffer alloc */
+			mem = rproc_of_resm_mem_entry_init(priv->dev, index, rmem->size,
+							   rmem->base, it.node->name);
+		}
+
+		if (!mem) {
 			of_node_put(it.node);
 			return -ENOMEM;
 		}
-
 		rproc_add_carveout(rproc, mem);
+		index++;
 	}
 
 	switch (dcfg->method) {

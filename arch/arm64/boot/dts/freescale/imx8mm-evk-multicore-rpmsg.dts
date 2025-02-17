@@ -1,10 +1,80 @@
 // SPDX-License-Identifier: (GPL-2.0 OR MIT)
 /*
- * Copyright 2023 NXP
+ * Copyright 2023, 2025 NXP
  */
 
 /dts-v1/;
 
 #include "imx8mm-evk-multicore-rtos.dts"
-#include "imx8m-rpmsg-ca53.dtsi"
-#include "imx8m-rpmsg-ca53-1.dtsi"
+#include "imx8m-generic-mbox.dtsi"
+#include "imx8m-generic-mbox-1.dtsi"
+
+/ {
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		vdev0vring0_ca53_2: vdev0vring0@b8600000 {
+			reg = <0 0xb8600000 0 0x8000>;
+			no-map;
+		};
+
+		vdev0vring1_ca53_2: vdev0vring1@b8608000 {
+			reg = <0 0xb8608000 0 0x8000>;
+			no-map;
+		};
+
+		rsc_table_ca53_2: rsc-table@b86f0000 {
+			reg = <0 0xb86f0000 0 0x1000>;
+			no-map;
+		};
+
+		vdev0buffer_ca53_2: vdev0buffer@b8700000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0xb8700000 0 0x100000>;
+			no-map;
+		};
+
+		vdev0vring0_ca53_3: vdev0vring0@b8610000 {
+			reg = <0 0xb8610000 0 0x8000>;
+			no-map;
+		};
+
+		vdev0vring1_ca53_3: vdev0vring1@b8618000 {
+			reg = <0 0xb8618000 0 0x8000>;
+			no-map;
+		};
+
+		rsc_table_ca53_3: rsc-table@b86f1000 {
+			reg = <0 0xb86f1000 0 0x1000>;
+			no-map;
+		};
+
+		vdev0buffer_ca53_3: vdev0buffer@b8800000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0xb8800000 0 0x100000>;
+			no-map;
+		};
+	};
+};
+
+&ca53_2 {
+	memory-region = <&vdev0buffer_ca53_2>, <&vdev0vring0_ca53_2>, <&vdev0vring1_ca53_2>, <&rsc_table_ca53_2>, <&rtos_ca53_reserved>;
+	dma-coherent;
+	mbox-names = "tx", "rx", "rxdb";
+	mboxes = <&gen_sw_mbox 0 0 1	/* Tx channel with ACK */
+		  &gen_sw_mbox 1 0 0	/* Rx channel without ACK */
+		  &gen_sw_mbox 2 0 1>;	/* RXDB channel with ACK */
+	fsl,startup-delay-ms = <50>;
+};
+
+&ca53_3 {
+	memory-region = <&vdev0buffer_ca53_3>, <&vdev0vring0_ca53_3>, <&vdev0vring1_ca53_3>, <&rsc_table_ca53_3>, <&rtos_ca53_reserved>;
+	dma-coherent;
+	mbox-names = "tx", "rx", "rxdb";
+	mboxes = <&gen_sw_mbox_1 0 0 1		/* Tx channel with ACK */
+		  &gen_sw_mbox_1 1 0 0		/* Rx channel without ACK */
+		  &gen_sw_mbox_1 2 0 1>;	/* RXDB channel with ACK */
+	fsl,startup-delay-ms = <50>;
+};

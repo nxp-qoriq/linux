@@ -8,6 +8,7 @@
 #include <linux/clk.h>
 #include <linux/cpu.h>
 #include <linux/delay.h>
+#include <linux/dma-map-ops.h>
 #include <linux/err.h>
 #include <linux/firmware.h>
 #include <linux/firmware/imx/sci.h>
@@ -762,7 +763,13 @@ static int imx_rproc_mem_alloc(struct rproc *rproc,
 	void *va;
 
 	dev_dbg(dev, "map memory: %p+%zx\n", &mem->dma, mem->len);
-	va = ioremap_wc(mem->dma, mem->len);
+	if (dev_is_dma_coherent(dev) &&
+	    !strncmp(mem->name, "vdev0vring", strlen("vdev0vring"))) {
+		va = ioremap_cache(mem->dma, mem->len);
+	} else {
+		va = ioremap_wc(mem->dma, mem->len);
+	}
+
 	if (IS_ERR_OR_NULL(va)) {
 		dev_err(dev, "Unable to map memory region: %p+%zx\n",
 			&mem->dma, mem->len);

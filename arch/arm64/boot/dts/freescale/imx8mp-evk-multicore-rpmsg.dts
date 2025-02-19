@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: (GPL-2.0 OR MIT)
 /*
- * Copyright 2023 NXP
+ * Copyright 2023, 2025 NXP
  */
 
 /dts-v1/;
 
 #include "imx8mp-evk-multicore-rtos.dts"
-#include "imx8mp-rpmsg-ca53.dtsi"
-#include "imx8mp-rpmsg-ca53-1.dtsi"
+#include "imx8mp-generic-mbox.dtsi"
+#include "imx8mp-generic-mbox-1.dtsi"
 
 / {
 	aliases {
@@ -41,6 +41,48 @@
 			reg = <0 0x550ff000 0 0x1000>;
 			no-map;
 		};
+
+		vdev0vring0_ca53_2: vdev0vring0@fe100000 {
+			reg = <0 0xfe100000 0 0x8000>;
+			no-map;
+		};
+
+		vdev0vring1_ca53_2: vdev0vring1@fe108000 {
+			reg = <0 0xfe108000 0 0x8000>;
+			no-map;
+		};
+
+		rsc_table_ca53_2: rsc-table@fe1f0000 {
+			reg = <0 0xfe1f0000 0 0x1000>;
+			no-map;
+		};
+
+		vdev0buffer_ca53_2: vdev0buffer@fe200000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0xfe200000 0 0x100000>;
+			no-map;
+		};
+
+		vdev0vring0_ca53_3: vdev0vring0@fe110000 {
+			reg = <0 0xfe110000 0 0x8000>;
+			no-map;
+		};
+
+		vdev0vring1_ca53_3: vdev0vring1@fe118000 {
+			reg = <0 0xfe118000 0 0x8000>;
+			no-map;
+		};
+
+		rsc_table_ca53_3: rsc-table@fe1f1000 {
+			reg = <0 0xfe1f1000 0 0x1000>;
+			no-map;
+		};
+
+		vdev0buffer_ca53_3: vdev0buffer@fe300000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0xfe300000 0 0x100000>;
+			no-map;
+		};
 	};
 
 	sound-wm8960 {
@@ -52,6 +94,26 @@
 			 <&audio_blk_ctrl IMX8MP_CLK_AUDIOMIX_AUDPLL_ROOT>;
 		clock-names = "core", "audio";
 	};
+};
+
+&ca53_2 {
+	memory-region = <&vdev0buffer_ca53_2>, <&vdev0vring0_ca53_2>, <&vdev0vring1_ca53_2>, <&rsc_table_ca53_2>, <&rtos_ca53_reserved>;
+	dma-coherent;
+	mbox-names = "tx", "rx", "rxdb";
+	mboxes = <&gen_sw_mbox 0 0 1	/* Tx channel with ACK */
+		  &gen_sw_mbox 1 0 0	/* Rx channel without ACK */
+		  &gen_sw_mbox 2 0 1>;	/* RXDB channel with ACK */
+	fsl,startup-delay-ms = <50>;
+};
+
+&ca53_3 {
+	memory-region = <&vdev0buffer_ca53_3>, <&vdev0vring0_ca53_3>, <&vdev0vring1_ca53_3>, <&rsc_table_ca53_3>, <&rtos_ca53_reserved>;
+	dma-coherent;
+	mbox-names = "tx", "rx", "rxdb";
+	mboxes = <&gen_sw_mbox_1 0 0 1		/* Tx channel with ACK */
+		  &gen_sw_mbox_1 1 0 0		/* Rx channel without ACK */
+		  &gen_sw_mbox_1 2 0 1>;	/* RXDB channel with ACK */
+	fsl,startup-delay-ms = <50>;
 };
 
 &sai3 {

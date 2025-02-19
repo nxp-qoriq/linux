@@ -13,27 +13,35 @@
 		#size-cells = <2>;
 		ranges;
 
-		rpmsg_ca55_reserved: rpmsg-ca55@fe100000 {
-			reg = <0 0xfe100000 0 0x10000>;
+		vdev0vring0_ca55: vdev0vring0@fe100000 {
+			reg = <0 0xfe100000 0 0x8000>;
 			no-map;
 		};
 
-		vdevbuffer_ca55: vdevbuffer-ca55@fe200000 {
+		vdev0vring1_ca55: vdev0vring1@fe108000 {
+			reg = <0 0xfe108000 0 0x8000>;
+			no-map;
+		};
+
+		rsc_table_ca55: rsc-table@fe1f0000 {
+			reg = <0 0xfe1f0000 0 0x1000>;
+			no-map;
+		};
+
+		vdev0buffer_ca55: vdev0buffer@fe200000 {
 			compatible = "shared-dma-pool";
 			reg = <0 0xfe200000 0 0x100000>;
 			no-map;
 		};
 	};
+};
 
-	rpmsg-ca55 {
-		compatible = "fsl,imx8mm-rpmsg";
-		reg = <0x0 0xfe100000 0x0 0x10000>; /* 64K for one rpmsg instance */
-		dma-coherent;
-		memory-region = <&vdevbuffer_ca55>;
-		mbox-names = "tx", "rx", "rxdb";
-		mboxes = <&gen_sw_mbox 0 0 1	/* Tx channel with ACK */
-			  &gen_sw_mbox 1 0 0	/* Rx channel without ACK */
-			  &gen_sw_mbox 2 0 1>;	/* RXDB channel with ACK */
-		vdev-nums = <1>;
-	};
+&ca55_1 {
+	memory-region = <&vdev0buffer_ca55>, <&vdev0vring0_ca55>, <&vdev0vring1_ca55>, <&rsc_table_ca55>, <&rtos_ca55_reserved>;
+	dma-coherent;
+	mbox-names = "tx", "rx", "rxdb";
+	mboxes = <&gen_sw_mbox 0 0 1	/* Tx channel with ACK */
+		  &gen_sw_mbox 1 0 0	/* Rx channel without ACK */
+		  &gen_sw_mbox 2 0 1>;	/* RXDB channel with ACK */
+	fsl,startup-delay-ms = <50>;
 };

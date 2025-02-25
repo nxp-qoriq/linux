@@ -254,7 +254,7 @@ struct ptp_convert_timestamps {
 	_IOWR(PTP_CLK_MAGIC, 17, struct ptp_sys_offset_precise)
 #define PTP_SYS_OFFSET_EXTENDED2 \
 	_IOWR(PTP_CLK_MAGIC, 18, struct ptp_sys_offset_extended)
-#define PTP_CONVERT_TIMESTAMPS  _IOW(PTP_CLK_MAGIC, 19, struct ptp_convert_timestamps)
+#define PTP_CONVERT_TIMESTAMPS  _IOW(PTP_CLK_MAGIC, 21, struct ptp_convert_timestamps)
 #define PTP_MASK_CLEAR_ALL  _IO(PTP_CLK_MAGIC, 19)
 #define PTP_MASK_EN_SINGLE  _IOW(PTP_CLK_MAGIC, 20, unsigned int)
 

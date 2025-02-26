@@ -328,6 +328,8 @@ struct enetc_si {
 	int (*vf_register_msg_msix)(struct enetc_si *si);
 	void (*vf_free_msg_msix)(struct enetc_si *si);
 	int (*vf_register_link_status_notify)(struct enetc_si *si, bool notify);
+
+	void *priv;  /* used by enetc_pci_uio driver */
 };
 
 #define ntmp_to_enetc_si(ntmp_priv)	\

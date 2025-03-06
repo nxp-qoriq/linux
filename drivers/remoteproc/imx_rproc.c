@@ -1294,7 +1294,23 @@ static int imx_rproc_detect_mode(struct imx_rproc *priv)
 		priv->rproc->state = RPROC_DETACHED;
 		return 0;
 	case IMX_RPROC_PSCI:
-		priv->rproc->state = RPROC_OFFLINE;
+		unsigned int cpu;
+		int cpu_aff;
+
+		priv->rproc->state = RPROC_DETACHED;
+		for_each_cpu(cpu, &priv->cpus) {
+			cpu_aff = psci_ops.affinity_info(cpu_logical_map(cpu), 0);
+			if (cpu_aff == PSCI_0_2_AFFINITY_LEVEL_OFF) {
+				priv->rproc->state = RPROC_OFFLINE;
+				break;
+			}
+
+			/* in psci on state but not running Linux */
+			if (cpu_online(cpu)) {
+				priv->rproc->state = RPROC_OFFLINE;
+				break;
+			}
+		}
 		return 0;
 	case IMX_RPROC_SMC:
 		ret = of_property_read_u32(dev->of_node, "fsl,core-index", &priv->core_index);
@@ -1503,6 +1519,17 @@ static int imx_rproc_probe(struct platform_device *pdev)
 		goto err_put_mbox;
 	}
 
+	/* Init priv->cpus before detect mode */
+	ret = of_property_read_u32(dev->of_node, "fsl,cpus-bits", &cpus);
+	if (ret) {
+		cpumask_clear(&priv->cpus);
+	} else {
+		cpus_bits = cpus;
+		bitmap_copy(cpumask_bits(&priv->cpus), &cpus_bits,
+				min((unsigned int)nr_cpumask_bits,
+				    (unsigned int)sizeof(unsigned long)));
+	}
+
 	ret = imx_rproc_detect_mode(priv);
 	if (ret)
 		goto err_put_mbox;
@@ -1541,17 +1568,6 @@ static int imx_rproc_probe(struct platform_device *pdev)
 	ret = of_property_read_u32(dev->of_node, "fsl,startup-delay-ms", &priv->startup_delay);
 	if (ret)
 		priv->startup_delay = 0;
-
-	ret = of_property_read_u32(dev->of_node, "fsl,cpus-bits", &cpus);
-	if (ret) {
-		cpumask_clear(&priv->cpus);
-	} else {
-		cpus_bits = cpus;
-		bitmap_copy(cpumask_bits(&priv->cpus), &cpus_bits,
-				min((unsigned int)nr_cpumask_bits,
-				    (unsigned int)sizeof(unsigned long)));
-		rproc->auto_boot = false;
-	}
 
 	ret = rproc_add(rproc);
 	if (ret) {

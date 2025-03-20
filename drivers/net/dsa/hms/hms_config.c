@@ -418,6 +418,73 @@ err:
 	return rc;
 }
 
+int hms_port_set_preemptible_tcs(struct dsa_switch *ds, int port,
+				  unsigned long preemptible_tcs)
+{
+	struct hms_private *priv = ds->priv;
+	struct hms_cmd_qbu_set qbu_conf;
+
+	memset(&qbu_conf, 0, sizeof(qbu_conf));
+	qbu_conf.port = port;
+	qbu_conf.preemption_mask = (uint8_t)preemptible_tcs;
+
+	return hms_xfer_set_cmd(priv, HMS_CMD_QBU_SET,
+				 &qbu_conf, sizeof(qbu_conf));
+}
+
+int hms_port_set_mm(struct dsa_switch *ds, int port,
+		    struct ethtool_mm_cfg *cfg,
+		    struct netlink_ext_ack *extack)
+{
+	struct hms_private *priv = ds->priv;
+	struct hms_cmd_set_get_mm mm_conf;
+	u32 add_frag_size = 0;
+	int rc = 0;
+
+	memset(&mm_conf, 0, sizeof(mm_conf));
+	mm_conf.verify_time = (uint32_t)cfg->verify_time;
+	mm_conf.verify_enabled = cfg->verify_enabled ? 1 : 0;
+	mm_conf.tx_enabled = cfg->tx_enabled ? 1 : 0;
+	mm_conf.pmac_enabled = cfg->pmac_enabled ? 1 : 0;
+	mm_conf.port = (uint8_t)port;
+
+	rc = ethtool_mm_frag_size_min_to_add((u32)cfg->tx_min_frag_size,
+					     &add_frag_size, extack);
+	if (rc)
+		return rc;
+
+	mm_conf.add_frag_size = (int32_t)add_frag_size;
+
+	return hms_xfer_set_cmd(priv, HMS_CMD_MM_SET, &mm_conf, sizeof(mm_conf));
+}
+
+int hms_port_get_mm(struct dsa_switch *ds, int port,
+		    struct ethtool_mm_state *state)
+{
+	struct hms_private *priv = ds->priv;
+	struct hms_cmd_set_get_mm mm_conf;
+	int rc;
+
+	memset(&mm_conf, 0, sizeof(mm_conf));
+	mm_conf.port = (uint8_t)port;
+	rc = hms_xfer_get_cmd(priv, HMS_CMD_MM_GET, port, &mm_conf, sizeof(mm_conf));
+	if (rc)
+		return rc;
+
+	state->verify_time = (u32)mm_conf.verify_time;
+	state->max_verify_time = HMS_GET_MM_MAX_VERIFY_TIME;
+	state->verify_status = (enum ethtool_mm_verify_status)mm_conf.verify_status;
+	state->tx_enabled = !!mm_conf.tx_enabled;
+	state->tx_active = !!mm_conf.tx_active;
+	state->pmac_enabled = !!mm_conf.pmac_enabled;
+	state->verify_enabled = !!mm_conf.verify_enabled;
+	state->tx_min_frag_size =
+			ethtool_mm_frag_size_add_to_min(mm_conf.add_frag_size);
+	state->rx_min_frag_size = state->tx_min_frag_size;
+
+	return 0;
+}
+
 static int hms_qci_sg_set(struct hms_private *priv, struct hms_stream_filter *filter)
 {
 	struct action_gate_entry *entry = NULL;

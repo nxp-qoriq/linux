@@ -29,6 +29,8 @@
 #define HMS_CMD_DIR_SHIFT 31
 #define HMS_CMD_LEN_SHIFT 16
 
+#define HMS_GET_MM_MAX_VERIFY_TIME	(128U)
+
 enum  hms_spi_rw_mode {
 	SPI_READ = 0,
 	SPI_WRITE = 1,
@@ -78,7 +80,8 @@ enum hms_cmd {
 	HMS_CMD_QBV_SET_P2,
 	HMS_CMD_QBV_SET_GCL,
 	HMS_CMD_QBU_SET,
-	HMS_CMD_QBU_GET,
+	HMS_CMD_MM_SET,
+	HMS_CMD_MM_GET,
 	HMS_CMD_QCI_SF_SET,
 	HMS_CMD_QCI_SG_SET_P1,
 	HMS_CMD_QCI_SG_SET_P2,
@@ -417,6 +420,24 @@ struct hms_cmd_qbv_set_p2 {
 	uint8_t reserved[12];
 };
 
+struct hms_cmd_set_get_mm {
+	uint32_t verify_time;
+	uint32_t add_frag_size;
+	uint8_t verify_enabled;
+	uint8_t verify_status;
+	uint8_t tx_enabled;
+	uint8_t pmac_enabled;
+	uint8_t tx_active;
+	uint8_t port;
+	uint8_t reserved[2];
+};
+
+struct hms_cmd_qbu_set {
+	uint8_t preemption_mask;
+	uint8_t port;
+	uint8_t reserved[2];
+};
+
 struct hms_cmd_port_ethtool_stats {
 	uint64_t values[HMS_ETHTOOL_STATS_NUM_MAX];
 };
@@ -532,4 +553,11 @@ int hms_vlan_entry_read(struct hms_private *priv,
 			struct hms_vlan_entry *vlan,
 			uint32_t entry_id, uint32_t *next_id);
 
+int hms_port_set_preemptible_tcs(struct dsa_switch *ds, int port,
+				 unsigned long preemptible_tcs);
+int hms_port_set_mm(struct dsa_switch *ds, int port,
+		    struct ethtool_mm_cfg *cfg,
+		    struct netlink_ext_ack *extack);
+int hms_port_get_mm(struct dsa_switch *ds, int port,
+		    struct ethtool_mm_state *state);
 #endif /* _HMS_CONFIG_H */

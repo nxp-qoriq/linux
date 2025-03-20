@@ -193,6 +193,14 @@ static struct sk_buff *hms_imprecise_xmit(struct sk_buff *skb,
 	 */
 	tx_vid = dsa_tag_8021q_bridge_vid(bridge_num);
 
+	if (unlikely(skb_vlan_tag_present(skb))) {
+		skb = __vlan_hwaccel_push_inside(skb);
+		if (!skb) {
+			WARN_ONCE(1, "Failed to push VLAN tag to payload!\n");
+			return NULL;
+		}
+	}
+
 	return dsa_8021q_xmit(skb, netdev, hms_xmit_tpid(dp), tx_vid);
 }
 

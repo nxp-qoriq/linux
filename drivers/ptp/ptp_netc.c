@@ -41,6 +41,10 @@
 #define  TMR_TEVENT_ETS2		(TMR_TEVENT_ETS2_THREN | \
 					 TMR_TEVENT_ETS2EN | TMR_TEVENT_ETS2_OVEN)
 
+#define NETC_TMR_FRT_L			0x0020
+#define NETC_TMR_FRT_H			0x0024
+#define NETC_TMR_SRT_L			0x0028
+#define NETC_TMR_SRT_H			0x002c
 #define NETC_TMR_TEMASK			0x0088
 #define NETC_TMR_STAT			0x0094
 #define  TMR_STAT_ETS1_VLD		BIT(24)
@@ -169,6 +173,18 @@ static u64 netc_timer_cnt_read(struct netc_timer *priv)
 	ns = (((u64)tmr_cnt_h) << 32) | tmr_cnt_l;
 
 	return ns;
+}
+
+static u64 netc_timer_frt_read(struct netc_timer *priv)
+{
+	u32 tmr_frt_l, tmr_frt_h;
+	u64 cycles;
+
+	tmr_frt_l = netc_timer_rd(priv, NETC_TMR_FRT_L);
+	tmr_frt_h = netc_timer_rd(priv, NETC_TMR_FRT_H);
+	cycles = (((u64)tmr_frt_h) << 32) | tmr_frt_l;
+
+	return cycles;
 }
 
 static u64 netc_timer_cur_time_read(struct netc_timer *priv)
@@ -512,6 +528,45 @@ static int netc_timer_gettimex64(struct ptp_clock_info *ptp, struct timespec64 *
 	return 0;
 }
 
+static u64 cycles_to_ns(u64 cycles, u32 period_int, u32 period_frac)
+{
+	return (cycles * period_int) + ((cycles >> 32) * period_frac) + (((cycles & 0xffffffff) * period_frac) >> 32);
+}
+
+static int netc_timer_getcycles64(struct ptp_clock_info *ptp, struct timespec64 *ts)
+{
+	struct netc_timer *priv = ptp_to_netc_timer(ptp);
+	u64 cycles, ns;
+
+	scoped_guard(spinlock_irqsave, &priv->lock)
+		cycles = netc_timer_frt_read(priv);
+ 
+	ns = cycles_to_ns(cycles, priv->period_int, priv->period_frac);
+
+	*ts = ns_to_timespec64(ns);
+
+	return 0;
+}
+
+static int netc_timer_getcyclesx64(struct ptp_clock_info *ptp, struct timespec64 *ts, 
+				   struct ptp_system_timestamp *sts)
+{
+	struct netc_timer *priv = ptp_to_netc_timer(ptp);
+	u64 cycles, ns;
+
+	scoped_guard(spinlock_irqsave, &priv->lock) {
+		ptp_read_system_prets(sts);
+		cycles = netc_timer_frt_read(priv);
+		ptp_read_system_postts(sts);
+	}
+
+	ns = cycles_to_ns(cycles, priv->period_int, priv->period_frac);
+
+	*ts = ns_to_timespec64(ns);
+
+	return 0;
+}
+
 static int netc_timer_settime64(struct ptp_clock_info *ptp,
 				const struct timespec64 *ts)
 {
@@ -763,6 +818,8 @@ static const struct ptp_clock_info netc_timer_ptp_caps = {
 	.adjfine	= netc_timer_adjfine,
 	.adjtime	= netc_timer_adjtime,
 	.gettimex64	= netc_timer_gettimex64,
+	.getcycles64	= netc_timer_getcycles64,
+	.getcyclesx64	= netc_timer_getcyclesx64,
 	.settime64	= netc_timer_settime64,
 	.enable		= netc_timer_enable,
 };

@@ -9,8 +9,6 @@
 
 #include "enetc_pf.h"
 
-static void enetc_configure_port_pmac(struct enetc_hw *hw, bool enable);
-
 static const u32 enetc_si_regs[] = {
 	ENETC_SIMR, ENETC_SIPMAR0, ENETC_SIPMAR1, ENETC_SICBDRMR,
 	ENETC_SICBDRSR,	ENETC_SICBDRBAR0, ENETC_SICBDRBAR1, ENETC_SICBDRPIR,
@@ -2057,34 +2055,6 @@ static int enetc_get_mm(struct net_device *ndev, struct ethtool_mm_state *state)
 	return 0;
 }
 
-static void enetc_configure_port_pmac(struct enetc_hw *hw, bool enable)
-{
-	u32 temp;
-
-	/* Set pMAC step lock */
-	temp = enetc_port_rd(hw, ENETC_PFPMR);
-	enetc_port_wr(hw, ENETC_PFPMR, temp | ENETC_PFPMR_PMACE);
-
-	temp = enetc_port_rd(hw, ENETC_MMCSR);
-	if (enable)
-		temp |= ENETC_MMCSR_ME;
-	else
-		temp &= (~ENETC_MMCSR_ME);
-	enetc_port_wr(hw, ENETC_MMCSR, temp);
-}
-
-int enetc_pmac_reset(struct net_device *ndev, bool enable)
-{
-	struct enetc_ndev_priv *priv = netdev_priv(ndev);
-	u32 temp;
-
-	temp = enetc_port_rd(&priv->si->hw, ENETC_PFPMR);
-	if (temp & ENETC_PFPMR_PMACE)
-		enetc_configure_port_pmac(&priv->si->hw, enable);
-
-	return 0;
-}
-
 static int enetc_mm_wait_tx_active(struct enetc_hw *hw, int verify_time)
 {
 	int timeout = verify_time * USEC_PER_MSEC * ENETC_MM_VERIFY_RETRIES;
@@ -2382,105 +2352,6 @@ void enetc_mm_link_state_update(struct enetc_ndev_priv *priv, bool link)
 }
 EXPORT_SYMBOL_GPL(enetc_mm_link_state_update);
 
-static int enetc_set_preempt(struct net_device *ndev,
-			     struct ethtool_fp *pt)
-{
-	struct enetc_ndev_priv *priv = netdev_priv(ndev);
-	u32 preempt, temp;
-	int rafs;
-	int i;
-
-	if (!pt)
-		return -EINVAL;
-
-	if (!pt->disabled && (pt->min_frag_size < 60 || pt->min_frag_size > 252))
-		return -EINVAL;
-
-	rafs = DIV_ROUND_UP((pt->min_frag_size + 4), 64) - 1;
-
-	preempt = pt->preemptible_queues_mask;
-
-	temp = enetc_rd(&priv->si->hw, ENETC_PTGCR);
-	if (temp & ENETC_PTGCR_TGE)
-		enetc_wr(&priv->si->hw, ENETC_PTGCR,
-			 temp & (~ENETC_PTGCR_TGPE));
-
-	for (i = 0; i < 8; i++) {
-		/* 1 Enabled. Traffic is transmitted on the preemptive MAC. */
-		temp = enetc_port_rd(&priv->si->hw, ENETC_PTCFPR(i));
-
-		if ((preempt >> i) & 0x1)
-			enetc_port_wr(&priv->si->hw,
-				      ENETC_PTCFPR(i),
-				      temp | ENETC_PTCFPR_FPE);
-		else
-			enetc_port_wr(&priv->si->hw,
-				      ENETC_PTCFPR(i),
-				      temp & ~ENETC_PTCFPR_FPE);
-	}
-
-	temp = enetc_port_rd(&priv->si->hw, ENETC_MMCSR);
-	temp &= ~ENETC_MMCSR_RAFS_MASK;
-	temp |= ENETC_MMCSR_RAFS(rafs);
-	if (pt->fp_enabled)
-		temp &= ~ENETC_MMCSR_VDIS;
-	else
-		temp |= ENETC_MMCSR_VDIS;
-	enetc_port_wr(&priv->si->hw, ENETC_MMCSR, temp);
-
-	if (pt->disabled) {
-		enetc_configure_port_pmac(&priv->si->hw, 0);
-		priv->fp_enabled_admin = 0;
-	} else {
-		enetc_configure_port_pmac(&priv->si->hw, 1);
-		priv->fp_enabled_admin = 1;
-	}
-
-	if (pt->disabled) {
-		temp = enetc_port_rd(&priv->si->hw, ENETC_PFPMR);
-		enetc_port_wr(&priv->si->hw, ENETC_PFPMR,
-			      temp & ~ENETC_PFPMR_PMACE);
-	}
-
-	return 0;
-}
-
-static int enetc_get_preempt(struct net_device *ndev,
-			     struct ethtool_fp *pt)
-{
-	struct enetc_ndev_priv *priv = netdev_priv(ndev);
-	u32 temp;
-	int i;
-
-	if (!pt)
-		return -EINVAL;
-
-	temp = enetc_port_rd(&priv->si->hw, ENETC_MMCSR);
-	if (!(temp & ENETC_MMCSR_VDIS) && (ENETC_MMCSR_GET_VSTS(temp) == 3))
-		pt->fp_active = true;
-	else if ((temp & ENETC_MMCSR_VDIS) && (temp & ENETC_MMCSR_ME))
-		pt->fp_active = true;
-	else
-		pt->fp_active = false;
-
-	if (temp & ENETC_MMCSR_ME)
-		pt->fp_status = true;
-	else
-		pt->fp_status = false;
-
-	pt->preemptible_queues_mask = 0;
-	for (i = 0; i < 8; i++)
-		if (enetc_port_rd(&priv->si->hw, ENETC_PTCFPR(i)) & 0x80000000)
-			pt->preemptible_queues_mask |= 1 << i;
-
-	pt->fp_supported = !!(priv->si->hw_features & ENETC_SI_F_QBU);
-	pt->supported_queues_mask = 0xff;
-	temp = enetc_port_rd(&priv->si->hw, ENETC_MMCSR);
-	pt->min_frag_size = (ENETC_MMCSR_GET_RAFS(temp) + 1) * 64;
-
-	return 0;
-}
-
 static const struct ethtool_ops enetc_pf_ethtool_ops = {
 	.supported_coalesce_params = ETHTOOL_COALESCE_USECS |
 				     ETHTOOL_COALESCE_MAX_FRAMES |
@@ -2517,9 +2388,6 @@ static const struct ethtool_ops enetc_pf_ethtool_ops = {
 	.get_mm = enetc_get_mm,
 	.set_mm = enetc_set_mm,
 	.get_mm_stats = enetc_get_mm_stats,
-	.set_preempt = enetc_set_preempt,
-	.get_preempt = enetc_get_preempt,
-	.reset_preempt = enetc_reset_preempt,
 };
 
 static const struct ethtool_ops enetc_ppm_ethtool_ops = {

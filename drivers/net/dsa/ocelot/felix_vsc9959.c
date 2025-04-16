@@ -2662,91 +2662,6 @@ static const struct ocelot_ops vsc9959_ops = {
 	.tas_guard_bands_update	= vsc9959_tas_guard_bands_update,
 };
 
-static void vsc9959_port_preempt_reset(struct ocelot *ocelot, int port, bool enable)
-{
-	struct ocelot_port *ocelot_port = ocelot->ports[port];
-
-	ocelot_port_rmwl(ocelot_port, 0,
-			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
-			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
-			 DEV_MM_ENABLE_CONFIG);
-
-	if (enable) {
-		if (ocelot_port->fp_enabled_admin) {
-			ocelot_port_rmwl(ocelot_port,
-					 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
-					 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
-					 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
-					 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
-					 DEV_MM_ENABLE_CONFIG);
-		}
-	}
-}
-
-static int vsc9959_port_set_preempt(struct ocelot *ocelot, int port,
-				    struct ethtool_fp *fpcmd)
-{
-	struct ocelot_port *ocelot_port = ocelot->ports[port];
-	u8 preemptible_tcs = fpcmd->preemptible_queues_mask;
-	struct ethtool_mm_cfg cfg;
-	int ret;
-
-	if (!fpcmd->disabled &&
-	    (fpcmd->min_frag_size < 60 || fpcmd->min_frag_size > 252))
-		return -EINVAL;
-
-	cfg.tx_min_frag_size = fpcmd->min_frag_size;
-
-	if (!fpcmd->disabled) {
-		ocelot_port->fp_enabled_admin = 1;
-		cfg.pmac_enabled = 1;
-		cfg.tx_enabled = 1;
-	} else {
-		ocelot_port->fp_enabled_admin = 0;
-		cfg.pmac_enabled = 0;
-		cfg.tx_enabled = 0;
-	}
-
-	cfg.verify_enabled = fpcmd->fp_enabled;
-	cfg.verify_time = 0xa;
-
-	ret = ocelot_port_set_mm(ocelot, port, &cfg, NULL);
-	if (ret)
-		return ret;
-
-	mutex_lock(&ocelot->fwd_domain_lock);
-	ret = ocelot_port_change_fp(ocelot, port, preemptible_tcs);
-	mutex_unlock(&ocelot->fwd_domain_lock);
-
-	return ret;
-}
-
-static int vsc9959_port_get_preempt(struct ocelot *ocelot, int port,
-				    struct ethtool_fp *fpcmd)
-{
-	struct ocelot_port *ocelot_port = ocelot->ports[port];
-	u8 fragsize;
-	u32 val;
-
-	fpcmd->fp_supported = 1;
-	fpcmd->supported_queues_mask = GENMASK(7, 0);
-
-	val = ocelot_port_readl(ocelot_port, DEV_MM_STATUS);
-	val &= DEV_MM_STAT_MM_STATUS_PRMPT_ACTIVE_STATUS;
-	fpcmd->fp_active = (val ? 1 : 0);
-
-	val = ocelot_port_readl(ocelot_port, DEV_MM_ENABLE_CONFIG);
-	val &= DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA;
-	fpcmd->fp_status = val;
-
-	val = ocelot_read_rix(ocelot, QSYS_PREEMPTION_CFG, port);
-	fpcmd->preemptible_queues_mask = val & QSYS_PREEMPTION_CFG_P_QUEUES_M;
-	fragsize = QSYS_PREEMPTION_CFG_MM_ADD_FRAG_SIZE_X(val);
-	fpcmd->min_frag_size = (fragsize + 1) * 64 - 4;
-
-	return 0;
-}
-
 static const struct felix_info felix_info_vsc9959 = {
 	.resources		= vsc9959_resources,
 	.num_resources		= ARRAY_SIZE(vsc9959_resources),
@@ -2770,9 +2685,6 @@ static const struct felix_info felix_info_vsc9959 = {
 	.port_setup_tc		= vsc9959_port_setup_tc,
 	.port_sched_speed_set	= vsc9959_sched_speed_set,
 	.request_irq		= vsc9959_request_irq,
-	.port_set_preempt	= vsc9959_port_set_preempt,
-	.port_get_preempt	= vsc9959_port_get_preempt,
-	.port_preempt_reset	= vsc9959_port_preempt_reset,
 };
 
 static int felix_pci_probe(struct pci_dev *pdev,

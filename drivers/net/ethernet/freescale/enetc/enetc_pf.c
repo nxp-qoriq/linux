@@ -660,7 +660,6 @@ static void enetc_pl_mac_link_down(struct phylink_config *config,
 		enetc_mm_link_state_update(priv, false);
 
 	enetc_mac_enable(si, false);
-	enetc_pmac_reset(pf->si->ndev, 0);
 }
 
 static const struct phylink_mac_ops enetc_mac_phylink_ops = {

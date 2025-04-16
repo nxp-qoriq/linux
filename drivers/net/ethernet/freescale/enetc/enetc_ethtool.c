@@ -1556,27 +1556,6 @@ static int enetc_set_rxfh(struct net_device *ndev,
 	return err;
 }
 
-static int enetc_reset_preempt(struct net_device *ndev, bool enable)
-{
-	struct enetc_ndev_priv *priv = netdev_priv(ndev);
-	u32 temp;
-
-	temp = enetc_rd(&priv->si->hw, ENETC_PTGCR);
-	if (temp & ENETC_PTGCR_TGE)
-		enetc_wr(&priv->si->hw, ENETC_PTGCR,
-			 temp & (~ENETC_PTGCR_TGPE));
-
-	if (enable) {
-		if (priv->fp_enabled_admin) {
-			enetc_configure_port_pmac(&priv->si->hw, 1);
-		}
-	} else {
-		enetc_configure_port_pmac(&priv->si->hw, 0);
-	}
-
-	return 0;
-}
-
 static void enetc_get_channels(struct net_device *ndev,
 			       struct ethtool_channels *ch)
 {

@@ -1745,41 +1745,6 @@ static int dsa_user_get_ts_info(struct net_device *dev,
 	return ds->ops->get_ts_info(ds, p->dp->index, ts);
 }
 
-static int dsa_user_reset_preempt(struct net_device *dev, bool enable)
-{
-	struct dsa_user_priv *p = netdev_priv(dev);
-	struct dsa_switch *ds = p->dp->ds;
-
-	if (!ds->ops->reset_preempt)
-		return -EOPNOTSUPP;
-
-	return ds->ops->reset_preempt(ds, p->dp->index, enable);
-}
-
-static int dsa_user_set_preempt(struct net_device *dev,
-				 struct ethtool_fp *fpcmd)
-{
-	struct dsa_user_priv *p = netdev_priv(dev);
-	struct dsa_switch *ds = p->dp->ds;
-
-	if (!ds->ops->set_preempt)
-		return -EOPNOTSUPP;
-
-	return ds->ops->set_preempt(ds, p->dp->index, fpcmd);
-}
-
-static int dsa_user_get_preempt(struct net_device *dev,
-				 struct ethtool_fp *fpcmd)
-{
-	struct dsa_user_priv *p = netdev_priv(dev);
-	struct dsa_switch *ds = p->dp->ds;
-
-	if (!ds->ops->get_preempt)
-		return -EOPNOTSUPP;
-
-	return ds->ops->get_preempt(ds, p->dp->index, fpcmd);
-}
-
 static int dsa_user_vlan_rx_add_vid(struct net_device *dev, __be16 proto,
 				    u16 vid)
 {
@@ -2518,9 +2483,6 @@ static const struct ethtool_ops dsa_user_ethtool_ops = {
 	.get_mm			= dsa_user_get_mm,
 	.set_mm			= dsa_user_set_mm,
 	.get_mm_stats		= dsa_user_get_mm_stats,
-	.set_preempt		= dsa_user_set_preempt,
-	.get_preempt		= dsa_user_get_preempt,
-	.reset_preempt		= dsa_user_reset_preempt,
 };
 
 static const struct dcbnl_rtnl_ops __maybe_unused dsa_user_dcbnl_ops = {

@@ -10,7 +10,7 @@
 &ecspi2 {
 	status = "okay";
 
-	netcdsa: ethernet-switch@0 {
+	hmsdsa: ethernet-switch@0 {
 		reg = <0x0>;
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -18,12 +18,12 @@
 		/* 500 kHz */
 		spi-max-frequency = <500000>;
 
-		netcdsa_ports: ports {
+		hmsdsa_ports: ports {
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			netcdsa_port0: port@0 {
-				label = "swp0";
+			hmsdsa_port0: port@0 {
+				label = "hms0p0";
 				reg = <0>;
 				phy-mode = "sgmii";
 
@@ -33,8 +33,8 @@
 				};
 			};
 
-			netcdsa_port1: port@1 {
-				label = "swp1";
+			hmsdsa_port1: port@1 {
+				label = "hms0p1";
 				reg = <1>;
 				phy-mode = "sgmii";
 
@@ -44,8 +44,8 @@
 				};
 			};
 
-			netcdsa_port2: port@2 {
-				label = "swp2";
+			hmsdsa_port2: port@2 {
+				label = "hms0p2";
 				reg = <2>;
 				phy-mode = "sgmii";
 
@@ -55,7 +55,7 @@
 				};
 			};
 
-			netcdsa_port3: port@3 {
+			hmsdsa_port3: port@3 {
 				/* cpu port connected to eqos */
 				ethernet = <&eqos>;
 				label = "cpu";
@@ -68,8 +68,8 @@
 				};
 			};
 
-			netcdsa_port4: port@4 {
-				label = "swp4";
+			hmsdsa_port4: port@4 {
+				label = "hms0p4";
 				reg = <4>;
 				phy-mode = "sgmii";
 				status = "disabled";

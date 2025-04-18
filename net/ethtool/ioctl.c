@@ -3061,6 +3061,55 @@ static int ethtool_set_fecparam(struct net_device *dev, void __user *useraddr)
 	return dev->ethtool_ops->set_fecparam(dev, &fecparam);
 }
 
+static int ethtool_get_mm(struct net_device *dev, void __user *useraddr)
+{
+       struct ethtool_fp fpparam = { .cmd = ETHTOOL_GMM };
+       struct ethtool_mm_state mm;
+       int rc;
+
+       if (!dev->ethtool_ops->get_mm) {
+               fpparam.support = 0;
+	       goto exit;
+       }
+
+       rc = dev->ethtool_ops->get_mm(dev, &mm);
+       if (rc)
+               return rc;
+
+       fpparam.support = 1;
+       fpparam.verify_time = mm.verify_time;
+       fpparam.tx_enabled = mm.tx_enabled;
+       fpparam.pmac_enabled = mm.pmac_enabled;
+       fpparam.verify_enabled = mm.verify_enabled;
+       fpparam.active = (mm.verify_status == ETHTOOL_MM_VERIFY_STATUS_SUCCEEDED) ? 1 : 0;
+       fpparam.min_frag_size = mm.tx_min_frag_size;
+
+exit:
+       if (copy_to_user(useraddr, &fpparam, sizeof(fpparam)))
+               return -EFAULT;
+       return 0;
+}
+
+static int ethtool_set_mm(struct net_device *dev, void __user *useraddr)
+{
+       struct ethtool_fp fpparam;
+       struct ethtool_mm_cfg mm;
+
+       if (!dev->ethtool_ops->set_mm)
+               return -EOPNOTSUPP;
+
+       if (copy_from_user(&fpparam, useraddr, sizeof(fpparam)))
+               return -EFAULT;
+
+       mm.verify_time = fpparam.verify_time;
+       mm.verify_enabled = fpparam.verify_enabled;
+       mm.tx_enabled = fpparam.tx_enabled;
+       mm.pmac_enabled = fpparam.pmac_enabled;
+       mm.tx_min_frag_size = fpparam.min_frag_size;
+
+       return dev->ethtool_ops->set_mm(dev, &mm, NULL);
+}
+
 /* The main entry point in this file.  Called from net/core/dev_ioctl.c */
 
 static int
@@ -3120,6 +3169,8 @@ __dev_ethtool(struct net *net, struct ifreq *ifr, void __user *useraddr,
 	case ETHTOOL_PHY_GTUNABLE:
 	case ETHTOOL_GLINKSETTINGS:
 	case ETHTOOL_GFECPARAM:
+	case ETHTOOL_GMM:
+	case ETHTOOL_SMM:
 		break;
 	default:
 		if (!ns_capable(net->user_ns, CAP_NET_ADMIN))
@@ -3346,6 +3397,12 @@ __dev_ethtool(struct net *net, struct ifreq *ifr, void __user *useraddr,
 		break;
 	case ETHTOOL_SFECPARAM:
 		rc = ethtool_set_fecparam(dev, useraddr);
+		break;
+	case ETHTOOL_GMM:
+		rc = ethtool_get_mm(dev, useraddr);
+		break;
+	case ETHTOOL_SMM:
+		rc = ethtool_set_mm(dev, useraddr);
 		break;
 	default:
 		rc = -EOPNOTSUPP;

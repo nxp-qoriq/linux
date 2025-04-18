@@ -590,6 +590,18 @@ struct ethtool_pauseparam {
 	__u32	tx_pause;
 };
 
+struct ethtool_fp {
+	__u32 cmd;
+	__u32 verify_time;
+	__u32 min_frag_size;
+	__u8 tx_enabled;
+	__u8 pmac_enabled;
+	__u8 verify_enabled;
+	__u8 active;
+	__u8 support;
+	__u8 reserved[3];
+};
+
 /* Link extended state */
 enum ethtool_link_ext_state {
 	ETHTOOL_LINK_EXT_STATE_AUTONEG,
@@ -1937,6 +1949,9 @@ enum ethtool_fec_config_bits {
 #define ETHTOOL_PHY_STUNABLE	0x0000004f /* Set PHY tunable configuration */
 #define ETHTOOL_GFECPARAM	0x00000050 /* Get FEC settings */
 #define ETHTOOL_SFECPARAM	0x00000051 /* Set FEC settings */
+
+#define ETHTOOL_GMM		0x00000052 /* Get MAC Merge settings */
+#define ETHTOOL_SMM		0x00000053 /* Set MAC Merge settings */
 
 /* compatibility with older code */
 #define SPARC_ETH_GSET		ETHTOOL_GSET

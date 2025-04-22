@@ -1666,49 +1666,10 @@ static int enetc_set_coalesce(struct net_device *ndev,
 	return 0;
 }
 
-static struct pci_dev *enetc4_get_default_timer_pdev(struct enetc_si *si)
-{
-	int domain, bus_number, devfn;
-
-	domain = pci_domain_nr(si->pdev->bus);
-	bus_number = si->pdev->bus->number;
-	switch (si->revision) {
-	case ENETC_REV_4_1:
-		devfn = PCI_DEVFN(24, 0);
-		break;
-	case ENETC_REV_4_3:
-		devfn = PCI_DEVFN(0, 1);
-		break;
-	default:
-		return NULL;
-	}
-
-	return pci_get_domain_bus_and_slot(domain, bus_number, devfn);
-}
-
-static struct pci_dev *enetc_get_timer_pdev(struct enetc_ndev_priv *priv)
-{
-	struct fwnode_handle *timer_fwnode;
-	struct enetc_si *si = priv->si;
-	struct device_node *timer_np;
-
-	timer_np = of_parse_phandle(si->pdev->dev.of_node, "nxp,ptp-timer", 0);
-	if (!timer_np)
-		return enetc4_get_default_timer_pdev(si);
-
-	timer_fwnode = of_fwnode_handle(timer_np);
-	of_node_put(timer_np);
-	if (!timer_fwnode)
-		return NULL;
-
-	return to_pci_dev(timer_fwnode->dev);
-}
-
 static int enetc_get_ts_info(struct net_device *ndev,
 			     struct kernel_ethtool_ts_info *info)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
-	struct pci_dev *timer_pdev;
 	int *phc_idx;
 
 	if (is_enetc_rev1(priv->si)) {
@@ -1718,8 +1679,7 @@ static int enetc_get_ts_info(struct net_device *ndev,
 			symbol_put(enetc_phc_index);
 		}
 	} else {
-		timer_pdev = enetc_get_timer_pdev(priv);
-		info->phc_index = netc_timer_get_phc_index(timer_pdev);
+		info->phc_index = netc_timer_get_phc_index(priv->timer_pdev);
 		if (info->phc_index < 0) {
 			info->so_timestamping = SOF_TIMESTAMPING_TX_SOFTWARE;
 			return 0;

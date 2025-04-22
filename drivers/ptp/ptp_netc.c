@@ -156,6 +156,8 @@ struct netc_timer {
 	u8 alarm_bitmap;
 	u8 alarm_num;
 	struct dentry *debugfs_root;
+
+	long scaled_ppm;
 };
 
 #define ptp_to_netc_timer(ptp)		container_of((ptp), struct netc_timer, caps)
@@ -185,6 +187,18 @@ static u64 netc_timer_frt_read(struct netc_timer *priv)
 	cycles = (((u64)tmr_frt_h) << 32) | tmr_frt_l;
 
 	return cycles;
+}
+
+static u64 netc_timer_srt_read(struct netc_timer *priv)
+{
+	u32 tmr_srt_l, tmr_srt_h;
+	u64 ns;
+
+	tmr_srt_l = netc_timer_rd(priv, NETC_TMR_SRT_L);
+	tmr_srt_h = netc_timer_rd(priv, NETC_TMR_SRT_H);
+	ns = (((u64)tmr_srt_h) << 32) | tmr_srt_l;
+
+	return ns;
 }
 
 static u64 netc_timer_cur_time_read(struct netc_timer *priv)
@@ -218,6 +232,20 @@ static void netc_timer_offset_write(struct netc_timer *priv, u64 offset)
 
 	netc_timer_wr(priv, NETC_TMR_OFF_L, tmr_off_l);
 	netc_timer_wr(priv, NETC_TMR_OFF_H, tmr_off_h);
+}
+
+u64 netc_timer_get_cycles(struct pci_dev *timer_dev)
+{
+	struct netc_timer *priv;
+
+	if (!timer_dev)
+		return 0;
+
+	priv = pci_get_drvdata(timer_dev);
+	if (!priv)
+		return 0;
+
+	return netc_timer_frt_read(priv);
 }
 
 u64 netc_timer_get_current_time(struct pci_dev *timer_dev)
@@ -480,6 +508,8 @@ static int netc_timer_adjfine(struct ptp_clock_info *ptp, long scaled_ppm)
 	new_period = adjust_by_scaled_ppm(priv->base_period, scaled_ppm);
 	netc_timer_adjust_period(priv, new_period);
 
+	priv->scaled_ppm = scaled_ppm;
+
 	return 0;
 }
 
@@ -566,6 +596,77 @@ static int netc_timer_getcyclesx64(struct ptp_clock_info *ptp, struct timespec64
 
 	return 0;
 }
+
+static void netc_timer_get_frt_srt_time(struct netc_timer *priv, u64 *frt_ns, u64 *srt_ns)
+{
+	scoped_guard(spinlock_irqsave, &priv->lock) {
+		*frt_ns = cycles_to_ns(netc_timer_frt_read(priv), priv->period_int, priv->period_frac);
+		*srt_ns = netc_timer_srt_read(priv);
+	}
+}
+
+u64 netc_timer_cycles_to_ns(struct pci_dev *timer_pdev, u64 cycles)
+{
+	struct netc_timer *priv;
+
+	priv = pci_get_drvdata(timer_pdev);
+	if (!priv)
+		return -EINVAL;
+
+	return cycles_to_ns(cycles, priv->period_int, priv->period_frac);
+}
+EXPORT_SYMBOL_GPL(netc_timer_cycles_to_ns);
+
+int netc_timer_ptp_convert(struct pci_dev *timer_pdev, u64 ts_src, u64 *ts_dst, bool ts_in_cycles, bool cycles)
+{
+	struct netc_timer *priv;
+	u64 frt_ns, srt_ns;
+	u64 ns_src, ns_dst;
+	s64 dt, dt_scaled;
+
+	if (!timer_pdev)
+		return -ENODEV;
+
+	priv = pci_get_drvdata(timer_pdev);
+	if (!priv)
+		return -EINVAL;
+
+	netc_timer_get_frt_srt_time(priv, &frt_ns, &srt_ns);
+
+	ns_src = ts_src;
+
+	if (!(ts_in_cycles ^ cycles)) {
+		ns_dst = ns_src;
+		goto done;
+	}
+
+	if (cycles) {
+		/* convert from synchronized to free-running */
+		dt = ns_src - srt_ns;
+
+		if (dt < 0)
+			dt_scaled = - adjust_by_scaled_ppm(-dt, -priv->scaled_ppm);
+		else
+			dt_scaled = adjust_by_scaled_ppm(dt, -priv->scaled_ppm);
+
+		ns_dst = frt_ns + dt_scaled;
+	} else {
+		/* convert from free-running to synchronized */
+		dt = ns_src - frt_ns;
+
+		if (dt < 0)
+			dt_scaled = - adjust_by_scaled_ppm(-dt, priv->scaled_ppm);
+		else
+			dt_scaled = adjust_by_scaled_ppm(dt, priv->scaled_ppm);
+
+		ns_dst = srt_ns + dt_scaled;
+	}
+done:
+	*ts_dst = ns_dst;
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(netc_timer_ptp_convert);
 
 static int netc_timer_settime64(struct ptp_clock_info *ptp,
 				const struct timespec64 *ts)

@@ -422,6 +422,7 @@ static const struct net_device_ops enetc4_ndev_ops = {
 	.ndo_bpf		= enetc_setup_bpf,
 	.ndo_xdp_xmit		= enetc_xdp_xmit,
 	.ndo_xsk_wakeup		= enetc_xsk_wakeup,
+	.ndo_get_tstamp		= enetc_get_tstamp,
 };
 
 static void enetc4_mac_config(struct enetc_pf *pf, unsigned int mode,
@@ -1175,6 +1176,44 @@ static void enetc4_link_deinit(struct enetc_ndev_priv *priv)
 	enetc_mdiobus_destroy(pf);
 }
 
+static struct pci_dev *enetc4_get_default_timer_pdev(struct enetc_si *si)
+{
+	int domain, bus_number, devfn;
+
+	domain = pci_domain_nr(si->pdev->bus);
+	bus_number = si->pdev->bus->number;
+	switch (si->revision) {
+	case NETC_REVISION_4_1:
+		devfn = PCI_DEVFN(24, 0);
+		break;
+	case NETC_REVISION_4_3:
+		devfn = PCI_DEVFN(0, 1);
+		break;
+	default:
+		return NULL;
+	}
+
+	return pci_get_domain_bus_and_slot(domain, bus_number, devfn);
+}
+
+static struct pci_dev *enetc4_get_timer_pdev(struct enetc_ndev_priv *priv)
+{
+	struct fwnode_handle *timer_fwnode;
+	struct enetc_si *si = priv->si;
+	struct device_node *timer_np;
+
+	timer_np = of_parse_phandle(si->pdev->dev.of_node, "nxp,ptp-timer", 0);
+	if (!timer_np)
+		return enetc4_get_default_timer_pdev(si);
+
+	timer_fwnode = of_fwnode_handle(timer_np);
+	of_node_put(timer_np);
+	if (!timer_fwnode)
+		return NULL;
+
+	return to_pci_dev(timer_fwnode->dev);
+}
+
 static int enetc4_pf_netdev_create(struct enetc_si *si)
 {
 	struct device *dev = &si->pdev->dev;
@@ -1231,8 +1270,16 @@ static int enetc4_pf_netdev_create(struct enetc_si *si)
 		goto err_reg_netdev;
 	}
 
+	priv->timer_pdev = enetc4_get_timer_pdev(priv);
+	if (!priv->timer_pdev) {
+		dev_err(dev, "Failed to get timer device\n");
+		goto err_get_timer_dev;
+	}
+
 	return 0;
 
+err_get_timer_dev:
+	unregister_netdev(ndev);
 err_reg_netdev:
 	enetc4_link_deinit(priv);
 err_link_init:

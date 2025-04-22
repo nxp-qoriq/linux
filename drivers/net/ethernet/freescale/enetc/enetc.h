@@ -466,6 +466,7 @@ struct enetc_ndev_priv {
 	struct enetc_si *si;
 	struct clk *ref_clk; /* RGMII/RMII reference clock */
 	struct pci_dev *rcec;
+	struct pci_dev *timer_pdev; /* timer device */
 
 	int bdr_int_num; /* number of Rx/Tx ring interrupts */
 	struct enetc_int_vector *int_vector[ENETC_MAX_BDR_INT];
@@ -559,6 +560,9 @@ int enetc_setup_bpf(struct net_device *ndev, struct netdev_bpf *bpf);
 int enetc_xdp_xmit(struct net_device *ndev, int num_frames,
 		   struct xdp_frame **frames, u32 flags);
 int enetc_xsk_wakeup(struct net_device *ndev, u32 queue, u32 flags);
+ktime_t enetc_get_tstamp(struct net_device *ndev,
+				const struct skb_shared_hwtstamps *hwtstamps,
+				bool cycles);
 void enetc_change_preemptible_tcs(struct enetc_ndev_priv *priv,
 				  u8 preemptible_tcs);
 void enetc_reset_mac_addr_filter(struct enetc_mac_filter *filter);

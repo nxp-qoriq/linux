@@ -3,6 +3,8 @@
  * Copyright 2023-2025 NXP
  */
 
+#include "imx8mp-evk-dsa.dts"
+
 &hmsdsa_port3 {
 	ethernet = <&fec>;
 };

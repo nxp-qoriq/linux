@@ -1097,6 +1097,8 @@ void ocelot_phylink_mac_link_down(struct ocelot *ocelot, int port,
 				 DEV_CLOCK_CFG_MAC_TX_RST |
 				 DEV_CLOCK_CFG_MAC_RX_RST,
 				 DEV_CLOCK_CFG);
+
+	ocelot_mm_link_state_update(ocelot, port, false);
 }
 EXPORT_SYMBOL_GPL(ocelot_phylink_mac_link_down);
 
@@ -1204,6 +1206,8 @@ void ocelot_phylink_mac_link_up(struct ocelot *ocelot, int port,
 	/* Core: Enable port for frame transfer */
 	ocelot_fields_write(ocelot, port,
 			    QSYS_SWITCH_PORT_MODE_PORT_ENA, 1);
+
+	ocelot_mm_link_state_update(ocelot, port, true);
 }
 EXPORT_SYMBOL_GPL(ocelot_phylink_mac_link_up);
 

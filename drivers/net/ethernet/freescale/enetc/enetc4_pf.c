@@ -256,6 +256,35 @@ static void enetc4_enable_all_si(struct enetc_pf *pf)
 	enetc_port_wr(hw, ENETC4_PMR, si_bitmap);
 }
 
+static void enetc4_set_timer_select(struct enetc_hw *hw, bool en)
+{
+	u32 val = enetc_port_rd(hw, ENETC4_PCR);
+
+	if (en)
+		val |= PCR_TIMER_CS;
+	else
+		val &= ~PCR_TIMER_CS;
+
+	enetc_port_wr(hw, ENETC4_PCR, val);
+}
+
+static void enetc4_pf_set_ts_mode(struct enetc_si *si, bool en)
+{
+	u32 val;
+
+	if (si->hw_features & ENETC_SI_F_PPM)
+		return;
+
+	val = enetc_port_mac_rd(si, ENETC4_PM_CMD_CFG(0));
+
+	if (en)
+		val |= PM_CMD_CFG_TS_MODE;
+	else
+		val &= ~PM_CMD_CFG_TS_MODE;
+
+	enetc_port_mac_wr(si, ENETC4_PM_CMD_CFG(0), val);
+}
+
 static void enetc4_configure_port(struct enetc_pf *pf)
 {
 	struct enetc_hw *hw = &pf->si->hw;
@@ -267,6 +296,10 @@ static void enetc4_configure_port(struct enetc_pf *pf)
 	enetc4_set_default_rss_key(hw);
 
 	enetc4_set_isit_key_construct_rule(hw);
+
+	enetc4_set_timer_select(hw, true);
+
+	enetc4_pf_set_ts_mode(pf->si, true);
 
 	/* Master enable for all SIs */
 	enetc4_enable_all_si(pf);

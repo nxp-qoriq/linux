@@ -1218,20 +1218,34 @@ static void enetc_reuse_page(struct enetc_bdr *rx_ring,
 	*new = *old;
 }
 
-static void enetc_get_tx_tstamp(struct enetc_hw *hw, union enetc_tx_bd *txbd,
+static void enetc_get_tx_tstamp(struct enetc_ndev_priv *priv, union enetc_tx_bd *txbd,
 				u64 *tstamp)
 {
+	struct enetc_hw *hw = &priv->si->hw;
 	u32 lo, hi, tstamp_lo;
+	u64 cycles;
 
-	lo = enetc_rd_hot(hw, ENETC_SICTR0);
-	hi = enetc_rd_hot(hw, ENETC_SICTR1);
-	tstamp_lo = le32_to_cpu(txbd->wb.tstamp);
-	if (lo <= tstamp_lo)
-		hi -= 1;
-	*tstamp = (u64)hi << 32 | tstamp_lo;
+	if (is_enetc_rev1(priv->si)) {
+		lo = enetc_rd_hot(hw, ENETC_SICTR0);
+		hi = enetc_rd_hot(hw, ENETC_SICTR1);
+		tstamp_lo = le32_to_cpu(txbd->wb.tstamp);
+
+		if (lo <= tstamp_lo)
+			hi -= 1;
+		*tstamp = (u64)hi << 32 | tstamp_lo;
+	} else {
+		cycles = netc_timer_get_cycles(priv->timer_pdev);
+		lo = (cycles & 0xffffffff);
+		hi = (cycles >> 32);
+		tstamp_lo = le32_to_cpu(txbd->wb.tstamp);
+
+		if (lo <= tstamp_lo)
+			hi -= 1;
+		*tstamp = netc_timer_cycles_to_ns(priv->timer_pdev, (u64)hi << 32 | tstamp_lo);
+	}
 }
 
-static void enetc_tstamp_tx(struct sk_buff *skb, u64 tstamp)
+static void enetc_tstamp_tx(struct enetc_ndev_priv *priv, struct sk_buff *skb, u64 tstamp)
 {
 	struct skb_shared_hwtstamps shhwtstamps;
 	u64 ns;
@@ -1319,7 +1333,7 @@ static u64 enetc_xsk_fill_timestamp(void *_priv)
 		return 0;
 
 	priv = netdev_priv(tx_ring->ndev);
-	enetc_get_tx_tstamp(&priv->si->hw, txbd, &tstamp);
+	enetc_get_tx_tstamp(priv, txbd, &tstamp);
 
 	return ns_to_ktime(tstamp);
 }
@@ -1381,7 +1395,7 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget,
 
 			if (txbd->flags & ENETC_TXBD_FLAGS_W &&
 			    tx_swbd->do_twostep_tstamp) {
-				enetc_get_tx_tstamp(&priv->si->hw, txbd,
+				enetc_get_tx_tstamp(priv, txbd,
 						    &tstamp);
 				do_twostep_tstamp = true;
 			}
@@ -1412,7 +1426,7 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget,
 				 */
 				schedule_work(&priv->tx_onestep_tstamp);
 			} else if (unlikely(do_twostep_tstamp)) {
-				enetc_tstamp_tx(skb, tstamp);
+				enetc_tstamp_tx(priv, skb, tstamp);
 				do_twostep_tstamp = false;
 			}
 			napi_consume_skb(skb, napi_budget);
@@ -1527,19 +1541,31 @@ static int enetc_refill_rx_ring(struct enetc_bdr *rx_ring, const int buff_cnt)
 	return j;
 }
 
-static u64 enetc_get_rx_timestamp(union enetc_rx_bd *rxbd,
-				  struct enetc_hw *hw)
+static u64 enetc_get_rx_timestamp(struct enetc_ndev_priv *priv, 
+				union enetc_rx_bd *rxbd, 
+				struct enetc_hw *hw)
 {
 	u32 lo, hi, tstamp_lo;
 	u64 tstamp;
 
-	lo = enetc_rd_reg_hot(hw->reg + ENETC_SICTR0);
-	hi = enetc_rd_reg_hot(hw->reg + ENETC_SICTR1);
-	tstamp_lo = le32_to_cpu(rxbd->ext.tstamp);
-	if (lo <= tstamp_lo)
-		hi -= 1;
+	if (is_enetc_rev1(priv->si)) {
+		lo = enetc_rd_reg_hot(hw->reg + ENETC_SICTR0);
+		hi = enetc_rd_reg_hot(hw->reg + ENETC_SICTR1);
+		tstamp_lo = le32_to_cpu(rxbd->ext.tstamp);
 
-	tstamp = (u64)hi << 32 | tstamp_lo;
+		if (lo <= tstamp_lo)
+			hi -= 1;
+		tstamp = (u64)hi << 32 | tstamp_lo;
+	} else {
+		tstamp = netc_timer_get_cycles(priv->timer_pdev);
+		lo = (tstamp & 0xffffffff);
+		hi = (tstamp >> 32);
+		tstamp_lo = le32_to_cpu(rxbd->ext.tstamp);
+
+		if (lo <= tstamp_lo)
+			hi -= 1;
+		tstamp = netc_timer_cycles_to_ns(priv->timer_pdev, (u64)hi << 32 | tstamp_lo);
+	}
 
 	return tstamp;
 }
@@ -1555,7 +1581,7 @@ static void enetc_skb_rx_timestamp(struct net_device *ndev,
 
 	if (le16_to_cpu(rxbd->r.flags) & ENETC_RXBD_FLAG_TSTMP) {
 		rxbd = enetc_rxbd_ext(rxbd);
-		ns = enetc_get_rx_timestamp(rxbd, hw);
+		ns = enetc_get_rx_timestamp(priv, rxbd, hw);
 		memset(shhwtstamps, 0, sizeof(*shhwtstamps));
 		shhwtstamps->hwtstamp = ns_to_ktime(ns);
 	}
@@ -1771,6 +1797,9 @@ static struct sk_buff *enetc_build_skb(struct enetc_bdr *rx_ring,
 	if (rx_ring->ext_en && priv->active_offloads & ENETC_F_RSC &&
 	    frames > 1)
 		skb_shinfo(skb)->gso_size = skb->data_len / frames;
+
+	if (priv->active_offloads & ENETC_F_RX_TSTAMP)
+		skb_shinfo(skb)->tx_flags |= SKBTX_HW_TSTAMP_NETDEV;
 
 	skb_record_rx_queue(skb, rx_ring->index);
 	skb->protocol = eth_type_trans(skb, rx_ring->ndev);
@@ -2840,7 +2869,7 @@ static int enetc_xdp_rx_timestamp(const struct xdp_md *ctx, u64 *timestamp)
 		u64 ns;
 
 		rxbd = enetc_rxbd_ext(rxbd);
-		ns = enetc_get_rx_timestamp(rxbd, hw);
+		ns = enetc_get_rx_timestamp(priv, rxbd, hw);
 		*timestamp = ns_to_ktime(ns);
 
 		return 0;

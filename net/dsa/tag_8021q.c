@@ -62,6 +62,7 @@
 #define DSA_8021Q_PORT_MASK		GENMASK(3, 0)
 #define DSA_8021Q_PORT(x)		(((x) << DSA_8021Q_PORT_SHIFT) & \
 						 DSA_8021Q_PORT_MASK)
+#define DSA_8021Q_HSR_VID		1
 
 struct dsa_tag_8021q_vlan {
 	struct list_head list;
@@ -334,6 +335,52 @@ void dsa_tag_8021q_bridge_leave(struct dsa_switch *ds, int port,
 	dsa_port_tag_8021q_vlan_del(dp, bridge_vid, true);
 }
 EXPORT_SYMBOL_GPL(dsa_tag_8021q_bridge_leave);
+
+int dsa_tag_8021q_hsr_join(struct dsa_switch *ds, int port,
+			   struct netlink_ext_ack *extack)
+{
+	struct dsa_port *dp = dsa_to_port(ds, port);
+	u16 standalone_vid, hsr_vid;
+	int err;
+
+	/* Delete the standalone VLAN of the port and replace it with a
+	 * bridging VLAN
+	 */
+	standalone_vid = dsa_tag_8021q_standalone_vid(dp);
+	hsr_vid = DSA_8021Q_HSR_VID;
+
+	err = dsa_port_tag_8021q_vlan_add(dp, hsr_vid, true);
+	if (err)
+		return err;
+
+	dsa_port_tag_8021q_vlan_del(dp, standalone_vid, false);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(dsa_tag_8021q_hsr_join);
+
+void dsa_tag_8021q_hsr_leave(struct dsa_switch *ds, int port)
+{
+	struct dsa_port *dp = dsa_to_port(ds, port);
+	u16 standalone_vid, hsr_vid;
+	int err;
+
+	/* Delete the bridging VLAN of the port and replace it with a
+	 * standalone VLAN
+	 */
+	standalone_vid = dsa_tag_8021q_standalone_vid(dp);
+	hsr_vid = DSA_8021Q_HSR_VID;
+
+	err = dsa_port_tag_8021q_vlan_add(dp, standalone_vid, false);
+	if (err) {
+		dev_err(ds->dev,
+			"Failed to delete tag_8021q standalone VLAN %d from port %d: %pe\n",
+			standalone_vid, port, ERR_PTR(err));
+	}
+
+	dsa_port_tag_8021q_vlan_del(dp, hsr_vid, true);
+}
+EXPORT_SYMBOL_GPL(dsa_tag_8021q_hsr_leave);
 
 /* Set up a port's standalone tag_8021q VLAN */
 static int dsa_tag_8021q_port_setup(struct dsa_switch *ds, int port)

@@ -677,6 +677,26 @@ int hms_frer_sr_del(struct hms_private *priv, uint16_t stream_handle, uint32_t p
 	return 0;
 }
 
+int hms_hsr_set(struct hms_private *priv, uint8_t *ports, bool enable)
+{
+	struct device *dev = priv->ds->dev;
+	struct hms_cmd_hsr_set cfg = {0};
+	int rc;
+
+	cfg.hsr_enabled = enable;
+	cfg.hsr_port_a = ports[0];
+	cfg.hsr_port_b = ports[1];
+
+	rc = hms_xfer_set_cmd(priv, HMS_CMD_HSR_SET,
+			       &cfg, sizeof(cfg));
+	if (rc < 0) {
+		dev_err(dev, "failed to set HSR config: %d\n", rc);
+		return rc;
+	}
+
+	return 0;
+}
+
 int hms_config_setup(struct hms_config *config)
 {
 	if (config->vlan_max_count) {

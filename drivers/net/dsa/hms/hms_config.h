@@ -96,6 +96,7 @@ enum hms_cmd {
 	HMS_CMD_STREAMID_SET,
 	HMS_CMD_STREAMID_DEL,
 	HMS_CMD_PRIORITY_MAP_SET,
+	HMS_CMD_HSR_SET = 0x3600,
 
 	HMS_CMD_REG_SET = 0x4000,
 	HMS_CMD_REG_GET,
@@ -438,6 +439,13 @@ struct hms_cmd_qbu_set {
 	uint8_t reserved[2];
 };
 
+struct hms_cmd_hsr_set {
+	uint8_t hsr_enabled;
+	uint8_t hsr_port_a;
+	uint8_t hsr_port_b;
+	uint8_t reserved[13];
+};
+
 struct hms_cmd_port_ethtool_stats {
 	uint64_t values[HMS_ETHTOOL_STATS_NUM_MAX];
 };
@@ -560,4 +568,5 @@ int hms_port_set_mm(struct dsa_switch *ds, int port,
 		    struct netlink_ext_ack *extack);
 int hms_port_get_mm(struct dsa_switch *ds, int port,
 		    struct ethtool_mm_state *state);
+int hms_hsr_set(struct hms_private *priv, uint8_t *ports, bool enable);
 #endif /* _HMS_CONFIG_H */

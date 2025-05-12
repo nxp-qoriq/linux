@@ -23,6 +23,10 @@
 #include <linux/dsa/hms.h>
 #include "hms_switch.h"
 
+#define HMS_SUPPORTED_HSR_FEATURES \
+	(NETIF_F_HW_HSR_TAG_INS | NETIF_F_HW_HSR_TAG_RM | \
+	 NETIF_F_HW_HSR_FWD | NETIF_F_HW_HSR_DUP)
+
 uint8_t hms_default_priority_map[] = {0, 1, 2, 3, 4, 5, 6, 7};
 
 int hms_is_vlan_configured(struct hms_private *priv, uint16_t vid)
@@ -1097,6 +1101,70 @@ static int hms_mac_init(struct hms_private *priv)
 	return 0;
 }
 
+static int hms_port_hsr_join(struct dsa_switch *ds, int port, struct net_device *hsr,
+			     struct netlink_ext_ack *extack)
+{
+	struct hms_private *priv = ds->priv;
+	struct dsa_port *hsr_dp, *dp;
+	uint8_t hsr_ports[2] = {0};
+	struct net_device *user;
+	int i = 0, rc = 0;
+
+	user = dsa_to_port(ds, port)->user;
+	user->features |= HMS_SUPPORTED_HSR_FEATURES;
+
+	dsa_hsr_foreach_port(hsr_dp, ds, hsr) {
+		hsr_ports[i++] = hsr_dp->index;
+		if (i >= 2)
+			break;
+	}
+
+	if (i >= 2) {
+		rc = hms_hsr_set(priv, hsr_ports, true);
+		if (rc)
+			return rc;
+
+		dsa_switch_for_each_port(dp, ds) {
+			rc = dsa_tag_8021q_hsr_join(ds, dp->index, extack);
+			if (rc)
+				return rc;
+		}
+	}
+
+	return rc;
+}
+
+static int hms_port_hsr_leave(struct dsa_switch *ds, int port, struct net_device *hsr)
+{
+	struct hms_private *priv = ds->priv;
+	struct dsa_port *dp, *partner;
+	uint8_t hsr_ports[2] = {0};
+	struct net_device *user;
+	int rc = 0;
+
+	user = dsa_to_port(ds, port)->user;
+	user->features &= ~HMS_SUPPORTED_HSR_FEATURES;
+
+	dsa_hsr_foreach_port(dp, ds, hsr) {
+		if (dp->index != port) {
+			partner = dp;
+			break;
+		}
+	}
+
+	if (!partner)
+		return rc;
+
+	rc = hms_hsr_set(priv, hsr_ports, false);
+	if (rc)
+		return rc;
+
+	dsa_switch_for_each_port(dp, ds)
+		dsa_tag_8021q_hsr_leave(ds, dp->index);
+
+	return rc;
+}
+
 static int hms_dsa_init(struct hms_private *priv)
 {
 	struct dsa_switch *ds = priv->ds;
@@ -1260,6 +1328,8 @@ static const struct dsa_switch_ops hms_switch_ops = {
 	.port_setup_tc		= hms_port_setup_tc,
 	.set_mm			= hms_port_set_mm,
 	.get_mm			= hms_port_get_mm,
+	.port_hsr_join		= hms_port_hsr_join,
+	.port_hsr_leave		= hms_port_hsr_leave,
 };
 
 static const struct of_device_id hms_dt_ids[];

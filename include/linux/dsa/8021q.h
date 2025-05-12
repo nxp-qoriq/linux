@@ -24,6 +24,11 @@ int dsa_tag_8021q_bridge_join(struct dsa_switch *ds, int port,
 void dsa_tag_8021q_bridge_leave(struct dsa_switch *ds, int port,
 				struct dsa_bridge bridge);
 
+int dsa_tag_8021q_hsr_join(struct dsa_switch *ds, int port,
+			   struct netlink_ext_ack *extack);
+
+void dsa_tag_8021q_hsr_leave(struct dsa_switch *ds, int port);
+
 u16 dsa_tag_8021q_bridge_vid(unsigned int bridge_num);
 
 u16 dsa_tag_8021q_standalone_vid(const struct dsa_port *dp);

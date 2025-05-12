@@ -170,6 +170,25 @@ static u16 hms_xmit_tpid(struct dsa_port *dp)
 	return ETH_P_HMS_8021Q;
 }
 
+static struct sk_buff *hms_hsr_xmit(struct sk_buff *skb,
+				    struct net_device *netdev)
+{
+	struct dsa_port *dp = dsa_user_to_port(netdev);
+	u16 tx_vid;
+
+	tx_vid = 1;
+
+	if (unlikely(skb_vlan_tag_present(skb))) {
+		skb = __vlan_hwaccel_push_inside(skb);
+		if (!skb) {
+			WARN_ONCE(1, "Failed to push VLAN tag to payload!\n");
+			return NULL;
+		}
+	}
+
+	return dsa_8021q_xmit(skb, netdev, hms_xmit_tpid(dp), tx_vid);
+}
+
 static struct sk_buff *hms_imprecise_xmit(struct sk_buff *skb,
 					   struct net_device *netdev)
 {
@@ -250,8 +269,13 @@ static struct sk_buff *hms_8021q_xmit(struct sk_buff *skb,
 static struct sk_buff *hms_xmit(struct sk_buff *skb,
 				 struct net_device *netdev)
 {
+	struct dsa_port *dp = dsa_user_to_port(netdev);
+
 	if (skb->offload_fwd_mark)
 		return hms_imprecise_xmit(skb, netdev);
+
+	if (dp->hsr_dev != NULL)
+		return hms_hsr_xmit(skb, netdev);
 
 	if (unlikely(hms_is_link_local(skb)))
 		return hms_meta_xmit(skb, netdev);

@@ -394,6 +394,12 @@ extern void *affine_portals[NR_CPUS];
 const struct qm_portal_config *qman_get_qm_portal_config(
 						struct qman_portal *portal);
 
+/* EtherCAT */
+#ifdef CONFIG_FSL_DPAA_ETHERCAT
+__init void qman_ethercat_portal_init(int cpu, bool need_cleanup);
+__init void qman_ethercat_portal_init_on_cpu(bool need_cleanup);
+#endif
+
 /* power management */
 #ifdef CONFIG_SUSPEND
 void suspend_unused_qportal(void);

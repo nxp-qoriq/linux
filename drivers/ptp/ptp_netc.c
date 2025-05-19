@@ -502,9 +502,6 @@ static int netc_timer_adjfine(struct ptp_clock_info *ptp, long scaled_ppm)
 	struct netc_timer *priv = ptp_to_netc_timer(ptp);
 	u64 new_period;
 
-	if (!scaled_ppm)
-		return 0;
-
 	new_period = adjust_by_scaled_ppm(priv->base_period, scaled_ppm);
 	netc_timer_adjust_period(priv, new_period);
 

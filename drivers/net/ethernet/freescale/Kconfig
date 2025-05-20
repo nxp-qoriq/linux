@@ -136,5 +136,6 @@ source "drivers/net/ethernet/freescale/sdk_dpaa/Kconfig"
 source "drivers/net/ethernet/freescale/dpaa/Kconfig"
 source "drivers/net/ethernet/freescale/dpaa2/Kconfig"
 source "drivers/net/ethernet/freescale/enetc/Kconfig"
+source "drivers/net/ethernet/freescale/enetc_ecat/Kconfig"
 
 endif # NET_VENDOR_FREESCALE

@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: GPL-2.0
+config FSL_ECAT_ENETC_CORE
+    tristate
+    help
+      This module supports common functionality between the PF and VF
+      drivers for the NXP ENETC controller.
+
+      If compiled as module (M), the module name is fsl-ecat-enetc-core.
+
+config FSL_ECAT_ENETC4
+    tristate "ENETC4 PF native driver"
+    depends on PCI_MSI && NXP_NETC_BLK_CTRL
+    select MDIO_DEVRES
+    select FSL_ECAT_ENETC_CORE
+    select FSL_ENETC_MDIO
+    select NXP_NETC_LIB
+    select PHYLINK
+    select PCS_LYNX
+    select PCS_XPCS
+    select DIMLIB
+    select CRC_ITU_T
+    select NET_DEVLINK
+    help
+      This driver supports the revision 4 of NXP ENETC (Fast Ethernet Controller)
+      PCIe physical function (PF) devices, managing ENETC Ports at a
+      privileged level.
+
+      If compiled as module (M), the module name is fsl-ecat-enetc4.
+

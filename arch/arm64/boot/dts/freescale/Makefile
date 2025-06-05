@@ -692,6 +692,7 @@ dtb-$(CONFIG_ARCH_MXC) += imx95-15x15-evk-flexspi-m2.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx95-15x15-evk-mqs.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx95-15x15-evk-multicore-rtos.dtb imx95-15x15-evk-multicore-rpmsg.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx95-15x15-evk-aud-hat.dtb
+dtb-$(CONFIG_ARCH_MXC) += imx95-15x15-evk-lpuart.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx95-15x15-evk-8mic-reve.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx95-15x15-evk-root.dtb imx95-15x15-evk-inmate.dtb imx95-15x15-evk-harpoon.dtb imx95-15x15-evk-harpoon-industrial.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx95-15x15-ab2.dtb

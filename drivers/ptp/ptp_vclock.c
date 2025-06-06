@@ -2,7 +2,7 @@
 /*
  * PTP virtual clock driver
  *
- * Copyright 2021 NXP
+ * Copyright 2021, 2025 NXP
  */
 #include <linux/slab.h>
 #include <linux/hashtable.h>
@@ -206,10 +206,30 @@ static inline s64 ptp_clock_time_to_ns(const struct ptp_clock_time *ptp_time)
 
 static inline struct ptp_clock_time ns_to_ptp_clock_time(s64 nsec)
 {
-	struct ptp_clock_time ptp_time = { 0 };
+	struct ptp_clock_time ptp_time;
 	struct timespec64 ts;
 
 	ts = ns_to_timespec64(nsec);
+
+	ptp_time.sec = ts.tv_sec;
+	ptp_time.nsec = ts.tv_nsec;
+
+	return ptp_time;
+}
+
+static inline struct timespec64 ptp_clock_time_to_timespec64(const struct ptp_clock_time *ptp_time)
+{
+	struct timespec64 ts;
+
+	ts.tv_sec = ptp_time->sec;
+	ts.tv_nsec = ptp_time->nsec;
+
+	return ts;
+}
+
+static inline struct ptp_clock_time timespec64_to_ptp_clock_time(const struct timespec64 ts)
+{
+	struct ptp_clock_time ptp_time;
 
 	ptp_time.sec = ts.tv_sec;
 	ptp_time.nsec = ts.tv_nsec;
@@ -226,6 +246,7 @@ int ptp_vclock_convert_timestamps(struct ptp_clock *ptp, struct ptp_clock_time *
 {
 	unsigned int hash = dst_phc_index % HASH_SIZE(vclock_hash);
 	struct ptp_vclock *vclock = info_to_vclock(ptp->info);
+	struct timespec64 src_timespec, dst_timespec;
 	struct ptp_vclock *vclock_dst;
 	int i, rc = 0;
 	u64 dst_ns;
@@ -259,12 +280,12 @@ int ptp_vclock_convert_timestamps(struct ptp_clock *ptp, struct ptp_clock_time *
 		}
 
 		for (i = 0; i < n_ts; i++) {
-			/* Convert from source virtual to physical time domain. */
+			/* Convert from source virtual time domain to cycles */
 			dst_ns = ptp_vclock_to_hw_time(&vclock->tc,
 						       ptp_clock_time_to_ns(src_ts + i));
-			/* Convert from physical to destination virtual time domain. */
-			dst_ns = timecounter_cyc2time(&vclock_dst->tc, dst_ns);
 
+			/* Convert from cycles to destination virtual time domain */
+			dst_ns = timecounter_cyc2time(&vclock_dst->tc, dst_ns);
 			*(dst_ts + i) = ns_to_ptp_clock_time(dst_ns);
 		}
 
@@ -279,20 +300,37 @@ int ptp_vclock_convert_timestamps(struct ptp_clock *ptp, struct ptp_clock_time *
 			goto out_unlock_rcu;
 		}
 
+		/* Physical clocks with cycles support must provide a free-running cycles 
+		 * to hardware conversion function.
+		 */
+		if (vclock->pclock->has_cycles && !vclock->pclock->info->converttime) {
+			rc = -EOPNOTSUPP;
+			goto out_unlock_rcu;
+		}
+
 		if (mutex_lock_interruptible(&vclock->lock)) {
 			rc = -EINTR;
 			goto out_unlock_rcu;
 		}
 
-		/* Convert from virtual to physical time domain . */
+		/* Destination is physical (cycles or hardware) */
 		for (i = 0; i < n_ts; i++) {
+			/* Convert from source virtual time domain to cycles */
 			dst_ns = ptp_vclock_to_hw_time(&vclock->tc,
 						       ptp_clock_time_to_ns(src_ts + i));
 			*(dst_ts + i) = ns_to_ptp_clock_time(dst_ns);
+
+			if (vclock->pclock->has_cycles) {
+				/* Convert from cycles to hardware time domain */
+				src_timespec = ptp_clock_time_to_timespec64(dst_ts + i);
+				vclock->pclock->info->converttime(vclock->pclock->info,
+								  src_timespec,
+								  &dst_timespec, false);
+				*(dst_ts + i) = timespec64_to_ptp_clock_time(dst_timespec);
+			}
 		}
 
 		mutex_unlock(&vclock->lock);
-
 	}
 
 out_unlock_rcu:
@@ -302,12 +340,15 @@ out:
 	return rc;
 }
 
-/* Convert from physical to virtual time domain. */
+/* This function converts from a physical (hardware or cycles) domain
+ * to a virtual destination clock domain
+ */
 int ptp_vclock_convert_from_hw_timestamps(struct ptp_clock *ptp, struct ptp_clock_time *src_ts,
 					  unsigned int n_ts, int dst_vclock_index,
 					  struct ptp_clock_time *dst_ts)
 {
 	unsigned int hash = dst_vclock_index % HASH_SIZE(vclock_hash);
+	struct timespec64 src_timespec, dst_timespec;
 	struct ptp_vclock *vclock;
 	int i, rc = 0;
 	u64 dst_ns;
@@ -330,12 +371,29 @@ int ptp_vclock_convert_from_hw_timestamps(struct ptp_clock *ptp, struct ptp_cloc
 		goto out_unlock_rcu;
 	}
 
+	/* Physical clocks with cycles support must provide a free-running cycles
+	* to hardware conversion function.
+	*/
+	if (vclock->pclock->has_cycles && !vclock->pclock->info->converttime) {
+		rc = -EOPNOTSUPP;
+		goto out_unlock_rcu;
+	}
+
 	if (mutex_lock_interruptible(&vclock->lock)) {
 		rc = -ERESTARTSYS;
 		goto out_unlock_rcu;
 	}
 
 	for (i = 0; i < n_ts; i++) {
+		if (ptp->has_cycles) {
+			/* Convert from hardware to virtual's free-running parent (cycles) */
+			src_timespec = ptp_clock_time_to_timespec64(src_ts + i);
+			ptp->info->converttime(ptp->info, src_timespec, &dst_timespec,
+					       true);
+			*(src_ts + i) = timespec64_to_ptp_clock_time(dst_timespec);
+		}
+
+		/* Convert from free-running to virtual clock */
 		dst_ns = timecounter_cyc2time(&vclock->tc, ptp_clock_time_to_ns(src_ts + i));
 		*(dst_ts + i) = ns_to_ptp_clock_time(dst_ns);
 	}

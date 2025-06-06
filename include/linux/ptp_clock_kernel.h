@@ -159,6 +159,14 @@ struct ptp_system_timestamp {
  *                scheduling time (>=0) or negative value in case further
  *                scheduling is not required.
  *
+ * @converttime: Requests driver to convert timestamps between free running
+ *               cycles counter and hardware clock time units. Only drivers that
+ *               implement getcycles64() may implement this callback as in such
+ *               case the hardware clock is not forced to be free-running.
+ *               parameter src_ts: Holds the source timestamp to convert.
+ *               parameter dst_ts: Holds the result.
+ *               parameter cycles: specifies if the destination ts is ns (false) or cycles (true).
+ *
  * Drivers should embed their ptp_clock_info within a private
  * structure, obtaining a reference to it using container_of().
  *
@@ -195,6 +203,8 @@ struct ptp_clock_info {
 	int (*verify)(struct ptp_clock_info *ptp, unsigned int pin,
 		      enum ptp_pin_function func, unsigned int chan);
 	long (*do_aux_work)(struct ptp_clock_info *ptp);
+	int (*converttime)(struct ptp_clock_info *ptp, struct timespec64 src_ts,
+			   struct timespec64 *dst_ts, bool cycles);
 };
 
 struct ptp_clock;

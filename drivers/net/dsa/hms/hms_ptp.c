@@ -5,6 +5,11 @@
 
 #include "hms_switch.h"
 
+#define HMS_PTP_SYNCHRONIZED_CLOCK_ID	0
+#define HMS_PTP_FREERUNNING_CLOCK_ID	1
+
+#define HMS_PTP_RX_TS_DESC_NUMBER	512
+
 #define extts_to_data(t) \
 		container_of((t), struct hms_ptp_data, extts_timer)
 #define ptp_caps_to_data(d) \
@@ -90,24 +95,56 @@ int hms_get_ts_info(struct dsa_switch *ds, int port,
 bool hms_port_rxtstamp(struct dsa_switch *ds, int port,
 			   struct sk_buff *skb, unsigned int type)
 {
+	struct hms_private *priv = ds->priv;
+	struct hms_ptp_data *ptp_data = &priv->ptp_data;
 	struct skb_shared_hwtstamps *shwt = skb_hwtstamps(skb);
-	u64 ts = HMS_SKB_CB(skb)->tstamp;
+	struct hms_skb_cb *cb = HMS_SKB_CB(skb);
+	struct hms_ptp_rx_tstamp *tstamp;
 
-	*shwt = (struct skb_shared_hwtstamps) {0};
+	spin_lock(&ptp_data->rx_ts_id_lock);
 
-	shwt->hwtstamp = ns_to_ktime(ts);
+	tstamp = ptp_data->rx_tstamps +
+		 (ptp_data->rx_ts_id % HMS_PTP_RX_TS_DESC_NUMBER);
+	ptp_data->rx_ts_id++;
+
+	spin_unlock(&ptp_data->rx_ts_id_lock);
+
+	tstamp->tstamp_sync = cb->tstamp_sync;
+	tstamp->tstamp_free = cb->tstamp_free;
+
+	shwt->netdev_data = tstamp;
+	skb_shinfo(skb)->tx_flags |= SKBTX_HW_TSTAMP_NETDEV;
 
 	/* Don't defer */
 	return false;
 }
 
+ktime_t hms_get_tstamp(struct dsa_switch *ds,
+		       const struct skb_shared_hwtstamps *hwtstamps,
+		       bool cycles)
+{
+	struct hms_ptp_rx_tstamp *hms_tstamp = hwtstamps->netdev_data;
+	u64 timestamp;
+
+	if (cycles)
+		timestamp = hms_tstamp->tstamp_free;
+	else
+		timestamp = hms_tstamp->tstamp_sync;
+
+	return ns_to_ktime(timestamp);
+}
+
 void hms_process_meta_tstamp(struct dsa_switch *ds, int port,
-			      u32 ts_id, u64 tstamp)
+			     struct hms_tx_ts_desc *desc)
 {
 	struct hms_private *priv = ds->priv;
 	struct hms_ptp_data *ptp_data = &priv->ptp_data;
 	struct sk_buff *skb, *skb_tmp, *skb_match = NULL;
 	struct skb_shared_hwtstamps shwt = {0};
+	u32 ts_id;
+	u64 timestamp;
+
+	ts_id = be32_to_cpu(desc->ts_id);
 
 	spin_lock(&ptp_data->skb_txtstamp_queue.lock);
 
@@ -126,7 +163,13 @@ void hms_process_meta_tstamp(struct dsa_switch *ds, int port,
 	if (WARN_ON(!skb_match))
 		return;
 
-	shwt.hwtstamp = ns_to_ktime(tstamp);
+	if (skb_shinfo(skb_match)->tx_flags & SKBTX_HW_TSTAMP_USE_CYCLES)
+		timestamp = be64_to_cpu(desc->tstamp_free);
+	else
+		timestamp = be64_to_cpu(desc->tstamp_sync);
+
+	shwt.hwtstamp = ns_to_ktime(timestamp);
+
 	skb_complete_tx_timestamp(skb_match, &shwt);
 }
 
@@ -190,12 +233,17 @@ static int hms_ptp_gettimex(struct ptp_clock_info *ptp,
 {
 	struct hms_ptp_data *ptp_data = ptp_caps_to_data(ptp);
 	struct hms_private *priv = ptp_data_to_hms(ptp_data);
+	struct hms_ptp_ctl_param param;
 	u64 now = 0;
 	int rc;
 
+	param.clock_id = HMS_PTP_SYNCHRONIZED_CLOCK_ID;
+
 	mutex_lock(&ptp_data->lock);
 
-	rc = hms_xfer_read_u64(priv, HMS_CMD_TIMER_CUR_GET, &now, ptp_sts);
+	rc = hms_xfer_get_cmd_sts(priv, HMS_CMD_TIMER_CUR_GET,
+				  &param, sizeof(param),
+				  &now, sizeof(now), ptp_sts);
 
 	mutex_unlock(&ptp_data->lock);
 
@@ -216,7 +264,7 @@ static int hms_ptp_settime(struct ptp_clock_info *ptp,
 	int rc;
 
 	param.ns = timespec64_to_ns(ts);
-	param.clock_id = 0;
+	param.clock_id = HMS_PTP_SYNCHRONIZED_CLOCK_ID;
 
 	mutex_lock(&ptp_data->lock);
 
@@ -235,8 +283,8 @@ static int hms_ptp_adjfine(struct ptp_clock_info *ptp, long scaled_ppm)
 	struct hms_ptp_ctl_param param;
 	int rc;
 
-	param.ppb = scaled_ppm_to_ppb(scaled_ppm);;
-	param.clock_id = 0;
+	param.ppb = scaled_ppm_to_ppb(scaled_ppm);
+	param.clock_id = HMS_PTP_SYNCHRONIZED_CLOCK_ID;
 
 	mutex_lock(&ptp_data->lock);
 
@@ -256,7 +304,7 @@ static int hms_ptp_adjtime(struct ptp_clock_info *ptp, s64 delta)
 	int rc;
 
 	param.offset = delta;
-	param.clock_id = 0;
+	param.clock_id = HMS_PTP_SYNCHRONIZED_CLOCK_ID;
 
 	mutex_lock(&ptp_data->lock);
 
@@ -268,9 +316,38 @@ static int hms_ptp_adjtime(struct ptp_clock_info *ptp, s64 delta)
 	return rc;
 }
 
+static int hms_ptp_getcyclesx64(struct ptp_clock_info *ptp,
+				struct timespec64 *ts,
+				struct ptp_system_timestamp *ptp_sts)
+{
+	struct hms_ptp_data *ptp_data = ptp_caps_to_data(ptp);
+	struct hms_private *priv = ptp_data_to_hms(ptp_data);
+	struct hms_ptp_ctl_param param;
+	u64 free_time = 0;
+	int rc;
+
+	param.clock_id = HMS_PTP_FREERUNNING_CLOCK_ID;
+
+	mutex_lock(&ptp_data->lock);
+
+	rc = hms_xfer_get_cmd_sts(priv, HMS_CMD_TIMER_CUR_GET,
+				  &param, sizeof(param),
+				  &free_time, sizeof(free_time),
+				  ptp_sts);
+
+	mutex_unlock(&ptp_data->lock);
+
+	*ts = ns_to_timespec64(free_time);
+
+	if (rc < 0)
+		dev_err(priv->ds->dev, "Failed to read free running time: %d\n", rc);
+
+	return 0;
+}
+
 static int hms_per_out_enable(struct hms_private *priv,
-			       struct ptp_perout_request *perout,
-			       bool on)
+			      struct ptp_perout_request *perout,
+			      bool on)
 {
 	struct hms_ptp_data *ptp_data = &priv->ptp_data;
 	struct hms_cmd_timer_pps param;
@@ -341,6 +418,7 @@ struct ptp_clock_info hms_clock_caps = {
 	.adjtime	= hms_ptp_adjtime,
 	.gettimex64	= hms_ptp_gettimex,
 	.settime64	= hms_ptp_settime,
+	.getcyclesx64	= hms_ptp_getcyclesx64,
 	.enable		= hms_ptp_enable,
 };
 
@@ -355,6 +433,16 @@ int hms_ptp_clock_register(struct dsa_switch *ds)
 	ptp_data->clock = ptp_clock_register(&ptp_data->caps, ds->dev);
 	if (IS_ERR_OR_NULL(ptp_data->clock))
 		return PTR_ERR(ptp_data->clock);
+
+	spin_lock_init(&ptp_data->rx_ts_id_lock);
+	ptp_data->rx_tstamps = devm_kcalloc(ds->dev,
+					    HMS_PTP_RX_TS_DESC_NUMBER,
+					    sizeof(*ptp_data->rx_tstamps),
+					    GFP_KERNEL);
+	if (!ptp_data->rx_tstamps)
+		return -ENOMEM;
+
+	ptp_data->rx_ts_id = 0;
 
 	return hms_ptp_reset(ds);
 }

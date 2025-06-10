@@ -7,10 +7,10 @@
 #include "hms_switch.h"
 
 int hms_xfer_cmd(const struct hms_private *priv,
-		  enum hms_spi_rw_mode rw, enum hms_cmd cmd,
-		  void *param, size_t param_len,
-		  void *resp, size_t resp_len,
-		  struct ptp_system_timestamp *ptp_sts)
+		 enum hms_spi_rw_mode rw, enum hms_cmd cmd,
+		 void *param, size_t param_len,
+		 void *resp, size_t resp_len,
+		 struct ptp_system_timestamp *ptp_sts)
 {
 	struct hms_cmd_hdr hdr = {0};
 	struct spi_device *spi = priv->spidev;
@@ -86,25 +86,44 @@ int hms_xfer_cmd(const struct hms_private *priv,
 }
 
 int hms_xfer_set_cmd(const struct hms_private *priv,
-		      enum hms_cmd cmd,
-		      void *param, size_t param_len)
+		     enum hms_cmd cmd,
+		     void *param, size_t param_len)
 {
 	return hms_xfer_cmd(priv, SPI_WRITE, cmd,
-			     param, param_len,
-			     NULL, 0, NULL);
+			    param, param_len,
+			    NULL, 0, NULL);
 }
 
 int hms_xfer_get_cmd(const struct hms_private *priv,
-			enum hms_cmd cmd, uint32_t id,
-			void *resp, size_t resp_len)
+		     enum hms_cmd cmd, uint32_t id,
+		     void *resp, size_t resp_len)
 {
 	struct hms_cmd_read_param param;
 
 	param.id = id;
 
 	return hms_xfer_cmd(priv, SPI_READ, cmd,
-			     &param, sizeof(param),
-			     resp, resp_len, NULL);
+			    &param, sizeof(param),
+			    resp, resp_len, NULL);
+}
+
+int hms_xfer_set_cmd_sts(const struct hms_private *priv,
+		         enum hms_cmd cmd,
+		         void *param, size_t param_len,
+		         struct ptp_system_timestamp *ptp_sts)
+{
+	return hms_xfer_cmd(priv, SPI_WRITE, cmd,
+			    param, param_len,
+			    NULL, 0, ptp_sts);
+}
+
+int hms_xfer_get_cmd_sts(const struct hms_private *priv,
+		         enum hms_cmd cmd, void *param, size_t param_len,
+			 void *resp, size_t resp_len,
+		         struct ptp_system_timestamp *ptp_sts)
+{
+	return hms_xfer_cmd(priv, SPI_READ, cmd, param, param_len,
+			    resp, resp_len, ptp_sts);
 }
 
 int hms_xfer_write_reg(const struct hms_private *priv,
@@ -116,32 +135,32 @@ int hms_xfer_write_reg(const struct hms_private *priv,
 	reg_cmd.value = value;
 
 	return hms_xfer_set_cmd(priv, HMS_CMD_REG_SET,
-				 &reg_cmd, sizeof(reg_cmd));
+				&reg_cmd, sizeof(reg_cmd));
 }
 
 int hms_xfer_read_reg(const struct hms_private *priv,
-		       uint32_t reg, uint32_t *value)
+		      uint32_t reg, uint32_t *value)
 {
 	return hms_xfer_get_cmd(priv, HMS_CMD_REG_GET, reg,
-				 value, sizeof(*value));
+				value, sizeof(*value));
 }
 
 int hms_xfer_write_u64(const struct hms_private *priv,
-			enum hms_cmd cmd, uint64_t value,
-			struct ptp_system_timestamp *ptp_sts)
+		       enum hms_cmd cmd, uint64_t value,
+		       struct ptp_system_timestamp *ptp_sts)
 {
 	return hms_xfer_cmd(priv, SPI_WRITE, cmd,
-			     &value, sizeof(value),
-			     NULL, 0,
-			     ptp_sts);
+			    &value, sizeof(value),
+			    NULL, 0,
+			    ptp_sts);
 }
 
 int hms_xfer_read_u64(const struct hms_private *priv,
-		       enum hms_cmd cmd, uint64_t *value,
-		       struct ptp_system_timestamp *ptp_sts)
+		      enum hms_cmd cmd, uint64_t *value,
+		      struct ptp_system_timestamp *ptp_sts)
 {
 	return hms_xfer_cmd(priv, SPI_READ, cmd,
-			     NULL, 0,
-			     value, sizeof(*value),
-			     ptp_sts);
+			    NULL, 0,
+			    value, sizeof(*value),
+			    ptp_sts);
 }

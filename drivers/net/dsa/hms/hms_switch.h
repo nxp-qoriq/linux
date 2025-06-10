@@ -104,8 +104,17 @@ int hms_xfer_set_cmd(const struct hms_private *priv,
 		      enum hms_cmd cmd,
 		      void *param, size_t param_len);
 int hms_xfer_get_cmd(const struct hms_private *priv,
-		      enum hms_cmd cmd, uint32_t id,
-		      void *resp, size_t resp_len);
+		     enum hms_cmd cmd, uint32_t id,
+		     void *resp, size_t resp_len);
+
+int hms_xfer_set_cmd_sts(const struct hms_private *priv,
+		         enum hms_cmd cmd,
+		         void *param, size_t param_len,
+		         struct ptp_system_timestamp *ptp_sts);
+int hms_xfer_get_cmd_sts(const struct hms_private *priv,
+		         enum hms_cmd cmd, void *param, size_t param_len,
+		         void *resp, size_t resp_len,
+		         struct ptp_system_timestamp *ptp_sts);
 
 int hms_xfer_write_reg(const struct hms_private *priv,
 			uint32_t reg, uint32_t value);

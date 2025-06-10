@@ -14,16 +14,16 @@
 /*
  * HMS HEADRER after Source MAC
  *
- * |     2B      |     2B      |   0 / 4B / 8B / 12B / 16B |
- * +------------ +-------------+---------------------------+
- * |    0xDADC   |   HEADRER   |            DATA           |
- * +------------ +------------ +---------------------------+
+ * |     2B      |     2B      |   0 / 4B / 8B / 12B / 16B / 20B |
+ * +------------ +-------------+---------------------------------+
+ * |    0xDADC   |   HEADRER   |               DATA              |
+ * +------------ +------------ +---------------------------------+
  */
 
 #define HMS_HEADER_LEN			4
 #define HMS_HEADER_DATA_TS_ID_LEN	4
-#define HMS_HEADER_DATA_TIMESTAP_LEN	8
-#define HMS_HEADER_DATA_CMD_LEN	16
+#define HMS_HEADER_DATA_TIMESTAP_LEN	16
+#define HMS_HEADER_DATA_CMD_LEN		16
 
 #define HMS_HEADER_HOST_TO_SWITCH	BIT(15)
 
@@ -49,22 +49,21 @@
 /*
  * RX RX_Timestamp:
  *
- * |    64 - 0   |
- * +------------ +
- * |  TimeStamp  |
- * +------------ +
+ * |    64 - 0       |        64 - 0      |
+ * +-----------------+--------------------+
+ * | TimeStamp(sync) |   TimeStamp(free)  |
+ * +-----------------+--------------------+
  */
-#define HMS_HEADER_TIMESTAMP_LEN	8
 
 /*
  * RX TX_Timestamp:
  *
- * |    64 - 0   |    32 - 0   |
- * +------------ +------------ +
- * |  TimeStamp  |    TS_ID    |
- * +------------ +------------ +
+ * |    64 - 0       |        64 - 0      |    32 - 0   |
+ * +-----------------+--------------------+-------------+
+ * | TimeStamp(sync) |  TimeStamp(free)   |    TS_ID    |
+ * +-----------------+--------------------+-------------+
+ *
  */
-#define HMS_RX_HEADER_TS_ID_LEN	4
 
 /* TX header */
 
@@ -94,7 +93,7 @@
  */
 #define HMS_TX_HEADER_TS_ID_LEN	4
 
-void print_skb_data(struct sk_buff *skb)
+static void __attribute__((unused)) print_skb_data(struct sk_buff *skb)
 {
     u8 *buf = skb->data - ETH_HLEN;
     int len = skb->len;
@@ -331,15 +330,13 @@ static struct sk_buff *hms_rcv_meta_cmd(struct sk_buff *skb, u16 rx_header)
 
 static struct sk_buff *hms_rcv_tx_timestap(struct sk_buff *skb, u16 rx_header)
 {
-	u8 *buf = dsa_etype_header_pos_rx(skb) + HMS_HEADER_LEN;
 	int switch_id = HMS_RX_HEADER_SWITCH_ID(rx_header);
 	int source_port = HMS_RX_HEADER_PORT_ID(rx_header);
 	struct hms_tagger_data *tagger_data;
 	struct net_device *master = skb->dev;
 	struct dsa_port *cpu_dp;
 	struct dsa_switch *ds;
-	u32 ts_id;
-	u64 tstamp;
+	struct hms_tx_ts_desc *tx_ts_desc;
 
 	cpu_dp = master->dsa_ptr;
 
@@ -354,14 +351,23 @@ static struct sk_buff *hms_rcv_tx_timestap(struct sk_buff *skb, u16 rx_header)
 	if (!tagger_data->meta_tstamp_handler)
 		return NULL;
 
+	tx_ts_desc = (struct hms_tx_ts_desc *)
+		     (dsa_etype_header_pos_rx(skb) + HMS_HEADER_LEN);
 
-	tstamp = be64_to_cpu(*(__be64 *)buf);
-	ts_id = be32_to_cpu(*(__be32 *)(buf + HMS_HEADER_TIMESTAMP_LEN));
-
-	tagger_data->meta_tstamp_handler(ds, source_port, ts_id, tstamp);
+	tagger_data->meta_tstamp_handler(ds, source_port, tx_ts_desc);
 
 	/* Discard the meta frame, we've consumed the timestamps it contained */
 	return NULL;
+}
+
+static void hms_rcv_rx_timestap(struct sk_buff *skb)
+{
+	struct hms_rx_ts_desc *desc = (struct hms_rx_ts_desc *)
+				      (dsa_etype_header_pos_rx(skb) + HMS_HEADER_LEN);
+	struct hms_skb_cb *cb = HMS_SKB_CB(skb);
+
+	cb->tstamp_sync = be64_to_cpu(desc->tstamp_sync);
+	cb->tstamp_free = be64_to_cpu(desc->tstamp_free);
 }
 
 static struct sk_buff *hms_rcv_inband_control_extension(struct sk_buff *skb,
@@ -374,12 +380,11 @@ static struct sk_buff *hms_rcv_inband_control_extension(struct sk_buff *skb,
 
 	if (unlikely(!pskb_may_pull(skb,
 				    HMS_HEADER_LEN +
-				    HMS_HEADER_TIMESTAMP_LEN +
-				    HMS_RX_HEADER_TS_ID_LEN)))
+				    HMS_HEADER_DATA_TIMESTAP_LEN +
+				    HMS_HEADER_DATA_TS_ID_LEN)))
 		return NULL;
 
 	rx_header = ntohs(*(__be16 *)skb->data);
-
 	if (rx_header & HMS_RX_HEADER_HOST_ONLY)
 		*host_only = true;
 
@@ -391,12 +396,8 @@ static struct sk_buff *hms_rcv_inband_control_extension(struct sk_buff *skb,
 
 	/* RX Timestamp frame */
 	if (rx_header & HMS_RX_HEADER_RX_TIMESTAP) {
-		u64 *tstamp = &HMS_SKB_CB(skb)->tstamp;
-		u8 *buf = dsa_etype_header_pos_rx(skb) + HMS_HEADER_LEN;
-
-		*tstamp = be64_to_cpu(*(__be64 *)buf);
-
-		len += HMS_HEADER_TIMESTAMP_LEN;
+		hms_rcv_rx_timestap(skb);
+		len += HMS_HEADER_DATA_TIMESTAP_LEN;
 	}
 
 	*source_port = HMS_RX_HEADER_PORT_ID(rx_header);

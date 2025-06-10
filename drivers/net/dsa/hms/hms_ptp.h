@@ -18,6 +18,10 @@ struct hms_ptp_data {
 	struct sk_buff_head skb_txtstamp_queue;
 	struct ptp_clock *clock;
 	struct ptp_clock_info caps;
+	/* PTP RX timestamp buffer, and its serialization lock */
+	spinlock_t rx_ts_id_lock;
+	u32 rx_ts_id;
+	struct hms_ptp_rx_tstamp *rx_tstamps;
 	/* Serializes all operations on the PTP hardware clock */
 	struct mutex lock;
 	bool extts_enabled;
@@ -29,16 +33,19 @@ int hms_hwtstamp_set(struct dsa_switch *ds, int port, struct ifreq *ifr);
 int hms_hwtstamp_get(struct dsa_switch *ds, int port, struct ifreq *ifr);
 
 void hms_process_meta_tstamp(struct dsa_switch *ds, int port,
-			      u32 ts_id, u64 tstamp);
+			     struct hms_tx_ts_desc *desc);
 
 int hms_get_ts_info(struct dsa_switch *ds, int port,
-			struct kernel_ethtool_ts_info *ts);
+		    struct kernel_ethtool_ts_info *ts);
 
 bool hms_port_rxtstamp(struct dsa_switch *ds, int port,
-			   struct sk_buff *skb, unsigned int type);
+		       struct sk_buff *skb, unsigned int type);
+ktime_t hms_get_tstamp(struct dsa_switch *ds,
+		       const struct skb_shared_hwtstamps *hwtstamps,
+		       bool cycles);
 
 void hms_port_txtstamp(struct dsa_switch *ds, int port,
-			   struct sk_buff *skb);
+		       struct sk_buff *skb);
 
 int hms_ptp_clock_register(struct dsa_switch *ds);
 

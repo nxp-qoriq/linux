@@ -1317,6 +1317,7 @@ static const struct dsa_switch_ops hms_switch_ops = {
 	.port_hwtstamp_set	= hms_hwtstamp_set,
 	.port_rxtstamp		= hms_port_rxtstamp,
 	.port_txtstamp		= hms_port_txtstamp,
+	.get_tstamp		= hms_get_tstamp,
 	.get_ts_info		= hms_get_ts_info,
 	.devlink_info_get	= hms_devlink_info_get,
 	.tag_8021q_vlan_add	= hms_8021q_vlan_add,

@@ -45,16 +45,35 @@ struct hms_deferred_xmit_work {
 
 struct hms_skb_cb {
 	struct sk_buff *clone;
-	u64 tstamp;
+	u64 tstamp_sync;
+	u64 tstamp_free;
 	u32 ts_id;
 };
+
+struct hms_ptp_rx_tstamp {
+	/* Timestamp of synchronized clock - unit nanoseconds */
+	u64 tstamp_sync;
+	/* Timestamp of free running clock */
+	u64 tstamp_free;
+} __packed;
+
+struct hms_rx_ts_desc {
+	__be64	tstamp_sync;
+	__be64	tstamp_free;
+} __packed;
+
+struct hms_tx_ts_desc {
+	__be64	tstamp_sync;
+	__be64	tstamp_free;
+	__be32	ts_id;
+} __packed;
 
 #define HMS_SKB_CB(skb) \
 	((struct hms_skb_cb *)((skb)->cb))
 
 struct hms_tagger_data {
 	void (*meta_tstamp_handler)(struct dsa_switch *ds, int port,
-				    u32 ts_id, u64 tstamp);
+				    struct hms_tx_ts_desc *desc);
 	void (*meta_cmd_handler)(struct dsa_switch *ds, int port,
 				 void *buf, size_t len);
 };

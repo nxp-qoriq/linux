@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2025 NXP
+ */
+
+/ {
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		gen_sw_mbox_1_reserved: gen-sw-mbox-1@c0001000 {
+			reg = <0 0xc0001000 0 0x1000>;
+			no-map;
+		};
+
+	};
+
+	gen_sw_mbox_1: generic-software-mailbox-1@c0001000 {
+		compatible = "fsl,generic-software-mbox";
+		reg = <0 0xc0001000 0 0x1000>;
+		#mbox-cells = <3>;
+		/* Use 2 unused SPI interrupts */
+		interrupts = <GIC_SPI 291 IRQ_TYPE_LEVEL_HIGH>, <GIC_SPI 292 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "irq", "remote_irq";
+	};
+};

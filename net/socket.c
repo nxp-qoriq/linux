@@ -97,6 +97,7 @@
 #include <net/wext.h>
 #include <net/cls_cgroup.h>
 
+#include <net/dsa.h>
 #include <net/sock.h>
 #include <linux/netfilter.h>
 
@@ -862,7 +863,12 @@ static ktime_t get_timestamp(struct sock *sk, struct sk_buff *skb, int *if_index
 	orig_dev = dev_get_by_napi_id(skb_napi_id(skb));
 	if (orig_dev) {
 		*if_index = orig_dev->ifindex;
-		hwtstamp = netdev_get_tstamp(orig_dev, shhwtstamps, cycles);
+		if (netdev_uses_dsa(orig_dev))
+			hwtstamp = dsa_get_tstamp(orig_dev,
+						  shhwtstamps, cycles);
+		else
+			hwtstamp = netdev_get_tstamp(orig_dev,
+						     shhwtstamps, cycles);
 	} else {
 		hwtstamp = shhwtstamps->hwtstamp;
 	}

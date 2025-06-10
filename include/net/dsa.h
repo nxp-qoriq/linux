@@ -1156,6 +1156,9 @@ struct dsa_switch_ops {
 				 struct sk_buff *skb);
 	bool	(*port_rxtstamp)(struct dsa_switch *ds, int port,
 				 struct sk_buff *skb, unsigned int type);
+	ktime_t	(*get_tstamp)(struct dsa_switch *ds,
+			      const struct skb_shared_hwtstamps *hwtstamps,
+			      bool cycles);
 
 	/* Devlink parameters, etc */
 	int	(*devlink_param_get)(struct dsa_switch *ds, u32 id,
@@ -1402,5 +1405,18 @@ static inline bool dsa_user_dev_check(const struct net_device *dev)
 
 netdev_tx_t dsa_enqueue_skb(struct sk_buff *skb, struct net_device *dev);
 void dsa_port_phylink_mac_change(struct dsa_switch *ds, int port, bool up);
+
+static inline ktime_t dsa_get_tstamp(struct net_device *orig_dev,
+                                     struct skb_shared_hwtstamps *hwtstamps,
+                                     bool cycles)
+{
+#if IS_ENABLED(CONFIG_NET_DSA)
+	struct dsa_switch *ds = orig_dev->dsa_ptr->ds;
+	if (ds && ds->ops->get_tstamp)
+		return ds->ops->get_tstamp(ds, hwtstamps, cycles);
+#endif
+
+	return netdev_get_tstamp(orig_dev, hwtstamps, cycles);
+}
 
 #endif

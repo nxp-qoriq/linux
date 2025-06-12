@@ -56,7 +56,7 @@ int hms_xfer_cmd(const struct hms_private *priv,
 	}
 
 	usleep_range(HMS_SPI_MSG_RESPONSE_TIME,
-		     HMS_SPI_MSG_RESPONSE_TIME * 10);
+		     HMS_SPI_MSG_RESPONSE_TIME + 100);
 
 	if (!resp)
 		return 0;
@@ -80,7 +80,7 @@ int hms_xfer_cmd(const struct hms_private *priv,
 	}
 
 	usleep_range(HMS_SPI_MSG_RESPONSE_TIME,
-		     HMS_SPI_MSG_RESPONSE_TIME * 10);
+		     HMS_SPI_MSG_RESPONSE_TIME + 100);
 
 	return 0;
 }

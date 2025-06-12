@@ -324,6 +324,7 @@ static int hms_ptp_getcyclesx64(struct ptp_clock_info *ptp,
 	struct hms_private *priv = ptp_data_to_hms(ptp_data);
 	struct hms_ptp_ctl_param param;
 	u64 free_time = 0;
+	static u64 last_free_time = 0;
 	int rc;
 
 	param.clock_id = HMS_PTP_FREERUNNING_CLOCK_ID;
@@ -336,6 +337,16 @@ static int hms_ptp_getcyclesx64(struct ptp_clock_info *ptp,
 				  ptp_sts);
 
 	mutex_unlock(&ptp_data->lock);
+
+	if(last_free_time == 0)
+		last_free_time = free_time;
+
+	if(free_time - last_free_time > 120 * NSEC_PER_SEC) {
+		dev_warn(priv->ds->dev, "Failed to read free running time 0x%016llx - 0x%016llx\n",
+			 last_free_time, free_time);
+		free_time = last_free_time;
+	} else
+		last_free_time = free_time;
 
 	*ts = ns_to_timespec64(free_time);
 

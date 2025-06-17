@@ -5,13 +5,32 @@
 
 #include "imx93-14x14-evk.dts"
 
+/ {
+	enet_phy_reset: enet-phy-reset {
+		compatible = "gpio-reset";
+		reset-gpios = <&pcal6524 15 GPIO_ACTIVE_LOW>;
+		reset-delay-us = <10000>;
+		#reset-cells = <0>;
+	};
+
+	reg_eqos_phy: regulator-eqos-phy {
+		compatible = "regulator-fixed";
+		regulator-name = "eth_eqos_phy_pwr";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		gpio = <&max7322 0 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-always-on;
+	};
+};
+
 &lpi2c2 {
 	max7322: gpio@68 {
 		compatible = "maxim,max7322";
 		reg = <0x68>;
 		gpio-controller;
 		#gpio-cells = <2>;
-		reset-gpios = <&pcal6524 15 GPIO_ACTIVE_LOW>;
+		resets = <&enet_phy_reset>;
 	};
 };
 
@@ -20,7 +39,6 @@
 	pinctrl-0 = <&pinctrl_eqos_rgmii>;
 	phy-mode = "rgmii-id";
 	phy-handle = <&eqosphy>;
-	pinctrl-assert-gpios = <&max7322 0 GPIO_ACTIVE_HIGH>;
 	snps,force_thresh_dma_mode;
 	snps,mtl-tx-config = <&mtl_tx_setup>;
 	snps,mtl-rx-config = <&mtl_rx_setup>;

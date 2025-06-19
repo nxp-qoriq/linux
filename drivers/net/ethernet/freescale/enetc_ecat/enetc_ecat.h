@@ -81,6 +81,7 @@ struct enetc_lso_t {
 #define ENETC_RS_MAX_BYTES	(ENETC_RXB_DMA_SIZE * (MAX_SKB_FRAGS + 1))
 
 struct enetc_rx_swbd {
+    struct sk_buff *skb;
 	dma_addr_t dma;
 	struct page *page;
 	struct xdp_buff *xsk_buff;

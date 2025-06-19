@@ -416,6 +416,8 @@ static const struct net_device_ops enetc4_ndev_ops = {
 	.ndo_stop		= ecat_enetc_close,
 	.ndo_start_xmit		= ecat_enetc_xmit,
 	.ndo_get_stats		= ecat_enetc_get_stats,
+	.ndo_fast_xmit      = enetc4_ecat_fast_xmit,
+	.ndo_fast_recv      = enetc4_ecat_fast_recv,
 	.ndo_set_mac_address	= enetc_pf_set_mac_addr,
 	.ndo_set_rx_mode	= enetc4_pf_set_rx_mode,
 	.ndo_vlan_rx_add_vid	= enetc_vlan_rx_add_vid,
@@ -1192,10 +1194,13 @@ static int enetc4_pf_netdev_create(struct enetc_si *si)
 				  1, 1);
 	if (!ndev)
 		return  -ENOMEM;
+
+	ndev->fast_raw_device = 1;
 	
 	priv = netdev_priv(ndev);
 	mutex_init(&priv->mm_lock);
 
+	mutex_init(&priv->fast_ndev_lock);
 
 	if (si->pdev->rcec)
 		priv->rcec = si->pdev->rcec;
@@ -1238,6 +1243,7 @@ static int enetc4_pf_netdev_create(struct enetc_si *si)
 		goto err_reg_netdev;
 	}
 
+	mutex_lock(&priv->fast_ndev_lock);
 
 	return 0;
 
@@ -1262,6 +1268,7 @@ static void enetc4_pf_netdev_destroy(struct enetc_si *si)
 	struct enetc_ndev_priv *priv;
 
 	priv = netdev_priv(ndev);
+	mutex_unlock(&priv->fast_ndev_lock);
 	unregister_netdev(ndev);
 	enetc4_link_deinit(priv);
 	ecat_enetc_free_msix(priv);

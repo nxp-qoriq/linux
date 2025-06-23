@@ -1584,6 +1584,7 @@ static void enetc_skb_rx_timestamp(struct net_device *ndev,
 		ns = enetc_get_rx_timestamp(priv, rxbd, hw);
 		memset(shhwtstamps, 0, sizeof(*shhwtstamps));
 		shhwtstamps->hwtstamp = ns_to_ktime(ns);
+		skb_shinfo(skb)->tx_flags |= SKBTX_HW_TSTAMP_NETDEV;
 	}
 }
 
@@ -1797,9 +1798,6 @@ static struct sk_buff *enetc_build_skb(struct enetc_bdr *rx_ring,
 	if (rx_ring->ext_en && priv->active_offloads & ENETC_F_RSC &&
 	    frames > 1)
 		skb_shinfo(skb)->gso_size = skb->data_len / frames;
-
-	if (priv->active_offloads & ENETC_F_RX_TSTAMP)
-		skb_shinfo(skb)->tx_flags |= SKBTX_HW_TSTAMP_NETDEV;
 
 	skb_record_rx_queue(skb, rx_ring->index);
 	skb->protocol = eth_type_trans(skb, rx_ring->ndev);

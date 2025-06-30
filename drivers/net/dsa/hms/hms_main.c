@@ -994,11 +994,15 @@ static int hms_port_mqprio_set(struct dsa_switch *ds, int port,
 	if (!qopt->num_tc)
 		map = hms_default_priority_map;
 
+	rc = hms_port_priority_map(priv, port, map);
+	if (rc)
+		return rc;
+
 	rc = hms_port_set_preemptible_tcs(ds, port, mqprio->preemptible_tcs);
 	if (rc)
 		return rc;
 
-	return hms_port_priority_map(priv, port, map);
+	return rc;
 }
 
 static int hms_port_taprio_set(struct dsa_switch *ds, int port,

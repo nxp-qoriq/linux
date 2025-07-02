@@ -638,7 +638,7 @@ int netc_timer_ptp_convert(struct pci_dev *timer_pdev, u64 ts_src, u64 *ts_dst, 
 	}
 
 	if (cycles) {
-		/* convert from synchronized to free-running */
+		/* convert from hardware to free-running cycles */
 		dt = ns_src - srt_ns;
 
 		if (dt < 0)
@@ -648,7 +648,7 @@ int netc_timer_ptp_convert(struct pci_dev *timer_pdev, u64 ts_src, u64 *ts_dst, 
 
 		ns_dst = frt_ns + dt_scaled;
 	} else {
-		/* convert from free-running to synchronized */
+		/* convert from free-running cycles to hardware */
 		dt = ns_src - frt_ns;
 
 		if (dt < 0)
@@ -904,6 +904,21 @@ static int netc_timer_enable(struct ptp_clock_info *ptp,
 	}
 }
 
+static int netc_timer_converttime(struct ptp_clock_info *ptp, struct timespec64 src_ts,
+				  struct timespec64 *dst_ts, bool cycles)
+{
+	struct netc_timer *priv = ptp_to_netc_timer(ptp);
+	u64 dst_ns;
+	int rc;
+
+	rc = netc_timer_ptp_convert(priv->pci_dev, timespec64_to_ns(&src_ts), &dst_ns,
+				    !cycles, cycles);
+	if (!rc)
+		*dst_ts = ns_to_timespec64(dst_ns);
+
+	return rc;
+}
+
 static const struct ptp_clock_info netc_timer_ptp_caps = {
 	.owner		= THIS_MODULE,
 	.name		= "NETC Timer PTP clock",
@@ -920,6 +935,7 @@ static const struct ptp_clock_info netc_timer_ptp_caps = {
 	.getcyclesx64	= netc_timer_getcyclesx64,
 	.settime64	= netc_timer_settime64,
 	.enable		= netc_timer_enable,
+	.converttime	= netc_timer_converttime,
 };
 
 static int netc_timer_get_source_clk(struct netc_timer *priv)

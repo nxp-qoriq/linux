@@ -347,7 +347,10 @@ void netc_port_get_eth_mac_stats(struct dsa_switch *ds, int port_id,
 int netc_port_get_mac_eee(struct dsa_switch *ds, int port_id,
 			  struct ethtool_keee *e)
 {
-	/* Nothing to do on the switch port */
+	struct netc_port *port = NETC_PORT(NETC_PRIV(ds), port_id);
+
+	e->tx_lpi_timer = port->eeecfg.tx_lpi_timer;
+	e->tx_lpi_enabled = port->eeecfg.tx_lpi_enabled;
 	return 0;
 }
 
@@ -361,53 +364,45 @@ static u64 netc_cycles_to_us(u64 clk_freq, u32 cycles)
 	return mul_u64_u64_div_u64(cycles, 1000000ULL, clk_freq);
 }
 
-void netc_port_set_tx_lpi(struct netc_port *port, bool enable)
+int netc_port_set_tx_lpi(struct netc_port *port, u32 tx_lpi_timer, bool enable)
 {
 	u64 clk_freq = port->switch_priv->info->sysclk_freq;
-	u32 sleep_cycles = 0, lpwake_cycles = 0;
+	u32 sleep_cycles = 0;
+	u32 lpwake_cycles = 0;
 
 	if (enable) {
-		sleep_cycles = netc_us_to_cycles(clk_freq, port->tx_lpi_timer);
-		lpwake_cycles = netc_us_to_cycles(clk_freq, NETC_LPWAKE_US);
+		sleep_cycles = (u32)netc_us_to_cycles(clk_freq, tx_lpi_timer);
+		if (sleep_cycles == 0 || sleep_cycles > PM_SLEEP_TIMER_SLEEP)
+			return -EINVAL;
+
+		lpwake_cycles = (u32)netc_us_to_cycles(clk_freq, NETC_LPWAKE_US);
 	}
 
 	netc_mac_port_wr(port, NETC_PM_SLEEP_TIMER(0), sleep_cycles);
 	netc_mac_port_wr(port, NETC_PM_LPWAKE_TIMER(0), lpwake_cycles);
+	return 0;
 }
 
 int netc_port_set_mac_eee(struct dsa_switch *ds, int port_id,
 			  struct ethtool_keee *e)
 {
 	struct netc_port *port = NETC_PORT(NETC_PRIV(ds), port_id);
-	struct net_device *ndev = dsa_to_port(ds, port_id)->user;
-	u64 clk_freq = NETC_PRIV(ds)->info->sysclk_freq;
-	bool tx_lpi_enabled = false;
-	u64 sleep_cycles;
+	struct net_device *ndev = port->dp->user;
+	struct eee_config *eeecfg = &port->eeecfg;
+	bool tx_lpi_enabled;
+	int ret = 0;
 
-	if (e->eee_enabled) {
-		tx_lpi_enabled = e->tx_lpi_enabled;
-		if (!tx_lpi_enabled)
-			goto set_tx_lpi;
+	tx_lpi_enabled = e->eee_enabled && e->tx_lpi_enabled;
 
-		if (!e->tx_lpi_timer) {
-			netdev_err(ndev, "tx_lpi_timer cannot be 0\n");
-			return -EINVAL;
-		}
-
-		sleep_cycles = netc_us_to_cycles(clk_freq, e->tx_lpi_timer);
-		if (sleep_cycles > PM_SLEEP_TIMER_SLEEP) {
-			netdev_err(ndev, "tx_lpi_timer cannot exceed %llu\n",
-				   netc_cycles_to_us(clk_freq,
-						     PM_SLEEP_TIMER_SLEEP));
-			return -EINVAL;
-		}
-
-		port->tx_lpi_timer = e->tx_lpi_timer;
+	ret = netc_port_set_tx_lpi(port, e->tx_lpi_timer, tx_lpi_enabled);
+	if (ret < 0) {
+		netdev_err(ndev, "invalid value of tx_lpi_timer(%u)\n",
+				   e->tx_lpi_timer);
+		return ret;
 	}
 
-set_tx_lpi:
-	port->tx_lpi_enabled = tx_lpi_enabled;
-	netc_port_set_tx_lpi(port, tx_lpi_enabled);
-
+	eee_to_eeecfg(eeecfg, e);
+	eeecfg->tx_lpi_enabled = tx_lpi_enabled;
+	eeecfg->tx_lpi_timer = tx_lpi_enabled ? e->tx_lpi_timer : 0;
 	return 0;
 }

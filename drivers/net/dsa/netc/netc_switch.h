@@ -150,8 +150,7 @@ struct netc_port {
 	int ptp_filter;
 	u32 ptp_ipft_eid[NETC_PTP_MAX];
 
-	bool tx_lpi_enabled;
-	u32 tx_lpi_timer;
+	struct eee_config eeecfg;
 	struct netc_port_db db;
 	struct tc_taprio_qopt_offload *taprio;
 };
@@ -313,7 +312,7 @@ void netc_port_get_eth_mac_stats(struct dsa_switch *ds, int port_id,
 void netc_port_get_strings(struct dsa_switch *ds, int port_id, u32 sset, u8 *data);
 void netc_port_get_ethtool_stats(struct dsa_switch *ds, int port_id, u64 *data);
 int netc_port_get_sset_count(struct dsa_switch *ds, int port_id, int sset);
-void netc_port_set_tx_lpi(struct netc_port *port, bool enable);
+int netc_port_set_tx_lpi(struct netc_port *port, u32 tx_lpi_timer, bool enable);
 int netc_port_get_mac_eee(struct dsa_switch *ds, int port_id,
 			  struct ethtool_keee *e);
 int netc_port_set_mac_eee(struct dsa_switch *ds, int port_id,

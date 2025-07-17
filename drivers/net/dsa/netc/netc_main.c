@@ -1605,6 +1605,7 @@ static int netc_port_enable(struct dsa_switch *ds, int port_id,
 			    struct phy_device *phy)
 {
 	struct netc_port *port = NETC_PORT(NETC_PRIV(ds), port_id);
+	struct ethtool_keee eee;
 	int err;
 
 	err = netc_port_set_vlan_entry(port, NETC_STANDALONE_PVID, false);
@@ -1649,6 +1650,13 @@ static int netc_port_enable(struct dsa_switch *ds, int port_id,
 
 	port->enabled = true;
 
+	if (!is_netc_pseudo_port(port)) {
+		memset(&eee, 0, sizeof(struct ethtool_keee));
+		eeecfg_to_eee(&eee, &port->eeecfg);
+		err = phylink_ethtool_set_eee(port->dp->pl, &eee);
+		if (err < 0)
+			dev_warn(ds->dev, "Failed to set PHY EEE");
+	}
 	return 0;
 
 del_unaware_vlan_entry:
@@ -2388,10 +2396,8 @@ static void netc_mac_link_up(struct phylink_config *config,
 	netc_port_enable_mac_path(port, true);
 	netc_port_update_mm_link_state(port, true);
 
-	if (phy && port->tx_lpi_enabled) {
-		if (phy_init_eee(phy, false) >= 0)
-			netc_port_set_tx_lpi(port, true);
-	}
+	netc_port_set_tx_lpi(port, port->eeecfg.tx_lpi_timer,
+						 port->eeecfg.tx_lpi_enabled);
 }
 
 static void netc_mac_link_down(struct phylink_config *config, unsigned int mode,
@@ -2405,7 +2411,7 @@ static void netc_mac_link_down(struct phylink_config *config, unsigned int mode,
 	netc_port_update_mm_link_state(port, false);
 	netc_port_enable_mac_path(port, false);
 	netc_port_remove_dynamic_entries(port);
-	netc_port_set_tx_lpi(port, false);
+	netc_port_set_tx_lpi(port, 0, false);
 }
 
 static const struct phylink_mac_ops netc_phylink_mac_ops = {

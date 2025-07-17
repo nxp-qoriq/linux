@@ -65,6 +65,7 @@ struct felix_info {
 	int	(*configure_serdes)(struct ocelot *ocelot, int port,
 				    struct device_node *portnp);
 	int	(*request_irq)(struct ocelot *ocelot);
+	int	(*guard_band_work_func)(struct ocelot_port *ocelot_port);
 };
 
 /* Methods for initializing the hardware resources specific to a tagging

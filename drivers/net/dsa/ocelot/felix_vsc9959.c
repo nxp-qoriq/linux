@@ -1086,17 +1086,22 @@ static u64 vsc9959_tas_remaining_gate_len_ps(u64 gate_len_ns)
 	return (gate_len_ns - VSC9959_TAS_MIN_GATE_LEN_NS) * PSEC_PER_NSEC;
 }
 
+static void vsc9959_tas_gcl_get(struct ocelot *ocelot, const u32 gcl_ix,
+				struct tc_taprio_sched_entry *entry);
+
 /* Extract shortest continuous gate open intervals in ns for each traffic class
  * of a cyclic tc-taprio schedule. If a gate is always open, the duration is
  * considered U64_MAX. If the gate is always closed, it is considered 0.
  */
-static void vsc9959_tas_min_gate_lengths(struct tc_taprio_qopt_offload *taprio,
+static void vsc9959_tas_min_gate_lengths(struct ocelot *ocelot, int port,
+					 struct tc_taprio_qopt_offload *taprio,
 					 u64 min_gate_len[OCELOT_NUM_TC])
 {
-	struct tc_taprio_sched_entry *entry;
+	struct tc_taprio_sched_entry *entries, *entry;
 	u64 gate_len[OCELOT_NUM_TC];
 	u8 gates_ever_opened = 0;
 	int tc, i, n;
+	u32 val;
 
 	/* Initialize arrays */
 	for (tc = 0; tc < OCELOT_NUM_TC; tc++) {
@@ -1108,7 +1113,19 @@ static void vsc9959_tas_min_gate_lengths(struct tc_taprio_qopt_offload *taprio,
 	if (!taprio)
 		return;
 
-	n = taprio->num_entries;
+	ocelot_rmw(ocelot,
+		   QSYS_TAS_PARAM_CFG_CTRL_PORT_NUM(port),
+		   QSYS_TAS_PARAM_CFG_CTRL_PORT_NUM_M,
+		   QSYS_TAS_PARAM_CFG_CTRL);
+
+	val = ocelot_read(ocelot, QSYS_PARAM_STATUS_REG_3);
+	n = QSYS_PARAM_STATUS_REG_3_LIST_LENGTH_X(val);
+	if (!n)
+		return;
+
+	entries = kzalloc(sizeof(struct tc_taprio_sched_entry) * n, GFP_KERNEL);
+	for (i = 0; i < n; i++)
+		vsc9959_tas_gcl_get(ocelot, i, &entries[i]);
 
 	/* Walk through the gate list twice to determine the length
 	 * of consecutively open gates for a traffic class, including
@@ -1118,7 +1135,7 @@ static void vsc9959_tas_min_gate_lengths(struct tc_taprio_qopt_offload *taprio,
 	 * remain U64_MAX).
 	 */
 	for (i = 0; i < 2 * n; i++) {
-		entry = &taprio->entries[i % n];
+		entry = &entries[i % n];
 
 		for (tc = 0; tc < OCELOT_NUM_TC; tc++) {
 			if (entry->gate_mask & BIT(tc)) {
@@ -1135,6 +1152,8 @@ static void vsc9959_tas_min_gate_lengths(struct tc_taprio_qopt_offload *taprio,
 			}
 		}
 	}
+
+	kfree(entries);
 
 	/* min_gate_len[tc] actually tracks minimum *open* gate time, so for
 	 * permanently closed gates, min_gate_len[tc] will still be U64_MAX.
@@ -1282,7 +1301,7 @@ static void vsc9959_tas_guard_bands_update(struct ocelot *ocelot, int port)
 		port, maxlen, needed_bit_time_ps, needed_min_frag_time_ps,
 		speed);
 
-	vsc9959_tas_min_gate_lengths(taprio, min_gate_len);
+	vsc9959_tas_min_gate_lengths(ocelot, port, taprio, min_gate_len);
 
 	for (tc = 0; tc < OCELOT_NUM_TC; tc++) {
 		u32 requested_max_sdu = vsc9959_tas_tc_max_sdu(taprio, tc);
@@ -1349,6 +1368,30 @@ static void vsc9959_tas_guard_bands_update(struct ocelot *ocelot, int port)
 	ocelot_write_rix(ocelot, maxlen, QSYS_PORT_MAX_SDU, port);
 
 	ocelot->ops->cut_through_fwd(ocelot);
+}
+
+static int vsc9959_guard_band_work_func(struct ocelot_port *ocelot_port)
+{
+	struct ocelot *ocelot = ocelot_port->ocelot;
+	int rc = 0;
+	u32 val;
+
+	mutex_lock(&ocelot->fwd_domain_lock);
+
+	ocelot_rmw(ocelot,
+		   QSYS_TAS_PARAM_CFG_CTRL_PORT_NUM(ocelot_port->index),
+		   QSYS_TAS_PARAM_CFG_CTRL_PORT_NUM_M,
+		   QSYS_TAS_PARAM_CFG_CTRL);
+
+	val = ocelot_read(ocelot, QSYS_PARAM_STATUS_REG_8);
+	if (val & QSYS_PARAM_STATUS_REG_8_CONFIG_PENDING)
+		rc = -1;
+	else
+		vsc9959_tas_guard_bands_update(ocelot, ocelot_port->index);
+
+	mutex_unlock(&ocelot->fwd_domain_lock);
+
+	return rc;
 }
 
 static void vsc9959_sched_speed_set(struct ocelot *ocelot, int port,
@@ -1426,6 +1469,21 @@ static void vsc9959_tas_gcl_set(struct ocelot *ocelot, const u32 gcl_ix,
 	ocelot_write(ocelot, entry->interval, QSYS_GCL_CFG_REG_2);
 }
 
+static void vsc9959_tas_gcl_get(struct ocelot *ocelot, const u32 gcl_ix,
+				struct tc_taprio_sched_entry *entry)
+{
+	u32 val;
+
+	ocelot_rmw(ocelot, QSYS_GCL_STATUS_REG_1_GCL_ENTRY_NUM(gcl_ix),
+		   QSYS_GCL_STATUS_REG_1_GCL_ENTRY_NUM_M,
+		   QSYS_GCL_STATUS_REG_1);
+
+	val = ocelot_read(ocelot, QSYS_GCL_STATUS_REG_2);
+	entry->interval = val;
+	val = ocelot_read(ocelot, QSYS_GCL_STATUS_REG_1);
+	entry->gate_mask = QSYS_GCL_STATUS_REG_1_GATE_STATE_X(val);
+}
+
 static int vsc9959_qos_port_tas_set(struct ocelot *ocelot, int port,
 				    struct tc_taprio_qopt_offload *taprio)
 {
@@ -1433,6 +1491,8 @@ static int vsc9959_qos_port_tas_set(struct ocelot *ocelot, int port,
 	struct timespec64 base_ts;
 	int ret, i;
 	u32 val;
+
+	cancel_delayed_work_sync(&ocelot_port->guard_band_work);
 
 	mutex_lock(&ocelot->fwd_domain_lock);
 
@@ -1530,7 +1590,13 @@ static int vsc9959_qos_port_tas_set(struct ocelot *ocelot, int port,
 		goto err_reset_tc;
 
 	ocelot_port->taprio = taprio_offload_get(taprio);
+
 	vsc9959_tas_guard_bands_update(ocelot, port);
+
+	val = ocelot_read(ocelot, QSYS_PARAM_STATUS_REG_8);
+	if (val & QSYS_PARAM_STATUS_REG_8_CONFIG_PENDING)
+		schedule_delayed_work(&ocelot_port->guard_band_work,
+				      msecs_to_jiffies(1000));
 
 	mutex_unlock(&ocelot->fwd_domain_lock);
 
@@ -2685,6 +2751,7 @@ static const struct felix_info felix_info_vsc9959 = {
 	.port_setup_tc		= vsc9959_port_setup_tc,
 	.port_sched_speed_set	= vsc9959_sched_speed_set,
 	.request_irq		= vsc9959_request_irq,
+	.guard_band_work_func	= vsc9959_guard_band_work_func,
 };
 
 static int felix_pci_probe(struct pci_dev *pdev,

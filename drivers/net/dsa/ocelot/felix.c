@@ -1717,6 +1717,43 @@ static void felix_teardown_devlink_params(struct dsa_switch *ds)
 				      ARRAY_SIZE(felix_devlink_params));
 }
 
+static void felix_guard_band_work_handler(struct work_struct *work)
+{
+	struct delayed_work *dwork = to_delayed_work(work);
+	struct ocelot_port *ocelot_port;
+	struct felix *felix;
+	int rc = 0;
+
+	ocelot_port = container_of(dwork, struct ocelot_port, guard_band_work);
+	felix = ocelot_to_felix(ocelot_port->ocelot);
+
+	if (felix->info->guard_band_work_func)
+		rc = felix->info->guard_band_work_func(ocelot_port);
+
+	if (rc)
+		schedule_delayed_work(&ocelot_port->guard_band_work,
+				      msecs_to_jiffies(1000));
+}
+
+static int felix_port_setup(struct dsa_switch *ds, int port)
+{
+	struct ocelot *ocelot = ds->priv;
+	struct ocelot_port *ocelot_port = ocelot->ports[port];
+
+	INIT_DELAYED_WORK(&ocelot_port->guard_band_work,
+			  felix_guard_band_work_handler);
+
+	return 0;
+}
+
+static void felix_port_teardown(struct dsa_switch *ds, int port)
+{
+	struct ocelot *ocelot = ds->priv;
+	struct ocelot_port *ocelot_port = ocelot->ports[port];
+
+	cancel_delayed_work_sync(&ocelot_port->guard_band_work);
+}
+
 static int felix_setup(struct dsa_switch *ds)
 {
 	struct ocelot *ocelot = ds->priv;
@@ -2300,6 +2337,8 @@ static const struct dsa_switch_ops felix_switch_ops = {
 	.get_sset_count			= felix_get_sset_count,
 	.get_ts_info			= felix_get_ts_info,
 	.phylink_get_caps		= felix_phylink_get_caps,
+	.port_setup			= felix_port_setup,
+	.port_teardown			= felix_port_teardown,
 	.port_enable			= felix_port_enable,
 	.port_fast_age			= felix_port_fast_age,
 	.port_fdb_dump			= felix_fdb_dump,

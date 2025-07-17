@@ -813,6 +813,8 @@ struct ocelot_port {
 	u8				cut_thru_selected_by_user;
 
 	int				speed;
+
+	struct delayed_work		guard_band_work;
 };
 
 struct ocelot {

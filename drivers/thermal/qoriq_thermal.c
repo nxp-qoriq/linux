@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 //
 // Copyright 2016 Freescale Semiconductor, Inc.
-// Copyright 2022, 2024 NXP
+// Copyright 2022, 2024-2025 NXP
 
 #include <linux/clk.h>
 #include <linux/device_cooling.h>
@@ -120,6 +120,9 @@ struct qoriq_tmu_data {
 	struct regmap *regmap;
 	struct clk *clk;
 	struct qoriq_sensor	sensor[SITES_MAX];
+  	unsigned long last_log_time; // In jiffies
+  	unsigned long log_interval;
+  	struct device *dev;
 };
 
 enum tmu_trip {
@@ -336,6 +339,8 @@ static int tmu_get_temp(void *p, int *temp)
 	struct qoriq_sensor *qsensor = p;
 	struct qoriq_tmu_data *qdata = qoriq_sensor_to_data(qsensor);
 	static bool flag = false;
+  	u64 interval_jiffies = qdata->log_interval * HZ;
+  	u64 current_time = jiffies;
 	u32 val, tidr;
 	/*
 	 * REGS_TRITSR(id) has the following layout:
@@ -363,17 +368,21 @@ static int tmu_get_temp(void *p, int *temp)
 				     USEC_PER_MSEC,
 				     10 * USEC_PER_MSEC)) {
 		regmap_read(qdata->regmap, REGS_TSR, &val);
-		if (val & GENMASK(29,29)) {
-			val = 0;
-			if (!flag) {
-				pr_err("Out of Range lowest temperature measurement detected!\n");
-				flag = true;
+		current_time = jiffies;
+		if (!flag && time_after((unsigned long)current_time, 
+					qdata->last_log_time + (unsigned long)interval_jiffies)) {
+			if (val & GENMASK(29,29)) {
+			    pr_err("Out of Range lowest temperature measurement detected!\n");
+			} else {
+					return -ENODATA;
 			}
-		} else {
-			return -ENODATA;
+			flag = true;
+        	qdata->last_log_time = jiffies;
 		}
+		return -EAGAIN;
 	} else {
 		flag = false;
+		qdata->last_log_time = jiffies;
 	}
 
 	/*ERR052243: If there raising or falling edge happens, try later */
@@ -874,6 +883,33 @@ int qoriq_tmu_update_threshold(struct platform_device *pdev, int hysteresis_val)
 }
 #endif
 
+static ssize_t log_interval_show(struct device *dev, struct device_attribute *attr,
+								char *buf)
+{
+   	struct qoriq_tmu_data *data = dev_get_drvdata(dev);
+   	return sprintf(buf, "%lu\n", data->log_interval);
+}
+
+static ssize_t log_interval_store(struct device *dev, struct device_attribute *attr,
+                                const char *buf, size_t count)
+{
+   	struct qoriq_tmu_data *data = dev_get_drvdata(dev);
+   	unsigned long interval;
+   	int ret;
+   	
+	ret = kstrtoul(buf, 10, &interval);
+   	if (ret)
+       return ret;
+   	
+	// Ensure interval is reasonable (e.g., from 0 second to 24 hours)
+   	if (interval <= 0 || interval > 86400)
+       return -EINVAL;
+   	
+	data->log_interval = interval;
+   	return count;
+}
+static DEVICE_ATTR_RW(log_interval);
+
 static int qoriq_tmu_probe(struct platform_device *pdev)
 {
 	int ret;
@@ -931,6 +967,16 @@ static int qoriq_tmu_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
+  	data->log_interval = 0;
+  	data->last_log_time = 0;
+  	data->dev = dev;
+
+  	ret = device_create_file(dev, &dev_attr_log_interval);
+  	if (ret) {
+    	dev_err(dev, "Failed to create sysfs attribute\n");
+    	return ret;
+  	}
+
 	/* version register offset at: 0xbf8 on both v1 and v2 */
 	ret = regmap_read(data->regmap, REGS_IPBRR(0), &ver);
 	if (ret) {
@@ -960,6 +1006,15 @@ static int qoriq_tmu_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, data);
 
 	return 0;
+}
+
+static int __maybe_unused qoriq_tmu_remove(struct platform_device *pdev)
+{
+   	struct qoriq_tmu_data *data = platform_get_drvdata(pdev);
+
+   	/* Remove sysfs attribute */
+   	device_remove_file(data->dev, &dev_attr_log_interval);
+   	return 0;
 }
 
 static int __maybe_unused qoriq_tmu_suspend(struct device *dev)
@@ -1007,6 +1062,7 @@ static struct platform_driver qoriq_tmu = {
 		.of_match_table	= qoriq_tmu_match,
 	},
 	.probe	= qoriq_tmu_probe,
+  	.remove = qoriq_tmu_remove,
 };
 module_platform_driver(qoriq_tmu);
 

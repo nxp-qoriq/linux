@@ -12,3 +12,11 @@ config NET_DSA_NETC_SWITCH
 	  only support switch versions greater than or equal to NETC v4.3.
 
 	  If compiled as module (M), the module name is nxp-netc-switch.
+
+config NET_DSA_NETC_SWITCH_CTF
+	bool "Enable cut-through forwarding"
+	default y
+	depends on NET_DSA_NETC_SWITCH
+	help
+	  Say Y to enable the cut-through forwarding on all ports of the switch.
+

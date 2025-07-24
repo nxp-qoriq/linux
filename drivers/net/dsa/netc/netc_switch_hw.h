@@ -154,6 +154,11 @@
 #define NETC_PBPMCR0			0x0400
 #define NETC_PBPMCR1			0x0404
 
+/* Port cut through forwarding configuration register (PCTFCR) */
+#define NETC_PCTFCR             0x0450
+#define  NETC_PCTFCR_ICTS       BIT(0)
+#define  NETC_PCTFCR_ECTS       BIT(1)
+
 #define NETC_PISIDCR			0x460
 #define  PISIDCR_KCPAIR			BIT(0)
 #define  PISIDCR_KC0EN			BIT(1)

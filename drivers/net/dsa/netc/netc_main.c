@@ -854,6 +854,15 @@ static void netc_port_default_config(struct netc_port *port)
 
 	netc_port_set_max_frame_size(port, NETC_MAX_FRAME_LEN);
 	netc_port_set_all_tc_msdu(port, NULL);
+
+#ifdef CONFIG_NET_DSA_NETC_SWITCH_CTF
+	if (!is_netc_pseudo_port(port)) {
+		val = netc_port_rd(port, NETC_PCTFCR);
+		/* clear bits to enable the cut-through forwarding on ingress and egress */
+		val &= ~(NETC_PCTFCR_ICTS | NETC_PCTFCR_ECTS);
+		netc_port_wr(port, NETC_PCTFCR, val);
+	}
+#endif
 }
 
 static int netc_switch_bpt_default_config(struct netc_switch *priv)

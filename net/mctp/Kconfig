@@ -19,6 +19,6 @@ config MCTP_TEST
         default KUNIT_ALL_TESTS
 
 config MCTP_FLOWS
-	bool
+	bool "MCTP Flow Support"
 	depends on MCTP
 	select SKB_EXTENSIONS

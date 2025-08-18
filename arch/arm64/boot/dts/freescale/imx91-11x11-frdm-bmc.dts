@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2025 NXP
+ */
+
+/dts-v1/;
+
+#include "imx91-11x11-frdm.dts"
+
+/ {
+        model = "i.MX91 FRDM BMC";
+
+	/* Add override changes for openbmc */
+};

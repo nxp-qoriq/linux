@@ -646,7 +646,9 @@ dtb-$(CONFIG_ARCH_MXC) += imx93-11x11-evk.dtb \
 			  imx93-11x11-evk-mt9m114.dtb \
 			  imx93-11x11-evk-iw612-otbr.dtb \
 			  imx93-11x11-evk-rpmsg.dtb \
-			  imx93-11x11-evk-8mic-reve.dtb
+			  imx93-11x11-evk-8mic-reve.dtb \
+			  imx93-11x11-evk-bmc-host.dtb \
+			  imx93-11x11-frdm-bmc.dtb
 
 imx93-11x11-evk-boe-wxga-lvds-panel-dtbs := imx93-11x11-evk.dtb imx93-11x11-evk-boe-wxga-lvds-panel.dtbo
 dtb-$(CONFIG_ARCH_MXC) += imx93-11x11-evk-boe-wxga-lvds-panel.dtb
@@ -708,7 +710,9 @@ dtb-$(CONFIG_ARCH_MXC) += imx91-11x11-evk.dtb \
 			  imx91-11x11-evk-i2c-spi-slave.dtb \
 			  imx91-11x11-evk-i3c.dtb \
 			  imx91-11x11-evk-8mic-reve.dtb \
-			  imx91-11x11-evk-usbwifi.dtb
+			  imx91-11x11-evk-usbwifi.dtb \
+			  imx91-11x11-evk-bmc.dtb \
+			  imx91-11x11-frdm-bmc.dtb
 
 imx93-11x11-evk-pmic-pf0900-dtbs := imx93-11x11-evk.dtb imx93-11x11-evk-pmic-pf0900.dtbo
 imx93-11x11-evk-pmic-pf0900-root-dtbs := imx93-11x11-evk-root.dtb imx93-11x11-evk-pmic-pf0900.dtbo

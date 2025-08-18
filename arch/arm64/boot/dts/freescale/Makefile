@@ -482,7 +482,9 @@ dtb-$(CONFIG_ARCH_MXC) += imx93-11x11-evk.dtb \
 			  imx93-11x11-evk-ld.dtb \
 			  imx93-11x11-evk-iw612-otbr.dtb \
 			  imx93-11x11-evk-rpmsg.dtb imx93-11x11-evk-rpmsg-lpv.dtb \
-			  imx93-11x11-evk-8mic-reve.dtb
+			  imx93-11x11-evk-8mic-reve.dtb \
+			  imx93-11x11-evk-bmc-host.dtb \
+			  imx93-11x11-frdm-bmc.dtb
 
 dtb-$(CONFIG_ARCH_MXC) += imx91-11x11-evk.dtb \
 			  imx91-11x11-evk-flexspi-m2.dtb imx91-11x11-evk-flexspi-nand-m2.dtb \
@@ -494,7 +496,8 @@ dtb-$(CONFIG_ARCH_MXC) += imx91-11x11-evk.dtb \
 			  imx91-11x11-evk-i2c-spi-slave.dtb \
 			  imx91-11x11-evk-i3c.dtb \
 			  imx91-11x11-evk-usbwifi.dtb \
-			  imx91-11x11-evk-8mic-reve.dtb
+			  imx91-11x11-evk-8mic-reve.dtb \
+			  imx91-11x11-evk-bmc.dtb
 
 imx93-11x11-evk-pmic-pf0900-dtbs := imx93-11x11-evk.dtb imx93-11x11-evk-pmic-pf0900.dtbo
 imx93-11x11-evk-pmic-pf0900-root-dtbs := imx93-11x11-evk-root.dtb imx93-11x11-evk-pmic-pf0900.dtbo

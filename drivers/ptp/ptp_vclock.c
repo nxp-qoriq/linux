@@ -244,7 +244,6 @@ int ptp_vclock_convert_timestamps(struct ptp_clock *ptp, struct ptp_clock_time *
 				  unsigned int n_ts, int dst_phc_index,
 				  struct ptp_clock_time *dst_ts)
 {
-	unsigned int hash = dst_phc_index % HASH_SIZE(vclock_hash);
 	struct ptp_vclock *vclock = info_to_vclock(ptp->info);
 	struct timespec64 src_timespec, dst_timespec;
 	struct ptp_vclock *vclock_dst;
@@ -347,7 +346,6 @@ int ptp_vclock_convert_from_hw_timestamps(struct ptp_clock *ptp, struct ptp_cloc
 					  unsigned int n_ts, int dst_vclock_index,
 					  struct ptp_clock_time *dst_ts)
 {
-	unsigned int hash = dst_vclock_index % HASH_SIZE(vclock_hash);
 	struct timespec64 src_timespec, dst_timespec;
 	struct ptp_vclock *vclock;
 	int i, rc = 0;
@@ -519,7 +517,6 @@ EXPORT_SYMBOL(ptp_get_vclocks_index);
 
 ktime_t ptp_convert_timestamp(const ktime_t *hwtstamp, int vclock_index)
 {
-	unsigned int hash = vclock_index % HASH_SIZE(vclock_hash);
 	struct ptp_vclock *vclock;
 	u64 ns;
 	u64 vclock_ns = 0;

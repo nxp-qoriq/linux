@@ -179,7 +179,6 @@ void ocelot_mm_link_state_update(struct ocelot *ocelot, int port, bool link)
 {
 	struct ocelot_port *ocelot_port = ocelot->ports[port];
 	struct ocelot_mm_state *mm = &ocelot->mm[port];
-	enum ethtool_mm_verify_status verify_status;
 
 	if (mm->tx_enabled) {
 		if (link)

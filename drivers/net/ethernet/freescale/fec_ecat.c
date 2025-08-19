@@ -316,15 +316,6 @@ static int fec_enet_get_bd_index(struct bufdesc *bdp,
 	return ((const char *)bdp - (const char *)bd->base) >> bd->dsize_log2;
 }
 
-static void swap_buffer(void *bufaddr, int len)
-{
-	int i;
-	unsigned int *buf = bufaddr;
-
-	for (i = 0; i < len; i += 4, buf++)
-		swab32s(buf);
-}
-
 static void swap_buffer2(void *dst_buf, void *src_buf, int len)
 {
 	int i;
@@ -424,7 +415,6 @@ static void fec_ecat_tx_queue(struct net_device *ndev)
 	struct bufdesc *bdp;
 	unsigned short status;
 	struct fec_enet_priv_tx_q *txq = fep->tx_queue;
-	int	index = 0;
 
 	/* get next bdp of dirty_tx */
 	bdp = txq->dirty_tx;
@@ -487,7 +477,6 @@ static void fec_enet_bd_init(struct net_device *dev)
 	struct fec_enet_priv_rx_q *rxq = fep->rx_queue;
 	struct bufdesc *bdp;
 	int i;
-	struct	sk_buff	*skb;
 
 	/* Initialize the receive buffer descriptors. */
 	bdp = rxq->bd.base;
@@ -713,44 +702,6 @@ static int fec_enet_ipc_handle_init(struct fec_enet_private *fep)
 	return imx_scu_get_handle(&fep->ipc_handle);
 }
 
-static void fec_enet_ipg_stop_set(struct fec_enet_private *fep, bool enabled)
-{
-	struct device_node *np = fep->pdev->dev.of_node;
-	u32 rsrc_id, val;
-	int idx;
-
-	if (!np || !fep->ipc_handle)
-		return;
-
-	idx = of_alias_get_id(np, "ethernet");
-	if (idx < 0)
-		idx = 0;
-	rsrc_id = idx ? IMX_SC_R_ENET_1 : IMX_SC_R_ENET_0;
-
-	val = enabled ? 1 : 0;
-	imx_sc_misc_set_control(fep->ipc_handle, rsrc_id, IMX_SC_C_IPG_STOP, val);
-}
-
-static void fec_enet_stop_mode(struct fec_enet_private *fep, bool enabled)
-{
-	struct fec_platform_data *pdata = fep->pdev->dev.platform_data;
-	struct fec_stop_mode_gpr *stop_gpr = &fep->stop_gpr;
-
-	if (stop_gpr->gpr) {
-		if (enabled)
-			regmap_update_bits(stop_gpr->gpr, stop_gpr->reg,
-					   BIT(stop_gpr->bit),
-					   BIT(stop_gpr->bit));
-		else
-			regmap_update_bits(stop_gpr->gpr, stop_gpr->reg,
-					   BIT(stop_gpr->bit), 0);
-	} else if (pdata && pdata->sleep_mode_enable) {
-		pdata->sleep_mode_enable(enabled);
-	} else {
-		fec_enet_ipg_stop_set(fep, enabled);
-	}
-}
-
 static inline void fec_irqs_disable(struct net_device *ndev)
 {
 	struct fec_enet_private *fep = netdev_priv(ndev);
@@ -762,7 +713,6 @@ static void
 fec_stop(struct net_device *ndev)
 {
 	struct fec_enet_private *fep = netdev_priv(ndev);
-	u32 rmii_mode = readl(fep->hwp + FEC_R_CNTRL) & (1 << 8);
 
 	/* We cannot expect a graceful transmit stop without link !!! */
 	if (fep->link) {
@@ -821,7 +771,6 @@ static int fec_ecat_recv_from_queue(struct net_device *ndev, void __user *buff, 
 	int	recv_len = 0;
 	int	index = 0;
 	bool	need_swap = fep->quirks & FEC_QUIRK_SWAP_FRAME;
-	int ret = 0;
 
 #ifdef CONFIG_M532x
 	flush_cache_all();
@@ -1716,56 +1665,6 @@ static void fec_enet_get_regs(struct net_device *ndev,
 
 #if !defined(CONFIG_M5272)
 
-static void fec_enet_get_pauseparam(struct net_device *ndev,
-				    struct ethtool_pauseparam *pause)
-{
-	struct fec_enet_private *fep = netdev_priv(ndev);
-
-	pause->autoneg = (fep->pause_flag & FEC_PAUSE_FLAG_AUTONEG) != 0;
-	pause->tx_pause = (fep->pause_flag & FEC_PAUSE_FLAG_ENABLE) != 0;
-	pause->rx_pause = pause->tx_pause;
-}
-
-static int fec_enet_set_pauseparam(struct net_device *ndev,
-				   struct ethtool_pauseparam *pause)
-{
-	struct fec_enet_private *fep = netdev_priv(ndev);
-
-	if (!ndev->phydev)
-		return -ENODEV;
-
-	if (pause->tx_pause != pause->rx_pause) {
-		netdev_info(ndev,
-			"hardware only support enable/disable both tx and rx");
-		return -EINVAL;
-	}
-
-	fep->pause_flag = 0;
-
-	/* tx pause must be same as rx pause */
-	fep->pause_flag |= pause->rx_pause ? FEC_PAUSE_FLAG_ENABLE : 0;
-	fep->pause_flag |= pause->autoneg ? FEC_PAUSE_FLAG_AUTONEG : 0;
-
-	phy_set_sym_pause(ndev->phydev, pause->rx_pause, pause->tx_pause,
-			  pause->autoneg);
-
-	if (pause->autoneg) {
-		if (netif_running(ndev))
-			fec_stop(ndev);
-		phy_start_aneg(ndev->phydev);
-	}
-	if (netif_running(ndev)) {
-		mutex_lock(&fep->fast_ndev_lock);
-
-		netif_tx_lock_bh(ndev);
-		//netif_tx_wake_all_queues(ndev);
-
-		mutex_unlock(&fep->fast_ndev_lock);
-	}
-
-	return 0;
-}
-
 static const struct fec_stat {
 	char name[ETH_GSTRING_LEN];
 	u16 offset;
@@ -1908,18 +1807,6 @@ static inline void fec_enet_clear_ethtool_stats(struct net_device *dev)
 }
 #endif /* !defined(CONFIG_M5272) */
 
-/* ITR clock source is enet system clock (clk_ahb).
- * TCTT unit is cycle_ns * 64 cycle
- * So, the ICTT value = X us / (cycle_ns * 64)
- */
-static int fec_enet_us_to_itr_clock(struct net_device *ndev, int us)
-{
-	struct fec_enet_private *fep = netdev_priv(ndev);
-
-	return us * (fep->itr_clk_rate / 64000) / 1000;
-}
-
-
 /* LPI Sleep Ts count base on tx clk (clk_ref).
  * The lpi sleep cnt value = X us / (cycle_ns).
  */
@@ -2028,7 +1915,6 @@ static const struct ethtool_ops fec_enet_ethtool_ops = {
 
 static int fec_enet_ioctl(struct net_device *ndev, struct ifreq *rq, int cmd)
 {
-	struct fec_enet_private *fep = netdev_priv(ndev);
 	struct phy_device *phydev = ndev->phydev;
 
 	if (!netif_running(ndev))
@@ -2048,7 +1934,6 @@ static void fec_enet_free_buffers(struct net_device *ndev)
 	struct bufdesc	*bdp;
 	struct fec_enet_priv_tx_q *txq = fep->tx_queue;
 	struct fec_enet_priv_rx_q *rxq = fep->rx_queue;
-	unsigned int q;
 
 	bdp = rxq->bd.base;
 	for (i = 0; i < rxq->bd.ring_size; i++) {
@@ -2190,7 +2075,6 @@ fec_enet_open(struct net_device *ndev)
 	struct fec_enet_private *fep = netdev_priv(ndev);
 	int ret;
 	bool reset_again;
-	int i;
 
 	ret = pm_runtime_resume_and_get(&fep->pdev->dev);
 	if (ret < 0)
@@ -2352,7 +2236,7 @@ fec_set_mac_address(struct net_device *ndev, void *p)
 	if (addr) {
 		if (!is_valid_ether_addr(addr->sa_data))
 			return -EADDRNOTAVAIL;
-		memcpy(ndev->dev_addr, addr->sa_data, ndev->addr_len);
+		memcpy((void *)ndev->dev_addr, addr->sa_data, ndev->addr_len);
 	}
 
 	/* Add netif status check here to avoid system hang in below case:
@@ -2521,7 +2405,7 @@ static int fec_enet_init(struct net_device *ndev)
 	ndev->netdev_ops = &fec_netdev_ops;
 	ndev->ethtool_ops = &fec_enet_ethtool_ops;
 
-	pm = ndev->dev_addr;
+	pm = (unsigned char *)ndev->dev_addr;
 	writel(0, fep->hwp + FEC_IMASK);
 
 	if (fep->quirks & FEC_QUIRK_HAS_MULTI_QUEUES) {
@@ -2653,11 +2537,10 @@ fec_probe(struct platform_device *pdev)
 	struct fec_platform_data *pdata;
 	phy_interface_t interface;
 	struct net_device *ndev;
-	int i, irq, ret = 0;
+	int ret = 0;
 	const struct of_device_id *of_id;
 	static int dev_id;
 	struct device_node *np = pdev->dev.of_node, *phy_node;
-	char irq_name[8];
 	struct fec_devinfo *dev_info;
 
 	/* Init network device */
@@ -2863,7 +2746,6 @@ fec_probe(struct platform_device *pdev)
 failed_register:
 	fec_enet_mii_remove(fep);
 failed_mii_init:
-failed_irq:
 failed_init:
 	//fec_ptp_stop(pdev);
 failed_reset:
@@ -2965,7 +2847,6 @@ static int __maybe_unused fec_resume(struct device *dev)
 	struct net_device *ndev = dev_get_drvdata(dev);
 	struct fec_enet_private *fep = netdev_priv(ndev);
 	int ret = 0;
-	int val;
 
 	if (fep->reg_phy && !(fep->wol_flag & FEC_WOL_FLAG_ENABLE)) {
 		ret = regulator_enable(fep->reg_phy);

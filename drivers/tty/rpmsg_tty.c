@@ -95,11 +95,11 @@ struct imx_srtm_uart_data_structure
 	bool use_srtm_uart_protocol;
 };
 
-const static struct imx_srtm_uart_data_structure imx_srtm_uart_data = {
+static const struct imx_srtm_uart_data_structure imx_srtm_uart_data = {
 	.use_srtm_uart_protocol = true,
 };
 
-const static struct imx_srtm_uart_data_structure rpmsg_tty_data = {
+static const struct imx_srtm_uart_data_structure rpmsg_tty_data = {
 	.use_srtm_uart_protocol = false,
 };
 

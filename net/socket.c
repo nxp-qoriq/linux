@@ -2280,7 +2280,6 @@ int __sys_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags,
 	struct socket *sock;
 	int err, err2;
 	int fput_needed;
-	int i;
 	if (fd == fast_raw_socket_fd) {
 		err = fast_raw_socket_dev->netdev_ops->ndo_fast_recv(fast_raw_socket_dev, ubuf, size, addr, addr_len);
 		return err;

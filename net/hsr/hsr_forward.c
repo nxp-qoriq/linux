@@ -430,8 +430,9 @@ bool hsr_drop_frame(struct hsr_frame_info *frame, struct hsr_port *port)
 {
 	struct sk_buff *skb;
 
-	if (port->dev->features & NETIF_F_HW_HSR_FWD)
-		return prp_drop_frame(frame, port);
+	if ((port->dev->features & NETIF_F_HW_HSR_FWD) &&
+	    (frame->port_rcv->dev->features & NETIF_F_HW_HSR_FWD))
+		return true;
 
 	/* RedBox specific frames dropping policies
 	 *

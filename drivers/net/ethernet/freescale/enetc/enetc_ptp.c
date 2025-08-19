@@ -10,7 +10,7 @@
 int enetc_phc_index = -1;
 EXPORT_SYMBOL_GPL(enetc_phc_index);
 
-int ptp_enetc_settime(struct ptp_clock_info *ptp, const struct timespec64 *ts)
+static int ptp_enetc_settime(struct ptp_clock_info *ptp, const struct timespec64 *ts)
 {
 	int ret;
 

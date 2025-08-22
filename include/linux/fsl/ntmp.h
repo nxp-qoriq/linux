@@ -456,6 +456,8 @@ struct ett_cfge_data {
 #define ETT_ECA_INC		1
 #define ETT_EFM_LEN_CHANGE	GENMASK(15, 9)
 #define ETT_FRM_LEN_DEL_VLAN	0x7c
+#define ETT_FRM_LEN_DEL_RTAG	0x7a
+#define ETT_FRM_LEN_DEL_VLAN_RTAG	0x76
 	__le16 efm_data_len;
 #define ETT_EFM_DATA_LEN	GENMASK(10, 0)
 	__le32 efm_eid;
@@ -548,6 +550,7 @@ union ntmp_fmt_eid {
 #define FMTEID_VUDA		GENMASK(1, 0)
 #define FMTEID_VUDA_DEL_OTAG	2
 #define FMTEID_SQTA		GENMASK(4, 2)
+#define FMTEID_SQTA_DEL		2
 #define FMTEID_VUDA_SQTA	BIT(13)
 	__le32 vara_vid;
 #define FMTEID_VID		GENMASK(11, 0)

@@ -38,6 +38,9 @@
 #define DRIVER_VERSION	"0.01.0"
 #define DRIVER_DESC	"Generic ENETC PCI UIO driver"
 
+#define DRV_NAME ("enetc_pci_uio")
+#define BD_SIZE (4096)
+
 /*
  * Enable EtherCAT link support
  * speed: 100Mbps
@@ -49,6 +52,10 @@
 struct enetc_pci_uio_dev {
 	struct uio_info info;
 	struct pci_dev *pdev;
+	dma_addr_t bd_dma;
+	void *bd_buf;
+	char name[32];
+	void *np;
 };
 
 static inline struct enetc_pci_uio_dev *to_enetc_pci_uio_dev(struct uio_info *info)
@@ -58,7 +65,7 @@ static inline struct enetc_pci_uio_dev *to_enetc_pci_uio_dev(struct uio_info *in
 
 static int release(struct uio_info *info, struct inode *inode)
 {
-	struct enetc_pci_uio_dev *gdev = to_enetc_pci_uio_dev(info);
+	struct enetc_pci_uio_dev *udev = to_enetc_pci_uio_dev(info);
 
 	/*
 	 * This driver is insecure when used with devices doing DMA, but some
@@ -68,16 +75,16 @@ static int release(struct uio_info *info, struct inode *inode)
 	 * Note that there's a non-zero chance doing this will wedge the device
 	 * at least until reset.
 	 */
-	pci_clear_master(gdev->pdev);
+	pci_clear_master(udev->pdev);
 	return 0;
 }
 
 /* Interrupt handler. Read/modify/write the command register to disable the interrupt. */
 static irqreturn_t irqhandler(int irq, struct uio_info *info)
 {
-	struct enetc_pci_uio_dev *gdev = to_enetc_pci_uio_dev(info);
+	struct enetc_pci_uio_dev *udev = to_enetc_pci_uio_dev(info);
 
-	if (!pci_check_and_mask_intx(gdev->pdev))
+	if (!pci_check_and_mask_intx(udev->pdev))
 		return IRQ_NONE;
 
 	/* UIO core will signal the user process. */
@@ -86,11 +93,11 @@ static irqreturn_t irqhandler(int irq, struct uio_info *info)
 
 static void enetc4_mac_config(struct enetc_pf *pf, unsigned int mode, phy_interface_t phy_mode)
 {
-	struct enetc_ndev_priv *priv = pf->si->priv;
-	struct enetc_si *si = pf->si;
+	struct enetc_pci_uio_dev *udev = pf->si->priv;
+	struct enetc_ndev_priv *priv = udev->np;
 	u32 val;
 
-	val = enetc_port_mac_rd(si, ENETC4_PM_IF_MODE(0));
+	val = enetc_port_mac_rd(pf->si, ENETC4_PM_IF_MODE(0));
 	val &= ~(PM_IF_MODE_IFMODE | PM_IF_MODE_ENA);
 
 	switch (phy_mode) {
@@ -122,10 +129,11 @@ static void enetc4_mac_config(struct enetc_pf *pf, unsigned int mode, phy_interf
 		return;
 	}
 
-	dev_info(priv->dev, "ENETC PHY mode:%d\n", phy_mode);
-	enetc_port_mac_wr(si, ENETC4_PM_IF_MODE(0), val);
+	dev_info(priv->dev, "ENETC4 PHY mode:%d\n", phy_mode);
+	enetc_port_mac_wr(pf->si, ENETC4_PM_IF_MODE(0), val);
 }
 
+/* phylink callback functions for enetc4 */
 static struct phylink_pcs *enetc4_pl_mac_select_pcs(struct phylink_config *config,
 						    phy_interface_t iface)
 {
@@ -332,11 +340,10 @@ static void enetc4_pl_mac_link_up(struct phylink_config *config,
 				  int duplex, bool tx_pause, bool rx_pause)
 {
 	struct enetc_pf *pf = phylink_to_enetc_pf(config);
-	struct enetc_si *si = pf->si;
-	struct enetc_ndev_priv *priv;
+	struct enetc_pci_uio_dev *udev = pf->si->priv;
+	struct enetc_ndev_priv *priv = udev->np;
 	bool hd_fc = false;
 
-	priv = si->priv;
 	enetc4_set_port_speed(priv, speed);
 
 	if (!phylink_autoneg_inband(mode) && phy_interface_mode_is_rgmii(interface))
@@ -365,8 +372,8 @@ static void enetc4_pl_mac_link_up(struct phylink_config *config,
 	enetc4_enable_mac(pf, true);
 
 #ifdef ECAT_LINK_100M
-	enetc_port_mac_wr(si, ENETC4_PM_SLEEP_TIMER(0), 0);
-	enetc_port_mac_wr(si, ENETC4_PM_LPWAKE_TIMER(0), 0);
+	enetc_port_mac_wr(pf->si, ENETC4_PM_SLEEP_TIMER(0), 0);
+	enetc_port_mac_wr(pf->si, ENETC4_PM_LPWAKE_TIMER(0), 0);
 #endif
 
 	enetc4_pf_send_link_status_msg(pf, true);
@@ -376,16 +383,12 @@ static void enetc4_pl_mac_link_down(struct phylink_config *config, unsigned int 
 				    phy_interface_t interface)
 {
 	struct enetc_pf *pf = phylink_to_enetc_pf(config);
-	struct enetc_si *si = pf->si;
-	struct enetc_ndev_priv *priv;
-
-	priv = si->priv;
 
 	enetc4_pf_send_link_status_msg(pf, false);
 	enetc4_enable_mac(pf, false);
 }
 
-static const struct phylink_mac_ops enetc_pl_mac_ops = {
+static const struct phylink_mac_ops enetc4_pl_mac_ops = {
 	.mac_select_pcs = enetc4_pl_mac_select_pcs,
 	.mac_config = enetc4_pl_mac_config,
 	.mac_link_up = enetc4_pl_mac_link_up,
@@ -469,7 +472,7 @@ static int enetc_phylink_stop(struct enetc_ndev_priv *priv)
 	return 0;
 }
 
-static int enetc_probe_enetc_port(struct pci_dev *pdev)
+static int enetc_probe_enetc_port(struct pci_dev *pdev, struct enetc_pci_uio_dev *udev)
 {
 	struct device *dev = &pdev->dev;
 	struct device_node *node = dev->of_node;
@@ -531,7 +534,8 @@ static int enetc_probe_enetc_port(struct pci_dev *pdev)
 	priv->dev = dev;
 	priv->si = si;
 	si->ndev = NULL;
-	si->priv = priv;
+	si->priv = udev;
+	udev->np = priv;
 
 	priv->ref_clk = devm_clk_get_optional(dev, "enet_ref_clk");
 	if (IS_ERR(priv->ref_clk)) {
@@ -552,7 +556,7 @@ static int enetc_probe_enetc_port(struct pci_dev *pdev)
 		goto err_clk_get;
 	}
 
-	err = enetc_phylink_setup(priv, node, &enetc_pl_mac_ops);
+	err = enetc_phylink_setup(priv, node, &enetc4_pl_mac_ops);
 	if (err) {
 		dev_err(dev, "Failed to create phylink\n");
 		goto err_phylink_create;
@@ -583,13 +587,15 @@ err_map_mem:
 
 static int enetc_remove_enetc_port(struct pci_dev *pdev)
 {
+	struct enetc_pci_uio_dev *udev;
 	struct enetc_ndev_priv *priv;
 	struct enetc_si *si;
 	struct enetc_pf *pf;
 
 	si = pci_get_drvdata(pdev);
 	pf = enetc_si_priv(si);
-	priv = si->priv;
+	udev = si->priv;
+	priv = udev->np;
 
 	enetc_phylink_stop(priv);
 	clk_disable_unprepare(priv->ref_clk);
@@ -605,12 +611,18 @@ static int enetc_remove_enetc_port(struct pci_dev *pdev)
 
 static int enetc_pci_uio_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 {
-	struct enetc_pci_uio_dev *gdev;
+	struct enetc_pci_uio_dev *udev;
 	struct uio_mem *uiomem;
+	u8 bn, sn, fn;
+	u32 dnr;
 	int err;
 	int i;
 
-	err = enetc_probe_enetc_port(pdev);
+	udev = devm_kzalloc(&pdev->dev, sizeof(struct enetc_pci_uio_dev), GFP_KERNEL);
+	if (!udev)
+		return -ENOMEM;
+
+	err = enetc_probe_enetc_port(pdev, udev);
 	if (err)
 		return err;
 
@@ -623,28 +635,30 @@ static int enetc_pci_uio_probe(struct pci_dev *pdev, const struct pci_device_id 
 	if (pdev->irq && !pci_intx_mask_supported(pdev))
 		return -ENODEV;
 
-	gdev = devm_kzalloc(&pdev->dev, sizeof(struct enetc_pci_uio_dev), GFP_KERNEL);
-	if (!gdev)
-		return -ENOMEM;
+	dnr = pci_domain_nr(pdev->bus);
+	bn = pdev->bus->number;
+	sn = PCI_SLOT(pdev->devfn);
+	fn = PCI_FUNC(pdev->devfn);
+	snprintf(udev->name, 32, "%s-%04x:%02x:%02x.%d", DRV_NAME, dnr, bn, sn, fn);
 
-	gdev->info.name = "enetc_pci_uio";
-	gdev->info.version = DRIVER_VERSION;
-	gdev->info.release = release;
-	gdev->pdev = pdev;
+	udev->info.name = udev->name;
+	udev->info.version = DRIVER_VERSION;
+	udev->info.release = release;
+	udev->pdev = pdev;
 	if (pdev->irq && pdev->irq != IRQ_NOTCONNECTED) {
-		gdev->info.irq = pdev->irq;
-		gdev->info.irq_flags = IRQF_SHARED;
-		gdev->info.handler = irqhandler;
+		udev->info.irq = pdev->irq;
+		udev->info.irq_flags = IRQF_SHARED;
+		udev->info.handler = irqhandler;
 	}
 
-	uiomem = &gdev->info.mem[0];
+	uiomem = &udev->info.mem[0];
 	for (i = 0; i < MAX_UIO_MAPS; ++i) {
 		struct resource *r = &pdev->resource[i];
 
 		if (r->flags != (IORESOURCE_SIZEALIGN | IORESOURCE_MEM))
 			continue;
 
-		if (uiomem >= &gdev->info.mem[MAX_UIO_MAPS]) {
+		if (uiomem >= &udev->info.mem[MAX_UIO_MAPS]) {
 			dev_warn(&pdev->dev, "device has more than "
 				__stringify(MAX_UIO_MAPS) " I/O memory resources.\n");
 			break;
@@ -658,23 +672,41 @@ static int enetc_pci_uio_probe(struct pci_dev *pdev, const struct pci_device_id 
 		++uiomem;
 	}
 
-	while (uiomem < &gdev->info.mem[MAX_UIO_MAPS]) {
+	/* Allocate memory for buffer descriptors. */
+	udev->bd_buf = dma_alloc_coherent(&pdev->dev, BD_SIZE, &udev->bd_dma, GFP_KERNEL);
+	if (udev->bd_buf) {
+		uiomem->memtype = UIO_MEM_PHYS;
+		uiomem->addr = udev->bd_dma;
+		uiomem->size = BD_SIZE;
+		uiomem->name = "BD_SPACE";
+		++uiomem;
+	} else {
+		dev_err(&pdev->dev, "%s: dma_alloc_coherent failed!\n", __func__);
+		return -ENOMEM;
+	}
+
+	while (uiomem < &udev->info.mem[MAX_UIO_MAPS]) {
 		uiomem->size = 0;
 		++uiomem;
 	}
 
-	return devm_uio_register_device(&pdev->dev, &gdev->info);
+	return devm_uio_register_device(&pdev->dev, &udev->info);
 }
 
 static void enetc_pci_uio_remove(struct pci_dev *pdev)
 {
-	enetc_remove_enetc_port(pdev);
+	struct enetc_si *si = pci_get_drvdata(pdev);
+	struct enetc_pci_uio_dev *udev = si->priv;
 
+	enetc_remove_enetc_port(pdev);
 	pci_disable_device(pdev);
+
+	if (udev->bd_buf)
+		dma_free_coherent(&pdev->dev, BD_SIZE, udev->bd_buf, udev->bd_dma);
 }
 
 static struct pci_driver enetc_pci_uio_driver = {
-	.name = "enetc_pci_uio",
+	.name = DRV_NAME,
 	.id_table = NULL, /* only dynamic id's */
 	.probe = enetc_pci_uio_probe,
 	.remove = enetc_pci_uio_remove,

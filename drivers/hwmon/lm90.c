@@ -1023,6 +1023,22 @@ static ssize_t pec_store(struct device *dev, struct device_attribute *dummy,
 
 static DEVICE_ATTR_RW(pec);
 
+#define SA56004X_ADJUST_TEMP_WRITE(temp) \
+   (({ \
+       long long t = (long long)(temp) / 1000 + CONFIG_SERIES_DIODE_RESISTANCE_PARAM + 273; \
+       long long r = (t * 1022 - 273 * 1008) * 1000 / 1008; \
+       long long offset = (r >= 0) ? 500 : -500; \
+       ((r + offset) / 1000) * 1000; \
+   }))
+
+#define SA56004X_ADJUST_TEMP_THR_READ(temp) \
+   (({ \
+       long long t = (long long)(temp) / 1000 + 273; \
+       long long r = (t * 1008 - 273 * 1022) * 1000 / 1022 - CONFIG_SERIES_DIODE_RESISTANCE_PARAM * 1000; \
+       long long offset = (r >= 0) ? 500 : -500; \
+       ((r + offset) / 1000) * 1000; \
+   }))
+
 static int adjust_temp_diode(int temp)
 {
 	return (((((temp / 1000) - CONFIG_SERIES_DIODE_RESISTANCE_PARAM + 273) *
@@ -1045,8 +1061,9 @@ static int lm90_get_temp11(struct lm90_data *data, int index)
 	if (data->kind == lm99 && index <= 2)
 		temp += 16000;
 
-	if (index == REMOTE_TEMP)
+	if (index == REMOTE_TEMP || index == REMOTE2_TEMP) {
 		temp = adjust_temp_diode(temp);
+  }
 
 	return temp;
 }
@@ -1073,6 +1090,12 @@ static int lm90_set_temp11(struct lm90_data *data, int index, long val)
 		val = max(val, -128000l);
 		val -= 16000;
 	}
+
+	if ( data->kind == sa56004 )
+		if ( index == LOCAL_LOW || index == REMOTE_LOW || index == REMOTE2_LOW
+			||index == LOCAL_HIGH || index == REMOTE_HIGH || index == REMOTE2_HIGH
+			||index == LOCAL_CRIT || index == REMOTE_CRIT || index == REMOTE2_CRIT )
+				val = SA56004X_ADJUST_TEMP_WRITE(val);
 
 	if (data->flags & LM90_HAVE_EXTENDED_TEMP)
 		data->temp11[index] = temp_to_u16_adt7461(data, val);
@@ -1136,6 +1159,12 @@ static int lm90_set_temp8(struct lm90_data *data, int index, long val)
 		val = max(val, -128000l);
 		val -= 16000;
 	}
+
+	if ( data->kind == sa56004 )
+		if ( index == LOCAL_LOW || index == REMOTE_LOW || index == REMOTE2_LOW
+			||index == LOCAL_HIGH || index == REMOTE_HIGH || index == REMOTE2_HIGH
+			||index == LOCAL_CRIT || index == REMOTE_CRIT || index == REMOTE2_CRIT )
+				val = SA56004X_ADJUST_TEMP_WRITE(val);
 
 	if (data->flags & LM90_HAVE_EXTENDED_TEMP)
 		data->temp8[index] = temp_to_u8_adt7461(data, val);
@@ -1252,23 +1281,35 @@ static int lm90_temp_read(struct device *dev, u32 attr, int channel, long *val)
 		*val = (data->alarms >> lm90_fault_bits[channel]) & 1;
 		break;
 	case hwmon_temp_min:
-		if (channel == 0)
+		if (channel == 0) {
 			*val = lm90_get_temp8(data,
 					      lm90_temp_min_index[channel]);
-		else
-			*val = lm90_get_temp11(data,
-					       lm90_temp_min_index[channel]);
+		} else {
+			if ( data->kind == sa56004 )
+				*val = SA56004X_ADJUST_TEMP_THR_READ(lm90_get_temp11(data,
+					lm90_temp_min_index[channel]));
+			else
+				*val = lm90_get_temp11(data, lm90_temp_min_index[channel]);
+		}
 		break;
 	case hwmon_temp_max:
-		if (channel == 0)
+		if (channel == 0) {
 			*val = lm90_get_temp8(data,
 					      lm90_temp_max_index[channel]);
-		else
-			*val = lm90_get_temp11(data,
-					       lm90_temp_max_index[channel]);
+		} else {
+			if ( data->kind == sa56004 ){
+				*val = SA56004X_ADJUST_TEMP_THR_READ(lm90_get_temp11(data,
+					lm90_temp_max_index[channel]));
+				}
+			else
+				*val = lm90_get_temp11(data, lm90_temp_max_index[channel]);
+		}
 		break;
 	case hwmon_temp_crit:
-		*val = lm90_get_temp8(data, lm90_temp_crit_index[channel]);
+		if ( data->kind == sa56004 )
+			*val = SA56004X_ADJUST_TEMP_THR_READ(lm90_get_temp8(data, lm90_temp_crit_index[channel]));
+        else
+			*val = lm90_get_temp8(data, lm90_temp_crit_index[channel]);
 		break;
 	case hwmon_temp_crit_hyst:
 		*val = lm90_get_temphyst(data, lm90_temp_crit_index[channel]);

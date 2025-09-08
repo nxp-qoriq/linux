@@ -151,15 +151,19 @@ static void *netc_fill_common_tp_tag(struct sk_buff *skb,
 	struct dsa_port *dp = dsa_user_to_port(ndev);
 	u16 queue = skb_get_queue_mapping(skb);
 	u8 ipv = netdev_txq_to_tc(ndev, queue);
+	u8 type = NETC_TAG_TO_PORT;
 	u8 port = dp->index;
 	void *tag;
 
 	skb_push(skb, tag_len);
 	dsa_alloc_etype_header(skb, tag_len);
 
+	if (ndev->features & NETIF_F_HW_HSR_FWD)
+		type = NETC_TAG_FORWARD;
+
 	tag = dsa_etype_header_pos_tx(skb);
 	memset(tag, 0, tag_len);
-	netc_common_tag_config(tag, NETC_TAG_TO_PORT,
+	netc_common_tag_config(tag, type,
 			       subtype, port, ipv);
 
 	return tag;

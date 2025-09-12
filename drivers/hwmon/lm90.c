@@ -1282,20 +1282,28 @@ static int lm90_temp_read(struct device *dev, u32 attr, int channel, long *val)
 		break;
 	case hwmon_temp_min:
 		if (channel == 0) {
-			*val = lm90_get_temp8(data,
-					      lm90_temp_min_index[channel]);
+			if (data->kind == sa56004) {
+				*val = SA56004X_ADJUST_TEMP_THR_READ(
+						lm90_get_temp8(data, lm90_temp_min_index[channel]));
+			} else {
+				*val = lm90_get_temp8(data, lm90_temp_min_index[channel]);
+			}
 		} else {
 			if ( data->kind == sa56004 )
 				*val = SA56004X_ADJUST_TEMP_THR_READ(lm90_get_temp11(data,
-					lm90_temp_min_index[channel]));
+							lm90_temp_min_index[channel]));
 			else
 				*val = lm90_get_temp11(data, lm90_temp_min_index[channel]);
 		}
 		break;
 	case hwmon_temp_max:
 		if (channel == 0) {
-			*val = lm90_get_temp8(data,
-					      lm90_temp_max_index[channel]);
+			if (data->kind == sa56004) {
+				*val = SA56004X_ADJUST_TEMP_THR_READ(
+						lm90_get_temp8(data, lm90_temp_max_index[channel]));
+			} else {
+				*val = lm90_get_temp8(data, lm90_temp_max_index[channel]);
+			}
 		} else {
 			if ( data->kind == sa56004 ){
 				*val = SA56004X_ADJUST_TEMP_THR_READ(lm90_get_temp11(data,

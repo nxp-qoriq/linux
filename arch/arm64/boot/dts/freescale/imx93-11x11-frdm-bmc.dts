@@ -27,10 +27,34 @@
 	pinctrl-1 = <&pinctrl_lpi2c5>;
 	status = "okay";
 
+	mctp-controller;
+	mctp@20 {
+                compatible = "mctp-i2c-controller";
+                reg = <(0x20 | I2C_OWN_SLAVE_ADDRESS)>;
+        };
+
 	sensor@48 {
 		compatible = "nxp,pct2075";
 		reg = <0x48>;
 	};
+};
+
+
+
+&lpi2c4 {
+#address-cells = <1>;
+#size-cells = <0>;
+        clock-frequency = <400000>;
+        pinctrl-names = "default", "sleep";
+        pinctrl-0 = <&pinctrl_lpi2c4>;
+        pinctrl-1 = <&pinctrl_lpi2c4>;
+        status = "okay";
+
+	mctp-controller;
+	mctp@10 {
+                compatible = "mctp-i2c-controller";
+                reg = <(0x10 | I2C_OWN_SLAVE_ADDRESS)>;
+        };
 };
 
 &lpuart7 { /* console */
@@ -67,4 +91,11 @@ pinctrl_uart8: uart8grp {
 			       MX93_PAD_GPIO_IO13__LPUART8_RX			0x31e
 			       >;
 	       };
+
+pinctrl_lpi2c4: lpi2c4grp {
+                fsl,pins = <
+                        MX93_PAD_GPIO_IO03__LPI2C4_SCL          0x40000b9e
+                        MX93_PAD_GPIO_IO02__LPI2C4_SDA          0x40000b9e
+                >;
+        };
 };

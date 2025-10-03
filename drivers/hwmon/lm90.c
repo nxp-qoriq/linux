@@ -1250,6 +1250,7 @@ static const u8 lm90_fault_bits[3] = { 0, 2, 10 };
 static int lm90_temp_read(struct device *dev, u32 attr, int channel, long *val)
 {
 	struct lm90_data *data = dev_get_drvdata(dev);
+	long current_temp, low_temp, high_temp, crit_temp;
 	int err;
 
 	mutex_lock(&data->update_lock);
@@ -1263,16 +1264,56 @@ static int lm90_temp_read(struct device *dev, u32 attr, int channel, long *val)
 		*val = lm90_get_temp11(data, lm90_temp_index[channel]);
 		break;
 	case hwmon_temp_min_alarm:
-		*val = (data->alarms >> lm90_min_alarm_bits[channel]) & 1;
+		// For SA56004 sensor, compare current temperature with adjusted min threshold
+		if (data->kind == sa56004) {
+			current_temp = lm90_get_temp11(data, lm90_temp_index[channel]); 
+			if (channel == 0) {
+				low_temp = SA56004X_ADJUST_TEMP_THR_READ(
+						temp_from_s8(data->temp8[lm90_temp_min_index[channel]])
+						);
+			} else {
+				low_temp = SA56004X_ADJUST_TEMP_THR_READ(
+						temp_from_s16(data->temp11[lm90_temp_min_index[channel]])
+						);
+			} 
+			*val = (current_temp < low_temp) ? 1 : 0;
+		} else {
+			*val = (data->alarms >> lm90_min_alarm_bits[channel]) & 1;
+		}
 		break;
+
 	case hwmon_temp_max_alarm:
-		*val = (data->alarms >> lm90_max_alarm_bits[channel]) & 1;
+		// For SA56004 sensor, compare current temperature with adjusted max threshold
+		if (data->kind == sa56004) {
+			current_temp = lm90_get_temp11(data, lm90_temp_index[channel]); 
+			if (channel == 0) {
+				high_temp = SA56004X_ADJUST_TEMP_THR_READ(
+						temp_from_s8(data->temp8[lm90_temp_max_index[channel]])
+						);
+			} else {
+				high_temp = SA56004X_ADJUST_TEMP_THR_READ(
+						temp_from_s16(data->temp11[lm90_temp_max_index[channel]])
+						);
+			} 
+			*val = (current_temp > high_temp) ? 1 : 0;
+		} else {
+			*val = (data->alarms >> lm90_max_alarm_bits[channel]) & 1;
+		}
 		break;
 	case hwmon_temp_crit_alarm:
-		if (data->flags & LM90_HAVE_CRIT_ALRM_SWP)
-			*val = (data->alarms >> lm90_crit_alarm_bits_swapped[channel]) & 1;
-		else
-			*val = (data->alarms >> lm90_crit_alarm_bits[channel]) & 1;
+		// For SA56004 sensor, compare current temperature with adjusted critical threshold
+		if (data->kind == sa56004) {
+			current_temp = lm90_get_temp11(data, lm90_temp_index[channel]);
+			crit_temp = SA56004X_ADJUST_TEMP_THR_READ(
+					temp_from_s8(data->temp8[lm90_temp_crit_index[channel]])
+					);
+			*val = (current_temp >= crit_temp) ? 1 : 0;
+		} else {
+			if (data->flags & LM90_HAVE_CRIT_ALRM_SWP)
+				*val = (data->alarms >> lm90_crit_alarm_bits_swapped[channel]) & 1;
+			else
+				*val = (data->alarms >> lm90_crit_alarm_bits[channel]) & 1;
+		}
 		break;
 	case hwmon_temp_emergency_alarm:
 		*val = (data->alarms >> lm90_emergency_alarm_bits[channel]) & 1;

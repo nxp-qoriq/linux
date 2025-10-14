@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
+# Copyright 2020-2025 NXP
 %YAML 1.2
 ---
 $id: http://devicetree.org/schemas/arm/fsl.yaml#
@@ -1582,6 +1583,12 @@ properties:
               - fsl,lx2160a-qds
               - fsl,lx2160a-rdb
               - fsl,lx2162a-qds
+          - const: fsl,lx2160a
+
+      - description: NXP LA1224 ARMv8 based RDB Board
+        items:
+          - enum:
+              - nxp,la1224-rdb
           - const: fsl,lx2160a
 
       - description: SolidRun LX2160A CEX-7 based Boards

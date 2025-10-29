@@ -8,12 +8,17 @@
 #include <linux/etherdevice.h>
 #include <linux/fsl/enetc_mdio.h>
 #include <linux/if_bridge.h>
+#include <linux/if_hsr.h>
 #include <linux/if_vlan.h>
 #include <linux/of_mdio.h>
 #include <linux/pcs/pcs-xpcs.h>
 #include <linux/unaligned.h>
 
 #include "netc_switch.h"
+
+#define NETC_SUPPORTED_HSR_FEATURES \
+	(NETIF_F_HW_HSR_TAG_INS | NETIF_F_HW_HSR_TAG_RM | \
+	 NETIF_F_HW_HSR_FWD | NETIF_F_HW_HSR_DUP)
 
 static struct netc_fdb_entry *netc_lookup_fdb_entry(struct netc_switch *priv,
 						    const unsigned char *addr,
@@ -499,7 +504,7 @@ static void netc_get_ntmp_capabilities(struct netc_switch *priv)
 	ntmp->caps.sgclt_num_words = NETC_GET_NUM_WORDS(val);
 
 	val = netc_base_rd(regs, NETC_ISQGITCAPR);
-	user->caps.isgt_num_entries = NETC_GET_NUM_ENTRIES(val);
+	ntmp->caps.isgt_num_entries = NETC_GET_NUM_ENTRIES(val);
 }
 
 static int netc_init_ntmp_bitmaps(struct netc_switch *priv)
@@ -541,16 +546,16 @@ static int netc_init_ntmp_bitmaps(struct netc_switch *priv)
 	if (!ntmp->sgclt_word_bitmap)
 		goto free_isct_eid_bitmap;
 
-	user->isgt_eid_bitmap = bitmap_zalloc(user->caps.isgt_num_entries,
+	ntmp->isgt_eid_bitmap = bitmap_zalloc(ntmp->caps.isgt_num_entries,
 					      GFP_KERNEL);
-	if (!user->isgt_eid_bitmap)
+	if (!ntmp->isgt_eid_bitmap)
 		goto free_sgclt_word_bitmap;
 
 	return 0;
 
 free_sgclt_word_bitmap:
-	bitmap_free(user->sgclt_word_bitmap);
-	user->sgclt_word_bitmap = NULL;
+	bitmap_free(ntmp->sgclt_word_bitmap);
+	ntmp->sgclt_word_bitmap = NULL;
 free_isct_eid_bitmap:
 	bitmap_free(ntmp->isct_eid_bitmap);
 	ntmp->isct_eid_bitmap = NULL;
@@ -577,8 +582,8 @@ static void netc_free_ntmp_bitmaps(struct netc_switch *priv)
 {
 	struct ntmp_priv *ntmp = &priv->ntmp;
 
-	bitmap_free(user->isgt_eid_bitmap);
-	user->isgt_eid_bitmap = NULL;
+	bitmap_free(ntmp->isgt_eid_bitmap);
+	ntmp->isgt_eid_bitmap = NULL;
 
 	bitmap_free(ntmp->sgclt_word_bitmap);
 	ntmp->sgclt_word_bitmap = NULL;
@@ -843,6 +848,26 @@ void netc_port_fixed_config(struct netc_port *port)
 		 */
 		netc_port_wr(port, NETC_PM_PAUSE_TRHESH(0), qth);
 	}
+}
+
+static void netc_port_enable_mac_station_move(struct netc_port *port, bool enabled)
+{
+	u32 val, old_val;
+
+	old_val = netc_port_rd(port, NETC_BPCR);
+	val = u32_replace_bits(old_val, enabled ? 0 : 1, BPCR_STAMVD);
+	if (old_val != val)
+		netc_port_wr(port, NETC_BPCR, val);
+}
+
+static void netc_port_set_group(struct netc_port *port, u32 groupid)
+{
+	u32 val, old_val;
+
+	old_val = netc_port_rd(port, NETC_PGCR);
+	val = u32_replace_bits(old_val, groupid, PGCR_PGID);
+	if (old_val != val)
+		netc_port_wr(port, NETC_PGCR, val);
 }
 
 static void netc_port_default_config(struct netc_port *port)
@@ -1300,6 +1325,62 @@ static int netc_port_update_vlan_egress_rule(struct netc_port *port,
 
 	return netc_add_or_update_ett_entry(priv, false, untagged,
 					    ett_eid, ect_eid);
+}
+
+static int netc_port_update_vlan_egress_seq_tag(struct netc_port *port,
+						u16 vid, bool removed)
+{
+	struct netc_switch *priv = port->switch_priv;
+	struct netc_cbdrs *cbdrs = &priv->ntmp.cbdrs;
+	struct ett_cfge_data ett_cfge = {};
+	struct netc_vlan_entry *entry;
+	bool vlan_removed = false;
+	u32 efmid_old;
+	u32 ett_eid;
+	int err;
+	u8 len;
+
+	guard(mutex)(&priv->vft_lock);
+
+	entry = netc_lookup_vlan_entry(priv, vid);
+	if (!entry)
+		return 0;
+
+	ett_eid = le32_to_cpu(entry->cfge.et_eid);
+	ett_eid += port->index;
+	err = ntmp_ett_query_entry(cbdrs, ett_eid, &ett_cfge);
+	if (err)
+		return err;
+
+	if ((ett_cfge.efm_eid & FRMEOD_VARA_VID) ||
+	    !(ett_cfge.efm_eid & FMTEID_VUDA_SQTA))
+		return -EOPNOTSUPP;
+
+	efmid_old = ett_cfge.efm_eid;
+	ett_cfge.efm_eid &= ~FMTEID_SQTA;
+	if (removed)
+		ett_cfge.efm_eid |= FIELD_PREP(FMTEID_SQTA, FMTEID_SQTA_DEL);
+
+	if (ett_cfge.efm_eid == efmid_old)
+		return 0;
+
+	if ((ett_cfge.efm_eid & FMTEID_VUDA) == FMTEID_VUDA_DEL_OTAG)
+		vlan_removed = true;
+
+	if (removed && vlan_removed)
+		len = ETT_FRM_LEN_DEL_VLAN_RTAG;
+	else if (removed)
+		len = ETT_FRM_LEN_DEL_RTAG;
+	else if (vlan_removed)
+		len = ETT_FRM_LEN_DEL_VLAN;
+	else
+		len = 0;
+
+	ett_cfge.efm_cfg &= ~ETT_EFM_LEN_CHANGE;
+	ett_cfge.efm_cfg |= FIELD_PREP(ETT_EFM_LEN_CHANGE, len);
+
+	/* Update the ETT entry */
+	return ntmp_ett_add_or_update_entry(cbdrs, ett_eid, false, &ett_cfge);
 }
 
 static int netc_port_add_vlan_entry(struct netc_port *port, u16 vid,
@@ -2041,6 +2122,184 @@ static void netc_port_fast_age(struct dsa_switch *ds, int port_id)
 	netc_port_remove_dynamic_entries(port);
 }
 
+static int netc_add_sequence_generate(struct netc_switch *priv, u32 entry_id,
+				      u8 tag)
+{
+	struct netc_cbdrs *cbdrs = &priv->ntmp.cbdrs;
+	struct isgt_cfge_data cfge = {};
+
+	cfge.sq_tag = cpu_to_le16(FIELD_PREP(ISGT_SQ_TAG, tag));
+
+	return ntmp_isgt_add_or_update_entry(cbdrs, entry_id, true, &cfge);
+}
+
+static int netc_port_set_hsr(struct netc_port *port, enum netc_hsr_port_type type)
+{
+	struct netc_switch *priv = port->switch_priv;
+	bool remove_seq_tag = false;
+	bool is_sr_port = false;
+	bool enable_sdf = true;
+	u32 isgt_eid = 0xffff;
+	u32 isgt_eid_old;
+	u32 val, old_val;
+	u8 pathid = 0;
+	u8 stp_state;
+	int err;
+
+	if (type == NETC_HSR_DISABLED) {
+		netc_port_del_vlan_entry(port, NETC_VLAN_UNAWARE_PVID);
+		port->pvid = NETC_STANDALONE_PVID;
+		netc_port_set_mlo(port, MLO_DISABLE);
+	} else {
+		err = netc_port_set_vlan_entry(port, NETC_VLAN_UNAWARE_PVID, false);
+		if (err)
+			return err;
+
+		port->pvid = NETC_VLAN_UNAWARE_PVID;
+		netc_port_set_mlo(port, MLO_NOT_OVERRIDE);
+	}
+
+	netc_port_set_pvid(port, port->pvid);
+
+	if (netif_carrier_ok(port->dp->user))
+		stp_state = BR_STATE_FORWARDING;
+	else
+		stp_state = BR_STATE_DISABLED;
+
+	netc_port_stp_state_set(port->dp->ds, port->dp->index, stp_state);
+
+	if (type == NETC_HSR_PORT_A || type == NETC_HSR_PORT_B) {
+		netc_port_set_group(port, NETC_PGID_HSR);
+		netc_port_enable_mac_station_move(port, false);
+
+		pathid = (type == NETC_HSR_PORT_A) ? 0 : 1;
+		is_sr_port = true;
+	} else if (type == NETC_HSR_REDBOX_INTERLINK || type == NETC_HSR_UPPER) {
+		remove_seq_tag = true;
+		isgt_eid = ntmp_lookup_free_eid(priv->ntmp.isgt_eid_bitmap,
+						priv->ntmp.caps.isgt_num_entries);
+
+		if (isgt_eid == NTMP_NULL_ENTRY_ID) {
+			dev_warn(priv->dev, "No ISGT entries available\n");
+			return -ENOSPC;
+		}
+
+		err = netc_add_sequence_generate(priv, isgt_eid, ISGT_SQ_TAG_HSR);
+		if (err)
+			goto clear_isgt_eid;
+
+		err = netc_port_update_vlan_egress_seq_tag(port, port->pvid, true);
+		if (err)
+			goto del_isgt_entries;
+	} else {
+		enable_sdf = false;
+		netc_port_set_group(port, 0);
+		netc_port_enable_mac_station_move(port, true);
+	}
+
+	old_val = netc_port_rd(port, NETC_PSRCR);
+	val = u32_replace_bits(old_val, is_sr_port, PSRCR_SR_PORT);
+	val = u32_replace_bits(val, enable_sdf, PSRCR_SDFA);
+	val = u32_replace_bits(val, remove_seq_tag, PSRCR_TX_SQTA);
+	val = u32_replace_bits(val, pathid, PSRCR_PATHID);
+	val = u32_replace_bits(val, isgt_eid, PSRCR_ISQG_EID);
+	if (old_val != val)
+		netc_port_wr(port, NETC_PSRCR, val);
+
+	isgt_eid_old = FIELD_GET(PSRCR_ISQG_EID, old_val);
+	if (isgt_eid != isgt_eid_old && isgt_eid_old != 0xffff) {
+		ntmp_isgt_delete_entry(&priv->ntmp.cbdrs, isgt_eid_old);
+		ntmp_clear_eid_bitmap(priv->ntmp.isgt_eid_bitmap, isgt_eid_old);
+	}
+
+	port->hsr_type = type;
+
+	return 0;
+
+del_isgt_entries:
+	ntmp_isgt_delete_entry(&priv->ntmp.cbdrs, isgt_eid);
+clear_isgt_eid:
+	ntmp_clear_eid_bitmap(priv->ntmp.isgt_eid_bitmap, isgt_eid);
+
+	return err;
+}
+
+static int netc_port_hsr_join(struct dsa_switch *ds, int port_id,
+			      struct net_device *hsr,
+			      struct netlink_ext_ack *extack)
+{
+	struct net_device *user = dsa_to_port(ds, port_id)->user;
+	struct netc_switch *priv = ds->priv;
+	struct dsa_port *cpu_dp, *hsr_dp;
+	enum netc_hsr_port_type type = 0;
+	struct netc_port *port;
+	enum hsr_version ver;
+	int err;
+
+	err = hsr_get_version(hsr, &ver);
+	if (err)
+		return err;
+
+	if (!(ver == HSR_V0 || ver == HSR_V1)) {
+		NL_SET_ERR_MSG_MOD(extack, "Only HSR v0/1 can be offloaded");
+		return -EOPNOTSUPP;
+	}
+
+	dsa_hsr_foreach_port(hsr_dp, ds, hsr)
+		type++;
+
+	port = priv->ports[port_id];
+	err = netc_port_set_hsr(port, type);
+	if (err)
+		return err;
+
+	if (type == NETC_HSR_PORT_B) {
+		dsa_switch_for_each_cpu_port(cpu_dp, ds) {
+			port = priv->ports[cpu_dp->index];
+			err = netc_port_set_hsr(port, NETC_HSR_UPPER);
+			if (err)
+				goto disable_hsr;
+		}
+	}
+
+	user->features |= NETC_SUPPORTED_HSR_FEATURES;
+
+	return 0;
+
+disable_hsr:
+	netc_port_set_hsr(priv->ports[port_id], NETC_HSR_DISABLED);
+
+	return err;
+}
+
+static int netc_port_hsr_leave(struct dsa_switch *ds, int port_id,
+			       struct net_device *hsr)
+{
+	struct net_device *user = dsa_to_port(ds, port_id)->user;
+	enum netc_hsr_port_type type = NETC_HSR_DISABLED;
+	struct netc_switch *priv = ds->priv;
+	struct dsa_port *cpu_dp, *hsr_dp;
+	struct netc_port *port;
+	int hsr_num = 0;
+
+	user->features &= ~NETC_SUPPORTED_HSR_FEATURES;
+
+	port = priv->ports[port_id];
+	netc_port_set_hsr(port, type);
+
+	dsa_hsr_foreach_port(hsr_dp, ds, hsr)
+		hsr_num++;
+
+	if (!hsr_num) {
+		dsa_switch_for_each_cpu_port(cpu_dp, ds) {
+			port = priv->ports[cpu_dp->index];
+			netc_port_set_hsr(port, type);
+		}
+	}
+
+	return 0;
+}
+
 static int netc_port_bridge_join(struct dsa_switch *ds, int port_id,
 				 struct dsa_bridge bridge,
 				 bool *tx_fwd_offload,
@@ -2410,6 +2669,9 @@ static void netc_mac_link_up(struct phylink_config *config,
 	netc_port_enable_mac_path(port, true);
 	netc_port_update_mm_link_state(port, true);
 
+	if (dp->user->features & NETIF_F_HW_HSR_FWD)
+		netc_port_stp_state_set(dp->ds, dp->index, BR_STATE_FORWARDING);
+
 	netc_port_set_tx_lpi(port, port->eeecfg.tx_lpi_timer,
 						 port->eeecfg.tx_lpi_enabled);
 }
@@ -2426,6 +2688,9 @@ static void netc_mac_link_down(struct phylink_config *config, unsigned int mode,
 	netc_port_enable_mac_path(port, false);
 	netc_port_remove_dynamic_entries(port);
 	netc_port_set_tx_lpi(port, 0, false);
+
+	if (dp->user->features & NETIF_F_HW_HSR_FWD)
+		netc_port_stp_state_set(dp->ds, dp->index, BR_STATE_DISABLED);
 }
 
 static const struct phylink_mac_ops netc_phylink_mac_ops = {
@@ -2478,6 +2743,8 @@ static const struct dsa_switch_ops netc_switch_ops = {
 	.set_mac_eee			= netc_port_set_mac_eee,
 	.resume				= netc_resume,
 	.suspend			= netc_suspend,
+	.port_hsr_join			= netc_port_hsr_join,
+	.port_hsr_leave			= netc_port_hsr_leave,
 };
 
 static int netc_switch_probe(struct pci_dev *pdev, const struct pci_device_id *id)

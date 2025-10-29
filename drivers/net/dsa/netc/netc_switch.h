@@ -113,6 +113,16 @@ struct netc_port_db {
 	int ptp_filter;
 };
 
+enum netc_hsr_port_type {
+	NETC_HSR_DISABLED,
+	NETC_HSR_PORT_A,
+	NETC_HSR_PORT_B,
+	NETC_HSR_REDBOX_INTERLINK,
+	NETC_HSR_UPPER,
+};
+
+#define NETC_PGID_HSR			1
+
 struct netc_switch;
 
 struct netc_port {
@@ -153,6 +163,7 @@ struct netc_port {
 	struct eee_config eeecfg;
 	struct netc_port_db db;
 	struct tc_taprio_qopt_offload *taprio;
+	enum netc_hsr_port_type hsr_type;
 };
 
 enum netc_port_mac {

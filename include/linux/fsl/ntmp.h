@@ -463,6 +463,21 @@ struct ett_cfge_data {
 	__le32 esqa_tgt_eid;
 };
 
+struct isgt_cfge_data {
+	u8 sq_tag;
+#define ISGT_SQ_TAG		GENMASK(2, 0)
+#define  ISGT_SQ_TAG_HSR	0x3
+};
+
+struct isgt_sgse_data {
+	__le16 sg_num;
+};
+
+struct isgt_entry_data {
+	struct isgt_cfge_data cfge;
+	struct isgt_sgse_data sgse;
+};
+
 struct esrt_cfge_data {
 	__le32 sqr_cfg;
 #define ESRT_SQ_TAG		GENMASK(2, 0)
@@ -611,6 +626,7 @@ struct netc_tbl_vers {
 	u8 sgclt_ver;
 	u8 isct_ver;
 	u8 ett_ver;
+	u8 isgt_ver;
 	u8 esrt_ver;
 	u8 ect_ver;
 	u8 fmt_ver;
@@ -656,6 +672,7 @@ struct ntmp_caps {
 	int sgclt_num_words;
 	int ett_num_entries;
 	int ect_num_entries;
+	int isgt_num_entries;
 };
 
 struct ntmp_priv {
@@ -672,6 +689,7 @@ struct ntmp_priv {
 	unsigned long *sgclt_word_bitmap;
 	unsigned long *ett_gid_bitmap;
 	unsigned long *ect_gid_bitmap;
+	unsigned long *isgt_eid_bitmap;
 	u32 ett_bitmap_size;
 	u32 ect_bitmap_size;
 
@@ -863,6 +881,12 @@ int ntmp_fmdt_update_entry(struct netc_cbdrs *cbdrs, u32 entry_id,
 			   u8 *data, u32 data_len);
 int ntmp_fmdt_query_entry(struct netc_cbdrs *cbdrs, u32 entry_id,
 			  u8 *data_buff, u32 data_len);
+int ntmp_isgt_add_or_update_entry(struct netc_cbdrs *cbdrs, u32 entry_id,
+				  bool add, struct isgt_cfge_data *cfge);
+int ntmp_isgt_query_entry(struct netc_cbdrs *cbdrs, u32 entry_id,
+			  struct isgt_entry_data *isgt);
+int ntmp_isgt_delete_entry(struct netc_cbdrs *cbdrs, u32 entry_id);
+
 #else
 static inline void netc_enable_cbdr(struct netc_cbdr *cbdr)
 {
@@ -1168,6 +1192,25 @@ static inline int ntmp_fmdt_query_entry(struct netc_cbdrs *cbdrs, u32 entry_id,
 {
 	return 0;
 }
+
+static inline int ntmp_isgt_add_or_update_entry(struct netc_cbdrs *cbdrs,
+						u32 entry_id, bool add,
+						struct isgt_cfge_data *cfge)
+{
+	return 0;
+}
+
+static inline int ntmp_isgt_query_entry(struct netc_cbdrs *cbdrs, u32 entry_id,
+					struct isgt_entry_data *isgt)
+{
+	return 0;
+}
+
+static inline int ntmp_isgt_delete_entry(struct netc_cbdrs *cbdrs, u32 entry_id)
+{
+	return 0;
+}
+
 #endif
 
 #endif /* ENETC_NTMP_H */

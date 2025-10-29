@@ -451,6 +451,11 @@ struct fmdt_resp_query {
 	u8 data[];
 };
 
+struct isgt_req_ua {
+	struct ntmp_req_by_eid rbe;
+	struct isgt_cfge_data cfge;
+};
+
 #pragma pack()
 
 struct tgst_query_data {
@@ -467,6 +472,13 @@ struct tgst_query_data {
 	__le16 oper_cl_len;
 	struct tgst_ge olse_ge[TGST_MAX_ENTRY_NUM];
 	struct tgst_ge cfge_ge[TGST_MAX_ENTRY_NUM];
+};
+
+struct isgt_resp_query {
+	__le32 entry_id;
+	struct isgt_cfge_data cfge;
+	u8 resv;
+	struct isgt_sgse_data sgse;
 };
 
 u32 ntmp_lookup_free_words(unsigned long *bitmap, u32 bitmap_size,

@@ -2133,14 +2133,13 @@ static int netc_add_sequence_generate(struct netc_switch *priv, u32 entry_id,
 	return ntmp_isgt_add_or_update_entry(cbdrs, entry_id, true, &cfge);
 }
 
-static int netc_port_set_hsr(struct netc_port *port, enum netc_hsr_port_type type)
+int netc_port_set_hsr(struct netc_port *port, enum netc_port_hsr_type type)
 {
 	struct netc_switch *priv = port->switch_priv;
 	bool remove_seq_tag = false;
 	bool is_sr_port = false;
 	bool enable_sdf = true;
 	u32 isgt_eid = 0xffff;
-	u32 isgt_eid_old;
 	u32 val, old_val;
 	u8 pathid = 0;
 	u8 stp_state;
@@ -2150,10 +2149,25 @@ static int netc_port_set_hsr(struct netc_port *port, enum netc_hsr_port_type typ
 		netc_port_del_vlan_entry(port, NETC_VLAN_UNAWARE_PVID);
 		port->pvid = NETC_STANDALONE_PVID;
 		netc_port_set_mlo(port, MLO_DISABLE);
+
+		if (port->hsr_data.isgt_eid != 0xffff) {
+			ntmp_isgt_delete_entry(&priv->ntmp.cbdrs,
+					       port->hsr_data.isgt_eid);
+			ntmp_clear_eid_bitmap(priv->ntmp.isgt_eid_bitmap,
+					      port->hsr_data.isgt_eid);
+			port->hsr_data.isgt_eid = 0xffff;
+		}
 	} else {
 		err = netc_port_set_vlan_entry(port, NETC_VLAN_UNAWARE_PVID, false);
 		if (err)
 			return err;
+
+		/* Clean the ISGT_EID bitmap when switch is resumed. */
+		if (port->hsr_data.isgt_eid != 0xffff) {
+			ntmp_clear_eid_bitmap(priv->ntmp.isgt_eid_bitmap,
+					      port->hsr_data.isgt_eid);
+			port->hsr_data.isgt_eid = 0xffff;
+		}
 
 		port->pvid = NETC_VLAN_UNAWARE_PVID;
 		netc_port_set_mlo(port, MLO_NOT_OVERRIDE);
@@ -2206,13 +2220,8 @@ static int netc_port_set_hsr(struct netc_port *port, enum netc_hsr_port_type typ
 	if (old_val != val)
 		netc_port_wr(port, NETC_PSRCR, val);
 
-	isgt_eid_old = FIELD_GET(PSRCR_ISQG_EID, old_val);
-	if (isgt_eid != isgt_eid_old && isgt_eid_old != 0xffff) {
-		ntmp_isgt_delete_entry(&priv->ntmp.cbdrs, isgt_eid_old);
-		ntmp_clear_eid_bitmap(priv->ntmp.isgt_eid_bitmap, isgt_eid_old);
-	}
-
-	port->hsr_type = type;
+	port->hsr_data.type = type;
+	port->hsr_data.isgt_eid = isgt_eid;
 
 	return 0;
 
@@ -2231,7 +2240,7 @@ static int netc_port_hsr_join(struct dsa_switch *ds, int port_id,
 	struct net_device *user = dsa_to_port(ds, port_id)->user;
 	struct netc_switch *priv = ds->priv;
 	struct dsa_port *cpu_dp, *hsr_dp;
-	enum netc_hsr_port_type type = 0;
+	enum netc_port_hsr_type type = 0;
 	struct netc_port *port;
 	enum hsr_version ver;
 	int err;
@@ -2276,7 +2285,7 @@ static int netc_port_hsr_leave(struct dsa_switch *ds, int port_id,
 			       struct net_device *hsr)
 {
 	struct net_device *user = dsa_to_port(ds, port_id)->user;
-	enum netc_hsr_port_type type = NETC_HSR_DISABLED;
+	enum netc_port_hsr_type type = NETC_HSR_DISABLED;
 	struct netc_switch *priv = ds->priv;
 	struct dsa_port *cpu_dp, *hsr_dp;
 	struct netc_port *port;

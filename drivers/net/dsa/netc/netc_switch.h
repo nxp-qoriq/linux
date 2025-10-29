@@ -113,7 +113,7 @@ struct netc_port_db {
 	int ptp_filter;
 };
 
-enum netc_hsr_port_type {
+enum netc_port_hsr_type {
 	NETC_HSR_DISABLED,
 	NETC_HSR_PORT_A,
 	NETC_HSR_PORT_B,
@@ -124,6 +124,11 @@ enum netc_hsr_port_type {
 #define NETC_PGID_HSR			1
 
 struct netc_switch;
+
+struct netc_port_hsr_data {
+	enum netc_port_hsr_type type;
+	u32 isgt_eid;
+};
 
 struct netc_port {
 	struct netc_switch *switch_priv;
@@ -163,7 +168,7 @@ struct netc_port {
 	struct eee_config eeecfg;
 	struct netc_port_db db;
 	struct tc_taprio_qopt_offload *taprio;
-	enum netc_hsr_port_type hsr_type;
+	struct netc_port_hsr_data hsr_data;
 };
 
 enum netc_port_mac {
@@ -341,6 +346,8 @@ bool netc_port_rxtstamp(struct dsa_switch *ds, int port,
 void netc_port_txtstamp(struct dsa_switch *ds, int port_id,
 			struct sk_buff *skb);
 int netc_port_set_ptp_filter(struct netc_port *port, int ptp_filter);
+
+int netc_port_set_hsr(struct netc_port *port, enum netc_port_hsr_type type);
 
 /* Power Management */
 int netc_suspend(struct dsa_switch *ds);

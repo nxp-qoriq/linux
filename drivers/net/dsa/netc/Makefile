@@ -3,3 +3,6 @@ obj-$(CONFIG_NET_DSA_NETC_SWITCH) += nxp-netc-switch.o
 nxp-netc-switch-objs := netc_main.o netc_platform.o netc_tc.o \
 			netc_ethtool.o netc_ptp.o netc_pm.o
 nxp-netc-switch-$(CONFIG_DEBUG_FS) += netc_debugfs.o
+
+ccflags-y += -I $(src)/../../ethernet/freescale/enetc/
+obj-$(CONFIG_NET_DSA_NETC_SWITCH_FM) += netc_fm.o

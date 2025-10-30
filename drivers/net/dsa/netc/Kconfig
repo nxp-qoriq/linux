@@ -20,3 +20,14 @@ config NET_DSA_NETC_SWITCH_CTF
 	help
 	  Say Y to enable the cut-through forwarding on all ports of the switch.
 
+config NET_DSA_NETC_SWITCH_FM
+	tristate "Support NETC Switch Frame Modification"
+	default m
+	depends on NET_DSA_NETC_SWITCH
+	help
+	  This driver supports the frame modification feature via NTMP. It is a
+	  special feature of NXP NETC Ethernet switch. This feature can modify
+	  the passing network packets on the fly. It also supports the OPC UA
+	  PUBSUB summation.
+
+	  Refer to Frame Modification Table in NETC reference manual.

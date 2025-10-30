@@ -451,6 +451,7 @@ struct vft_cfge_data {
 struct ett_cfge_data {
 	__le16 efm_cfg;
 #define	ETT_EFM_MODE		GENMASK(1, 0)
+#define  ETT_EFM_MODE_INSERT	(3)
 #define ETT_ESQA		GENMASK(5, 4)
 #define ETT_ECA			GENMASK(8, 6)
 #define ETT_ECA_INC		1
@@ -534,6 +535,7 @@ struct fmt_cfge_data {
 #define FMT_OUTER_PCP_ACT	GENMASK(5, 3)
 #define FMT_OUTER_DEI_ACT	GENMASK(7, 6)
 #define FMT_PLD_ACT		GENMASK(10, 8)
+#define  FMT_PLD_ACT_INSERT_DATASETMSG	(5)
 #define FMT_OPCUA_MSG_CNT	GENMASK(15, 11)
 	__le16 pld_offset;
 	__le16 opcua_fms;
@@ -676,6 +678,8 @@ struct ntmp_caps {
 	int ett_num_entries;
 	int ect_num_entries;
 	int isgt_num_entries;
+	int fmt_num_entries;
+	int fmdt_num_blocks;
 };
 
 struct ntmp_priv {
@@ -695,6 +699,8 @@ struct ntmp_priv {
 	unsigned long *isgt_eid_bitmap;
 	u32 ett_bitmap_size;
 	u32 ect_bitmap_size;
+	unsigned long *fmt_eid_bitmap;
+	unsigned long *fmdt_eid_bitmap;
 
 	struct hlist_head flower_list;
 	struct mutex flower_lock; /* flower_list lock */

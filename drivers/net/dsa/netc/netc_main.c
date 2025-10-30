@@ -505,6 +505,12 @@ static void netc_get_ntmp_capabilities(struct netc_switch *priv)
 
 	val = netc_base_rd(regs, NETC_ISQGITCAPR);
 	ntmp->caps.isgt_num_entries = NETC_GET_NUM_ENTRIES(val);
+
+	val = netc_base_rd(regs, NETC_FMITCAPR);
+	ntmp->caps.fmt_num_entries = NETC_GET_NUM_ENTRIES(val);
+
+	val = netc_base_rd(regs, NETC_FMDITCAPR);
+	ntmp->caps.fmdt_num_blocks = NETC_GET_NUM_WORDS(val);
 }
 
 static int netc_init_ntmp_bitmaps(struct netc_switch *priv)
@@ -551,8 +557,23 @@ static int netc_init_ntmp_bitmaps(struct netc_switch *priv)
 	if (!ntmp->isgt_eid_bitmap)
 		goto free_sgclt_word_bitmap;
 
+	ntmp->fmt_eid_bitmap = bitmap_zalloc(ntmp->caps.fmt_num_entries, GFP_KERNEL);
+	if (!ntmp->fmt_eid_bitmap)
+		goto free_isgt_eid_bitmap;
+
+	/* one bit one block; one block has 24 bytes */
+	ntmp->fmdt_eid_bitmap = bitmap_zalloc(ntmp->caps.fmdt_num_blocks, GFP_KERNEL);
+	if (!ntmp->fmdt_eid_bitmap)
+		goto free_fmt_eid_bitmap;
+
 	return 0;
 
+free_fmt_eid_bitmap:
+	bitmap_free(ntmp->fmt_eid_bitmap);
+	ntmp->fmt_eid_bitmap = NULL;
+free_isgt_eid_bitmap:
+	bitmap_free(ntmp->isgt_eid_bitmap);
+	ntmp->isgt_eid_bitmap = NULL;
 free_sgclt_word_bitmap:
 	bitmap_free(ntmp->sgclt_word_bitmap);
 	ntmp->sgclt_word_bitmap = NULL;

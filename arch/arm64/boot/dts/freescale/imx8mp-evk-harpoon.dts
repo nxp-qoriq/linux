@@ -35,6 +35,10 @@
 	status = "disabled";
 };
 
+&mu2 {
+	status = "disabled";
+};
+
 &audio_blk_ctrl {
 	status = "disabled";
 };

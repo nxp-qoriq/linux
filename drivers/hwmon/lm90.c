@@ -168,6 +168,10 @@ enum chips { lm90, adm1032, lm99, lm86, max6657, max6659, adt7461, max6680,
 #define SA56004_REG_R_LOCAL_TEMPL 0x22
 
 #define LM90_MAX_CONVRATE_MS	16000	/* Maximum conversion rate in ms */
+#define KELVIN_OFFSET 273
+#define SCALE_NUM 1008
+#define SCALE_DEN 1022
+
 
 /* TMP451/TMP461 registers */
 #define TMP451_REG_R_LOCAL_TEMPL	0x15
@@ -1023,26 +1027,25 @@ static ssize_t pec_store(struct device *dev, struct device_attribute *dummy,
 
 static DEVICE_ATTR_RW(pec);
 
-#define SA56004X_ADJUST_TEMP_WRITE(temp) \
-   (({ \
-       long long t = (long long)(temp) / 1000 + CONFIG_SERIES_DIODE_RESISTANCE_PARAM + 273; \
-       long long r = (t * 1022 - 273 * 1008) * 1000 / 1008; \
-       long long offset = (r >= 0) ? 500 : -500; \
-       ((r + offset) / 1000) * 1000; \
-   }))
+static long sa56004_reverse_diode_adjustment(long temp_millic)
+{
+    /* Convert adjusted threshold back to raw value for hardware */
+    long temp_k = temp_millic / 1000 + KELVIN_OFFSET; /* Kelvin */
+    long raw_temp_k = DIV_ROUND_CLOSEST((temp_k + CONFIG_SERIES_DIODE_RESISTANCE_PARAM) * 1022, SCALE_NUM);
+    return (raw_temp_k - KELVIN_OFFSET) * 1000;
+}
 
-#define SA56004X_ADJUST_TEMP_THR_READ(temp) \
-   (({ \
-       long long t = (long long)(temp) / 1000 + 273; \
-       long long r = (t * 1008 - 273 * 1022) * 1000 / 1022 - CONFIG_SERIES_DIODE_RESISTANCE_PARAM * 1000; \
-       long long offset = (r >= 0) ? 500 : -500; \
-       ((r + offset) / 1000) * 1000; \
-   }))
+static long sa56004_apply_diode_adjustment(long temp_millic)
+{
+    /* Apply diode adjustment for temperature readings */
+    long temp_k = (temp_millic / 1000) - CONFIG_SERIES_DIODE_RESISTANCE_PARAM + KELVIN_OFFSET;
+    long adjusted_k = DIV_ROUND_CLOSEST(temp_k * SCALE_NUM, SCALE_DEN);
+    return (adjusted_k - KELVIN_OFFSET) * 1000 + (temp_millic % 1000);
+}
 
 static int adjust_temp_diode(int temp)
 {
-	return (((((temp / 1000) - CONFIG_SERIES_DIODE_RESISTANCE_PARAM + 273) *
-				1008 / 1022) - 273) * 1000 + (temp % 1000));
+	return sa56004_apply_diode_adjustment(temp);
 }
 
 static int lm90_get_temp11(struct lm90_data *data, int index)
@@ -1061,9 +1064,10 @@ static int lm90_get_temp11(struct lm90_data *data, int index)
 	if (data->kind == lm99 && index <= 2)
 		temp += 16000;
 
-	if (index == REMOTE_TEMP || index == REMOTE2_TEMP) {
+	/* Apply diode adjustment for SA56004 remote temperature readings */
+	if (data->kind == sa56004 && (index == REMOTE_TEMP || index == REMOTE2_TEMP)) {
 		temp = adjust_temp_diode(temp);
-  }
+	}
 
 	return temp;
 }
@@ -1090,13 +1094,12 @@ static int lm90_set_temp11(struct lm90_data *data, int index, long val)
 		val = max(val, -128000l);
 		val -= 16000;
 	}
-
-	if ( data->kind == sa56004 )
-		if ( index == LOCAL_LOW || index == REMOTE_LOW || index == REMOTE2_LOW
-			||index == LOCAL_HIGH || index == REMOTE_HIGH || index == REMOTE2_HIGH
-			||index == LOCAL_CRIT || index == REMOTE_CRIT || index == REMOTE2_CRIT )
-				val = SA56004X_ADJUST_TEMP_WRITE(val);
-
+	/* For SA56004 remote thresholds, reverse the diode adjustment */
+	if (data->kind == sa56004) {
+		if (index == REMOTE_LOW || index == REMOTE_HIGH || index == REMOTE2_LOW || index == REMOTE2_HIGH) {
+			val = sa56004_reverse_diode_adjustment(val);
+		}
+	}
 	if (data->flags & LM90_HAVE_EXTENDED_TEMP)
 		data->temp11[index] = temp_to_u16_adt7461(data, val);
 	else if (data->kind == max6646)
@@ -1160,12 +1163,12 @@ static int lm90_set_temp8(struct lm90_data *data, int index, long val)
 		val -= 16000;
 	}
 
-	if ( data->kind == sa56004 )
-		if ( index == LOCAL_LOW || index == REMOTE_LOW || index == REMOTE2_LOW
-			||index == LOCAL_HIGH || index == REMOTE_HIGH || index == REMOTE2_HIGH
-			||index == LOCAL_CRIT || index == REMOTE_CRIT || index == REMOTE2_CRIT )
-				val = SA56004X_ADJUST_TEMP_WRITE(val);
-
+	/* For SA56004 remote critical thresholds, reverse the diode adjustment */
+	if (data->kind == sa56004) {
+		if (index == REMOTE_CRIT || index == REMOTE2_CRIT) {
+			val = sa56004_reverse_diode_adjustment(val);
+		}
+	}
 	if (data->flags & LM90_HAVE_EXTENDED_TEMP)
 		data->temp8[index] = temp_to_u8_adt7461(data, val);
 	else if (data->kind == max6646)
@@ -1247,10 +1250,10 @@ static const u8 lm90_crit_alarm_bits_swapped[3] = { 1, 0, 9 };
 static const u8 lm90_emergency_alarm_bits[3] = { 15, 13, 14 };
 static const u8 lm90_fault_bits[3] = { 0, 2, 10 };
 
+
 static int lm90_temp_read(struct device *dev, u32 attr, int channel, long *val)
 {
 	struct lm90_data *data = dev_get_drvdata(dev);
-	long current_temp, low_temp, high_temp, crit_temp;
 	int err;
 
 	mutex_lock(&data->update_lock);
@@ -1264,56 +1267,16 @@ static int lm90_temp_read(struct device *dev, u32 attr, int channel, long *val)
 		*val = lm90_get_temp11(data, lm90_temp_index[channel]);
 		break;
 	case hwmon_temp_min_alarm:
-		// For SA56004 sensor, compare current temperature with adjusted min threshold
-		if (data->kind == sa56004) {
-			current_temp = lm90_get_temp11(data, lm90_temp_index[channel]); 
-			if (channel == 0) {
-				low_temp = SA56004X_ADJUST_TEMP_THR_READ(
-						temp_from_s8(data->temp8[lm90_temp_min_index[channel]])
-						);
-			} else {
-				low_temp = SA56004X_ADJUST_TEMP_THR_READ(
-						temp_from_s16(data->temp11[lm90_temp_min_index[channel]])
-						);
-			} 
-			*val = (current_temp < low_temp) ? 1 : 0;
-		} else {
-			*val = (data->alarms >> lm90_min_alarm_bits[channel]) & 1;
-		}
+		*val = (data->alarms >> lm90_min_alarm_bits[channel]) & 1;
 		break;
-
 	case hwmon_temp_max_alarm:
-		// For SA56004 sensor, compare current temperature with adjusted max threshold
-		if (data->kind == sa56004) {
-			current_temp = lm90_get_temp11(data, lm90_temp_index[channel]); 
-			if (channel == 0) {
-				high_temp = SA56004X_ADJUST_TEMP_THR_READ(
-						temp_from_s8(data->temp8[lm90_temp_max_index[channel]])
-						);
-			} else {
-				high_temp = SA56004X_ADJUST_TEMP_THR_READ(
-						temp_from_s16(data->temp11[lm90_temp_max_index[channel]])
-						);
-			} 
-			*val = (current_temp > high_temp) ? 1 : 0;
-		} else {
-			*val = (data->alarms >> lm90_max_alarm_bits[channel]) & 1;
-		}
+		*val = (data->alarms >> lm90_max_alarm_bits[channel]) & 1;
 		break;
 	case hwmon_temp_crit_alarm:
-		// For SA56004 sensor, compare current temperature with adjusted critical threshold
-		if (data->kind == sa56004) {
-			current_temp = lm90_get_temp11(data, lm90_temp_index[channel]);
-			crit_temp = SA56004X_ADJUST_TEMP_THR_READ(
-					temp_from_s8(data->temp8[lm90_temp_crit_index[channel]])
-					);
-			*val = (current_temp >= crit_temp) ? 1 : 0;
-		} else {
-			if (data->flags & LM90_HAVE_CRIT_ALRM_SWP)
-				*val = (data->alarms >> lm90_crit_alarm_bits_swapped[channel]) & 1;
-			else
-				*val = (data->alarms >> lm90_crit_alarm_bits[channel]) & 1;
-		}
+		if (data->flags & LM90_HAVE_CRIT_ALRM_SWP)
+			*val = (data->alarms >> lm90_crit_alarm_bits_swapped[channel]) & 1;
+		else
+			*val = (data->alarms >> lm90_crit_alarm_bits[channel]) & 1;
 		break;
 	case hwmon_temp_emergency_alarm:
 		*val = (data->alarms >> lm90_emergency_alarm_bits[channel]) & 1;
@@ -1323,42 +1286,41 @@ static int lm90_temp_read(struct device *dev, u32 attr, int channel, long *val)
 		break;
 	case hwmon_temp_min:
 		if (channel == 0) {
-			if (data->kind == sa56004) {
-				*val = SA56004X_ADJUST_TEMP_THR_READ(
-						lm90_get_temp8(data, lm90_temp_min_index[channel]));
-			} else {
-				*val = lm90_get_temp8(data, lm90_temp_min_index[channel]);
-			}
+			*val = lm90_get_temp8(data, lm90_temp_min_index[channel]);
 		} else {
-			if ( data->kind == sa56004 )
-				*val = SA56004X_ADJUST_TEMP_THR_READ(lm90_get_temp11(data,
-							lm90_temp_min_index[channel]));
-			else
+			/* For SA56004 remote thresholds, apply adjustment when reading */
+			if (data->kind == sa56004) {
+				s16 raw_temp = data->temp11[lm90_temp_min_index[channel]];
+				int temp = temp_from_s16(raw_temp);
+				*val = adjust_temp_diode(temp);
+			} else {
 				*val = lm90_get_temp11(data, lm90_temp_min_index[channel]);
+			}
 		}
 		break;
 	case hwmon_temp_max:
 		if (channel == 0) {
-			if (data->kind == sa56004) {
-				*val = SA56004X_ADJUST_TEMP_THR_READ(
-						lm90_get_temp8(data, lm90_temp_max_index[channel]));
-			} else {
-				*val = lm90_get_temp8(data, lm90_temp_max_index[channel]);
-			}
+			*val = lm90_get_temp8(data, lm90_temp_max_index[channel]);
 		} else {
-			if ( data->kind == sa56004 ){
-				*val = SA56004X_ADJUST_TEMP_THR_READ(lm90_get_temp11(data,
-					lm90_temp_max_index[channel]));
-				}
-			else
+			/* For SA56004 remote thresholds, apply adjustment when reading */
+			if (data->kind == sa56004) {
+				s16 raw_temp = data->temp11[lm90_temp_max_index[channel]];
+				int temp = temp_from_s16(raw_temp);
+				*val = adjust_temp_diode(temp);
+			} else {
 				*val = lm90_get_temp11(data, lm90_temp_max_index[channel]);
+			}
 		}
 		break;
 	case hwmon_temp_crit:
-		if ( data->kind == sa56004 )
-			*val = SA56004X_ADJUST_TEMP_THR_READ(lm90_get_temp8(data, lm90_temp_crit_index[channel]));
-        else
+		/* For SA56004 remote critical thresholds, apply adjustment when reading */
+		if (data->kind == sa56004 && channel > 0) {
+			s8 raw_temp = data->temp8[lm90_temp_crit_index[channel]];
+			int temp = temp_from_s8(raw_temp);
+			*val = adjust_temp_diode(temp);
+		} else {
 			*val = lm90_get_temp8(data, lm90_temp_crit_index[channel]);
+		}
 		break;
 	case hwmon_temp_crit_hyst:
 		*val = lm90_get_temphyst(data, lm90_temp_crit_index[channel]);

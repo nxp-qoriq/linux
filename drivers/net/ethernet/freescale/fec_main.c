@@ -1460,6 +1460,12 @@ static void fec_ctrl_reset(struct fec_enet_private *fep, bool allow_wol)
 	u32 val;
 
 	if (!allow_wol || !(fep->wol_flag & FEC_WOL_FLAG_SLEEP_ON)) {
+#ifdef CONFIG_AVB_SUPPORT
+		/* Always use disable MAC instead of MAC reset to
+		 * keep the ENET 1588 counter running
+		 */
+		writel(0, fep->hwp + FEC_ECNTRL);
+#else
 		if (fep->quirks & FEC_QUIRK_HAS_MULTI_QUEUES ||
 		    ((fep->quirks & FEC_QUIRK_NO_HARD_RESET) && fep->link)) {
 			writel(0, fep->hwp + FEC_ECNTRL);
@@ -1467,6 +1473,7 @@ static void fec_ctrl_reset(struct fec_enet_private *fep, bool allow_wol)
 			writel(FEC_ECR_RESET, fep->hwp + FEC_ECNTRL);
 			udelay(10);
 		}
+#endif
 	} else {
 		val = readl(fep->hwp + FEC_ECNTRL);
 		val |= (FEC_ECR_MAGICEN | FEC_ECR_SLEEP);
@@ -1487,17 +1494,12 @@ fec_restart(struct net_device *ndev)
 	u32 rcntl = OPT_FRAME_SIZE | 0x04;
 	u32 ecntl = FEC_ECR_ETHEREN;
 
+#ifndef CONFIG_AVB_SUPPORT
 	if (fep->bufdesc_ex)
 		fec_ptp_save_state(fep);
+#endif
 
 	fec_ctrl_reset(fep, false);
-
-	/* Always use disable MAC instead of MAC reset to:
-	 *    - Keep the ENET counter running
-	 *    - Avoid dead system bus for SoCs using the ENET-AXI bus
-	 *      and not the AHB bus, like the i.MX6SX
-	 */
-	writel(0, fep->hwp + FEC_ECNTRL);
 
 	/*
 	 * enet-mac reset will reset mac address registers too,
@@ -1654,10 +1656,12 @@ fec_restart(struct net_device *ndev)
 	writel(ecntl, fep->hwp + FEC_ECNTRL);
 	fec_enet_active_rxring(ndev);
 
+#ifndef CONFIG_AVB_SUPPORT
 	if (fep->bufdesc_ex) {
 		fec_ptp_start_cyclecounter(ndev);
 		fec_ptp_restore_state(fep);
 	}
+#endif
 
 	/* Enable interrupts we wish to service */
 	if (fep->link)
@@ -1738,7 +1742,6 @@ fec_stop(struct net_device *ndev)
 {
 	struct fec_enet_private *fep = netdev_priv(ndev);
 	u32 rmii_mode = readl(fep->hwp + FEC_R_CNTRL) & FEC_RCR_RMII;
-	u32 val;
 
 	/* We cannot expect a graceful transmit stop without link !!! */
 	if (fep->link) {
@@ -1748,27 +1751,12 @@ fec_stop(struct net_device *ndev)
 			netdev_err(ndev, "Graceful transmit stop did not complete!\n");
 	}
 
+#ifndef CONFIG_AVB_SUPPORT
 	if (fep->bufdesc_ex)
 		fec_ptp_save_state(fep);
+#endif
 
 	fec_ctrl_reset(fep, true);
-
-	/* Whack a reset.  We should wait for this.
-	 * For i.MX6SX SOC, enet use AXI bus, we use disable MAC
-	 * instead of reset MAC itself.
-	 */
-	if (!(fep->wol_flag & FEC_WOL_FLAG_SLEEP_ON)) {
-		/* Always use disable MAC instead of MAC reset to:
-		 *    - Keep the ENET counter running
-		 *    - Avoid dead system bus for SoCs using the ENET-AXI bus
-		 *      and not the AHB bus, like the i.MX6SX
-		 */
-		writel(0, fep->hwp + FEC_ECNTRL);
-	} else {
-		val = readl(fep->hwp + FEC_ECNTRL);
-		val |= (FEC_ECR_MAGICEN | FEC_ECR_SLEEP);
-		writel(val, fep->hwp + FEC_ECNTRL);
-	}
 
 	writel(fep->phy_speed, fep->hwp + FEC_MII_SPEED);
 	writel(FEC_DEFAULT_IMASK, fep->hwp + FEC_IMASK);
@@ -1780,7 +1768,10 @@ fec_stop(struct net_device *ndev)
 		writel(rmii_mode, fep->hwp + FEC_R_CNTRL);
 	}
 
+#ifndef CONFIG_AVB_SUPPORT
 	if (fep->bufdesc_ex) {
+		u32 val;
+
 		val = readl(fep->hwp + FEC_ECNTRL);
 		val |= FEC_ECR_EN1588;
 		writel(val, fep->hwp + FEC_ECNTRL);
@@ -1788,6 +1779,7 @@ fec_stop(struct net_device *ndev)
 		fec_ptp_start_cyclecounter(ndev);
 		fec_ptp_restore_state(fep);
 	}
+#endif
 }
 
 static void

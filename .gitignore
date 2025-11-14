@@ -51,6 +51,7 @@
 *.tar
 *.xz
 *.zst
+*.builtin
 Module.symvers
 dtbs-list
 modules.order

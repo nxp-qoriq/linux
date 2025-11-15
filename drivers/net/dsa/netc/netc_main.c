@@ -811,11 +811,12 @@ static void netc_port_set_tc_max_sdu(struct netc_port *port,
 
 void netc_port_set_all_tc_msdu(struct netc_port *port, u32 *max_sdu)
 {
-	u32 msdu = NETC_MAX_FRAME_LEN;
 	int tc;
 
 	for (tc = 0; tc < NETC_TC_NUM; tc++) {
-		if (max_sdu)
+		u32 msdu = NETC_MAX_FRAME_LEN;
+
+		if (max_sdu && max_sdu[tc])
 			msdu = max_sdu[tc] + VLAN_ETH_HLEN;
 
 		netc_port_set_tc_max_sdu(port, tc, msdu);

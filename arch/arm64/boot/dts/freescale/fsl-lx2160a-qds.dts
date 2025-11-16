@@ -2,7 +2,7 @@
 //
 // Device Tree file for LX2160AQDS
 //
-// Copyright 2018 NXP
+// Copyright 2018,2025 NXP
 
 /dts-v1/;
 
@@ -185,6 +185,18 @@
 };
 
 &dpmac18 {
+	phy-handle = <&rgmii_phy2>;
+	phy-connection-type = "rgmii-id";
+};
+
+&dpmac17 {
+	status = "okay";
+	phy-handle = <&rgmii_phy1>;
+	phy-connection-type = "rgmii-id";
+};
+
+&dpmac18 {
+	status = "okay";
 	phy-handle = <&rgmii_phy2>;
 	phy-connection-type = "rgmii-id";
 };

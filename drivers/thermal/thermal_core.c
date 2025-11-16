@@ -401,9 +401,36 @@ static void thermal_zone_device_halt(struct thermal_zone_device *tz, bool shutdo
 		hw_protection_reboot(msg, poweroff_delay_ms);
 }
 
+#ifdef CONFIG_THERMAL_CRITICAL_REBOOT
+static const char reboot_cmd[] = "/sbin/reboot";
+static int is_fs_mounted(const char *cmd)
+{
+	char **argv;
+	static char *envp[] = {
+		"HOME=/",
+		"PATH=/sbin:/bin:/usr/sbin:/usr/bin",
+		NULL
+	};
+	int ret;
+	argv = argv_split(GFP_KERNEL, cmd, NULL);
+	if (argv) {
+		ret = call_usermodehelper(argv[0], argv, envp, UMH_WAIT_EXEC);
+		argv_free(argv);
+	} else {
+		ret = -ENOMEM;
+	}
+
+	return ret;
+}
+#endif
+
 void thermal_zone_device_critical(struct thermal_zone_device *tz)
 {
 	thermal_zone_device_halt(tz, true);
+#ifdef CONFIG_THERMAL_CRITICAL_REBOOT
+	if (is_fs_mounted(reboot_cmd));
+	emergency_restart();
+#endif
 }
 EXPORT_SYMBOL(thermal_zone_device_critical);
 

@@ -49,6 +49,11 @@ config THERMAL_CORE_TESTING
 	  with trip points in order to exercise the thermal core
 	  functionality in a controlled way.
 
+config THERMAL_CRITICAL_REBOOT
+  bool "Thermal critical temperature reboot"
+  help
+    Reboot the system if critical temperature reaches.
+
 config THERMAL_EMERGENCY_POWEROFF_DELAY_MS
 	int "Emergency poweroff delay in milli-seconds"
 	default 0

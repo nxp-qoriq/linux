@@ -1245,6 +1245,8 @@ static int imx_rproc_detect_mode(struct imx_rproc *priv)
 	struct regmap *regmap;
 	struct arm_smccc_res res;
 	bool started = false;
+	unsigned int cpu;
+	int cpu_aff;
 	int ret;
 	u32 val;
 	u8 pt;
@@ -1294,9 +1296,6 @@ static int imx_rproc_detect_mode(struct imx_rproc *priv)
 		priv->rproc->state = RPROC_DETACHED;
 		return 0;
 	case IMX_RPROC_PSCI:
-		unsigned int cpu;
-		int cpu_aff;
-
 		priv->rproc->state = RPROC_DETACHED;
 		for_each_cpu(cpu, &priv->cpus) {
 			cpu_aff = psci_ops.affinity_info(cpu_logical_map(cpu), 0);

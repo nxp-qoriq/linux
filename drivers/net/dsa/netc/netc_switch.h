@@ -63,6 +63,9 @@
 
 #define NETC_MM_VERIFY_RETRIES		3
 
+#define NETC_PTP_RX_TSTAMP_SLOTS	512
+#define NETC_PTP_RX_TSTAMP_MASK		(NETC_PTP_RX_TSTAMP_SLOTS - 1)
+
 /* Software defined host reason */
 #define NETC_HR_TRAP			0x8
 
@@ -98,6 +101,11 @@ enum netc_ptp_type {
 	NETC_PTP_L4_IPV6_EVENT,
 	NETC_PTP_L4_IPV6_GENERAL,
 	NETC_PTP_MAX,
+};
+
+struct netc_ptp_rx_tstamp {
+	u64 tstamp_sync;
+	u64 tstamp_free;
 };
 
 struct netc_port_db {
@@ -164,6 +172,10 @@ struct netc_port {
 	struct sk_buff_head skb_txtstamp_queue;
 	int ptp_filter;
 	u32 ptp_ipft_eid[NETC_PTP_MAX];
+	/* RX timestamp ring lock */
+	spinlock_t rx_ts_lock;
+	u32 rx_ts_head;
+	struct netc_ptp_rx_tstamp rx_tstamps[NETC_PTP_RX_TSTAMP_SLOTS];
 
 	struct eee_config eeecfg;
 	struct netc_port_db db;
@@ -208,6 +220,7 @@ struct netc_switch {
 	struct device *dev;
 	struct dsa_switch *ds;
 	u16 revision;
+	struct pci_dev *timer_pdev;
 
 	const struct netc_switch_info *info;
 	struct netc_switch_regs regs;
@@ -348,6 +361,10 @@ void netc_port_txtstamp(struct dsa_switch *ds, int port_id,
 int netc_port_set_ptp_filter(struct netc_port *port, int ptp_filter);
 
 int netc_port_set_hsr(struct netc_port *port, enum netc_port_hsr_type type);
+
+ktime_t netc_get_tstamp(struct dsa_switch *ds,
+			const struct skb_shared_hwtstamps *hwtstamps,
+			bool cycles);
 
 /* Power Management */
 int netc_suspend(struct dsa_switch *ds);

@@ -14,13 +14,12 @@ int netc_get_ts_info(struct dsa_switch *ds, int port_id,
 		     struct kernel_ethtool_ts_info *info)
 {
 	struct netc_switch *priv = NETC_PRIV(ds);
-	u32 devfn = priv->info->tmr_devfn;
-	u32 bus = priv->pdev->bus->number;
 	struct pci_dev *tmr_pdev;
-	int domain;
 
-	domain = pci_domain_nr(priv->pdev->bus);
-	tmr_pdev = pci_get_domain_bus_and_slot(domain, bus, devfn);
+	tmr_pdev = netc_switch_get_timer(priv);
+	if (!tmr_pdev)
+		return -ENODEV;
+
 	info->phc_index = netc_timer_get_phc_index(tmr_pdev);
 
 	info->so_timestamping |= SOF_TIMESTAMPING_TX_SOFTWARE |
@@ -406,13 +405,49 @@ static int netc_port_txtstamp_twostep(struct netc_port *port,
 	return 0;
 }
 
+static struct netc_ptp_rx_tstamp *netc_port_next_rx_tstamp(struct netc_port *port)
+{
+	struct netc_ptp_rx_tstamp *entry;
+	unsigned int idx;
+
+	spin_lock(&port->rx_ts_lock);
+	idx = port->rx_ts_head++ & NETC_PTP_RX_TSTAMP_MASK;
+	entry = &port->rx_tstamps[idx];
+	spin_unlock(&port->rx_ts_lock);
+
+	return entry;
+}
+
 bool netc_port_rxtstamp(struct dsa_switch *ds, int port,
 			struct sk_buff *skb, unsigned int type)
 {
+	struct netc_switch *priv = NETC_PRIV(ds);
 	struct skb_shared_hwtstamps *hwtstamps = skb_hwtstamps(skb);
-	u64 ts = NETC_SKB_CB(skb)->tstamp;
+	struct netc_ptp_rx_tstamp *entry;
+	struct netc_port *netc_port;
+	struct pci_dev *tmr_pdev;
+	u64 ts_sync, ts_free;
 
-	hwtstamps->hwtstamp = ns_to_ktime(ts);
+	netc_port = NETC_PORT(priv, port);
+	ts_sync = NETC_SKB_CB(skb)->tstamp;
+	ts_free = ts_sync;
+
+	tmr_pdev = netc_switch_get_timer(priv);
+	if (tmr_pdev) {
+		u64 converted;
+
+		converted = ts_free;
+		if (!netc_timer_ptp_convert(tmr_pdev, ts_sync, &converted,
+					    false, true))
+			ts_free = converted;
+	}
+
+	entry = netc_port_next_rx_tstamp(netc_port);
+	entry->tstamp_sync = ts_sync;
+	entry->tstamp_free = ts_free;
+
+	hwtstamps->netdev_data = entry;
+	skb_shinfo(skb)->tx_flags |= SKBTX_HW_TSTAMP_NETDEV;
 
 	return false;
 }
@@ -450,4 +485,19 @@ void netc_port_txtstamp(struct dsa_switch *ds, int port_id,
 		NETC_SKB_CB(skb)->clone = clone;
 		NETC_SKB_CB(skb)->ptp_flag = NETC_PTP_FLAG_TWOSTEP;
 	}
+}
+
+ktime_t netc_get_tstamp(struct dsa_switch *ds,
+			const struct skb_shared_hwtstamps *hwtstamps,
+			bool cycles)
+{
+	const struct netc_ptp_rx_tstamp *entry = hwtstamps->netdev_data;
+	u64 ts;
+
+	if (!entry)
+		return hwtstamps->hwtstamp;
+
+	ts = cycles ? entry->tstamp_free : entry->tstamp_sync;
+
+	return ns_to_ktime(ts);
 }

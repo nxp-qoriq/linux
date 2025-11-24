@@ -100,6 +100,15 @@ static void netc_twostep_tstamp_handler(struct dsa_switch *ds, int port_id,
 		return;
 	}
 
+	if (priv->timer_pdev &&
+	    (skb_shinfo(skb_match)->tx_flags & SKBTX_HW_TSTAMP_USE_CYCLES)) {
+		u64 converted = ts;
+
+		if (!netc_timer_ptp_convert(priv->timer_pdev, ts, &converted,
+					    false, true))
+			ts = converted;
+	}
+
 	hwtstamps.hwtstamp = ns_to_ktime(ts);
 	skb_complete_tx_timestamp(skb_match, &hwtstamps);
 }
@@ -350,6 +359,8 @@ static int netc_init_all_ports(struct dsa_switch *ds)
 
 		if (port->caps.pmac)
 			mutex_init(&port->mm_lock);
+
+		spin_lock_init(&port->rx_ts_lock);
 
 		if (!port->caps.pseudo_link) {
 			spin_lock_init(&port->ts_req_id_lock);
@@ -630,11 +641,22 @@ static void netc_free_ntmp_bitmaps(struct netc_switch *priv)
 
 struct pci_dev *netc_switch_get_timer(struct netc_switch *priv)
 {
-	int domain = pci_domain_nr(priv->pdev->bus);
-	u32 devfn = priv->info->tmr_devfn;
-	u8 bus = priv->pdev->bus->number;
+	int domain;
+	u32 devfn;
+	u8 bus;
 
-	return pci_get_domain_bus_and_slot(domain, bus, devfn);
+	if (priv->timer_pdev)
+		return priv->timer_pdev;
+
+	if (!priv->info)
+		return NULL;
+
+	domain = pci_domain_nr(priv->pdev->bus);
+	devfn = priv->info->tmr_devfn;
+	bus = priv->pdev->bus->number;
+	priv->timer_pdev = pci_get_domain_bus_and_slot(domain, bus, devfn);
+
+	return priv->timer_pdev;
 }
 
 static u64 netc_switch_adjust_base_time(struct ntmp_priv *ntmp, u64 base_time,
@@ -2762,6 +2784,7 @@ static const struct dsa_switch_ops netc_switch_ops = {
 	.set_mm				= netc_port_set_mm,
 	.get_mm_stats			= netc_port_get_mm_stats,
 	.get_ts_info			= netc_get_ts_info,
+	.get_tstamp			= netc_get_tstamp,
 	.port_hwtstamp_set		= netc_port_hwtstamp_set,
 	.port_hwtstamp_get		= netc_port_hwtstamp_get,
 	.port_rxtstamp			= netc_port_rxtstamp,
@@ -2847,6 +2870,11 @@ static void netc_switch_remove(struct pci_dev *pdev)
 
 	if (!priv)
 		return;
+
+	if (priv->timer_pdev) {
+		pci_dev_put(priv->timer_pdev);
+		priv->timer_pdev = NULL;
+	}
 
 	netc_remove_debugfs(priv);
 	dsa_unregister_switch(priv->ds);

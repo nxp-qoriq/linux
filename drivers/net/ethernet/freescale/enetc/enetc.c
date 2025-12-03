@@ -1253,7 +1253,8 @@ static void enetc_tstamp_tx(struct enetc_ndev_priv *priv, struct sk_buff *skb, u
 	if (skb_shinfo(skb)->tx_flags & SKBTX_IN_PROGRESS) {
 		memset(&shhwtstamps, 0, sizeof(shhwtstamps));
 
-		if (!(skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP_USE_CYCLES)) {
+		if (is_enetc_rev4(priv->si) &&
+		    !(skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP_USE_CYCLES)) {
 			netc_timer_ptp_convert(priv->timer_pdev, tstamp, &ns, true, false);
 			shhwtstamps.hwtstamp = ns_to_ktime(ns);
 		} else

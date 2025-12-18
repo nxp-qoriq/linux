@@ -39,7 +39,7 @@
  */
 #define NETC_DEFAULT_CMD_CACHE_ATTR	0x2b2b6727
 
-#define NETC_MAX_FRAME_LEN		1500
+#define NETC_MAX_FRAME_LEN		9600
 
 #define NETC_STG_STATE_DISABLED		0
 #define NETC_STG_STATE_LEARNING		1
@@ -152,6 +152,7 @@ struct netc_port {
 
 	u32 speed;
 	phy_interface_t phy_mode;
+	u32 maxfrm;
 
 	u16 pvid;
 	u16 vlan_aware:1;

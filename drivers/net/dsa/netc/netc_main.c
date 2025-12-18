@@ -815,6 +815,8 @@ static void netc_port_set_max_frame_size(struct netc_port *port,
 
 	val = PM_MAXFRAM & max_frame_size;
 	netc_mac_port_wr(port, NETC_PM_MAXFRM(0), val);
+
+	port->maxfrm = val;
 }
 
 static void netc_port_set_tc_max_sdu(struct netc_port *port,
@@ -833,13 +835,16 @@ static void netc_port_set_tc_max_sdu(struct netc_port *port,
 
 void netc_port_set_all_tc_msdu(struct netc_port *port, u32 *max_sdu)
 {
+	u32 msdu;
 	int tc;
 
 	for (tc = 0; tc < NETC_TC_NUM; tc++) {
-		u32 msdu = NETC_MAX_FRAME_LEN;
-
-		if (max_sdu && max_sdu[tc])
+		if (max_sdu == NULL)
+			msdu = NETC_MAX_FRAME_LEN;
+		else if (max_sdu[tc])
 			msdu = max_sdu[tc] + VLAN_ETH_HLEN;
+		else
+			msdu = port->maxfrm;
 
 		netc_port_set_tc_max_sdu(port, tc, msdu);
 	}
@@ -936,6 +941,7 @@ static void netc_port_default_config(struct netc_port *port)
 	}
 
 	netc_port_set_max_frame_size(port, NETC_MAX_FRAME_LEN);
+
 	netc_port_set_all_tc_msdu(port, NULL);
 
 #ifdef CONFIG_NET_DSA_NETC_SWITCH_CTF

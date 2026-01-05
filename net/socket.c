@@ -111,7 +111,7 @@
 #include <linux/ptp_clock_kernel.h>
 #include <trace/events/sock.h>
 
-static int fast_raw_socket_fd = -1;
+static int fast_raw_socket_fd = -ESOCKTNOSUPPORT;
 static struct net_device *fast_raw_socket_dev;
 static struct socket *fast_raw_socket_sock = NULL;
 
@@ -677,7 +677,7 @@ static void __sock_release(struct socket *sock, struct inode *inode)
 	}
 	if (fast_raw_socket_sock != NULL && fast_raw_socket_sock == sock) {
 		fast_raw_socket_sock = NULL;
-		fast_raw_socket_fd = -1;
+		fast_raw_socket_fd = -ESOCKTNOSUPPORT;
 	}
 	sock->file = NULL;
 }
@@ -2210,7 +2210,7 @@ int __sys_sendto(int fd, void __user *buff, size_t len, unsigned int flags,
 	int err;
 	struct msghdr msg;
 	int fput_needed;
-	if (fd == fast_raw_socket_fd) {
+	if (fd == fast_raw_socket_fd && fd > 0) {
 		err = fast_raw_socket_dev->netdev_ops->ndo_fast_xmit(fast_raw_socket_dev, buff, len);
 		return err;
 	}
@@ -2280,7 +2280,7 @@ int __sys_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags,
 	struct socket *sock;
 	int err, err2;
 	int fput_needed;
-	if (fd == fast_raw_socket_fd) {
+	if (fd == fast_raw_socket_fd && fd > 0) {
 		err = fast_raw_socket_dev->netdev_ops->ndo_fast_recv(fast_raw_socket_dev, ubuf, size, addr, addr_len);
 		return err;
 	}

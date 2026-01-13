@@ -605,6 +605,19 @@ config MFD_MX25_TSADC
 	  i.MX25 processors. They consist of a conversion queue for general
 	  purpose ADC and a queue for Touchscreens.
 
+config MFD_P3H2X4X
+	tristate "NXP P3H2X4X I3C Hub Device"
+	depends on I3C_OR_I2C
+	select MFD_CORE
+	select REGMAP_I3C if I3C
+	select REGMAP_I2C if I2C
+	help
+	  Enable Support for NXP P3H244x/P3H284x I3C HUB device using I3C/I2C
+	  communication interface.
+
+	  This driver provides support for I3C hub and regulator, each subdriver
+	  can be enabled independently depending on the required functionality.
+
 config MFD_IMX_FLEXIO
 	tristate "NXP i.MX FlexIO core driver support"
 	depends on OF

@@ -124,6 +124,8 @@ obj-$(CONFIG_MFD_MC13XXX)	+= mc13xxx-core.o
 obj-$(CONFIG_MFD_MC13XXX_SPI)	+= mc13xxx-spi.o
 obj-$(CONFIG_MFD_MC13XXX_I2C)	+= mc13xxx-i2c.o
 
+obj-$(CONFIG_MFD_P3H2X4X)	+= p3h2840.o
+
 obj-$(CONFIG_MFD_NCT6694)	+= nct6694.o
 
 obj-$(CONFIG_MFD_CORE)		+= mfd-core.o

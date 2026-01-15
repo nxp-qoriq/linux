@@ -2,7 +2,7 @@
 //
 // Device Tree file for LA1224RDB Rev C board
 //
-// Copyright 2020-2025 NXP
+// Copyright 2020-2026 NXP
 
 /dts-v1/;
 
@@ -136,7 +136,6 @@
 			little-endian;
 			reg = <0x00 0x8b95000 0x00 0x100>;
 		};
-
 	};
 };
 
@@ -144,8 +143,44 @@
 	status = "okay";
 };
 
+&dpmac3 {
+	phy-handle = <&aquantia_phy1>;
+	phy-connection-type = "usxgmii";
+	managed = "in-band-status";
+};
+
+&dpmac4 {
+	phy-handle = <&aquantia_phy2>;
+	phy-connection-type = "usxgmii";
+	managed = "in-band-status";
+};
+
+&dpmac17 {
+	phy-handle = <&rgmii_phy1>;
+	phy-connection-type = "rgmii-id";
+};
+
 &emdio1 {
 	status = "okay";
+
+	rgmii_phy1: ethernet-phy@3 {
+		/* AR8035 PHY - "compatible" property not strictly needed */
+		compatible = "ethernet-phy-id004d.d072";
+		reg = <0x3>;
+		/* Poll mode - no "interrupts" property defined */
+	};
+	aquantia_phy1: ethernet-phy@8 {
+		/* AQR113 PHY - "compatible" property not strictly needed */
+		compatible = "ethernet-phy-ieee802.3-c45";
+		interrupts = <GIC_SPI 2 IRQ_TYPE_LEVEL_HIGH>;
+		reg = <0x8>;
+	};
+	aquantia_phy2: ethernet-phy@0 {
+		/* AQR113 PHY - "compatible" property not strictly needed */
+		compatible = "ethernet-phy-ieee802.3-c45";
+		interrupts = <GIC_SPI 3 IRQ_TYPE_LEVEL_HIGH>;
+		reg = <0x0>;
+	};
 };
 
 &emdio2 {
@@ -165,6 +200,32 @@
 	mmc-hs400-1_8v;
 	bus-width = <8>;
 	status = "okay";
+};
+
+&fspi {
+	status = "okay";
+
+	mt35xu512aba0: flash@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "spansion,m25p80";
+		m25p,fast-read;
+		spi-max-frequency = <50000000>;
+		reg = <0>;
+		spi-rx-bus-width = <8>;
+		spi-tx-bus-width = <8>;
+	};
+
+	mt35xu512aba1: flash@1 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "spansion,m25p80";
+		m25p,fast-read;
+		spi-max-frequency = <50000000>;
+		reg = <1>;
+		spi-rx-bus-width = <8>;
+		spi-tx-bus-width = <8>;
+	};
 };
 
 &i2c0 {
@@ -545,30 +606,12 @@
 	};
 };
 
-&fspi {
+&pcs_mdio3 {
 	status = "okay";
+};
 
-	mt35xu512aba0: flash@0 {
-		#address-cells = <1>;
-		#size-cells = <1>;
-		compatible = "spansion,m25p80";
-		m25p,fast-read;
-		spi-max-frequency = <50000000>;
-		reg = <0>;
-		spi-rx-bus-width = <8>;
-		spi-tx-bus-width = <8>;
-	};
-
-	mt35xu512aba1: flash@1 {
-		#address-cells = <1>;
-		#size-cells = <1>;
-		compatible = "spansion,m25p80";
-		m25p,fast-read;
-		spi-max-frequency = <50000000>;
-		reg = <1>;
-		spi-rx-bus-width = <8>;
-		spi-tx-bus-width = <8>;
-	};
+&pcs_mdio4 {
+	status = "okay";
 };
 
 &uart0 {
@@ -593,40 +636,4 @@
 
 &usb1 {
 	status = "okay";
-};
-
-&emdio1 {
-	rgmii_phy1: ethernet-phy@3 {
-		/* AR8035 PHY - "compatible" property not strictly needed */
-		compatible = "ethernet-phy-id004d.d072";
-		reg = <0x3>;
-		/* Poll mode - no "interrupts" property defined */
-	};
-	aquantia_phy1: ethernet-phy@8 {
-		/* AQR113 PHY - "compatible" property not strictly needed */
-		compatible = "ethernet-phy-ieee802.3-c45";
-		interrupts = <GIC_SPI 2 IRQ_TYPE_LEVEL_HIGH>;
-		reg = <0x8>;
-	};
-	aquantia_phy2: ethernet-phy@0 {
-		/* AQR113 PHY - "compatible" property not strictly needed */
-		compatible = "ethernet-phy-ieee802.3-c45";
-		interrupts = <GIC_SPI 3 IRQ_TYPE_LEVEL_HIGH>;
-		reg = <0x0>;
-	};
-};
-
-&dpmac3 {
-	phy-handle = <&aquantia_phy1>;
-	phy-connection-type = "usxgmii";
-};
-
-&dpmac4 {
-	phy-handle = <&aquantia_phy2>;
-	phy-connection-type = "usxgmii";
-};
-
-&dpmac17 {
-	phy-handle = <&rgmii_phy1>;
-	phy-connection-type = "rgmii-id";
 };

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Copyright 2025 NXP
+ * Copyright 2025-2026 NXP
  */
 
 #include "imx93-11x11-frdm.dts"
@@ -120,3 +120,9 @@ pinctrl_uart8: uart8grp {
 
 };
 
+&lpi2c1 {
+	p3t2030@72 {
+		compatible = "ti,tmp108";
+		reg = <0x72>;
+	};
+};

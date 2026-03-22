@@ -66,7 +66,6 @@
 #define REGS_TIER	0x020	/* Interrupt Enable Register */
 #define TIER_DISABLE	0x0
 
-#define REGS_TIDR      0x024   /* Interrupt Enable Register */
 #define REGS_TISCR     0x28    /* Interrupt site capture register */
 #define REGS_TICSCR    0x2C    /* Interrupt critical site capture register */
 #define REGS_TMHTATR   0x54    /* Monitor high temperature average threshold register */

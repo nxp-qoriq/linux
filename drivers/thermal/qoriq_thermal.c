@@ -136,15 +136,16 @@ int crit_thread_running;
 struct qoriq_sensor {
 	int				id;
 };
-
-struct qoriq_tmu_data {
-	int ver;
-	u32 ttrcr[NUM_TTRCR_MAX];
-	struct regmap *regmap;
-	struct clk *clk;
-	struct qoriq_sensor	sensor[SITES_MAX];
-};
-
+	struct qoriq_tmu_data {
+		int ver;
+		u32 ttrcr[NUM_TTRCR_MAX];
+		struct regmap *regmap;
+		struct clk *clk;
+		struct qoriq_sensor	sensor[SITES_MAX];
+		unsigned long last_log_time;	/* in jiffies */
+		unsigned long log_interval;	/* in seconds */
+		struct device *dev;
+	};
 static struct qoriq_tmu_data *qoriq_sensor_to_data(struct qoriq_sensor *s)
 {
 	return container_of(s, struct qoriq_tmu_data, sensor[s->id]);
@@ -336,6 +337,8 @@ static int tmu_get_temp(struct thermal_zone_device *tz, int *temp)
 	struct qoriq_tmu_data *qdata = qoriq_sensor_to_data(qsensor);
 	static bool flag = false;
 	u32 val, tidr;
+	u64 interval_jiffies;
+	u64 current_time;
 	/*
 	 * REGS_TRITSR(id) has the following layout:
 	 *
@@ -368,27 +371,30 @@ static int tmu_get_temp(struct thermal_zone_device *tz, int *temp)
 			return -EAGAIN;
 		}
 	}
-
-	if (regmap_read_poll_timeout(qdata->regmap,
-				     REGS_TRITSR(qsensor->id),
-				     val,
-				     val & TRITSR_V,
-				     USEC_PER_MSEC,
-				     10 * USEC_PER_MSEC)) {
-		regmap_read(qdata->regmap, REGS_TSR, &val);
-		if (val & GENMASK(29,29)) {
-			val = 0;
-			if (!flag) {
-				pr_err("Out of Range lowest temperature measurement detected!\n");
+		if (regmap_read_poll_timeout(qdata->regmap,
+										REGS_TRITSR(qsensor->id),
+										val,
+										val & TRITSR_V,
+										USEC_PER_MSEC,
+										10 * USEC_PER_MSEC)) {
+			regmap_read(qdata->regmap, REGS_TSR, &val);
+			interval_jiffies = qdata->log_interval * HZ;
+			current_time = jiffies;
+			if (!flag && time_after((unsigned long)current_time,
+						qdata->last_log_time + (unsigned long)interval_jiffies)) {
+				if (val & GENMASK(29, 29)) {
+					pr_err("Out of Range lowest temperature measurement detected!\n");
+				} else {
+					return -ENODATA;
+				}
 				flag = true;
+				qdata->last_log_time = jiffies;
 			}
+			return -EAGAIN;
 		} else {
-			return -ENODATA;
+			flag = false;
+			qdata->last_log_time = jiffies;
 		}
-	} else {
-		flag = false;
-	}
-
 	/*ERR052243: If there raising or falling edge happens, try later */
 	if (qdata->ver == TMU_VER93) {
 		regmap_read(qdata->regmap, REGS_TIDR, &tidr);
@@ -805,6 +811,41 @@ int qoriq_tmu_update_threshold(struct platform_device *pdev, int hysteresis_val)
 }
 #endif
 
+static ssize_t log_interval_show(struct device *dev, struct device_attribute *attr,
+				char *buf)
+{
+	struct qoriq_tmu_data *data = dev_get_drvdata(dev);
+	return sprintf(buf, "%lu\n", data->log_interval);
+}
+
+static ssize_t log_interval_store(struct device *dev, struct device_attribute *attr,
+				const char *buf, size_t count)
+{
+	struct qoriq_tmu_data *data = dev_get_drvdata(dev);
+	unsigned long interval;
+	int ret;
+
+	ret = kstrtoul(buf, 10, &interval);
+	if (ret)
+		return ret;
+
+	/* Ensure interval is reasonable (e.g., from 0 second to 24 hours) */
+	if (interval <= 0 || interval > 86400)
+		return -EINVAL;
+
+	data->log_interval = interval;
+	return count;
+}
+
+static struct device_attribute dev_attr_log_interval = {
+	.attr = {
+		.name = "log_interval",
+		.mode = 0644,
+	},
+	.show = log_interval_show,
+	.store = log_interval_store,
+};
+
 static int qoriq_tmu_probe(struct platform_device *pdev)
 {
 	int ret;
@@ -887,6 +928,16 @@ static int qoriq_tmu_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, data);
 
+	data->log_interval = 0;
+	data->last_log_time = 0;
+	data->dev = dev;
+
+	ret = device_create_file(dev, &dev_attr_log_interval);
+	if (ret) {
+		dev_err(dev, "Failed to create sysfs attribute\n");
+		return ret;
+	}
+
 	return 0;
 }
 
@@ -929,6 +980,14 @@ static int qoriq_tmu_resume(struct device *dev)
 	return regmap_update_bits(data->regmap, REGS_TMR, TMR_ME, TMR_ME);
 }
 
+static void qoriq_tmu_remove(struct platform_device *pdev)
+{
+	struct qoriq_tmu_data *data = platform_get_drvdata(pdev);
+
+	/* Remove sysfs attribute */
+	device_remove_file(data->dev, &dev_attr_log_interval);
+}
+
 static DEFINE_SIMPLE_DEV_PM_OPS(qoriq_tmu_pm_ops,
 				qoriq_tmu_suspend, qoriq_tmu_resume);
 
@@ -939,16 +998,16 @@ static const struct of_device_id qoriq_tmu_match[] = {
 	{},
 };
 MODULE_DEVICE_TABLE(of, qoriq_tmu_match);
-
-static struct platform_driver qoriq_tmu = {
+	static struct platform_driver qoriq_tmu = {
 	.driver	= {
 		.name		= "qoriq_thermal",
 		.pm		= pm_sleep_ptr(&qoriq_tmu_pm_ops),
 		.of_match_table	= qoriq_tmu_match,
 	},
 	.probe	= qoriq_tmu_probe,
+	.remove_new = qoriq_tmu_remove,
 };
-module_platform_driver(qoriq_tmu);
+	module_platform_driver(qoriq_tmu);
 
 MODULE_AUTHOR("Jia Hongtao <hongtao.jia@nxp.com>");
 MODULE_DESCRIPTION("QorIQ Thermal Monitoring Unit driver");

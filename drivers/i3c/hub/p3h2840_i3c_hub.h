@@ -14,6 +14,7 @@
 #include <linux/i3c/master.h>
 #include <linux/regulator/consumer.h>
 #include <linux/regmap.h>
+#include <linux/debugfs.h>
 
 /* I3C HUB REGISTERS */
 
@@ -313,6 +314,8 @@ struct tp_bus {
 };
 
 struct p3h2x4x_i3c_hub_dev {
+	u8 reg_addr;				/* Offset for reading HUB's register. */
+	struct dentry *sysfs_debug_dir;
 	struct device *dev;
 	struct regmap *regmap;
 	struct mutex etx_mutex;      /* all port mutex */

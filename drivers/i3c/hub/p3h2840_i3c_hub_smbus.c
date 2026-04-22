@@ -390,9 +390,211 @@ static s32 p3h2x4x_tp_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs, i
 	return ret_sum;
 }
 
+static int p3h2x4x_tp_smbus_xfer_msg(struct p3h2x4x_i3c_hub_dev *hub,
+				     u8 target_port,
+				     u8 addr,
+				     u8 rw,
+				     u8 cmd,
+				     int sz,
+				     union i2c_smbus_data *data)
+{
+	u8 transaction_type = P3H2X4X_SMBUS_400kHz;
+	u8 controller_buffer_page = P3H2X4X_CONTROLLER_BUFFER_PAGE + 4 * target_port;
+	u8 target_port_status = P3H2X4X_TP0_SMBUS_AGNT_STS + target_port;
+	u8 target_port_code = BIT(target_port);
+	u8 rw_address = 2 * addr;
+	u8 desc[P3H2X4X_SMBUS_DESCRIPTOR_SIZE] = { 0 };
+	u8 read_length = 0, write_length = 0;
+	u8 buf[I2C_SMBUS_BLOCK_MAX + 2] = { 0 };
+	int ret, i;
+
+	switch (sz) {
+	case I2C_SMBUS_QUICK:
+	case I2C_SMBUS_BYTE:
+		if (rw) {
+			buf[0] = data->byte;
+			read_length = ONE_BYTE_SIZE;
+			write_length = 0;
+			rw_address |= BIT(0);
+		} else {
+			buf[0] = cmd;
+			write_length = ONE_BYTE_SIZE;
+			read_length = 0;
+		}
+		break;
+
+	case I2C_SMBUS_BYTE_DATA:
+		if (rw) {   /* read write */
+			buf[0] = cmd;
+			write_length = ONE_BYTE_SIZE;
+			read_length = ONE_BYTE_SIZE;
+			transaction_type |= BIT(0);
+		} else {  /* only write */
+			buf[0] = cmd;
+			buf[1] = data->byte;
+			write_length = ONE_BYTE_SIZE + 1;
+			read_length = 0;
+		}
+		break;
+
+	case I2C_SMBUS_WORD_DATA:
+		if (rw) {         /* read write */
+			buf[0] = cmd;
+			write_length = ONE_BYTE_SIZE;
+			read_length = 2;
+			transaction_type |= BIT(0);
+		} else {  /* only write */
+			buf[0] = cmd;
+			buf[1] = data->word & 0xff;
+			buf[2] = (data->word & 0xff00) >> 8;
+			write_length = ONE_BYTE_SIZE + 2;
+			read_length = 0;
+		}
+		break;
+	case I2C_SMBUS_BLOCK_DATA:
+		if (rw) {         /* read write */
+			buf[0] = cmd;
+			write_length = ONE_BYTE_SIZE;
+			read_length = data->block[0] + 1;
+			transaction_type |= BIT(0);
+		} else {  /* only write */
+			buf[0] = cmd;
+			for (i = 0 ; i <= data->block[0]; i++)
+				buf[i + 1] = data->block[i];
+
+			write_length = data->block[0] + 2;
+			read_length = 0;
+		}
+		break;
+	case I2C_SMBUS_I2C_BLOCK_DATA:
+		if (rw) {         /* read write */
+			buf[0] = cmd;
+			write_length = ONE_BYTE_SIZE;
+			read_length = data->block[0];
+			transaction_type |= BIT(0);
+		} else {  /* only write */
+			buf[0] = cmd;
+			for (i = 0 ; i < data->block[0]; i++)
+				buf[i + 1] = data->block[i + 1];
+
+			write_length = data->block[0] + 1;
+			read_length = 0;
+		}
+		break;
+	default:
+		dev_warn(hub->dev, "Unsupported SMBus transaction %d\n", sz);
+		return -EOPNOTSUPP;
+	}
+
+	desc[0] = rw_address;
+	desc[1] = transaction_type;
+	desc[2] = write_length;
+	desc[3] = read_length;
+
+	ret = regmap_write(hub->regmap, target_port_status, P3H2X4X_TP_BUFFER_STATUS_MASK);
+	if (ret)
+		return ret;
+
+	ret = regmap_write(hub->regmap, P3H2X4X_PAGE_PTR, controller_buffer_page);
+	if (ret)
+		return ret;
+
+	ret = regmap_bulk_write(hub->regmap, P3H2X4X_CONTROLLER_AGENT_BUFF,
+				desc, P3H2X4X_SMBUS_DESCRIPTOR_SIZE);
+	if (ret)
+		goto out_page;
+
+	if (write_length) {
+		ret = regmap_bulk_write(hub->regmap, P3H2X4X_CONTROLLER_AGENT_BUFF_DATA,
+					buf, write_length);
+		if (ret)
+			goto out_page;
+	}
+
+	ret = regmap_write(hub->regmap, P3H2X4X_TP_SMBUS_AGNT_TRANS_START, target_port_code);
+	if (ret)
+		goto out_page;
+
+	ret = p3h2x4x_read_smbus_transaction_status(hub, target_port_status,
+						    write_length + read_length);
+	if (ret)
+		goto out_page;
+
+	if (rw) {
+		switch (sz) {
+		case I2C_SMBUS_QUICK:
+		case I2C_SMBUS_BYTE:
+		case I2C_SMBUS_BYTE_DATA:
+			ret = regmap_bulk_read(hub->regmap,
+					       P3H2X4X_CONTROLLER_AGENT_BUFF_DATA + write_length,
+					       &data->byte, read_length);
+			break;
+		case I2C_SMBUS_WORD_DATA:
+			ret = regmap_bulk_read(hub->regmap,
+					       P3H2X4X_CONTROLLER_AGENT_BUFF_DATA + write_length,
+					       (u8 *)&data->word, read_length);
+			break;
+		case I2C_SMBUS_BLOCK_DATA:
+			ret = regmap_bulk_read(hub->regmap,
+					       P3H2X4X_CONTROLLER_AGENT_BUFF_DATA + write_length,
+					       data->block, read_length);
+			break;
+		case I2C_SMBUS_I2C_BLOCK_DATA:
+			ret = regmap_bulk_read(hub->regmap,
+					       P3H2X4X_CONTROLLER_AGENT_BUFF_DATA + write_length,
+					       data->block + 1, read_length);
+			break;
+		default:
+			dev_warn(hub->dev, "Unsupported transaction %d\n", sz);
+			break;
+		}
+	}
+
+out_page:
+
+	int ret2 = regmap_write(hub->regmap, P3H2X4X_PAGE_PTR, 0x00);
+
+	if (!ret && ret2)
+		ret = ret2;
+
+	return ret;
+}
+
+static s32 p3h2x4x_tp_smbus_xfer(struct i2c_adapter *adap, u16 addr,
+				 unsigned short flags,
+				 char read_write, u8 command,
+				 int size, union i2c_smbus_data *data)
+{
+	struct tp_bus *bus = i2c_get_adapdata(adap);
+	struct p3h2x4x_i3c_hub_dev *hub = bus->p3h2x4x_i3c_hub;
+	int ret;
+
+	if (flags & I2C_CLIENT_PEC)
+		return -EOPNOTSUPP;
+
+	guard(mutex)(&hub->etx_mutex);
+	guard(mutex)(&bus->port_mutex);
+
+	ret = p3h2x4x_tp_smbus_xfer_msg(hub,
+					(u8)bus->tp_port,
+					(u8)addr,
+					(u8)(read_write == I2C_SMBUS_READ),
+					command,
+					size,
+					data);
+
+	return ret;
+}
+
 static u32 p3h2x4x_tp_smbus_funcs(struct i2c_adapter *adapter)
 {
-	u32 funcs = I2C_FUNC_I2C | I2C_FUNC_SMBUS_BLOCK_DATA;
+	u32 funcs = I2C_FUNC_SMBUS_QUICK |
+		    I2C_FUNC_SMBUS_BYTE |
+		    I2C_FUNC_SMBUS_BYTE_DATA |
+		    I2C_FUNC_SMBUS_WORD_DATA |
+		    I2C_FUNC_SMBUS_BLOCK_DATA |
+		    I2C_FUNC_SMBUS_I2C_BLOCK |
+		    I2C_FUNC_I2C;
 
 #if IS_ENABLED(CONFIG_I2C_SLAVE)
 	struct tp_bus *bus = i2c_get_adapdata(adapter);
@@ -531,6 +733,7 @@ static const struct i2c_adapter_quirks p3h2x4x_tp_i2c_quirks = {
  */
 static struct i2c_algorithm p3h2x4x_tp_i2c_algorithm = {
 	.master_xfer    = p3h2x4x_tp_i2c_xfer,
+	.smbus_xfer     = p3h2x4x_tp_smbus_xfer,
 #if IS_ENABLED(CONFIG_I2C_SLAVE)
 	.reg_slave = p3h2x4x_tp_i2c_reg_slave,
 	.unreg_slave = p3h2x4x_tp_i2c_unreg_slave,

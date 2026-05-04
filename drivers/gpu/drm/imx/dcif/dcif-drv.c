@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 
 /*
- * Copyright 2025 NXP
+ * Copyright 2025-2026 NXP
  */
 
 #include <linux/dma-mapping.h>
@@ -10,6 +10,7 @@
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
+#include <linux/of_reserved_mem.h>
 
 #include <drm/drm_atomic_helper.h>
 #include <drm/clients/drm_client_setup.h>
@@ -34,10 +35,46 @@
 
 #define DRIVER_NAME			"imx-dcif-drm"
 
+
+#define DRM_IMX_DPU_GET_DMA_ADDRESS    0x44
+
+#define DRM_IOCTL_IMX_DPU_GET_DMA_ADDRESS \
+	DRM_IOWR(DRM_IMX_DPU_GET_DMA_ADDRESS, \
+			struct drm_imx_dpu_get_dma_address)
+
 static int legacyfb_depth = 32;
 module_param(legacyfb_depth, uint, 0444);
 
 DEFINE_DRM_GEM_DMA_FOPS(dcif_driver_fops);
+
+static int imx_drm_dcif_get_dma_ioctl(struct drm_device *dev,
+					void *data,
+					struct drm_file *file)
+{
+	struct drm_imx_dpu_get_dma_address *args = data;
+	struct drm_gem_object *obj;
+	struct drm_gem_dma_object *dma_obj;
+
+	obj = drm_gem_object_lookup(file, args->handle);
+	if (!obj)
+		return -ENOENT;
+
+	dma_obj = to_drm_gem_dma_obj(obj);
+
+	args->dma_addr = dma_obj->dma_addr;
+
+	pr_info("DCIF DMA ADDR = 0x%016llX\n",
+		(unsigned long long)dma_obj->dma_addr);
+
+	drm_gem_object_put(obj);
+
+	return 0;
+}
+
+static const struct drm_ioctl_desc dcif_ioctls[] = {
+	DRM_IOCTL_DEF_DRV(IMX_DPU_GET_DMA_ADDRESS, imx_drm_dcif_get_dma_ioctl,
+			  DRM_RENDER_ALLOW),
+};
 
 static struct drm_driver dcif_driver = {
 	.driver_features	= DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC,
@@ -49,6 +86,8 @@ static struct drm_driver dcif_driver = {
 	.major			= 1,
 	.minor			= 0,
 	.patchlevel		= 0,
+	.ioctls			= dcif_ioctls,
+	.num_ioctls		= ARRAY_SIZE(dcif_ioctls),
 };
 
 static int dcif_set_qos(struct dcif_dev *dcif)
@@ -102,10 +141,19 @@ static const char * const dcif_clks[] = {
 static int dcif_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
+	struct device *dev = &pdev->dev;
 	struct dcif_dev *dcif;
 	struct drm_device *drm;
 	int ret;
 	int i;
+
+  ret = of_reserved_mem_device_init(dev);
+    if (ret)
+        dev_warn(dev, "No reserved memory, using CMA\n");
+    else
+        dev_info(dev, "Reserved VRAM attached\n");
+
+    dma_set_mask_and_coherent(dev, DMA_BIT_MASK(32));
 
 	if (!pdev->dev.of_node)
 		return -ENODEV;
@@ -192,7 +240,7 @@ static int dcif_probe(struct platform_device *pdev)
 		legacyfb_depth = 32;
 	}
 
-	drm_client_setup(drm, NULL);
+	//drm_client_setup(drm, NULL);
 
 	return 0;
 

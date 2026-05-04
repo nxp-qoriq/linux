@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 
 /*
- * Copyright 2025 NXP
+ * Copyright 2025-2026 NXP
  */
 
 #ifndef __DCIF_DRV_H__
@@ -62,6 +62,12 @@ struct dcif_crtc_state {
 	struct dcif_crc		crc;
 	u32			bus_format;
 	u32			bus_flags;
+};
+
+struct drm_imx_dpu_get_dma_address {
+	u32 handle;
+	u32 pad;
+	u64 dma_addr;
 };
 
 static inline struct dcif_dev *to_dcif_dev(struct drm_device *drm_dev)

@@ -852,7 +852,7 @@ imx943-evk-mqs-dtbs := imx943-evk.dtb imx943-evk-mqs.dtbo
 dtb-$(CONFIG_ARCH_MXC) += imx943-evk-mqs.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx943-evk-sgmii.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx943-evk-rpmsg.dtb
-
+dtb-$(CONFIG_ARCH_MXC) += imx943-dc-scm.dtb
 imx943-evk-pcie1-ep-dtbs := imx943-evk.dtb imx943-evk-pcie1-ep.dtbo
 dtb-$(CONFIG_ARCH_MXC) += imx943-evk-pcie1-ep.dtb
 

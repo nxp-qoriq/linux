@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Copyright 2024-2025 NXP
+ * Copyright 2024-2026 NXP
  */
 
 /dts-v1/;
@@ -307,6 +307,12 @@
 			no-map;
 		};
 
+		vram: vram@94000000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0x94000000 0 0x04000000>; /* 64MB */
+			no-map;
+		};
+
 		ele_reserved: ele-reserved@a4120000 {
 			compatible = "shared-dma-pool";
 			reg = <0 0xa4120000 0 0x100000>;
@@ -391,6 +397,7 @@
 };
 
 &dcif {
+  memory-region = <&vram>;
 	status = "okay";
 };
 

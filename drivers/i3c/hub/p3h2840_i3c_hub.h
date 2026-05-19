@@ -123,6 +123,11 @@
 #define BUF_RECEIVED_FLAG_MASK					GENMASK(3, 1)
 #define BUF_RECEIVED_FLAG_TF_MASK				GENMASK(3, 0)
 
+#define P3H2X4X_TARGET_BUF_0_RECEIVE_VAL			1
+#define P3H2X4X_TARGET_BUF_1_RECEIVE_VAL			2
+#define P3H2X4X_TARGET_BUF_0_1_RECEIVE_VAL			3
+#define P3H2X4X_TARGET_BUF_OVRFL_VAL				7
+
 #define P3H2X4X_TARGET_AGENT_LOCAL_DEV				0x11
 #define P3H2X4X_TARGET_BUFF_0_PAGE				0x12
 #define P3H2X4X_TARGET_BUFF_1_PAGE				0x13
@@ -315,6 +320,10 @@ struct p3h2x4x_i3c_hub_dev {
 	struct i2c_client *i2c_client;
 	struct hub_configuration hub_config;
 	struct tp_bus tp_bus[P3H2X4X_TP_MAX_COUNT];
+#if IS_ENABLED(CONFIG_I2C_SLAVE)
+	bool ibi_ready;
+	u8 *slave_rx_buffer;
+#endif
 	struct i3c_hub *hub;
 };
 
@@ -339,5 +348,15 @@ int p3h2x4x_tp_smbus_algo(struct p3h2x4x_i3c_hub_dev *p3h2x4x_i3c_hub);
  * Return: 0 in case of success, negative error code on failure.
  */
 int p3h2x4x_tp_i3c_algo(struct p3h2x4x_i3c_hub_dev *p3h2x4x_i3c_hub);
+
+/**
+ * p3h2x4x_ibi_handler - IBI handler.
+ * @i3cdev: i3c device.
+ * @payload: two byte IBI payload data.
+ */
+#if IS_ENABLED(CONFIG_I2C_SLAVE)
+void p3h2x4x_ibi_handler(struct i3c_device *i3cdev,
+			 const struct i3c_ibi_payload *payload);
+#endif
 
 #endif /* P3H2840_I3C_HUB_H */

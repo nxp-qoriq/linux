@@ -480,8 +480,12 @@ static int rxgk_verify_packet_integrity(struct rxrpc_call *call,
 
 	_enter("");
 
-	crypto_krb5_where_is_the_data(gk->krb5, KRB5_CHECKSUM_MODE,
-				      &data_offset, &data_len);
+	if (crypto_krb5_where_is_the_data(gk->krb5, KRB5_CHECKSUM_MODE,
+					  &data_offset, &data_len) < 0) {
+		ret = rxrpc_abort_eproto(call, skb, RXGK_PACKETSHORT,
+					 rxgk_abort_1_short_header);
+		goto put_gk;
+	}
 
 	hdr = kzalloc(sizeof(*hdr), GFP_NOFS);
 	if (!hdr)
@@ -528,6 +532,13 @@ static int rxgk_verify_packet_encrypted(struct rxrpc_call *call,
 	u32 ac = 0;
 
 	_enter("");
+
+	if (crypto_krb5_check_data_len(gk->krb5, KRB5_ENCRYPT_MODE,
+				       len, sizeof(hdr)) < 0) {
+		ret = rxrpc_abort_eproto(call, skb, RXGK_PACKETSHORT,
+					 rxgk_abort_2_short_header);
+		goto error;
+	}
 
 	ret = rxgk_decrypt_skb(gk->krb5, gk->rx_enc, skb, &offset, &len, &ac);
 	if (ret < 0) {
@@ -1085,6 +1096,9 @@ static int rxgk_do_verify_authenticator(struct rxrpc_connection *conn,
 
 	_enter("");
 
+	if ((end - p) * sizeof(__be32) < 24)
+		return rxrpc_abort_conn(conn, skb, RXGK_NOTAUTH, -EPROTO,
+					rxgk_abort_resp_short_auth);
 	if (memcmp(p, conn->rxgk.nonce, 20) != 0)
 		return rxrpc_abort_conn(conn, skb, RXGK_NOTAUTH, -EPROTO,
 					rxgk_abort_resp_bad_nonce);
@@ -1098,7 +1112,7 @@ static int rxgk_do_verify_authenticator(struct rxrpc_connection *conn,
 	p += xdr_round_up(app_len) / sizeof(__be32);
 	if (end - p < 4)
 		return rxrpc_abort_conn(conn, skb, RXGK_NOTAUTH, -EPROTO,
-					rxgk_abort_resp_short_applen);
+					rxgk_abort_resp_short_auth);
 
 	level	= ntohl(*p++);
 	epoch	= ntohl(*p++);
@@ -1270,16 +1284,18 @@ static int rxgk_verify_response(struct rxrpc_connection *conn,
 	if (ret < 0) {
 		rxrpc_abort_conn(conn, skb, RXGK_SEALEDINCON, ret,
 				 rxgk_abort_resp_auth_dec);
-		goto out;
+		goto out_gk;
 	}
 
 	ret = rxgk_verify_authenticator(conn, krb5, skb, auth_offset, auth_len);
 	if (ret < 0)
-		goto out;
+		goto out_gk;
 
 	conn->key = key;
 	key = NULL;
 	ret = 0;
+out_gk:
+	rxgk_put(gk);
 out:
 	key_put(key);
 	_leave(" = %d", ret);

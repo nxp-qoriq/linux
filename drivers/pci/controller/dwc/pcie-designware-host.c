@@ -1257,7 +1257,7 @@ int dw_pcie_resume_noirq(struct dw_pcie *pci)
 
 	ret = dw_pcie_start_link(pci);
 	if (ret)
-		return ret;
+		goto err_deinit;
 
 	/* Ignore errors, the link may come up later */
 	dw_pcie_wait_for_link(pci);
@@ -1266,5 +1266,11 @@ int dw_pcie_resume_noirq(struct dw_pcie *pci)
 		pci->pp.ops->post_init(&pci->pp);
 
 	return 0;
+
+err_deinit:
+	if (pci->pp.ops->deinit)
+		pci->pp.ops->deinit(&pci->pp);
+
+	return ret;
 }
 EXPORT_SYMBOL_GPL(dw_pcie_resume_noirq);

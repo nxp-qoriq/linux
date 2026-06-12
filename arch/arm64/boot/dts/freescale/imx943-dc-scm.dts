@@ -304,9 +304,22 @@
 	#address-cells = <1>;
 	#size-cells = <0>;
 	assigned-clocks = <&scmi_clk IMX94_CLK_LDBPLL_VCO>,
-			  <&scmi_clk IMX94_CLK_LDBPLL>;
-	assigned-clock-rates = <4158000000>, <1039500000>;
-	status = "okay";
+    <&scmi_clk IMX94_CLK_LDBPLL>;
+  assigned-clock-rates = <4158000000>, <1039500000>;
+  status = "okay";
+
+  ports {
+    #address-cells = <1>;
+    #size-cells = <0>;
+
+    port@1 {
+      reg = <1>;
+
+      lvds_out: endpoint {
+        remote-endpoint = <&it6263_in>;
+      };
+    };
+  };
 };
 
 &lpi2c6 {
@@ -314,6 +327,31 @@
 	pinctrl-0 = <&pinctrl_lpi2c6>;
 	pinctrl-names = "default";
 	status = "okay";
+
+  lvds-to-hdmi-bridge@4c {
+    compatible = "ite,it6251";
+    reg = <0x4c>, <0x4d>;
+    reg-names = "bridge", "lvds";
+    reset-gpios = <&gpio2 18 GPIO_ACTIVE_LOW>;
+
+    ports {
+      #address-cells = <1>;
+      #size-cells = <0>;
+      port@0 {
+        reg = <0>;
+        bridge_out_edp0: endpoint {
+        };
+      };
+
+      port@1 {
+        reg = <1>;
+
+        it6263_in: endpoint {
+          remote-endpoint = <&lvds_out>;
+        };
+      };
+    };
+  };
 };
 
 &lpi2c5 {
@@ -727,20 +765,6 @@
 		fsl,pins = <
 			IMX94_PAD_GPIO_IO04__LPUART6_TX		0x31e
 			IMX94_PAD_GPIO_IO05__LPUART6_RX		0x31e
-		>;
-	};
-
-	pinctrl_lpi2c3: lpi2c3grp {
-		fsl,pins = <
-			IMX94_PAD_GPIO_IO16__LPI2C3_SDA		0x40000b9e
-			IMX94_PAD_GPIO_IO17__LPI2C3_SCL		0x40000b9e
-		>;
-	};
-
-	pinctrl_lpi2c4: lpi2c4grp {
-		fsl,pins = <
-			IMX94_PAD_GPIO_IO18__LPI2C4_SDA		0x40000b9e
-			IMX94_PAD_GPIO_IO19__LPI2C4_SCL		0x40000b9e
 		>;
 	};
 

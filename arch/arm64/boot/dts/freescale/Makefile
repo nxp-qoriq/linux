@@ -954,6 +954,9 @@ dtb-$(CONFIG_ARCH_MXC) += imx95-15x15-evk-rpmsg.dtb
 
 dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk.dtb imx95-19x19-evk-root.dtb imx95-19x19-evk-inmate.dtb \
 			  imx95-19x19-evk-lpspi-slave.dtb
+
+dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-latu-dcsm.dtb
+
 dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-tja1104-rgmii.dtb imx95-19x19-evk-tja1104-rmii.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-netc-rpmsg.dtb
 

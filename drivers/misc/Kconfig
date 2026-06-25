@@ -661,4 +661,15 @@ source "drivers/misc/mchp_pci1xxxx/Kconfig"
 source "drivers/misc/keba/Kconfig"
 source "drivers/misc/amd-sbi/Kconfig"
 source "drivers/misc/rp1/Kconfig"
+
+config MISC_IMX_FLEXIO_JTAG
+	tristate "NXP i.MX FlexIO JTAG master (latu-dcsm)"
+	depends on MFD_IMX_FLEXIO || COMPILE_TEST
+	help
+	  JTAG master driver using the NXP i.MX FlexIO IP block.
+	  Provides /dev/jtag0 for JTAG access to the HPM device on the
+	  latu-dcsm board (i.MX95).  FlexIO1 timers and shifters are used
+	  to generate TCK and shift TDI/TDO/TMS at a minimum of ~46.875 kHz.
+	  Say Y or M if building for the latu-dcsm board.
+
 endmenu

@@ -875,6 +875,16 @@ config GPIO_ZYNQ
 	help
 	  Say yes here to support Xilinx Zynq GPIO controller.
 
+config GPIO_IMX_FLEXIO_SGPIO
+	tristate "NXP i.MX FlexIO SGPIO controller (latu-dcsm)"
+	depends on (MFD_IMX_FLEXIO || COMPILE_TEST) && GPIOLIB
+	help
+	  SGPIO (Serial GPIO) controller using the NXP i.MX FlexIO1 IP block.
+	  Exposes 128 virtual GPIO lines (two 64-bit chains) via the Linux
+	  gpio_chip interface for the HPM device on the i.MX95 latu-dcsm board.
+	  SGPIO clock minimum is ~46.875 kHz (24 MHz FlexIO clock / 512).
+	  Say Y or M if building for the latu-dcsm board.
+
 config GPIO_ZYNQMP_MODEPIN
 	tristate "ZynqMP ps-mode pin GPIO configuration driver"
 	depends on ZYNQMP_FIRMWARE || COMPILE_TEST

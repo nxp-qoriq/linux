@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2026 NXP
+ */
+
+/dts-v1/;
+
+
+#include "imx95-15x15-frdm.dts"
+
+/ {
+    model = "i.MX95 FRDM BMC";
+
+    /* Add override changes for openbmc */
+};

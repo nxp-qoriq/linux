@@ -2,7 +2,7 @@
 /*
  * A V4L2 driver for Omnivision OX05B1S RGB-IR camera.
  *
- * Copyright 2024-2025 NXP
+ * Copyright 2024-2026 NXP
  *
  * Inspired from Sony imx219, imx290, imx214 and imx334 camera drivers
  *
@@ -746,7 +746,7 @@ static int ox05b1s_s_ctrl(struct v4l2_ctrl *ctrl)
 			ret |= ox05b1s_set_dgain_short(sensor, ctrl->val);
 		ret = ret ? -EIO : 0;
 		break;
-	case V4L2_CID_EXPOSURE:
+	case V4L2_CID_EXPOSURE: {
 		u32 long_exp = ctrl->val;
 		u32 short_exp = ctrl->val / OX05B1S_EXP_RATIO;
 
@@ -759,6 +759,7 @@ static int ox05b1s_s_ctrl(struct v4l2_ctrl *ctrl)
 			ret |= ox05b1s_set_exp_short(sensor, short_exp);
 		ret = ret ? -EIO : 0;
 		break;
+	}
 	case V4L2_CID_EXPOSURE_MULTI:
 		/* control available only for HDR mode */
 		if (!hdr_ctrl->cur.val)

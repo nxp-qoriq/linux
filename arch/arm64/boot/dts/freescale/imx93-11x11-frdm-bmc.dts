@@ -30,6 +30,13 @@
 	status = "okay";
 };
 
+
+/* Force USB device (peripheral) mode for OpenBMC */
+&usbotg1 {
+        dr_mode = "peripheral";
+        status = "okay";
+};
+
 &iomuxc {
 
 pinctrl_lpi2c5: lpi2c5grp {

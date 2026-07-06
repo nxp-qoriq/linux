@@ -1469,6 +1469,9 @@ dtb-$(CONFIG_ARCH_MXC) += imx952-evk-kd123c02.dtb
 
 dtb-$(CONFIG_ARCH_MXC) += imx952-frdm.dtb
 
+imx952-frdm-waveshare-7inch-c-panel-dtbs := imx952-frdm.dtb imx952-frdm-waveshare-7inch-c-panel.dtbo
+dtb-$(CONFIG_ARCH_MXC) += imx952-frdm-waveshare-7inch-c-panel.dtb
+
 dtb-$(CONFIG_ARCH_MXC) += imx8mm-kontron-dl.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8mm-kontron-bl-lte.dtb
 

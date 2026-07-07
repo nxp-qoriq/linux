@@ -244,6 +244,7 @@ static int deferred_devs_show(struct seq_file *s, void *data)
 			   curr->deferred_probe_reason ?: "\n");
 
 	mutex_unlock(&deferred_probe_mutex);
+	driver_deferred_probe_trigger();
 
 	return 0;
 }

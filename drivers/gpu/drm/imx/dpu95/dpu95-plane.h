@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 
 /*
- * Copyright 2017-2020,2022,2023 NXP
+ * Copyright 2017-2020,2022,2023,2026 NXP
  */
 
 #ifndef __DPU95_PLANE_H__
@@ -34,6 +34,7 @@ struct dpu95_drm_device;
 struct dpu95_plane {
 	struct drm_plane	base;
 	struct dpu95_plane_grp	*grp;
+	struct drm_property *stride_prop;
 };
 
 union dpu95_plane_stage {
@@ -50,6 +51,7 @@ struct dpu95_plane_state {
 	struct dpu95_vscaler	*vs;
 	struct dpu95_layerblend	*blend;
 	bool			is_top;
+	u32 stride_override;
 };
 
 static inline struct dpu95_plane *to_dpu95_plane(struct drm_plane *plane)
@@ -61,6 +63,12 @@ static inline struct dpu95_plane_state *
 to_dpu95_plane_state(struct drm_plane_state *plane_state)
 {
 	return container_of(plane_state, struct dpu95_plane_state, base);
+}
+
+static inline const struct dpu95_plane_state *
+to_dpu95_plane_state_const(const struct drm_plane_state *plane_state)
+{
+	return container_of(plane_state, const struct dpu95_plane_state, base);
 }
 
 int dpu95_plane_initialize(struct dpu95_drm_device *dpu_drm,

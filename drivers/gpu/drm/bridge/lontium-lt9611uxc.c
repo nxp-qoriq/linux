@@ -28,7 +28,7 @@
 #include <drm/drm_probe_helper.h>
 
 #define EDID_BLOCK_SIZE	128
-#define EDID_NUM_BLOCKS	2
+#define EDID_NUM_BLOCKS 4
 
 #define FW_FILE "lt9611uxc_fw.bin"
 
@@ -410,6 +410,9 @@ static int lt9611uxc_get_edid_block(void *data, u8 *buf, unsigned int block, siz
 {
 	struct lt9611uxc *lt9611uxc = data;
 	int ret;
+
+	dev_info(lt9611uxc->dev,
+         "Reading EDID block %u\n", block);
 
 	if (len > EDID_BLOCK_SIZE)
 		return -EINVAL;

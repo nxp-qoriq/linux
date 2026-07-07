@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Copyright 2024 NXP
+ * Copyright 2024, 2026 NXP
  */
 
 /dts-v1/;
@@ -125,6 +125,12 @@
 
 		rsc_table: rsc-table@88220000 {
 			reg = <0 0x88220000 0 0x1000>;
+			no-map;
+		};
+
+		vram: vram@94000000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0x94000000 0 0x04000000>; /* 64MB */
 			no-map;
 		};
 
@@ -366,6 +372,7 @@
 };
 
 &dpu {
+	memory-region = <&vram>;
 	status = "okay";
 };
 
@@ -1349,4 +1356,8 @@
 &vpuctrl {
 	boot = <&vpu_boot>;
 	sram = <&sram1>;
+};
+
+&mali {
+	status = "okay";
 };

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017,2022-2023,2025 NXP
+ * Copyright 2017,2022-2023,2025,2026 NXP
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -51,6 +51,7 @@ struct drm_imx_dpu_frame_plane_info {
 #define DRM_IMX_DPU_WAIT                        0x01
 #define DRM_IMX_DPU_GET_PARAM                   0x02
 #define DRM_IMX_DPU_SYNC_DMABUF                 0x03
+#define DRM_IMX_DPU_GET_DMA_ADDRESS				0x04
 
 #define DRM_IOCTL_IMX_DPU_SET_CMDLIST   DRM_IOWR(DRM_COMMAND_BASE + \
 		DRM_IMX_DPU_SET_CMDLIST, struct drm_imx_dpu_set_cmdlist)
@@ -60,6 +61,8 @@ struct drm_imx_dpu_frame_plane_info {
 		DRM_IMX_DPU_GET_PARAM, enum drm_imx_dpu_param)
 #define DRM_IOCTL_IMX_DPU_SYNC_DMABUF   DRM_IOW(DRM_COMMAND_BASE + \
 		DRM_IMX_DPU_SYNC_DMABUF, struct drm_imx_dpu_sync_dmabuf)
+#define DRM_IOCTL_IMX_DPU_GET_DMA_ADDRESS DRM_IOWR(DRM_COMMAND_BASE + \
+		DRM_IMX_DPU_GET_DMA_ADDRESS, struct drm_imx_dpu_get_dma_address)
 
 /**
  * struct drm_imx_dpu_set_cmdlist - ioctl argument for
@@ -97,6 +100,12 @@ enum drm_imx_dpu_sync_direction {
 struct drm_imx_dpu_sync_dmabuf {
 	__u32   dmabuf_fd;
 	__u32   direction;
+};
+
+struct drm_imx_dpu_get_dma_address {
+    __u32 handle;
+    __u32 pad;
+    __u64 dma_addr;
 };
 
 /**

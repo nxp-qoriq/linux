@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0+
 
 /*
- * Copyright 2017-2020,2022,2023,2025 NXP
+ * Copyright 2017-2020,2022,2023,2025-2026 NXP
  */
 
 #include <drm/drm_atomic.h>
@@ -73,6 +73,7 @@ static void dpu95_plane_reset(struct drm_plane *plane)
 	plane->state->color_encoding = DRM_COLOR_YCBCR_BT709;
 	plane->state->color_range = DRM_COLOR_YCBCR_LIMITED_RANGE;
 	plane->state->scaling_filter = DRM_SCALING_FILTER_DEFAULT;
+	state->stride_override = 0;
 }
 
 static struct drm_plane_state *
@@ -95,6 +96,7 @@ dpu95_drm_atomic_plane_duplicate_state(struct drm_plane *plane)
 	copy->vs = state->vs;
 	copy->blend = state->blend;
 	copy->is_top = state->is_top;
+	copy->stride_override = state->stride_override;
 
 	return &copy->base;
 }
@@ -113,6 +115,40 @@ static bool dpu95_drm_plane_format_mod_supported(struct drm_plane *plane,
 	return modifier == DRM_FORMAT_MOD_LINEAR;
 }
 
+static int dpu95_plane_atomic_set_property(struct drm_plane *plane,
+					   struct drm_plane_state *state,
+					   struct drm_property *property,
+					   uint64_t val)
+{
+	struct dpu95_plane *dplane = to_dpu95_plane(plane);
+	struct dpu95_plane_state *dpstate =
+		to_dpu95_plane_state(state);
+
+	if (property == dplane->stride_prop) {
+		dpstate->stride_override = (u32)val;
+		return 0;
+	}
+
+	return -EINVAL;
+}
+
+static int dpu95_plane_atomic_get_property(struct drm_plane *plane,
+					   const struct drm_plane_state *state,
+					   struct drm_property *property,
+					   uint64_t *val)
+{
+	struct dpu95_plane *dplane = to_dpu95_plane(plane);
+	const struct dpu95_plane_state *dpstate =
+		to_dpu95_plane_state_const(state);
+
+	if (property == dplane->stride_prop) {
+		*val = dpstate->stride_override;
+		return 0;
+	}
+
+	return -EINVAL;
+}
+
 static const struct drm_plane_funcs dpu95_plane_funcs = {
 	.update_plane		= drm_atomic_helper_update_plane,
 	.disable_plane		= drm_atomic_helper_disable_plane,
@@ -121,6 +157,8 @@ static const struct drm_plane_funcs dpu95_plane_funcs = {
 	.atomic_duplicate_state	= dpu95_drm_atomic_plane_duplicate_state,
 	.atomic_destroy_state	= dpu95_drm_atomic_plane_destroy_state,
 	.format_mod_supported	= dpu95_drm_plane_format_mod_supported,
+	.atomic_set_property = dpu95_plane_atomic_set_property,
+	.atomic_get_property = dpu95_plane_atomic_get_property,
 };
 
 static inline dma_addr_t
@@ -373,9 +411,11 @@ static int dpu95_plane_atomic_check(struct drm_plane *plane,
 				drm_atomic_get_new_plane_state(state, plane);
 	struct dpu95_plane_state *new_dpstate =
 				to_dpu95_plane_state(new_plane_state);
+	struct dpu95_plane *dplane = to_dpu95_plane(plane);
 	struct drm_framebuffer *fb = new_plane_state->fb;
 	struct drm_crtc_state *crtc_state;
 	int min_scale, ret;
+	u64 val = 0;
 
 	/* ok to disable */
 	if (!fb) {
@@ -474,10 +514,13 @@ static void dpu95_plane_atomic_update(struct drm_plane *plane,
 	if (!new_state->crtc->state->active)
 		return;
 
+	u32 stride;
+
 	src_w = drm_rect_width(&new_state->src) >> 16;
 	src_h = drm_rect_height(&new_state->src) >> 16;
 	dst_w = drm_rect_width(&new_state->dst);
 	dst_h = drm_rect_height(&new_state->dst);
+	stride = fb->pitches[0];
 
 	if (fb->format->num_planes > 1)
 		need_fetcheco = true;
@@ -499,7 +542,9 @@ static void dpu95_plane_atomic_update(struct drm_plane *plane,
 	fu_ops->set_layerblend(fu, lb);
 	fu_ops->set_numbuffers(fu, 16);
 	fu_ops->set_burstlength(fu, 16);
-	fu_ops->set_src_stride(fu, fb->pitches[0]);
+	if (new_dpstate->stride_override)
+		stride = new_dpstate->stride_override;
+	fu_ops->set_src_stride(fu, stride);
 	fu_ops->set_src_buf_dimensions(fu, src_w, src_h, fb->format);
 	fu_ops->set_fmt(fu, fb->format, new_state->color_encoding,
 			new_state->color_range);
@@ -617,6 +662,7 @@ int dpu95_plane_initialize(struct dpu95_drm_device *dpu_drm,
 	struct dpu95_plane_grp *plane_grp = &dpu_drm->dpu_plane_grp;
 	struct drm_plane *plane = &dpu_plane->base;
 	struct drm_device *drm = &dpu_drm->base;
+	struct drm_property *prop;
 	unsigned int zpos;
 	int ret;
 
@@ -631,6 +677,16 @@ int dpu95_plane_initialize(struct dpu95_drm_device *dpu_drm,
 		return ret;
 
 	drm_plane_helper_add(plane, &dpu95_plane_helper_funcs);
+
+	prop = drm_property_create_range(drm, 0,
+				"STRIDE_OVERRIDE",
+				0, 65536);
+	if (!prop)
+		return -ENOMEM;
+
+	drm_object_attach_property(&plane->base, prop, 0);
+
+	dpu_plane->stride_prop = prop;
 
 	zpos = dpu95_plane_get_default_zpos(type);
 	ret = drm_plane_create_zpos_property(plane,

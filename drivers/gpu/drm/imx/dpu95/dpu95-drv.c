@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0+
 
 /*
- * Copyright 2023 NXP
+ * Copyright 2023, 2026 NXP
  */
 
 #include <linux/module.h>
@@ -9,6 +9,8 @@
 #include <linux/platform_device.h>
 #include <linux/pm.h>
 #include <linux/pm_runtime.h>
+#include <linux/of_reserved_mem.h>
+#include <linux/dma-mapping.h>
 
 #include <drm/clients/drm_client_setup.h>
 #include <drm/drm_atomic_helper.h>
@@ -24,7 +26,7 @@
 #include "dpu95.h"
 #include "dpu95-drv.h"
 
-#define DRIVER_NAME	"imx95-dpu"
+#define DRIVER_NAME	"imx95-dpu-PCIe"
 
 DEFINE_DRM_GEM_DMA_FOPS(dpu95_drm_driver_fops);
 
@@ -73,6 +75,14 @@ static int dpu95_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct drm_device *drm;
 	int ret;
+
+	ret = of_reserved_mem_device_init(dev);
+	if (ret)
+		dev_warn(dev, "No reserved memory, using CMA\n");
+	else
+		dev_info(dev, "Reserved VRAM attached\n");
+
+	dma_set_mask_and_coherent(dev, DMA_BIT_MASK(32));
 
 	dpu_drm = devm_drm_dev_alloc(dev, &dpu95_drm_driver,
 				     struct dpu95_drm_device, base);

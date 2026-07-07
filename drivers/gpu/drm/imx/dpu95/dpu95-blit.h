@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 
 /*
- * Copyright 2023 NXP
+ * Copyright 2023, 2026 NXP
  */
 
 #ifndef __DPU95_BLIT_H__
@@ -50,7 +50,7 @@ struct dpu_bliteng {
 
 struct dpu95_drm_device;
 
-extern const struct drm_ioctl_desc imx_drm_dpu95_ioctls[4];
+extern const struct drm_ioctl_desc imx_drm_dpu95_ioctls[5];
 
 int dpu95_bliteng_load(struct dpu95_drm_device *dpu_drm);
 void dpu95_bliteng_unload(struct dpu95_drm_device *dpu_drm);

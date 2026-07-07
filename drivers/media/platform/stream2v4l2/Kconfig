@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Copyright 2026 NXP
+config VIDEO_STREAM2V4L2
+    tristate "PCIe stream to V4L2 MJPEG bridge"
+    depends on MEDIA_SUPPORT && VIDEO_DEV
+    select VIDEOBUF2_CORE
+    select VIDEOBUF2_VMALLOC
+    default m
+    help
+      Say Y or M here if you want to expose a PCIe-delivered
+      host video stream as a V4L2 capture device suitable
+      for OpenBMC iKVM (RGB24 only).
+
+      This driver creates a virtual V4L2 capture device
+      backed by /dev/stream.

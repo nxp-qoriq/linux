@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0+
 
 /*
- * Copyright 2017-2020,2022,2023,2025 NXP
+ * Copyright 2017-2020,2022,2023,2025-2026 NXP
  */
 
 #include <linux/list.h>
@@ -620,6 +620,8 @@ int dpu95_kms_prepare(struct dpu95_drm_device *dpu_drm)
 				i, ret);
 			return ret;
 		}
+			drm_err(drm, "init overlay plane%d: %d\n",
+				i, ret);
 	}
 
 	ret = drm_vblank_init(drm, DPU95_CRTCS);

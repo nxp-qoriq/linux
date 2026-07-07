@@ -554,12 +554,14 @@ static int imx95_pcie_wait_for_phy_pll_lock(struct imx_pcie *imx_pcie)
 				     val & IMX95_PCIE_PHY_MPLL_STATE,
 				     PHY_PLL_LOCK_WAIT_USLEEP_MAX,
 				     PHY_PLL_LOCK_WAIT_TIMEOUT)) {
-		dev_err(dev, "PCIe PLL lock timeout\n");
+		// dev_err(dev, "PCIe PLL lock timeout\n");
+		dev_err(dev, "PCIe PLL lock timeout 0x%x\n", val);
 		imx_pcie->pll_locked = false;
 		return -ETIMEDOUT;
 	}
 
 	imx_pcie->pll_locked = true;
+	dev_err(dev, "PCIe PLL locked 0x%x\n", val);
 	return 0;
 }
 
@@ -1332,8 +1334,20 @@ static int imx_pcie_host_init(struct dw_pcie_rp *pp)
 		}
 	}
 
+	if (imx_pcie->drvdata->mode == DW_PCIE_EP_TYPE) {
+		if ((imx95_pcie_wait_for_phy_pll_lock(imx_pcie)) < 0) {
+			ret = imx_pcie_deassert_core_reset(imx_pcie);
+			if (ret < 0) {
+				dev_err(dev, "pcie deassert core reset failed: %d\n", ret);
+				goto err_phy_off;
+			}
+			ret = -EPROBE_DEFER;
+			goto err_phy_off;
+		}
+	}
+
 	/* Make sure that PCIe LTSSM is cleared */
-	imx_pcie_ltssm_disable(dev);
+	//imx_pcie_ltssm_disable(dev);
 
 	ret = imx_pcie_deassert_core_reset(imx_pcie);
 	if (ret < 0) {
@@ -1541,7 +1555,10 @@ static int imx_add_pcie_ep(struct imx_pcie *imx_pcie,
 	struct dw_pcie_rp *pp = &pci->pp;
 	struct device *dev = pci->dev;
 
-	imx_pcie_host_init(pp);
+	//imx_pcie_host_init(pp);
+	if (imx_pcie_host_init(pp) == -EPROBE_DEFER)
+		return -EPROBE_DEFER;
+
 	ep = &pci->ep;
 	ep->ops = &pcie_ep_ops;
 
@@ -1566,6 +1583,7 @@ static int imx_add_pcie_ep(struct imx_pcie *imx_pcie,
 
 	pci_epc_init_notify(ep->epc);
 
+	imx_pcie_ltssm_enable(dev);
 	return 0;
 }
 
@@ -1911,8 +1929,13 @@ static int imx_pcie_probe(struct platform_device *pdev)
 	for (i = 0; i < imx_pcie->num_clks; i++) {
 		if (strncmp(imx_pcie->clks[i].id, "ext-ref", 7) == 0)
 			imx_pcie->enable_ext_refclk = true;
-		else
-			imx_pcie->enable_ext_refclk = false;
+		else {
+			imx_pcie->enable_ext_refclk = of_property_read_bool(pdev->dev.of_node, "ext-refclk");
+			if (imx_pcie->enable_ext_refclk)
+				dev_err(dev, "external ref clk enable\n");
+			else
+				dev_err(dev, "external ref clk disable\n");
+		}
 	}
 
 	if (imx_check_flag(imx_pcie, IMX_PCIE_FLAG_HAS_PHYDRV)) {
@@ -2028,8 +2051,8 @@ static int imx_pcie_probe(struct platform_device *pdev)
 	pci->use_parent_dt_ranges = true;
 	if (imx_pcie->drvdata->mode == DW_PCIE_EP_TYPE) {
 		ret = imx_add_pcie_ep(imx_pcie, pdev);
-		if (ret < 0)
-			return ret;
+		if (ret == -EPROBE_DEFER)
+			return dev_err_probe(dev, -EPROBE_DEFER, "ext clk 100MHZ not avail\n");
 
 		/*
 		 * FIXME: Only single Device (EPF) is supported due to the
@@ -2413,7 +2436,7 @@ static void imx_pcie_quirk(struct pci_dev *dev)
 	}
 }
 DECLARE_PCI_FIXUP_CLASS_HEADER(PCI_VENDOR_ID_SYNOPSYS, 0xabcd,
-			PCI_CLASS_BRIDGE_PCI, 8, imx_pcie_quirk);
+			PCI_CLASS_DISPLAY_VGA, 8, imx_pcie_quirk);
 
 static int __init imx_pcie_init(void)
 {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0+
 
 /*
- * Copyright 2023 NXP
+ * Copyright 2023, 2026 NXP
  */
 
 #include <drm/drm_drv.h>
@@ -15,6 +15,7 @@
 #include <linux/mutex.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
+#include <drm/drm_gem_dma_helper.h>
 
 #include "dpu95.h"
 #include "dpu95-drv.h"
@@ -495,6 +496,8 @@ static int dpu95_bliteng_init(struct dpu_bliteng *dpu_bliteng)
 	dpu_bliteng->base = base;
 	dpu_bliteng->dpu = dpu;
 
+	dev_err(dpu->dev, "IP identifier: 0x%x\n", dpu95_be_read(dpu_bliteng, 0));
+
 	mutex_init(&dpu_bliteng->mutex);
 
 	/* Init the uints used by blit engine */
@@ -713,7 +716,31 @@ err_put:
 	return ret;
 }
 
-const struct drm_ioctl_desc imx_drm_dpu95_ioctls[4] = {
+static int imx_drm_dpu95_get_dma_ioctl(struct drm_device *dev,
+                               void *data,
+                               struct drm_file *file)
+{
+    struct drm_imx_dpu_get_dma_address *args = data;
+    struct drm_gem_object *obj;
+    struct drm_gem_dma_object *dma_obj;
+
+    obj = drm_gem_object_lookup(file, args->handle);
+    if (!obj)
+        return -ENOENT;
+
+    dma_obj = to_drm_gem_dma_obj(obj);
+
+    args->dma_addr = dma_obj->dma_addr;
+
+    pr_info("DPU95 DMA ADDR = 0x%016llX\n",
+            (unsigned long long)dma_obj->dma_addr);
+
+    drm_gem_object_put(obj);
+
+    return 0;
+}
+
+const struct drm_ioctl_desc imx_drm_dpu95_ioctls[5] = {
 	DRM_IOCTL_DEF_DRV(IMX_DPU_SET_CMDLIST, imx_drm_dpu95_set_cmdlist_ioctl,
 			DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(IMX_DPU_WAIT, imx_drm_dpu95_wait_ioctl,
@@ -721,6 +748,8 @@ const struct drm_ioctl_desc imx_drm_dpu95_ioctls[4] = {
 	DRM_IOCTL_DEF_DRV(IMX_DPU_GET_PARAM, imx_drm_dpu95_get_param_ioctl,
 			DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(IMX_DPU_SYNC_DMABUF, imx_drm_dpu95_sync_dmabuf_ioctl,
+			DRM_RENDER_ALLOW),
+    DRM_IOCTL_DEF_DRV(IMX_DPU_GET_DMA_ADDRESS, imx_drm_dpu95_get_dma_ioctl,
 			DRM_RENDER_ALLOW),
 };
 

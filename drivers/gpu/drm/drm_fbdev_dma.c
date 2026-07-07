@@ -19,6 +19,7 @@ static int drm_fbdev_dma_fb_open(struct fb_info *info, int user)
 {
 	struct drm_fb_helper *fb_helper = info->par;
 
+	printk("In %s\n", __func__);
 	/* No need to take a ref for fbcon because it unbinds on unregister */
 	if (user && !try_module_get(fb_helper->dev->driver->fops->owner))
 		return -ENODEV;
@@ -39,6 +40,7 @@ static int drm_fbdev_dma_fb_release(struct fb_info *info, int user)
 static int drm_fbdev_dma_fb_mmap(struct fb_info *info, struct vm_area_struct *vma)
 {
 	struct drm_fb_helper *fb_helper = info->par;
+	printk("In %s\n", __func__);
 
 	return drm_gem_prime_mmap(fb_helper->buffer->gem, vma);
 }
@@ -279,7 +281,7 @@ int drm_fbdev_dma_driver_fbdev_probe(struct drm_fb_helper *fb_helper,
 	struct iosys_map map;
 	int ret;
 
-	drm_dbg_kms(dev, "surface width(%d), height(%d) and bpp(%d)\n",
+	drm_warn(dev, "surface width(%d), height(%d) and bpp(%d)\n",
 		    sizes->surface_width, sizes->surface_height,
 		    sizes->surface_bpp);
 

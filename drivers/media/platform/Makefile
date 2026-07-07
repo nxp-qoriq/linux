@@ -41,3 +41,4 @@ obj-$(CONFIG_VIDEO_MEM2MEM_DEINTERLACE)	+= m2m-deinterlace.o
 obj-$(CONFIG_VIDEO_MUX)			+= video-mux.o
 obj-$(CONFIG_VIDEO_MXC_CAPTURE)		+= mxc/capture/
 obj-$(CONFIG_VIDEO_MXC_OUTPUT)		+= mxc/output/
+obj-$(CONFIG_VIDEO_STREAM2V4L2)         += stream2v4l2/

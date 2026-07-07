@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0+
 
 /*
- * Copyright 2023 NXP
+ * Copyright 2023, 2026 NXP
  */
 
 #include <linux/bits.h>
@@ -117,6 +117,9 @@ imx95_pl_find_next_bridge_per_output_port(struct imx95_pl *pl, u32 out_port)
 	struct device_node *np = dev->of_node;
 	u32 in_port = out_port - STREAMS;
 	struct device_node *remote;
+	struct device_node *remote_ldb_ch1_remote;
+	struct device_node *remote_ldb_ch1_remote_port;
+	bool remote_dual_link_ldb = false;
 	u32 ep;
 	int i;
 
@@ -137,6 +140,34 @@ imx95_pl_find_next_bridge_per_output_port(struct imx95_pl *pl, u32 out_port)
 			continue;
 		}
 
+		if (out_port == 3 && ep == 1) {
+			remote_ldb_ch1_remote =
+				of_graph_get_remote_node(remote, 1, 0);
+			if (!remote_ldb_ch1_remote)
+				goto out;
+
+			remote_ldb_ch1_remote_port =
+				of_graph_get_port_by_id(remote_ldb_ch1_remote, 1);
+			if (!remote_ldb_ch1_remote_port) {
+				of_node_put(remote_ldb_ch1_remote);
+				goto out;
+			}
+
+			if (of_property_present(remote_ldb_ch1_remote_port,
+						"dual-lvds-odd-pixels") ||
+			    of_property_present(remote_ldb_ch1_remote_port,
+						"dual-lvds-even-pixels"))
+				remote_dual_link_ldb = true;
+
+			of_node_put(remote_ldb_ch1_remote_port);
+			of_node_put(remote_ldb_ch1_remote);
+
+			if (remote_dual_link_ldb) {
+				of_node_put(remote);
+				continue;
+			}
+		}
+out:
 		pl->next_bridge[in_port] = of_drm_find_bridge(remote);
 		if (!pl->next_bridge[in_port]) {
 			dev_dbg(dev, "failed to find next bridge for port%u ep%u\n",

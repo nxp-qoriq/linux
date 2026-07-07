@@ -382,6 +382,7 @@ int drm_open(struct inode *inode, struct file *filp)
 
 	atomic_fetch_inc(&dev->open_count);
 
+	drm_err(dev, "PCIe open_count \n");
 	/* share address_space across all char-devs of a single device */
 	filp->f_mapping = dev->anon_inode->i_mapping;
 

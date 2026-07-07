@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0+
 
 /*
- * Copyright 2017-2020,2022-2025 NXP
+ * Copyright 2017-2020,2022-2026 NXP
  */
 
 #include <linux/irq.h>
@@ -687,6 +687,8 @@ int dpu95_crtc_init(struct dpu95_drm_device *dpu_drm,
 			stream_id, ret);
 		return ret;
 	}
+	drm_err(drm, " DRM_PLANE_TYPE_PRIMARY failed to init primary plane for stream%d: %d\n",
+		stream_id, ret);
 
 	drm_crtc_helper_add(crtc, &dpu95_helper_funcs);
 

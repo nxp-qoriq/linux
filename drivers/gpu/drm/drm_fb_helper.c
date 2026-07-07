@@ -1839,7 +1839,7 @@ __drm_fb_helper_initial_config_and_unlock(struct drm_fb_helper *fb_helper)
 	if (ret < 0)
 		return ret;
 
-	drm_info(dev, "fb%d: %s frame buffer device\n",
+	drm_info(dev, "fb%d: %s PCIe frame buffer device\n",
 		 info->node, info->fix.id);
 
 	mutex_lock(&kernel_fb_helper_lock);

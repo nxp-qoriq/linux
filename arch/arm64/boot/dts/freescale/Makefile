@@ -1475,6 +1475,17 @@ dtb-$(CONFIG_ARCH_MXC) += imx952-evk-kd123c02.dtb
 
 dtb-$(CONFIG_ARCH_MXC) += imx952-frdm.dtb
 
+imx952-frdm-os08a20-csi0-2lanes-dtbs := imx952-frdm.dtb imx952-frdm-os08a20-csi0-2lanes.dtbo
+dtb-$(CONFIG_ARCH_MXC) += imx952-frdm-os08a20-csi0-2lanes.dtb
+
+imx952-frdm-os08a20-csi1-2lanes-dtbs := imx952-frdm.dtb imx952-frdm-os08a20-csi1-2lanes.dtbo
+dtb-$(CONFIG_ARCH_MXC) += imx952-frdm-os08a20-csi1-2lanes.dtb
+
+imx952-frdm-os08a20-dual-dtbs := imx952-frdm.dtb \
+                                 imx952-frdm-os08a20-csi0-2lanes.dtbo \
+                                 imx952-frdm-os08a20-csi1-2lanes.dtbo
+dtb-$(CONFIG_ARCH_MXC) += imx952-frdm-os08a20-dual.dtb
+
 imx952-frdm-boe-wxga-lvds-panel-dtbs := imx952-frdm.dtb imx952-frdm-boe-wxga-lvds-panel.dtbo
 dtb-$(CONFIG_ARCH_MXC) += imx952-frdm-boe-wxga-lvds-panel.dtb
 

@@ -1475,6 +1475,9 @@ dtb-$(CONFIG_ARCH_MXC) += imx952-evk-kd123c02.dtb
 
 dtb-$(CONFIG_ARCH_MXC) += imx952-frdm.dtb
 
+imx952-frdm-os08a20-csi0-4lanes-dtbs := imx952-frdm.dtb imx952-frdm-os08a20-csi0-4lanes.dtbo
+dtb-$(CONFIG_ARCH_MXC) += imx952-frdm-os08a20-csi0-4lanes.dtb
+
 imx952-frdm-os08a20-csi0-2lanes-dtbs := imx952-frdm.dtb imx952-frdm-os08a20-csi0-2lanes.dtbo
 dtb-$(CONFIG_ARCH_MXC) += imx952-frdm-os08a20-csi0-2lanes.dtb
 

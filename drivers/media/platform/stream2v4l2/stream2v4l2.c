@@ -11,13 +11,22 @@
 #include <linux/mm.h>
 #include <linux/mman.h>
 #include <linux/spinlock.h>
+#include <linux/platform_device.h>
+#include <linux/of.h>
+#include <linux/of_address.h>
+#include <linux/io.h>
 
 #include <media/v4l2-device.h>
 #include <media/v4l2-ioctl.h>
-#include <media/videobuf2-vmalloc.h>
+#include <media/videobuf2-dma-contig.h>
 
 #include <linux/fs.h>
 #include <linux/slab.h>
+
+extern uint64_t pci_epf_get_vram_fb_address(void);
+extern int dpu95_convert_bgrx8888_to_rgbx8888(dma_addr_t src, dma_addr_t dst,
+				      u32 width, u32 height,
+				      u32 src_stride, u32 dst_stride);
 
 #define RES_FILE "/tmp/last_res.conf"
 
@@ -32,24 +41,16 @@ static int pitch = 0;  /* bytes per row; 0 = use width*BPP */
 static DEFINE_SPINLOCK(res_lock);
 static bool res_changed;
 
-#define BPP    4
-#define FRAME_SIZE (width * height * BPP)
-
 struct stream2v4l2 {
 	struct v4l2_device  v4l2_dev;
 	struct video_device vdev;
 	struct vb2_queue    vb2_q;
 	struct mutex        lock;
-	struct file *stream_filp;
-	void *stream_buf;
-	size_t stream_size;
-	int mapped_width;
-	int mapped_height;
-	u8 *tmp_buf;
-	struct mutex stream_lock;
+	bool streaming;
 };
 
 static struct stream2v4l2 *g_dev;
+static struct platform_device *stream_pdev;
 
 static void stream2v4l2_wait_prepare(struct vb2_queue *vq)
 {
@@ -69,78 +70,41 @@ static void stream2v4l2_wait_finish(struct vb2_queue *vq)
 static void stream2v4l2_buf_queue(struct vb2_buffer *vb)
 {
 	struct stream2v4l2 *dev = vb2_get_drv_priv(vb->vb2_queue);
-	void *dst;
-	u8 *out;
-	u8 *tmp;
-	u8 __user *src;
+	dma_addr_t src, dst;
 	unsigned long flags;
-	int w, h, p;
-	int src_stride, dst_stride;
-	int x, y;
+	u32 w, h, p;
+	int ret;
 
-	spin_lock_irqsave(&res_lock, flags);
-	w = width;
-	h = height;
-	p = pitch;
-	spin_unlock_irqrestore(&res_lock, flags);
+	if (unlikely(!READ_ONCE(dev->streaming))) {
+		vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
+		return;
+	}
+	
+	w = READ_ONCE(width);
+	h = READ_ONCE(height);
+	p = READ_ONCE(pitch);
 
-	if (res_changed) {
-		pr_err("res_changed: stream stop\n");
+	if (!p)
+		p = w * 4;
+
+	src = pci_epf_get_vram_fb_address();
+	dst = vb2_dma_contig_plane_dma_addr(vb, 0);
+
+	if (!src || !dst) {
+		pr_err("Invalid DMA address src=%pad dst=%pad\n", &src, &dst);
 		vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
 		return;
 	}
 
-	dst = vb2_plane_vaddr(vb, 0);
-	if (!dst) {
+	u64 start = ktime_get_ns();
+
+	/* Perform HW conversion */
+	ret = dpu95_convert_bgrx8888_to_rgbx8888(src, dst, w, h, p, w * 4);
+	if (ret) {
+		pr_err("DPU convert failed %d\n", ret);
 		vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
 		return;
 	}
-
-	mutex_lock(&dev->stream_lock);
-
-	if (!dev->stream_buf || !dev->tmp_buf) {
-		mutex_unlock(&dev->stream_lock);
-		pr_err("stream2v4l2: stream not mapped\n");
-		vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
-		return;
-	}
-
-	if (dev->stream_size < ((size_t)(p ? p : w * 4) * h)) {
-		pr_err("stream2v4l2: invalid stream size (%zu)\n",
-		       dev->stream_size);
-		mutex_unlock(&dev->stream_lock);
-		vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
-		return;
-	}
-
-	tmp = dev->tmp_buf;
-	src = (u8 __user *)dev->stream_buf;
-
-	if (copy_from_user(tmp, src, dev->stream_size)) {
-		pr_err("stream2v4l2: copy_from_user failed\n");
-		mutex_unlock(&dev->stream_lock);
-		vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
-		return;
-	}
-
-	out = (u8 *)dst;
-	/* Use actual FB pitch if set, else default to width*4 */
-	src_stride = p ? p : w * 4;
-	dst_stride = w * 4;   /* RGB24 output (always packed) */
-
-	for (y = 0; y < h; y++) {
-		const u8 *src_row = tmp + y * src_stride;
-		u8 *dst_row = out + y * dst_stride;
-
-		for (x = 0; x < w; x++) {
-			dst_row[x * 4 + 0] = src_row[x * 4 + 2];
-			dst_row[x * 4 + 1] = src_row[x * 4 + 1];
-			dst_row[x * 4 + 2] = src_row[x * 4 + 0];
-			dst_row[x * 4 + 3] = 0;
-		}
-	}
-
-	mutex_unlock(&dev->stream_lock);
 
 	vb2_set_plane_payload(vb, 0, w * h * 4);
 	vb->timestamp = ktime_get_ns();
@@ -155,11 +119,8 @@ static int stream2v4l2_queue_setup(struct vb2_queue *vq,
 					unsigned int sizes[],
 					struct device *alloc_devs[])
 {
-	struct stream2v4l2 *dev = vb2_get_drv_priv(vq);
-	unsigned long addr;
 	unsigned long flags;
 	int w, h, p;
-	size_t map_size;
 
 	spin_lock_irqsave(&res_lock, flags);
 	w = width;
@@ -167,72 +128,23 @@ static int stream2v4l2_queue_setup(struct vb2_queue *vq,
 	p = pitch;
 	spin_unlock_irqrestore(&res_lock, flags);
 
-	/* Ensure at least 2 buffers */
-	if (*nbufs < 2)
-		*nbufs = 2;
+	if (*nbufs < 4)
+		*nbufs = 4;
 
 	/* Single plane RGB24 */
 	*nplanes = 1;
-	sizes[0] = (size_t)w * h * 4;
-
-	mutex_lock(&dev->stream_lock);
-
-	/* Re-map if resolution changed since last map */
-	if (res_changed && dev->stream_buf) {
-
-		vm_munmap((unsigned long)dev->stream_buf, dev->stream_size);
-		dev->stream_buf = NULL;
-		if (dev->stream_filp) {
-			filp_close(dev->stream_filp, NULL);
-			dev->stream_filp = NULL;
-		}
-		kfree(dev->tmp_buf);
-		dev->tmp_buf = kmalloc((size_t)w * h * 4, GFP_KERNEL);
-		if (!dev->tmp_buf) {
-			mutex_unlock(&dev->stream_lock);
-			return -ENOMEM;
-		}
-		res_changed = false;
-		pr_info("stream2v4l2: resolution updated to %dx%d\n", w, h);
-	}
-
-	/* Map /dev/stream only once */
-	if (!dev->stream_buf) {
-		dev->stream_filp = filp_open("/dev/stream", O_RDONLY, 0);
-		if (IS_ERR(dev->stream_filp)) {
-			pr_err("stream2v4l2: failed to open /dev/stream\n");
-			mutex_unlock(&dev->stream_lock);
-			return PTR_ERR(dev->stream_filp);
-		}		
-
-		/* Map using actual pitch*height to cover full FB */
-		map_size = (size_t)(p ? p : w * 4) * h;
-		addr = vm_mmap(dev->stream_filp, 0, map_size, PROT_READ,
-		MAP_SHARED, 0);
-
-		if (IS_ERR_VALUE(addr)) {
-			pr_err("stream2v4l2: vm_mmap failed\n");
-			filp_close(dev->stream_filp, NULL);
-			dev->stream_filp = NULL;
-			mutex_unlock(&dev->stream_lock);
-			return -ENOMEM;
-		}
-
-		dev->stream_buf = (void *)addr;
-		dev->stream_size = map_size;
-
-		pr_info("stream2v4l2: mapped /dev/stream at %p\n",
-		dev->stream_buf);
-	}
-
-	mutex_unlock(&dev->stream_lock);
+	sizes[0] = max_t(size_t, (size_t)w * h * 4, PAGE_SIZE);
 	return 0;
 }
 
 static int stream2v4l2_start_streaming(struct vb2_queue *vq,
 					unsigned int count)
 {
+	struct stream2v4l2 *dev = vb2_get_drv_priv(vq);
+
+	dev->streaming = true;
 	res_changed = false;
+
 	return 0;
 }
 
@@ -240,31 +152,31 @@ static void stream2v4l2_stop_streaming(struct vb2_queue *vq)
 {
 	struct stream2v4l2 *dev = vb2_get_drv_priv(vq);
 
-	if (dev->stream_buf) {
-		vm_munmap((unsigned long)dev->stream_buf,
-			dev->stream_size);
-		dev->stream_buf = NULL;
-	}
-
-	if (dev->stream_filp) {
-		filp_close(dev->stream_filp, NULL);
-		dev->stream_filp = NULL;
-	}
+	dev->streaming = false;
 }
 
 static int stream2v4l2_buf_prepare(struct vb2_buffer *vb)
 {
-	if (vb2_plane_size(vb, 0) < FRAME_SIZE)
+	u32 size;
+	
+	size = READ_ONCE(width) * READ_ONCE(height) * 4;
+	if (vb2_plane_size(vb,0) < size)
 		return -EINVAL;
 
-	vb2_set_plane_payload(vb, 0, FRAME_SIZE);
+	vb2_set_plane_payload(vb, 0 ,size);
 	return 0;
+}
+
+static void stream2v4l2_buf_finish(struct vb2_buffer *vb)
+{
+	
 }
 
 static const struct vb2_ops stream2v4l2_vb2_ops = {
 	.queue_setup     = stream2v4l2_queue_setup,
 	.buf_prepare     = stream2v4l2_buf_prepare,
 	.buf_queue       = stream2v4l2_buf_queue,
+	.buf_finish      = stream2v4l2_buf_finish,
 	.start_streaming = stream2v4l2_start_streaming,
 	.stop_streaming  = stream2v4l2_stop_streaming,
 	.wait_prepare    = stream2v4l2_wait_prepare,
@@ -489,27 +401,32 @@ static int __init stream2v4l2_init(void)
 	if (!dev)
 		return -ENOMEM;
 
-	dev->tmp_buf = kmalloc(width * height * 4, GFP_KERNEL);
-	if (!dev->tmp_buf) {
-		rc = -ENOMEM;
-		goto err_free;
-	}
-
 	mutex_init(&dev->lock);
-	mutex_init(&dev->stream_lock);
+	dev->streaming = false;
 
 	strscpy(dev->v4l2_dev.name, DRIVER_NAME, sizeof(dev->v4l2_dev.name));
 	strscpy(dev->vb2_q.name, DRIVER_NAME, sizeof(dev->vb2_q.name));
 
-	rc = v4l2_device_register(NULL, &dev->v4l2_dev);
-	if (rc)
-		goto err_free;
+	stream_pdev = platform_device_register_simple(DRIVER_NAME, -1, NULL, 0);
+	if (IS_ERR(stream_pdev)) {
+			rc = PTR_ERR(stream_pdev);
+			goto err_free;
+	}
 
-	dev->vb2_q.dev = dev->v4l2_dev.dev;
+	rc = dma_set_mask_and_coherent(&stream_pdev->dev,DMA_BIT_MASK(64));
+	if (rc)
+		pr_err("Failed dma set mask");
+
+	rc = v4l2_device_register(&stream_pdev->dev, &dev->v4l2_dev);
+	if (rc)
+		goto err_pdev;
+
+	dev->vb2_q.dev = &stream_pdev->dev;
 	dev->vb2_q.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	dev->vb2_q.io_modes = VB2_MMAP;
+	dev->vb2_q.io_modes = VB2_MMAP | VB2_DMABUF | VB2_READ;
+	dev->vb2_q.gfp_flags = GFP_DMA32;
 	dev->vb2_q.ops = &stream2v4l2_vb2_ops;
-	dev->vb2_q.mem_ops = &vb2_vmalloc_memops;
+	dev->vb2_q.mem_ops = &vb2_dma_contig_memops;
 	dev->vb2_q.lock = &dev->lock;
 	dev->vb2_q.drv_priv = dev;
 	dev->vb2_q.buf_struct_size = sizeof(struct vb2_v4l2_buffer);
@@ -540,10 +457,11 @@ static int __init stream2v4l2_init(void)
 	pr_info("stream2v4l2: registered /dev/video%d\n", dev->vdev.num);
 	return 0;
 
+err_pdev:
+    platform_device_unregister(stream_pdev);	
 err_v4l2:
 	v4l2_device_unregister(&dev->v4l2_dev);
 err_free:
-	kfree(dev->tmp_buf);
 	kfree(dev);
 
 	return rc;
@@ -556,18 +474,11 @@ static void __exit stream2v4l2_exit(void)
 	if (!dev)
 		return;
 
-	if (dev->stream_buf) {
-		vm_munmap((unsigned long)dev->stream_buf,
-			dev->stream_size);
-	}
-
-	if (dev->stream_filp)
-		filp_close(dev->stream_filp, NULL);
-
+	vb2_queue_release(&dev->vb2_q);
 	video_unregister_device(&dev->vdev);
 	v4l2_device_unregister(&dev->v4l2_dev);
+	platform_device_unregister(stream_pdev);
 
-	kfree(dev->tmp_buf);
 	kfree(dev);
 }
 
@@ -591,10 +502,13 @@ static int param_set_resolution(const char *val, const struct kernel_param *kp)
 	spin_lock_irqsave(&res_lock, flags);
 
 	if (width != w || height != h || pitch != new_pitch) {
-		width = w;
-		height = h;
-		pitch = new_pitch;
-		res_changed = true;
+		WRITE_ONCE(width,w);
+		WRITE_ONCE(height,h);
+		WRITE_ONCE(pitch,new_pitch);
+		WRITE_ONCE(res_changed,true);
+
+		if (g_dev)
+			stream2v4l2_stop_streaming(&g_dev->vb2_q);
 	}
 	spin_unlock_irqrestore(&res_lock, flags);
 	return 0;

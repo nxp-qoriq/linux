@@ -38,21 +38,11 @@
 #include <linux/dma-mapping.h>
 #include <linux/scatterlist.h>
 
-static dev_t stream_dev;
-static struct cdev stream_cdev;
-static struct class *stream_class;
+static DEFINE_SPINLOCK(offset_lock);
 static phys_addr_t vram_phys;
 static size_t vram_size;
 static uint64_t vram_fb_offset;
-
-struct stream_dmabuf {
-	phys_addr_t phys;
-	size_t size;
-	struct device *dev;
-};
-
-#define STREAM_IOC_GET_DMABUF	_IOR('S', 1, int)
-#define STREAM_IOC_SET_OFFSET	_IOW('S', 2, uint64_t)
+static uint64_t vram_fb_addr;
 
 #define IRQ_TYPE_INTX			0
 #define IRQ_TYPE_MSI			1
@@ -1395,8 +1385,6 @@ static int pci_epf_test_probe(struct pci_epf *epf,
 	return 0;
 }
 
-/* ---- VRAM character device: mmap + DMA-BUF export ---- */
-
 static int stream_init_vram(void)
 {
 	struct device_node *vram_node;
@@ -1420,218 +1408,6 @@ static int stream_init_vram(void)
 
 	return 0;
 }
-
-static int stream_attach(struct dma_buf *dmabuf,
-			 struct dma_buf_attachment *attach)
-{
-	pr_info("%s\n", __func__);
-	return 0;
-}
-
-static void stream_detach(struct dma_buf *dmabuf,
-			  struct dma_buf_attachment *attach)
-{
-	pr_info("%s\n", __func__);
-}
-
-static struct sg_table *stream_map_dma_buf(struct dma_buf_attachment *attach,
-					   enum dma_data_direction dir)
-{
-	struct stream_dmabuf *buf = attach->dmabuf->priv;
-	struct sg_table *sgt;
-	int ret;
-
-	pr_info("%s\n", __func__);
-	sgt = kzalloc(sizeof(*sgt), GFP_KERNEL);
-	if (!sgt)
-		return ERR_PTR(-ENOMEM);
-
-	ret = sg_alloc_table(sgt, 1, GFP_KERNEL);
-	if (ret) {
-		kfree(sgt);
-		return ERR_PTR(ret);
-	}
-
-	sg_set_page(sgt->sgl, ZERO_PAGE(0), buf->size, 0);
-	sg_dma_address(sgt->sgl) = buf->phys;
-	sg_dma_len(sgt->sgl) = buf->size;
-
-	ret = dma_map_sg(attach->dev, sgt->sgl, 1, dir);
-	if (ret <= 0) {
-		sg_free_table(sgt);
-		kfree(sgt);
-		return ERR_PTR(-EIO);
-	}
-
-	return sgt;
-}
-
-static void stream_unmap_dma_buf(struct dma_buf_attachment *attach,
-				 struct sg_table *sgt,
-				 enum dma_data_direction dir)
-{
-	pr_info("%s\n", __func__);
-	dma_unmap_sg(attach->dev, sgt->sgl, 1, dir);
-	sg_free_table(sgt);
-	kfree(sgt);
-}
-
-static void stream_dma_buf_release(struct dma_buf *dmabuf)
-{
-	struct stream_dmabuf *buf = dmabuf->priv;
-
-	pr_info("%s\n", __func__);
-	kfree(buf);
-}
-
-static int stream_dmabuf_mmap(struct dma_buf *dmabuf,
-			      struct vm_area_struct *vma)
-{
-	struct stream_dmabuf *buf = dmabuf->priv;
-
-	pr_info("%s\n", __func__);
-	if ((vma->vm_end - vma->vm_start) > buf->size)
-		return -EINVAL;
-
-	vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
-
-	return remap_pfn_range(vma,
-			       vma->vm_start,
-			       buf->phys >> PAGE_SHIFT,
-			       vma->vm_end - vma->vm_start,
-			       vma->vm_page_prot);
-}
-
-static const struct dma_buf_ops stream_dmabuf_ops = {
-	.attach        = stream_attach,
-	.detach        = stream_detach,
-	.map_dma_buf   = stream_map_dma_buf,
-	.unmap_dma_buf = stream_unmap_dma_buf,
-	.mmap          = stream_dmabuf_mmap,
-	.release       = stream_dma_buf_release,
-};
-
-static struct dma_buf *stream_export_dmabuf(struct device *dev)
-{
-	DEFINE_DMA_BUF_EXPORT_INFO(exp);
-	struct stream_dmabuf *buf;
-
-	pr_info("%s\n", __func__);
-
-	if (!vram_phys || !vram_size)
-		return ERR_PTR(-EINVAL);
-
-	buf = kzalloc(sizeof(*buf), GFP_KERNEL);
-	if (!buf)
-		return ERR_PTR(-ENOMEM);
-
-	buf->phys = vram_phys;
-	buf->size = vram_size;
-	buf->dev  = dev;
-
-	exp.ops   = &stream_dmabuf_ops;
-	exp.size  = buf->size;
-	exp.flags = O_RDWR;
-	exp.priv  = buf;
-
-	return dma_buf_export(&exp);
-}
-
-static long stream_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
-{
-	struct dma_buf *dmabuf;
-	int fd;
-	long ret = 0;
-
-	pr_info("%s   %d\n", __func__, cmd);
-	switch (cmd) {
-
-	case STREAM_IOC_GET_DMABUF:
-		pr_info("STREAM_IOC_GET_DMABUF\n");
-		dmabuf = stream_export_dmabuf(file->private_data);
-		if (IS_ERR(dmabuf))
-			return PTR_ERR(dmabuf);
-
-		fd = dma_buf_fd(dmabuf, O_CLOEXEC);
-		if (fd < 0)
-			return fd;
-
-		if (copy_to_user((int __user *)arg, &fd, sizeof(fd)))
-			return -EFAULT;
-
-		ret = 0;
-		break;
-
-	case STREAM_IOC_SET_OFFSET:
-	{
-		uint64_t offset;
-
-		if (copy_from_user(&offset, (void __user *)arg, sizeof(offset)))
-			return -EFAULT;
-
-		if (offset != 0)
-			vram_fb_offset = offset - vram_phys;
-		else
-			vram_fb_offset = 0;
-
-		pr_info("VRAM offset = 0x%016llx\n", vram_fb_offset);
-		ret = 0;
-		break;
-	}
-
-	default:
-		pr_err("%s No ioctl found\n", __func__);
-		return -EINVAL;
-	}
-
-	return ret;
-}
-
-static int stream_mmap_pci(struct file *filp, struct vm_area_struct *vma)
-{
-	phys_addr_t map_phys;
-	unsigned long map_size;
-
-	map_size = vma->vm_end - vma->vm_start;
-	map_phys = vram_phys;
-
-	if (map_size > vram_size) {
-		pr_err("%s: invalid size req=%lu > vram=%zu\n",
-		       __func__, map_size, vram_size);
-		return -EINVAL;
-	}
-
-	if (vram_fb_offset) {
-		map_phys += vram_fb_offset;
-		pr_info("%s: applying fb offset -> map_phys=0x%pa\n",
-			__func__, &map_phys);
-	} else {
-		pr_info("%s: no fb offset, using BAR base\n", __func__);
-	}
-
-	vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
-
-	pr_info("%s: mmap start=0x%lx end=0x%lx phys=0x%pa size=%lu\n",
-		__func__, vma->vm_start, vma->vm_end, &map_phys, map_size);
-
-	return io_remap_pfn_range(vma,
-				  vma->vm_start,
-				  map_phys >> PAGE_SHIFT,
-				  map_size,
-				  vma->vm_page_prot);
-}
-
-static int stream_open_pci(struct inode *inode, struct file *file)
-{
-	return 0;
-}
-
-static const struct file_operations stream_fops = {
-	.owner          = THIS_MODULE,
-	.open           = stream_open_pci,
-	.mmap           = stream_mmap_pci,
-	.unlocked_ioctl = stream_ioctl,
-};
 
 static const struct pci_epf_ops ops = {
 	.unbind	= pci_epf_test_unbind,
@@ -1668,16 +1444,6 @@ static int __init pci_epf_test_init(void)
 		return ret;
 	}
 
-	alloc_chrdev_region(&stream_dev, 0, 1, "stream");
-	cdev_init(&stream_cdev, &stream_fops);
-	cdev_add(&stream_cdev, stream_dev, 1);
-
-	stream_class = class_create("pcie_stream");
-	if (IS_ERR(stream_class))
-		return PTR_ERR(stream_class);
-
-	device_create(stream_class, NULL, stream_dev, NULL, "stream");
-
 	return 0;
 }
 module_init(pci_epf_test_init);
@@ -1687,14 +1453,54 @@ static void __exit pci_epf_test_exit(void)
 	if (kpcitest_workqueue)
 		destroy_workqueue(kpcitest_workqueue);
 
-	device_destroy(stream_class, stream_dev);
-	class_destroy(stream_class);
-	cdev_del(&stream_cdev);
-	unregister_chrdev_region(stream_dev, 1);
-
 	pci_epf_unregister_driver(&test_driver);
 }
 module_exit(pci_epf_test_exit);
+
+uint64_t pci_epf_get_vram_fb_address(void)
+{
+	if (vram_fb_addr)
+		return vram_fb_addr;
+	else
+		return vram_phys;
+}
+EXPORT_SYMBOL_GPL(pci_epf_get_vram_fb_address);
+
+static int param_set_offset(const char *val, const struct kernel_param *kp)
+{
+    unsigned long flags;
+    u64 offset;
+    int ret;
+
+    ret = kstrtou64(val, 0, &offset);
+    if (ret)
+        return ret;
+
+    spin_lock_irqsave(&offset_lock, flags);
+	vram_fb_addr = offset;
+    vram_fb_offset = offset ? offset - vram_phys : 0;
+	
+    pr_info("VRAM fb add =  0x%016llx, offset = 0x%016llx\n",
+            (unsigned long long)vram_fb_addr, (unsigned long long)vram_fb_offset);
+
+    spin_unlock_irqrestore(&offset_lock, flags);
+
+    return 0;
+}
+
+static int param_get_offset(char *buffer, const struct kernel_param *kp)
+{
+    return sprintf(buffer, "%llu\n",
+                   (unsigned long long)vram_fb_offset);
+}
+
+static const struct kernel_param_ops offset_ops = {
+    .set = param_set_offset,
+    .get = param_get_offset,
+};
+
+module_param_cb(offset, &offset_ops, NULL, 0644);
+MODULE_PARM_DESC(offset, "VRAM framebuffer offset");
 
 MODULE_DESCRIPTION("PCI EPF TEST DRIVER");
 MODULE_AUTHOR("Kishon Vijay Abraham I <kishon@ti.com>");

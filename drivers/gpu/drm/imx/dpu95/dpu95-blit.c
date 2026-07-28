@@ -815,3 +815,189 @@ int dpu95_bliteng_runtime_resume(struct dpu95_drm_device *dpu_drm)
 	return 0;
 }
 MODULE_IMPORT_NS("DMA_BUF");
+
+static const u32 bgrx8888_to_rgbx8888_cmdlist[] = {
+    /* FETCHDECODE9_CONTROL */
+    0x14000001, FETCHDECODE9_CONTROL,
+	0x00000000,
+
+    /* FETCHDECODE9_BURSTBUFFERMANAGEMENT */
+    0x14000001, FETCHDECODE9_BURSTBUFFERMANAGEMENT,
+	0x7fe7f010,
+
+    /* FETCHDECODE9_SOURCEBUFFERATTRIBUTES0 */
+    0x14000009, FETCHDECODE9_SOURCEBUFFERATTRIBUTES0,
+    0x00201dff,
+    0x0437077f, 
+    0x08080800,
+    0x10080018, /* BGRX8888 source */
+    0x00000000,
+    0x00000000,
+    0x0437077f,
+    0x00000000,
+    0xc0000100,
+
+    /* FETCHDECODE9_FRAMEDIMENSIONS */
+    0x14000002, FETCHDECODE9_FRAMEDIMENSIONS,
+    0x0437077f,
+    0x00104000,
+
+    /* FETCHDECODE9_FRAMEPROPERTIES0 */
+    0x14000001, FETCHDECODE9_FRAMEPROPERTIES0,
+    0x00000000,
+
+    /* STORE9_CONTROL */
+    0x14000001, STORE9_CONTROL,
+    0x00000000,
+
+    /* STORE9_BURSTBUFFERMANAGEMENT */
+    0x14000001, STORE9_BURSTBUFFERMANAGEMENT,
+    0xff9ff000,
+
+    /* STORE9_DESTINATIONBUFFERATTRIBUTES0 */
+    0x14000001, STORE9_DESTINATIONBUFFERATTRIBUTES0,
+    0x20e01dff,
+
+    /* STORE9_DESTINATIONBUFFERATTRIBUTES1 */
+    0x14000001, STORE9_DESTINATIONBUFFERATTRIBUTES1,
+    0x00000000,
+
+    /* STORE9_DESTINATIONBUFFERATTRIBUTES2 */
+    0x14000001, STORE9_DESTINATIONBUFFERATTRIBUTES2,
+    0x00000000,
+
+    /* STORE9_DESTINATIONBUFFERDIMENSION */
+    0x14000004, STORE9_DESTINATIONBUFFERDIMENSION,
+    0x0437077f,
+    0x00000000,
+    0x08080800,
+    0x00081018, /* RGBX8888 destination */
+
+    /* PIXENGCFG_FETCHROT9_DYNAMIC */
+    0x14000001, PIXENGCFG_FETCHROT9_DYNAMIC,
+	0x00000000,
+
+	/* PIXENGCFG_FETCHDECODE9_DYNAMIC */
+    0x14000001, PIXENGCFG_FETCHDECODE9_DYNAMIC,
+	0x00000000,
+
+	/* PIXENGCFG_ROP9_DYNAMIC */
+    0x14000001, PIXENGCFG_ROP9_DYNAMIC,
+	0x00000000,
+
+	/* PIXENGCFG_ROP9_DYNAMIC */
+    0x14000001, PIXENGCFG_MATRIX9_DYNAMIC,
+	0x00000000,
+
+	/* PIXENGCFG_HSCALER9_DYNAMIC */
+    0x14000001, PIXENGCFG_HSCALER9_DYNAMIC,
+	0x00000000,
+	/* PIXENGCFG_VSCALER9_DYNAMIC */
+    0x14000001, PIXENGCFG_VSCALER9_DYNAMIC,
+	0x00000000,
+
+    /* PIXENGCFG_BLITBLEND9_DYNAMIC */
+    0x14000001, PIXENGCFG_BLITBLEND9_DYNAMIC,
+    0x00000000,
+
+    /* PIXENGCFG_STORE9_DYNAMIC */
+    0x14000001, PIXENGCFG_STORE9_DYNAMIC,
+    0x00000006,
+
+    /* PIXENGCFG_STORE9_TRIGGER */
+    0x14000001, PIXENGCFG_STORE9_TRIGGER,
+    0x00000001,
+
+    /* STORE9_START */
+    0x14000001, STORE9_START,
+    0x00000001,
+
+    /* Execute command list */
+    0x20000100,
+
+    /* CMDSEQ_INTERRUPTCLEAR0 */
+    0x14000001, CMDSEQ_INTERRUPTCLEAR0,
+    0x00000001,
+};
+
+int dpu95_convert_bgrx8888_to_rgbx8888(dma_addr_t src,
+                                       dma_addr_t dst,
+                                       u32 width,
+                                       u32 height,
+                                       u32 src_stride,
+                                       u32 dst_stride)
+{
+    unsigned long src_plane_addr[3] = {0};
+    unsigned long dst_plane_addr[3] = {0};
+
+    u32 frame_dims;
+    u32 src_attr0;
+    u32 dst_attr0;
+    u32 *cmd;
+    int ret;
+
+    if (!dpu_blit_eng)
+        return -ENODEV;
+
+    if (!dpu_blit_eng->ready)
+        return -EBUSY;
+
+    if (!width || !height)
+        return -EINVAL;
+
+
+    if (!src_stride)
+        src_stride = width * 4;
+
+    if (!dst_stride)
+        dst_stride = width * 4;
+
+
+    ret = pm_runtime_resume_and_get(dpu_blit_eng->dev);
+    if (ret < 0)
+        return ret;
+
+    dpu95_be_get(dpu_blit_eng);
+
+    cmd = dpu95_bliteng_get_cmd_list(dpu_blit_eng);
+
+    memcpy(cmd, bgrx8888_to_rgbx8888_cmdlist, sizeof(bgrx8888_to_rgbx8888_cmdlist));
+
+    frame_dims = ((height - 1) << 16) | (width - 1);
+    
+	/* FETCH */
+    src_attr0 = (0x0020 << 16) | ((src_stride - 1) & 0xffff);
+
+    /* STORE */
+    dst_attr0 = (0x20e0 << 16) | ((dst_stride - 1) & 0xffff);
+
+    /*
+     * Patch FETCH registers
+     */
+    cmd[8]  = src_attr0;
+    cmd[9]  = frame_dims;
+    cmd[19] = frame_dims;
+
+    /*
+     * Patch STORE registers
+     */
+    cmd[32] = dst_attr0;
+    cmd[41] = frame_dims;
+
+    src_plane_addr[0] = src;
+    dst_plane_addr[0] = dst;
+
+    dpu95_be_set_plane_addr(dpu_blit_eng, src_plane_addr, dst_plane_addr);
+
+    ret = dpu95_be_blit(dpu_blit_eng, cmd, ARRAY_SIZE(bgrx8888_to_rgbx8888_cmdlist));
+    if (!ret) {
+        dpu95_be_wait(dpu_blit_eng);
+        dma_wmb();
+    }
+
+    dpu95_be_put(dpu_blit_eng);
+    pm_runtime_put_autosuspend(dpu_blit_eng->dev);
+    return ret;
+}
+
+EXPORT_SYMBOL_GPL(dpu95_convert_bgrx8888_to_rgbx8888);

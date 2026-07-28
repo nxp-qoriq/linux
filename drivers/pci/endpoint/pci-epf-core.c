@@ -4,6 +4,8 @@
  *
  * Copyright (C) 2017 Texas Instruments
  * Author: Kishon Vijay Abraham I <kishon@ti.com>
+ * Copyright 2026 NXP
+ *
  */
 
 #include <linux/device.h>

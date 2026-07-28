@@ -976,6 +976,7 @@ int dpu95_convert_bgrx8888_to_rgbx8888(dma_addr_t src,
      */
     cmd[8]  = src_attr0;
     cmd[9]  = frame_dims;
+	cmd[14] = frame_dims;
     cmd[19] = frame_dims;
 
     /*

@@ -28,11 +28,13 @@ extern int dpu95_convert_bgrx8888_to_rgbx8888(dma_addr_t src, dma_addr_t dst,
 				      u32 width, u32 height,
 				      u32 src_stride, u32 dst_stride);
 
+/* RES_FILE use for sync the local and remote display resoluion
+	Example:- local work 4k and if user start remote 1k then remote display its not work */
 #define RES_FILE "/tmp/last_res.conf"
 
 #define DRIVER_NAME     "stream2v4l2"
 #define VIDEO_NAME      "PCIe Host Console"
-
+#define BPP_FORMAT       4 
 static int width = 1920;
 
 static int height = 1080;
@@ -47,7 +49,17 @@ struct stream2v4l2 {
 	struct vb2_queue    vb2_q;
 	struct mutex        lock;
 	bool streaming;
+	u8 *stream_buf;
+	size_t map_size;
 };
+
+enum soc_type {
+    SOC_UNKNOWN,
+    SOC_IMX94,
+    SOC_IMX95,
+};
+
+static enum soc_type current_soc = SOC_UNKNOWN;
 
 static struct stream2v4l2 *g_dev;
 static struct platform_device *stream_pdev;
@@ -70,8 +82,6 @@ static void stream2v4l2_wait_finish(struct vb2_queue *vq)
 static void stream2v4l2_buf_queue(struct vb2_buffer *vb)
 {
 	struct stream2v4l2 *dev = vb2_get_drv_priv(vb->vb2_queue);
-	dma_addr_t src, dst;
-	unsigned long flags;
 	u32 w, h, p;
 	int ret;
 
@@ -85,28 +95,76 @@ static void stream2v4l2_buf_queue(struct vb2_buffer *vb)
 	p = READ_ONCE(pitch);
 
 	if (!p)
-		p = w * 4;
+		p = w * BPP_FORMAT;
 
-	src = pci_epf_get_vram_fb_address();
-	dst = vb2_dma_contig_plane_dma_addr(vb, 0);
+	/* Runtime SoC detection */
+	switch (current_soc) {
+		case SOC_IMX95:
+			/* Hardware conversion path for i.MX95 */
+			dma_addr_t src = pci_epf_get_vram_fb_address();
+			dma_addr_t dst = vb2_dma_contig_plane_dma_addr(vb, 0);
 
-	if (!src || !dst) {
-		pr_err("Invalid DMA address src=%pad dst=%pad\n", &src, &dst);
-		vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
+			if (!src || !dst) {
+				pr_err("Invalid DMA address src=%pad dst=%pad\n", &src, &dst);
+				vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
+				return;
+			}			
+			ret = dpu95_convert_bgrx8888_to_rgbx8888(src, dst, w, h, p, p);
+			if (ret) {
+				pr_err("DPU convert failed %d\n", ret);
+				vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
+				return;
+			}
+			break;
+
+		case SOC_IMX94:
+			/* Software conversion path for i.MX94 */
+
+			u8 *src_ptr, *dst_ptr;
+			unsigned int x, y;
+			int src_stride, dst_stride;
+
+			if (unlikely(READ_ONCE(res_changed)) || !dev->stream_buf) {
+				vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
+				return;
+			}
+
+        	src_ptr = dev->stream_buf;
+        	dst_ptr = vb2_plane_vaddr(vb, 0);
+
+        	if (!dst_ptr || !src_ptr) {
+                pr_err("stream2v4l2: vb2_plane_vaddr() returned NULL\n");
+                vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
+                return;
+        	}
+
+        	src_stride = p;
+    	    dst_stride = p;
+	
+			for (y = 0; y < h; y++) {
+				const u8 *__restrict src = src_ptr + y * src_stride;
+				u8 *__restrict dst = dst_ptr + y * dst_stride;
+				for (x = 0; x < w; x++) {
+					/*BGRX -> RGBX*/
+					dst[0] = src[2];  /* R <- B */
+					dst[1] = src[1];  /* G <- G */
+					dst[2] = src[0];  /* B <- R */
+					dst[3] = src[3];  /* padding */
+
+					src += 4;
+					dst += 4;
+				}
+			}
+        break;
+
+	    default:
+			pr_warn("Unsupported SoC detected, skipping conversion\n");
+			vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
+
 		return;
 	}
 
-	u64 start = ktime_get_ns();
-
-	/* Perform HW conversion */
-	ret = dpu95_convert_bgrx8888_to_rgbx8888(src, dst, w, h, p, w * 4);
-	if (ret) {
-		pr_err("DPU convert failed %d\n", ret);
-		vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
-		return;
-	}
-
-	vb2_set_plane_payload(vb, 0, w * h * 4);
+	vb2_set_plane_payload(vb, 0, w * h * BPP_FORMAT);
 	vb->timestamp = ktime_get_ns();
 
 	vb2_buffer_done(vb, VB2_BUF_STATE_DONE);
@@ -119,7 +177,10 @@ static int stream2v4l2_queue_setup(struct vb2_queue *vq,
 					unsigned int sizes[],
 					struct device *alloc_devs[])
 {
+	struct stream2v4l2 *dev = vb2_get_drv_priv(vq);
 	unsigned long flags;
+	phys_addr_t phys;
+	size_t map_size;
 	int w, h, p;
 
 	spin_lock_irqsave(&res_lock, flags);
@@ -128,12 +189,41 @@ static int stream2v4l2_queue_setup(struct vb2_queue *vq,
 	p = pitch;
 	spin_unlock_irqrestore(&res_lock, flags);
 
+	if (!p)
+		p = w * BPP_FORMAT;
+
 	if (*nbufs < 4)
 		*nbufs = 4;
 
 	/* Single plane RGB24 */
 	*nplanes = 1;
-	sizes[0] = max_t(size_t, (size_t)w * h * 4, PAGE_SIZE);
+	sizes[0] = max_t(size_t, (size_t)h * p, PAGE_SIZE);
+
+	if (current_soc != SOC_IMX94)
+		return 0;
+
+	map_size = (size_t)h * p;
+
+	if (dev->stream_buf && dev->map_size != map_size) {
+		memunmap(dev->stream_buf);
+		dev->stream_buf = NULL;
+		dev->map_size = 0;
+	}
+
+	if (dev->stream_buf)
+		return 0;
+		
+	if (!dev->stream_buf) {
+
+		phys_addr_t phys = pci_epf_get_vram_fb_address();
+
+		dev->stream_buf = memremap(phys, map_size, MEMREMAP_WB);
+		if (!dev->stream_buf)
+			return -ENOMEM;
+		
+		dev->map_size = map_size;
+	}
+
 	return 0;
 }
 
@@ -151,6 +241,12 @@ static int stream2v4l2_start_streaming(struct vb2_queue *vq,
 static void stream2v4l2_stop_streaming(struct vb2_queue *vq)
 {
 	struct stream2v4l2 *dev = vb2_get_drv_priv(vq);
+	
+	if (dev->stream_buf) {
+			memunmap(dev->stream_buf);
+			dev->stream_buf = NULL;
+			dev->map_size = 0;
+	}
 
 	dev->streaming = false;
 }
@@ -159,7 +255,7 @@ static int stream2v4l2_buf_prepare(struct vb2_buffer *vb)
 {
 	u32 size;
 	
-	size = READ_ONCE(width) * READ_ONCE(height) * 4;
+	size = READ_ONCE(width) * READ_ONCE(height) * BPP_FORMAT;
 	if (vb2_plane_size(vb,0) < size)
 		return -EINVAL;
 
@@ -216,8 +312,8 @@ static int stream2v4l2_g_fmt(struct file *file, void *priv,
 	f->fmt.pix.height       = height;
 	f->fmt.pix.pixelformat  = V4L2_PIX_FMT_RGB24;
 	f->fmt.pix.field        = V4L2_FIELD_NONE;
-	f->fmt.pix.bytesperline = width * 4;
-	f->fmt.pix.sizeimage    = width * height * 4;
+	f->fmt.pix.bytesperline = width * BPP_FORMAT;
+	f->fmt.pix.sizeimage    = width * height * BPP_FORMAT;
 	f->fmt.pix.colorspace   = V4L2_COLORSPACE_SRGB;
 	f->fmt.pix.ycbcr_enc    = V4L2_YCBCR_ENC_DEFAULT;
 	f->fmt.pix.quantization = V4L2_QUANTIZATION_DEFAULT;
@@ -395,6 +491,15 @@ static int __init stream2v4l2_init(void)
 	struct stream2v4l2 *dev;
 	int rc;
 
+    if (of_machine_is_compatible("fsl,imx95"))
+        current_soc = SOC_IMX95;
+    else if (of_machine_is_compatible("fsl,imx94"))
+        current_soc = SOC_IMX94;
+    else
+        current_soc = SOC_UNKNOWN;
+
+    pr_info("Detected SoC_type: %d\n", current_soc);
+
 	load_resolution();
 
 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
@@ -474,6 +579,11 @@ static void __exit stream2v4l2_exit(void)
 	if (!dev)
 		return;
 
+	if (current_soc == SOC_IMX94 && dev->stream_buf) {
+		memunmap(dev->stream_buf);
+		dev->stream_buf = NULL;
+	}
+
 	vb2_queue_release(&dev->vb2_q);
 	video_unregister_device(&dev->vdev);
 	v4l2_device_unregister(&dev->v4l2_dev);
@@ -506,9 +616,6 @@ static int param_set_resolution(const char *val, const struct kernel_param *kp)
 		WRITE_ONCE(height,h);
 		WRITE_ONCE(pitch,new_pitch);
 		WRITE_ONCE(res_changed,true);
-
-		if (g_dev)
-			stream2v4l2_stop_streaming(&g_dev->vb2_q);
 	}
 	spin_unlock_irqrestore(&res_lock, flags);
 	return 0;

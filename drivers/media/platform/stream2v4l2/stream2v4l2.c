@@ -16,6 +16,11 @@
 #include <media/v4l2-ioctl.h>
 #include <media/videobuf2-vmalloc.h>
 
+#include <linux/fs.h>
+#include <linux/slab.h>
+
+#define RES_FILE "/tmp/last_res.conf"
+
 #define DRIVER_NAME     "stream2v4l2"
 #define VIDEO_NAME      "PCIe Host Console"
 
@@ -41,6 +46,7 @@ struct stream2v4l2 {
 	int mapped_width;
 	int mapped_height;
 	u8 *tmp_buf;
+	struct mutex stream_lock;
 };
 
 static struct stream2v4l2 *g_dev;
@@ -67,10 +73,19 @@ static void stream2v4l2_buf_queue(struct vb2_buffer *vb)
 	u8 *out;
 	u8 *tmp;
 	u8 __user *src;
-	int pixels;
+	unsigned long flags;
+	int w, h, p;
+	int src_stride, dst_stride;
+	int x, y;
 
-	if (!dev->stream_buf) {
-		pr_err("stream2v4l2: stream not mapped\n");
+	spin_lock_irqsave(&res_lock, flags);
+	w = width;
+	h = height;
+	p = pitch;
+	spin_unlock_irqrestore(&res_lock, flags);
+
+	if (res_changed) {
+		pr_err("res_changed: stream stop\n");
 		vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
 		return;
 	}
@@ -81,51 +96,53 @@ static void stream2v4l2_buf_queue(struct vb2_buffer *vb)
 		return;
 	}
 
-	tmp = dev->tmp_buf;
-	if (!tmp) {
+	mutex_lock(&dev->stream_lock);
+
+	if (!dev->stream_buf || !dev->tmp_buf) {
+		mutex_unlock(&dev->stream_lock);
+		pr_err("stream2v4l2: stream not mapped\n");
 		vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
 		return;
 	}
 
+	if (dev->stream_size < ((size_t)(p ? p : w * 4) * h)) {
+		pr_err("stream2v4l2: invalid stream size (%zu)\n",
+		       dev->stream_size);
+		mutex_unlock(&dev->stream_lock);
+		vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
+		return;
+	}
+
+	tmp = dev->tmp_buf;
 	src = (u8 __user *)dev->stream_buf;
 
-	{
-		unsigned long flags;
-
-		spin_lock_irqsave(&res_lock, flags);
-		pixels = width * height;
-		spin_unlock_irqrestore(&res_lock, flags);
-	}
-
-	if (copy_from_user(tmp, src, (size_t)pixels * 4) != 0) {
+	if (copy_from_user(tmp, src, dev->stream_size)) {
 		pr_err("stream2v4l2: copy_from_user failed\n");
+		mutex_unlock(&dev->stream_lock);
 		vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
 		return;
 	}
-
-	int src_stride, dst_stride, x, y, src_idx, dst_idx;
 
 	out = (u8 *)dst;
 	/* Use actual FB pitch if set, else default to width*4 */
-	src_stride = pitch ? pitch : width * 4;
-	dst_stride = width * 4;   /* RGB24 output (always packed) */
+	src_stride = p ? p : w * 4;
+	dst_stride = w * 4;   /* RGB24 output (always packed) */
 
-	for (y = 0; y < height; y++) {
+	for (y = 0; y < h; y++) {
 		const u8 *src_row = tmp + y * src_stride;
 		u8 *dst_row = out + y * dst_stride;
 
-		for (x = 0; x < width; x++) {
-			src_idx = x * 4;
-			dst_idx = x * 4;
-
-			dst_row[dst_idx + 0] = src_row[src_idx + 2];  // R
-			dst_row[dst_idx + 1] = src_row[src_idx + 1];  // G
-			dst_row[dst_idx + 2] = src_row[src_idx + 0];  // B
-			dst_row[dst_idx + 3] = 0x00;                 // padding
+		for (x = 0; x < w; x++) {
+			dst_row[x * 4 + 0] = src_row[x * 4 + 2];
+			dst_row[x * 4 + 1] = src_row[x * 4 + 1];
+			dst_row[x * 4 + 2] = src_row[x * 4 + 0];
+			dst_row[x * 4 + 3] = 0;
 		}
 	}
 
-	vb2_set_plane_payload(vb, 0, FRAME_SIZE);
+	mutex_unlock(&dev->stream_lock);
+
+	vb2_set_plane_payload(vb, 0, w * h * 4);
 	vb->timestamp = ktime_get_ns();
 
 	vb2_buffer_done(vb, VB2_BUF_STATE_DONE);
@@ -140,6 +157,15 @@ static int stream2v4l2_queue_setup(struct vb2_queue *vq,
 {
 	struct stream2v4l2 *dev = vb2_get_drv_priv(vq);
 	unsigned long addr;
+	unsigned long flags;
+	int w, h, p;
+	size_t map_size;
+
+	spin_lock_irqsave(&res_lock, flags);
+	w = width;
+	h = height;
+	p = pitch;
+	spin_unlock_irqrestore(&res_lock, flags);
 
 	/* Ensure at least 2 buffers */
 	if (*nbufs < 2)
@@ -147,17 +173,12 @@ static int stream2v4l2_queue_setup(struct vb2_queue *vq,
 
 	/* Single plane RGB24 */
 	*nplanes = 1;
-	sizes[0] = FRAME_SIZE;
+	sizes[0] = (size_t)w * h * 4;
+
+	mutex_lock(&dev->stream_lock);
 
 	/* Re-map if resolution changed since last map */
 	if (res_changed && dev->stream_buf) {
-		unsigned long flags;
-		int w, h;
-
-		spin_lock_irqsave(&res_lock, flags);
-		w = width;
-		h = height;
-		spin_unlock_irqrestore(&res_lock, flags);
 
 		vm_munmap((unsigned long)dev->stream_buf, dev->stream_size);
 		dev->stream_buf = NULL;
@@ -166,24 +187,26 @@ static int stream2v4l2_queue_setup(struct vb2_queue *vq,
 			dev->stream_filp = NULL;
 		}
 		kfree(dev->tmp_buf);
-		dev->tmp_buf = kmalloc((size_t)w * h * BPP, GFP_KERNEL);
+		dev->tmp_buf = kmalloc((size_t)w * h * 4, GFP_KERNEL);
+		if (!dev->tmp_buf) {
+			mutex_unlock(&dev->stream_lock);
+			return -ENOMEM;
+		}
 		res_changed = false;
 		pr_info("stream2v4l2: resolution updated to %dx%d\n", w, h);
 	}
 
 	/* Map /dev/stream only once */
 	if (!dev->stream_buf) {
-		dev->stream_filp = filp_open("/dev/stream", O_RDWR, 0);
+		dev->stream_filp = filp_open("/dev/stream", O_RDONLY, 0);
 		if (IS_ERR(dev->stream_filp)) {
 			pr_err("stream2v4l2: failed to open /dev/stream\n");
-		return PTR_ERR(dev->stream_filp);
-		}
-
-		/* Map stream buffer (XBGR32 at 4 bytes per pixel) */
-		size_t map_size;
+			mutex_unlock(&dev->stream_lock);
+			return PTR_ERR(dev->stream_filp);
+		}		
 
 		/* Map using actual pitch*height to cover full FB */
-		map_size = (size_t)(pitch ? pitch : width * 4) * height;
+		map_size = (size_t)(p ? p : w * 4) * h;
 		addr = vm_mmap(dev->stream_filp, 0, map_size, PROT_READ,
 		MAP_SHARED, 0);
 
@@ -191,22 +214,25 @@ static int stream2v4l2_queue_setup(struct vb2_queue *vq,
 			pr_err("stream2v4l2: vm_mmap failed\n");
 			filp_close(dev->stream_filp, NULL);
 			dev->stream_filp = NULL;
-			return -EINVAL;
+			mutex_unlock(&dev->stream_lock);
+			return -ENOMEM;
 		}
 
 		dev->stream_buf = (void *)addr;
-		dev->stream_size = (size_t)(pitch ? pitch : width * 4) * height;
+		dev->stream_size = map_size;
 
 		pr_info("stream2v4l2: mapped /dev/stream at %p\n",
 		dev->stream_buf);
 	}
 
+	mutex_unlock(&dev->stream_lock);
 	return 0;
 }
 
 static int stream2v4l2_start_streaming(struct vb2_queue *vq,
 					unsigned int count)
 {
+	res_changed = false;
 	return 0;
 }
 
@@ -408,16 +434,56 @@ static const struct v4l2_ioctl_ops stream2v4l2_ioctl_ops = {
 static const struct v4l2_file_operations stream2v4l2_fops = {
 	.owner          = THIS_MODULE,
 	.open           = v4l2_fh_open,
-	.release        = v4l2_fh_release,
+	.release        = vb2_fop_release,
 	.unlocked_ioctl = video_ioctl2,
 	.mmap           = vb2_fop_mmap,
 	.poll           = vb2_fop_poll,
 };
 
+static void load_resolution(void)
+{
+    struct file *filp;
+    char buf[64];
+    loff_t pos = 0;
+    ssize_t len;
+	
+	int last_w;
+	int last_h;
+
+    last_w = width;
+    last_h = height;
+
+    filp = filp_open(RES_FILE, O_RDONLY, 0);
+    if (IS_ERR(filp)) {
+        pr_info("No saved resolution, using default %dx%d\n",
+                width, height);
+        return;
+    }
+
+    len = kernel_read(filp, buf, sizeof(buf) - 1, &pos);
+    filp_close(filp, NULL);
+
+    if (len <= 0) {
+        pr_info("Failed to read resolution file\n");
+        return;
+    }
+
+    buf[len] = '\0';
+
+    if (sscanf(buf, "%d %d", &width, &height) != 2) {
+		width = last_w;
+    	height = last_h;
+    }
+
+    pr_info("Restored resolution %dx%d\n", width, height);
+}
+
 static int __init stream2v4l2_init(void)
 {
 	struct stream2v4l2 *dev;
 	int rc;
+
+	load_resolution();
 
 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
 	if (!dev)
@@ -430,6 +496,7 @@ static int __init stream2v4l2_init(void)
 	}
 
 	mutex_init(&dev->lock);
+	mutex_init(&dev->stream_lock);
 
 	strscpy(dev->v4l2_dev.name, DRIVER_NAME, sizeof(dev->v4l2_dev.name));
 	strscpy(dev->vb2_q.name, DRIVER_NAME, sizeof(dev->vb2_q.name));
@@ -510,84 +577,36 @@ static void __exit stream2v4l2_exit(void)
  * RESOLUTION_CHANGE uevent. The module_param callback sets res_changed
  * so queue_setup re-maps /dev/stream at the new size.
  */
-static int param_set_width(const char *val, const struct kernel_param *kp)
+static int param_set_resolution(const char *val, const struct kernel_param *kp)
 {
 	unsigned long flags;
-	int new_w, ret;
+	int w, h, new_pitch;
 
-	ret = kstrtoint(val, 0, &new_w);
-	if (ret || new_w <= 0)
-		return ret ?: -EINVAL;
+	if (sscanf(val, "%dx%d:%d", &w, &h, &new_pitch) != 3)
+		return -EINVAL;
 
-	spin_lock_irqsave(&res_lock, flags);
-	if (new_w != width) {
-		width = new_w;
-		res_changed = true;
-		pr_info("stream2v4l2: width updated to %d\n", new_w);
-	}
-	spin_unlock_irqrestore(&res_lock, flags);
-	return 0;
-}
-
-static int param_set_height(const char *val, const struct kernel_param *kp)
-{
-	unsigned long flags;
-	int new_h, ret;
-
-	ret = kstrtoint(val, 0, &new_h);
-	if (ret || new_h <= 0)
-		return ret ?: -EINVAL;
+	if (w <= 0 || h <= 0 || new_pitch <= 0)
+		return -EINVAL;
 
 	spin_lock_irqsave(&res_lock, flags);
-	if (new_h != height) {
-		height = new_h;
-		res_changed = true;
-		pr_info("stream2v4l2: height updated to %d\n", new_h);
-	}
-	spin_unlock_irqrestore(&res_lock, flags);
-	return 0;
-}
 
-static const struct kernel_param_ops width_ops = {
-	.set = param_set_width,
-	.get = param_get_int,
-};
-
-static const struct kernel_param_ops height_ops = {
-	.set = param_set_height,
-	.get = param_get_int,
-};
-
-static int param_set_pitch(const char *val, const struct kernel_param *kp)
-{
-	unsigned long flags;
-	int new_pitch, ret;
-
-	ret = kstrtoint(val, 0, &new_pitch);
-	if (ret || new_pitch < 0)
-		return ret ?: -EINVAL;
-
-	spin_lock_irqsave(&res_lock, flags);
-	if (new_pitch != pitch) {
+	if (width != w || height != h || pitch != new_pitch) {
+		width = w;
+		height = h;
 		pitch = new_pitch;
 		res_changed = true;
-		pr_info("stream2v4l2: pitch updated to %d\n", new_pitch);
 	}
 	spin_unlock_irqrestore(&res_lock, flags);
 	return 0;
 }
 
-static const struct kernel_param_ops pitch_ops = {
-	.set = param_set_pitch,
+static const struct kernel_param_ops resolution_ops = {
+	.set = param_set_resolution,
 	.get = param_get_int,
 };
 
-module_param_cb(width,  &width_ops,  &width,  0644);
-MODULE_PARM_DESC(width,  "Frame width - write to update resolution");
-module_param_cb(height, &height_ops, &height, 0644);
-MODULE_PARM_DESC(height, "Frame height - write to update resolution");
-module_param_cb(pitch,  &pitch_ops,  &pitch,  0644);
-MODULE_PARM_DESC(pitch,  "Frame pitch (bytes/row) - 0 = width*4");
+module_param_cb(resolution, &resolution_ops, NULL, 0644);
+MODULE_PARM_DESC(resolution, "Frame resolution + Frame pitch (bytes/row) - 0 = width*4 (e.g. 1920x1080:7680)");
 
 module_init(stream2v4l2_init);
 module_exit(stream2v4l2_exit);

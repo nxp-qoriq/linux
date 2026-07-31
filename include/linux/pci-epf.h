@@ -67,6 +67,23 @@ struct pci_epf_ops {
 	void	(*unbind)(struct pci_epf *epf);
 	struct config_group *(*add_cfs)(struct pci_epf *epf,
 					struct config_group *group);
+	/**
+	 * @alloc_bar: optional driver-specific BAR memory allocator.
+	 * Called by pci_epf_alloc_space() before falling back to
+	 * dma_alloc_coherent(). Driver must set *phys_addr and return
+	 * virtual address. Return NULL to use the default allocator.
+	 */
+	void	*(*alloc_bar)(struct pci_epf *epf, enum pci_barno bar,
+			      size_t size, dma_addr_t *phys_addr);
+	/**
+	 * @free_bar: optional driver-specific BAR memory release.
+	 * Called by pci_epf_free_space() when alloc_bar was used.
+	 * Return true if the driver handled the free (core skips
+	 * dma_free_coherent). Return false to let the core call
+	 * dma_free_coherent(epc->dev.parent).
+	 */
+	bool	(*free_bar)(struct pci_epf *epf, enum pci_barno bar,
+			    void *addr, size_t size);
 };
 
 /**
@@ -248,4 +265,19 @@ int pci_epf_bind(struct pci_epf *epf);
 void pci_epf_unbind(struct pci_epf *epf);
 int pci_epf_add_vepf(struct pci_epf *epf_pf, struct pci_epf *epf_vf);
 void pci_epf_remove_vepf(struct pci_epf *epf_pf, struct pci_epf *epf_vf);
+#if IS_ENABLED(CONFIG_PCI_EPF_IMX9_VGA)
+/**
+ * pci_epf_get_vram_fb_address - return the current VRAM framebuffer address
+ *
+ * Returns the physical address of the active framebuffer within the VRAM
+ * region. If no explicit offset has been set via the module parameter,
+ * returns the base of the VRAM region.
+ *
+ * Exported by the pci-epf-vga driver for use by stream2v4l2.
+ */
+uint64_t pci_epf_get_vram_fb_address(void);
+#else
+static inline uint64_t pci_epf_get_vram_fb_address(void) { return 0; }
+#endif
+
 #endif /* __LINUX_PCI_EPF_H */

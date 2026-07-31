@@ -1,15 +1,19 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # Copyright 2026 NXP
 config VIDEO_STREAM2V4L2
-    tristate "PCIe stream to V4L2 MJPEG bridge"
+    tristate "PCIe EP framebuffer to V4L2 capture bridge (iKVM)"
     depends on MEDIA_SUPPORT && VIDEO_DEV
+    depends on PCI_EPF_IMX9_VGA
     select VIDEOBUF2_CORE
-    select VIDEOBUF2_VMALLOC
+    select VIDEOBUF2_DMA_CONTIG
     default m
     help
-      Say Y or M here if you want to expose a PCIe-delivered
-      host video stream as a V4L2 capture device suitable
-      for OpenBMC iKVM (RGB24 only).
+      Say Y or M here to expose the i.MX9 PCIe endpoint framebuffer
+      as a V4L2 capture device for OpenBMC iKVM.
 
-      This driver creates a virtual V4L2 capture device
-      backed by /dev/stream.
+      This driver reads the VRAM framebuffer address from the VGA EPF
+      driver (pci-epf-imx9-vga) via pci_epf_get_vram_fb_address() and uses
+      the DPU95 blit engine for zero-copy BGRX->RGBX conversion into
+      DMA-contiguous V4L2 capture buffers.
+
+      Requires CONFIG_PCI_EPF_VGA=y or =m.

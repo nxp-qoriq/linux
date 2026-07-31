@@ -47,3 +47,25 @@ config PCI_EPF_MHI
 	   devices such as SDX55.
 
 	   If in doubt, say "N" to disable Endpoint driver for MHI bus.
+
+config PCI_EPF_IMX9_VGA
+	tristate "PCI Endpoint VGA Class Display driver (i.MX9 iKVM)"
+	depends on PCI_ENDPOINT
+	depends on OF
+	select FIRMWARE_LOADER
+	help
+	  Enable this driver to expose the i.MX9 PCIe endpoint as a VGA
+	  class display device for iKVM (IP-based KVM over PCIe) use cases.
+
+	  Provides:
+	    - BAR1: EDID (read from DRM sysfs or 4K fallback blob)
+	    - BAR2: 32MB VRAM (ioremap_wc, DT reserved-memory node "vram")
+	    - BAR4: DPU95 register space (ioremap at 0x4b400000)
+	    - Option ROM via firmware loader (OptionRom.rom)
+	    - Resolution change uevent to userspace
+	    - pci_epf_get_vram_fb_address() for stream2v4l2
+
+	  This driver is independent of PCI_EPF_TEST.
+
+	  If in doubt, say "N".
+

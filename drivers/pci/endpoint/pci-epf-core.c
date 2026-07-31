@@ -12,15 +12,11 @@
 #include <linux/dma-mapping.h>
 #include <linux/slab.h>
 #include <linux/module.h>
-#include <linux/of.h>
-#include <linux/of_address.h>
-#include <linux/ioport.h>
 
 #include <linux/pci-epc.h>
 #include <linux/pci-epf.h>
 #include <linux/pci-ep-cfs.h>
 
-#define DPU95_ADDRESS_SPACE 0x4b400000
 static DEFINE_MUTEX(pci_epf_mutex);
 
 static const struct bus_type pci_epf_bus_type;
@@ -241,10 +237,19 @@ void pci_epf_free_space(struct pci_epf *epf, void *addr, enum pci_barno bar,
 		epf_bar = epf->sec_epc_bar;
 	}
 
+	/* If the driver supplied its own allocator, let it free too.
+	 * free_bar returns true if it handled the free (skip dma_free_coherent),
+	 * false if the core should call dma_free_coherent(epc->dev.parent).
+	 */
+	if (epf->driver && epf->driver->ops && epf->driver->ops->free_bar &&
+	    epf->driver->ops->free_bar(epf, bar, addr, epf_bar[bar].size))
+		goto clear;
+
 	dev = epc->dev.parent;
 	dma_free_coherent(dev, epf_bar[bar].aligned_size, addr,
 			  epf_bar[bar].phys_addr);
 
+clear:
 	epf_bar[bar].phys_addr = 0;
 	epf_bar[bar].addr = NULL;
 	epf_bar[bar].size = 0;
@@ -315,39 +320,16 @@ void *pci_epf_alloc_space(struct pci_epf *epf, size_t size, enum pci_barno bar,
 
 	dev = epc->dev.parent;
 
-	if (bar == BAR_4) {
-		void __iomem *vaddr = ioremap(DPU95_ADDRESS_SPACE, size);
-		space = (__force void *)vaddr;
+	/* Give the EPF driver a chance to supply its own BAR allocator.
+	 * A NULL return means "I don't handle this BAR" — fall back to
+	 * dma_alloc_coherent(epc->dev.parent).
+	 */
+	if (epf->driver && epf->driver->ops && epf->driver->ops->alloc_bar)
+		space = epf->driver->ops->alloc_bar(epf, bar, aligned_size, &phys_addr);
 
-	} else if (bar == BAR_2) {
-		struct device_node *vram_node;
-		struct resource res;
-
-		vram_node = of_find_node_by_name(NULL, "vram");
-		if (!vram_node) {
-			pr_err("VRAM node not found\n");
-			return NULL;
-		}
-
-		of_address_to_resource(vram_node, 0, &res);
-		phys_addr = res.start;
-
-		size = resource_size(&res);
-
-		void __iomem *vaddr_fb = ioremap_wc(phys_addr, size);
-
-		if (!vaddr_fb) {
-			dev_err(&epf->dev, "Failed to remap framebuffer\n");
-			return NULL;
-		}
-
-		space = (__force void *)vaddr_fb;
-
-	} else {
-
-		space = dma_alloc_coherent(dev, aligned_size, &phys_addr, GFP_KERNEL);
-
-	}
+	if (!space)
+		space = dma_alloc_coherent(dev, aligned_size, &phys_addr,
+					   GFP_KERNEL);
 
 	if (!space) {
 		dev_err(dev, "failed to allocate mem space\n");
@@ -358,16 +340,6 @@ void *pci_epf_alloc_space(struct pci_epf *epf, size_t size, enum pci_barno bar,
 	epf_bar[bar].addr = space;
 	epf_bar[bar].size = size;
 	epf_bar[bar].aligned_size = aligned_size;
-	if (bar == BAR_4) {
-		epf_bar[bar].phys_addr = DPU95_ADDRESS_SPACE;
-		epf_bar[bar].size = size;
-	}
-	else if (bar == BAR_2) {
-		pr_info("BAR 2 VRAM phys address = 0x%pa\n", &phys_addr);
-		pr_info("BAR 2 VRAM size = 0x%zx\n", size);
-		memset(epf_bar[bar].addr, 0x00, epf_bar[bar].size);
-		epf_bar[bar].flags |= PCI_BASE_ADDRESS_MEM_PREFETCH | PCI_BASE_ADDRESS_SPACE_MEMORY;
-	}
 	epf_bar[bar].barno = bar;
 	if (upper_32_bits(size) || epc_features->bar[bar].only_64bit)
 		epf_bar[bar].flags |= PCI_BASE_ADDRESS_MEM_TYPE_64;

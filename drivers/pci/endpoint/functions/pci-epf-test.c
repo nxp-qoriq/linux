@@ -11,38 +11,16 @@
 #include <linux/delay.h>
 #include <linux/dmaengine.h>
 #include <linux/io.h>
-#include <linux/of.h>
-#include <linux/of_address.h>
-#include <linux/ioport.h>
 #include <linux/module.h>
 #include <linux/msi.h>
 #include <linux/slab.h>
 #include <linux/pci_ids.h>
 #include <linux/random.h>
-#include <linux/fs.h>
-#include <linux/file.h>
-#include <linux/uaccess.h>
-#include <linux/kernel.h>
-#include <linux/fb.h>
-#include <linux/device.h>
-#include <linux/dma-map-ops.h>
-#include <linux/firmware.h>
 
 #include <linux/pci-epc.h>
 #include <linux/pci-epf.h>
 #include <linux/pci-ep-msi.h>
 #include <linux/pci_regs.h>
-#include <linux/cdev.h>
-
-#include <linux/dma-buf.h>
-#include <linux/dma-mapping.h>
-#include <linux/scatterlist.h>
-
-static DEFINE_SPINLOCK(offset_lock);
-static phys_addr_t vram_phys;
-static size_t vram_size;
-static uint64_t vram_fb_offset;
-static uint64_t vram_fb_addr;
 
 #define IRQ_TYPE_INTX			0
 #define IRQ_TYPE_MSI			1
@@ -56,10 +34,6 @@ static uint64_t vram_fb_addr;
 #define COMMAND_COPY			BIT(5)
 #define COMMAND_ENABLE_DOORBELL		BIT(6)
 #define COMMAND_DISABLE_DOORBELL	BIT(7)
-#define COMMAND_CHANGE_RESOLUTION	BIT(8)
-#define COMMAND_GET_FB_OFFSET		BIT(9)
-#define COMMAND_START_STREAM		BIT(10)
-#define COMMAND_STOP_STREAM		BIT(11)
 
 #define STATUS_READ_SUCCESS		BIT(0)
 #define STATUS_READ_FAIL		BIT(1)
@@ -73,7 +47,7 @@ static uint64_t vram_fb_addr;
 #define STATUS_DOORBELL_SUCCESS		BIT(9)
 #define STATUS_DOORBELL_ENABLE_SUCCESS	BIT(10)
 #define STATUS_DOORBELL_ENABLE_FAIL	BIT(11)
-#define STATUS_DOORBELL_DISABLE_SUCCESS	BIT(12)
+#define STATUS_DOORBELL_DISABLE_SUCCESS BIT(12)
 #define STATUS_DOORBELL_DISABLE_FAIL	BIT(13)
 
 #define FLAG_USE_DMA			BIT(0)
@@ -85,15 +59,11 @@ static uint64_t vram_fb_addr;
 #define CAP_MSIX			BIT(2)
 #define CAP_INTX			BIT(3)
 
-#define EDID_PATH	"/sys/class/drm/card0-HDMI-A-1/edid"
-#define EDID_SIZE	256
-
 static struct workqueue_struct *kpcitest_workqueue;
 
 struct pci_epf_test {
 	void			*reg[PCI_STD_NUM_BARS];
 	struct pci_epf		*epf;
-	struct pci_epf_bar	rom_bar;	/* ROM BAR */
 	enum pci_barno		test_reg_bar;
 	size_t			msix_table_offset;
 	struct delayed_work	cmd_handler;
@@ -109,42 +79,6 @@ struct pci_epf_test {
 	struct pci_epf_bar	db_bar;
 };
 
-/* Default EDID fallback (max 4K) */
-static unsigned char default_edid[256] = {
-	0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00,
-	0x09, 0xd1, 0x49, 0x79, 0x45, 0x54, 0x00, 0x00,
-	0x03, 0x20, 0x01, 0x03, 0x80, 0x3e, 0x22, 0x78,
-	0x2e, 0x08, 0xa5, 0xa2, 0x57, 0x4f, 0xa2, 0x28,
-	0x0f, 0x50, 0x54, 0xa5, 0x6b, 0x80, 0xd1, 0xc0,
-	0x81, 0xc0, 0x81, 0x00, 0x81, 0x80, 0xa9, 0xc0,
-	0xb3, 0x00, 0xa9, 0x40, 0x01, 0x01, 0x51, 0xd0,
-	0x00, 0xa0, 0xf0, 0x70, 0x3e, 0x80, 0x30, 0x20,
-	0x35, 0x00, 0x6d, 0x55, 0x21, 0x00, 0x00, 0x1a,
-	0x00, 0x00, 0x00, 0xff, 0x00, 0x32, 0x31, 0x4e,
-	0x30, 0x37, 0x35, 0x38, 0x36, 0x53, 0x4c, 0x30,
-	0x0a, 0x20, 0x00, 0x00, 0x00, 0xfd, 0x00, 0x18,
-	0x4c, 0x1e, 0x87, 0x3c, 0x00, 0x0a, 0x20, 0x20,
-	0x20, 0x20, 0x20, 0x20, 0x00, 0x00, 0x00, 0xfc,
-	0x00, 0x42, 0x65, 0x6e, 0x51, 0x20, 0x45, 0x4c,
-	0x32, 0x38, 0x37, 0x30, 0x55, 0x0a, 0x01, 0x63,
-	0x02, 0x03, 0x4e, 0xf1, 0x56, 0x61, 0x60, 0x5d,
-	0x5e, 0x5f, 0x10, 0x05, 0x04, 0x03, 0x02, 0x07,
-	0x06, 0x0f, 0x1f, 0x20, 0x21, 0x22, 0x14, 0x13,
-	0x12, 0x16, 0x01, 0x23, 0x09, 0x07, 0x07, 0x6d,
-	0x03, 0x0c, 0x00, 0x10, 0x00, 0x38, 0x44, 0x20,
-	0x00, 0x60, 0x01, 0x02, 0x03, 0x67, 0xd8, 0x5d,
-	0xc4, 0x01, 0x78, 0x80, 0x03, 0xe3, 0x05, 0xc3,
-	0x01, 0xe4, 0x0f, 0x03, 0x00, 0x00, 0xe6, 0x06,
-	0x05, 0x01, 0x5a, 0x53, 0x44, 0x68, 0x1a, 0x00,
-	0x00, 0x01, 0x01, 0x28, 0x3c, 0x00, 0x56, 0x5e,
-	0x00, 0xa0, 0xa0, 0xa0, 0x29, 0x50, 0x30, 0x20,
-	0x35, 0x00, 0x6d, 0x55, 0x21, 0x00, 0x00, 0x1a,
-	0xf4, 0x51, 0x00, 0xa0, 0xf0, 0x70, 0x19, 0x80,
-	0x30, 0x20, 0x35, 0x00, 0x6d, 0x55, 0x21, 0x00,
-	0x00, 0x1e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfb
-};
-
 struct pci_epf_test_reg {
 	__le32 magic;
 	__le32 command;
@@ -156,9 +90,6 @@ struct pci_epf_test_reg {
 	__le32 irq_type;
 	__le32 irq_number;
 	__le32 flags;
-	__le32 height;
-	__le32 width;
-	__le64 dpu_fb_offset;
 	__le32 caps;
 	__le32 doorbell_bar;
 	__le32 doorbell_offset;
@@ -166,13 +97,13 @@ struct pci_epf_test_reg {
 } __packed;
 
 static struct pci_epf_header test_header = {
-	.vendorid	= 0x1131,
-	.deviceid	= 0x1234,
-	.baseclass_code	= PCI_BASE_CLASS_DISPLAY,
+	.vendorid	= PCI_ANY_ID,
+	.deviceid	= PCI_ANY_ID,
+	.baseclass_code = PCI_CLASS_OTHERS,
 	.interrupt_pin	= PCI_INTERRUPT_INTA,
 };
 
-static size_t bar_size[] = { 512, 512, 33554432, 16384, 4194304, 1048576 };
+static size_t bar_size[] = { 512, 512, 1024, 16384, 131072, 1048576 };
 
 static void pci_epf_test_dma_callback(void *param)
 {
@@ -450,7 +381,7 @@ static void pci_epf_test_copy(struct pci_epf_test *epf_test,
 		}
 
 		ret = pci_epc_mem_map(epf->epc, epf->func_no, epf->vfunc_no,
-				      dst_addr, copy_size, &dst_map);
+					   dst_addr, copy_size, &dst_map);
 		if (ret) {
 			dev_err(dev, "Failed to map destination address\n");
 			status = STATUS_DST_ADDR_INVALID;
@@ -537,7 +468,7 @@ static void pci_epf_test_read(struct pci_epf_test *epf_test,
 
 	while (src_size) {
 		ret = pci_epc_mem_map(epc, epf->func_no, epf->vfunc_no,
-				      src_addr, src_size, &map);
+					   src_addr, src_size, &map);
 		if (ret) {
 			dev_err(dev, "Failed to map address\n");
 			status = STATUS_SRC_ADDR_INVALID;
@@ -635,7 +566,7 @@ static void pci_epf_test_write(struct pci_epf_test *epf_test,
 
 	while (dst_size) {
 		ret = pci_epc_mem_map(epc, epf->func_no, epf->vfunc_no,
-				      dst_addr, dst_size, &map);
+					   dst_addr, dst_size, &map);
 		if (ret) {
 			dev_err(dev, "Failed to map address\n");
 			status = STATUS_DST_ADDR_INVALID;
@@ -704,117 +635,6 @@ set_status:
 	else
 		status |= STATUS_WRITE_FAIL;
 	reg->status = cpu_to_le32(status);
-}
-
-static int epf_read_edid_sysfs(u8 *buf)
-{
-	struct file *filp;
-	loff_t pos = 0;
-	ssize_t ret;
-
-	filp = filp_open(EDID_PATH, O_RDONLY, 0);
-	if (IS_ERR(filp))
-		return PTR_ERR(filp);
-
-	ret = kernel_read(filp, buf, EDID_SIZE, &pos);
-	filp_close(filp, NULL);
-
-	if (ret != EDID_SIZE)
-		return -EINVAL;
-
-	return 0;
-}
-
-static void epf_copy_edid_to_bar1(struct pci_epf_test *epf_test)
-{
-	u8 *bar1;
-	int ret;
-	u8 edid[EDID_SIZE];
-
-	if (!epf_test->reg[BAR_1]) {
-		pr_err("BAR1 not mapped\n");
-		return;
-	}
-
-	bar1 = (u8 *)epf_test->reg[BAR_1];
-
-	ret = epf_read_edid_sysfs(edid);
-	if (ret) {
-		pr_warn("EDID missing using fallback with max 4k\n");
-		memcpy(edid, default_edid, EDID_SIZE);
-	} else {
-		pr_info("EDID read from sysfs with max connected display resolution.\n");
-	}
-
-	memcpy(bar1, edid, EDID_SIZE);
-	pr_info("EDID copied to BAR1\n");
-}
-
-static int pci_epf_load_option_rom(struct pci_epf *epf)
-{
-	const struct firmware *fw;
-	struct pci_epf_test *epf_test = epf_get_drvdata(epf);
-	void *rom_base;
-	size_t rom_size;
-	int ret;
-
-	dev_info(&epf->dev, "Loading PCIe Option ROM\n");
-
-	ret = request_firmware(&fw, "OptionRom.rom", &epf->dev);
-	if (ret) {
-		dev_err(&epf->dev, "Failed to load Option ROM (%d)\n", ret);
-		return ret;
-	}
-
-	dev_info(&epf->dev, "Option ROM size: %zu\n", fw->size);
-
-	/* PCI spec requires ROM BAR window >= 64KB */
-	rom_size = max_t(size_t, roundup_pow_of_two(fw->size), 65536);
-
-	memset(&epf_test->rom_bar, 0, sizeof(epf_test->rom_bar));
-
-	epf_test->rom_bar.barno = (enum pci_barno)PCI_ROM_RESOURCE;
-	epf_test->rom_bar.flags = PCI_BASE_ADDRESS_SPACE_MEMORY |
-				  PCI_BASE_ADDRESS_MEM_TYPE_32;
-	epf_test->rom_bar.size = rom_size;
-
-	/* Allocate DMA-safe memory accessible by PCIe */
-	rom_base = dma_alloc_coherent(epf->epc->dev.parent,
-				      rom_size,
-				      &epf_test->rom_bar.phys_addr,
-				      GFP_KERNEL);
-	if (!rom_base) {
-		dev_err(&epf->dev, "Failed to allocate ROM memory\n");
-		release_firmware(fw);
-		return -ENOMEM;
-	}
-
-	/* Copy firmware image into allocated memory */
-	memcpy(rom_base, fw->data, fw->size);
-
-	epf_test->rom_bar.addr = rom_base;
-
-	dev_info(&epf->dev,
-		 "Option ROM mapped: virt=%p phys=%pa size=%zu\n",
-		 rom_base, &epf_test->rom_bar.phys_addr, rom_size);
-
-	/* Configure ROM BAR in endpoint controller */
-	ret = pci_epc_set_bar(epf->epc, epf->func_no, epf->vfunc_no,
-			      &epf_test->rom_bar);
-	if (ret) {
-		dev_err(&epf->dev, "Failed to configure ROM BAR (%d)\n", ret);
-		dma_free_coherent(epf->epc->dev.parent, rom_size, rom_base,
-				  epf_test->rom_bar.phys_addr);
-		release_firmware(fw);
-		return ret;
-	}
-
-	dev_info(&epf->dev, "ROM BAR configured successfully (%zu bytes)\n",
-		 rom_size);
-
-	release_firmware(fw);
-
-	return 0;
 }
 
 static void pci_epf_test_raise_irq(struct pci_epf_test *epf_test,
@@ -907,8 +727,7 @@ static void pci_epf_test_enable_doorbell(struct pci_epf_test *epf_test,
 		goto set_status_err;
 
 	msg = &epf->db_msg[0].msg;
-	bar = pci_epc_get_next_free_bar(epf_test->epc_features,
-					epf_test->test_reg_bar + 1);
+	bar = pci_epc_get_next_free_bar(epf_test->epc_features, epf_test->test_reg_bar + 1);
 	if (bar < BAR_0)
 		goto err_doorbell_cleanup;
 
@@ -926,9 +745,9 @@ static void pci_epf_test_enable_doorbell(struct pci_epf_test *epf_test,
 	reg->doorbell_bar = cpu_to_le32(bar);
 
 	msg = &epf->db_msg[0].msg;
-	ret = pci_epf_align_inbound_addr(epf, bar,
-					 ((u64)msg->address_hi << 32) | msg->address_lo,
+	ret = pci_epf_align_inbound_addr(epf, bar, ((u64)msg->address_hi << 32) | msg->address_lo,
 					 &epf_test->db_bar.phys_addr, &offset);
+
 	if (ret)
 		goto err_doorbell_cleanup;
 
@@ -938,8 +757,7 @@ static void pci_epf_test_enable_doorbell(struct pci_epf_test *epf_test,
 	epf_test->db_bar.size = epf->bar[bar].size;
 	epf_test->db_bar.flags = epf->bar[bar].flags;
 
-	ret = pci_epc_set_bar(epc, epf->func_no, epf->vfunc_no,
-			      &epf_test->db_bar);
+	ret = pci_epc_set_bar(epc, epf->func_no, epf->vfunc_no, &epf_test->db_bar);
 	if (ret)
 		goto err_doorbell_cleanup;
 
@@ -976,8 +794,7 @@ static void pci_epf_test_disable_doorbell(struct pci_epf_test *epf_test,
 	 * the host. Thus, when disabling the doorbell, restore the inbound
 	 * translation to point to the memory allocated for the BAR.
 	 */
-	ret = pci_epc_set_bar(epc, epf->func_no, epf->vfunc_no,
-			      &epf->bar[bar]);
+	ret = pci_epc_set_bar(epc, epf->func_no, epf->vfunc_no, &epf->bar[bar]);
 	if (ret)
 		goto set_status_err;
 
@@ -1044,29 +861,6 @@ static void pci_epf_test_cmd_handler(struct work_struct *work)
 		break;
 	case COMMAND_DISABLE_DOORBELL:
 		pci_epf_test_disable_doorbell(epf_test, reg);
-		pci_epf_test_raise_irq(epf_test, reg);
-		break;
-	case COMMAND_CHANGE_RESOLUTION:
-	{
-		char *envp[3];
-		char res_str[32];
-		u32 width = le32_to_cpu(reg->width);
-		u32 height = le32_to_cpu(reg->height);
-
-		dev_info(dev, "Resolution change: %ux%u\n", width, height);
-
-		snprintf(res_str, sizeof(res_str), "RESOLUTION=%ux%u",
-			 width, height);
-		envp[0] = "EVENT=RESOLUTION_CHANGE";
-		envp[1] = res_str;
-		envp[2] = NULL;
-
-		kobject_uevent_env(&dev->kobj, KOBJ_CHANGE, envp);
-		pci_epf_test_raise_irq(epf_test, reg);
-		break;
-	}
-	case COMMAND_GET_FB_OFFSET:
-		reg->dpu_fb_offset = cpu_to_le64(vram_fb_offset);
 		pci_epf_test_raise_irq(epf_test, reg);
 		break;
 	default:
@@ -1161,8 +955,7 @@ static int pci_epf_test_epc_init(struct pci_epf *epf)
 		epf_test->dma_supported = false;
 
 	if (epf->vfunc_no <= 1) {
-		ret = pci_epc_write_header(epc, epf->func_no, epf->vfunc_no,
-					   header);
+		ret = pci_epc_write_header(epc, epf->func_no, epf->vfunc_no, header);
 		if (ret) {
 			dev_err(dev, "Configuration header write failed\n");
 			return ret;
@@ -1194,12 +987,6 @@ static int pci_epf_test_epc_init(struct pci_epf *epf)
 			return ret;
 		}
 	}
-
-	ret = pci_epf_load_option_rom(epf);
-	if (ret)
-		dev_err(&epf->dev, "Failed to expose Option ROM\n");
-
-	epf_copy_edid_to_bar1(epf_test);
 
 	linkup_notifier = epc_features->linkup_notifier;
 	if (!linkup_notifier)
@@ -1385,30 +1172,6 @@ static int pci_epf_test_probe(struct pci_epf *epf,
 	return 0;
 }
 
-static int stream_init_vram(void)
-{
-	struct device_node *vram_node;
-	struct resource res;
-
-	vram_node = of_find_node_by_name(NULL, "vram");
-	if (!vram_node) {
-		pr_err("VRAM node not found\n");
-		return -ENODEV;
-	}
-
-	if (of_address_to_resource(vram_node, 0, &res)) {
-		pr_err("Failed to get VRAM resource\n");
-		return -EINVAL;
-	}
-
-	vram_phys = res.start;
-	vram_size = resource_size(&res);
-
-	pr_info("VRAM: phys=%pa size=0x%zx\n", &vram_phys, vram_size);
-
-	return 0;
-}
-
 static const struct pci_epf_ops ops = {
 	.unbind	= pci_epf_test_unbind,
 	.bind	= pci_epf_test_bind,
@@ -1425,10 +1188,6 @@ static struct pci_epf_driver test_driver = {
 static int __init pci_epf_test_init(void)
 {
 	int ret;
-
-	ret = stream_init_vram();
-	if (ret)
-		return ret;
 
 	kpcitest_workqueue = alloc_workqueue("kpcitest",
 					     WQ_MEM_RECLAIM | WQ_HIGHPRI, 0);
@@ -1452,55 +1211,9 @@ static void __exit pci_epf_test_exit(void)
 {
 	if (kpcitest_workqueue)
 		destroy_workqueue(kpcitest_workqueue);
-
 	pci_epf_unregister_driver(&test_driver);
 }
 module_exit(pci_epf_test_exit);
-
-uint64_t pci_epf_get_vram_fb_address(void)
-{
-	if (vram_fb_addr)
-		return vram_fb_addr;
-	else
-		return vram_phys;
-}
-EXPORT_SYMBOL_GPL(pci_epf_get_vram_fb_address);
-
-static int param_set_offset(const char *val, const struct kernel_param *kp)
-{
-    unsigned long flags;
-    u64 offset;
-    int ret;
-
-    ret = kstrtou64(val, 0, &offset);
-    if (ret)
-        return ret;
-
-    spin_lock_irqsave(&offset_lock, flags);
-	vram_fb_addr = offset;
-    vram_fb_offset = offset ? offset - vram_phys : 0;
-	
-    pr_info("VRAM fb add =  0x%016llx, offset = 0x%016llx\n",
-            (unsigned long long)vram_fb_addr, (unsigned long long)vram_fb_offset);
-
-    spin_unlock_irqrestore(&offset_lock, flags);
-
-    return 0;
-}
-
-static int param_get_offset(char *buffer, const struct kernel_param *kp)
-{
-    return sprintf(buffer, "%llu\n",
-                   (unsigned long long)vram_fb_offset);
-}
-
-static const struct kernel_param_ops offset_ops = {
-    .set = param_set_offset,
-    .get = param_get_offset,
-};
-
-module_param_cb(offset, &offset_ops, NULL, 0644);
-MODULE_PARM_DESC(offset, "VRAM framebuffer offset");
 
 MODULE_DESCRIPTION("PCI EPF TEST DRIVER");
 MODULE_AUTHOR("Kishon Vijay Abraham I <kishon@ti.com>");

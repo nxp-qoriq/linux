@@ -1347,7 +1347,7 @@ static int imx_pcie_host_init(struct dw_pcie_rp *pp)
 	}
 
 	/* Make sure that PCIe LTSSM is cleared */
-	//imx_pcie_ltssm_disable(dev);
+	imx_pcie_ltssm_disable(dev);
 
 	ret = imx_pcie_deassert_core_reset(imx_pcie);
 	if (ret < 0) {
@@ -1555,8 +1555,7 @@ static int imx_add_pcie_ep(struct imx_pcie *imx_pcie,
 	struct dw_pcie_rp *pp = &pci->pp;
 	struct device *dev = pci->dev;
 
-	//imx_pcie_host_init(pp);
-	if (imx_pcie_host_init(pp) == -EPROBE_DEFER)
+	if (imx_pcie_host_init(pp) < 0)
 		return -EPROBE_DEFER;
 
 	ep = &pci->ep;
@@ -2436,7 +2435,7 @@ static void imx_pcie_quirk(struct pci_dev *dev)
 	}
 }
 DECLARE_PCI_FIXUP_CLASS_HEADER(PCI_VENDOR_ID_SYNOPSYS, 0xabcd,
-			PCI_CLASS_DISPLAY_VGA, 8, imx_pcie_quirk);
+			PCI_CLASS_BRIDGE_PCI, 8, imx_pcie_quirk);
 
 static int __init imx_pcie_init(void)
 {

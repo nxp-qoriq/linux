@@ -1,0 +1,104 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2023-2026 NXP
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include "imx95-clock.h"
+
+&{/} {
+	dp-connector {
+		compatible = "dp-connector";
+		label = "DP";
+		type = "mini";
+
+		port {
+			dp_connector_in: endpoint {
+				remote-endpoint = <&it6251_out>;
+			};
+		};
+	};
+};
+
+&display_pixel_link {
+	status = "okay";
+};
+
+&lpi2c6 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	lvds0-to-dp-bridge@4c {
+		compatible = "ite,it6251";
+		reg = <0x4c>, <0x4d>;
+		reg-names = "bridge", "lvds";
+		power-supply = <&vcc_scm_aux_3v3>;
+		ite,color-depth = <8>;
+		ite,dp-lanes = <4>;
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+
+				it6251_in_0: endpoint {
+					remote-endpoint = <&lvds0_out>;
+					data-mapping = "jeida-24";
+				};
+			};
+
+			port@1 {
+				reg = <1>;
+
+				it6251_out: endpoint {
+					remote-endpoint = <&dp_connector_in>;
+				};
+			};
+		};
+	};
+};
+
+
+&ldb {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	assigned-clocks = <&scmi_clk IMX95_CLK_LDBPLL_VCO>,
+			  <&scmi_clk IMX95_CLK_LDBPLL>;
+	assigned-clock-rates = <4158000000>, <1039500000>;
+	status = "okay";
+
+	channel@0 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "okay";
+		reg = <0>;
+
+		port@1 {
+			reg = <1>;
+
+			lvds0_out: endpoint {
+				remote-endpoint = <&it6251_in_0>;
+			};
+		};
+	};
+};
+
+&ldb0_phy {
+	status = "okay";
+};
+
+&pixel_interleaver {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	channel@0 {
+		reg = <0>;
+		status = "okay";
+	};
+};

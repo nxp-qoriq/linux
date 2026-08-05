@@ -1009,8 +1009,8 @@ dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-os08a20-dual.dtb
 imx95-19x19-evk-adv7535-dtbs := imx95-19x19-evk.dtb imx95-19x19-evk-adv7535.dtbo
 dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-adv7535.dtb
 
-imx95-19x19-evk-no-display-dtbs := imx95-19x19-evk.dtb imx95-19x19-evk-no-display.dtbo
-dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-no-display.dtb
+imx95-19x19-evk-ep-no-display-dtbs := imx95-19x19-evk.dtb imx95-19x19-evk-no-display.dtbo imx95-19x19-evk-pcie1-ep.dtbo
+dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-ep-no-display.dtb
 
 imx95-19x19-evk-dsi-serdes-dtbs := imx95-19x19-evk.dtb imx95-19x19-evk-dsi-serdes.dtbo
 dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-dsi-serdes.dtb
@@ -1040,12 +1040,14 @@ dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-ox03c10-combo.dtb
 imx95-19x19-evk-ox03c10-all-dtbs := imx95-19x19-evk.dtb imx95-19x19-evk-ox03c10.dtbo imx95-19x19-evk-ox03c10-combo.dtbo
 dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-ox03c10-all.dtb
 
-
 imx95-19x19-verdin-ox03c10-dtbs := imx95-19x19-verdin.dtb imx95-19x19-verdin-ox03c10.dtbo
 dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-verdin-ox03c10.dtb
 
 imx95-19x19-evk-it6263-lvds0-dtbs := imx95-19x19-evk.dtb imx95-19x19-evk-it6263-lvds0.dtbo
 dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-it6263-lvds0.dtb
+
+imx95-19x19-latu-dcsm-it6251-lvds0-dtbs := imx95-19x19-latu-dcsm.dtb imx95-19x19-evk-it6251-lvds0.dtbo imx95-19x19-evk-pcie1-ep.dtbo
+dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-latu-dcsm-it6251-lvds0.dtb
 
 imx95-19x19-evk-it6263-lvds1-dtbs := imx95-19x19-evk.dtb imx95-19x19-evk-it6263-lvds1.dtbo
 dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-it6263-lvds1.dtb
@@ -1066,9 +1068,6 @@ dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-ep-adv7535.dtb
 
 imx95-19x19-evk-ep-mipi-4K-lt9611uxc-dtbs := imx95-19x19-evk.dtb imx95-19x19-evk-lt9611uxc.dtbo imx95-19x19-evk-pcie1-ep.dtbo
 dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-ep-mipi-4K-lt9611uxc.dtb
-
-imx95-19x19-evk-ep-no-display-dtbs := imx95-19x19-evk.dtb imx95-19x19-evk-no-display.dtbo imx95-19x19-evk-pcie1-ep.dtbo
-dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-ep-no-display.dtb
 
 imx95-19x19-evk-jdi-wuxga-lvds-panel-dtbs := imx95-19x19-evk.dtb imx95-19x19-evk-jdi-wuxga-lvds-panel.dtbo
 dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-jdi-wuxga-lvds-panel.dtb

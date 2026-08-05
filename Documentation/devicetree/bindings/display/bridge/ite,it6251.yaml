@@ -59,6 +59,45 @@ properties:
 
   power-supply: true
 
+  interrupts:
+    maxItems: 1
+    description: |
+      Optional interrupt from the HPD/status pin of the bridge.
+
+  ite,single-pixel-input:
+    type: boolean
+    description: |
+      When present, the LVDS input uses single-pixel mode (one pixel per
+      clock cycle). By default, dual-pixel mode is assumed, which is
+      required for 1920x1080 operation on LATU boards.
+
+  ite,color-depth:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    enum: [6, 8, 10, 12]
+    default: 8
+    description: |
+      LVDS input color depth in bits per component.
+      Supported values: 6, 8, 10, 12. Defaults to 8.
+
+  ite,dp-lanes:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    enum: [1, 2, 4]
+    default: 4
+    description: |
+      Number of DisplayPort output lanes. Defaults to 4.
+
+  ite,dp-spread-spectrum:
+    type: boolean
+    description: |
+      Enable spread-spectrum clocking on the DP output.
+
+  ite,force-lbr:
+    type: boolean
+    description: |
+      Force Low Bit Rate (LBR, 1.62 Gbps) link training instead of
+      the default HBR (2.7 Gbps). Use when the downstream sink does
+      not support HBR.
+
 required:
   - compatible
   - reg

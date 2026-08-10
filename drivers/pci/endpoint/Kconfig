@@ -37,5 +37,5 @@ config PCI_ENDPOINT_MSI_DOORBELL
 	  dedicated BAR, which the EP maps to the controller's message address.
 
 source "drivers/pci/endpoint/functions/Kconfig"
-
+source "drivers/pci/endpoint/functions/imx9_ikvm/Kconfig"
 endmenu

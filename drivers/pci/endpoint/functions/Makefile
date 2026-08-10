@@ -7,4 +7,4 @@ obj-$(CONFIG_PCI_EPF_TEST)		+= pci-epf-test.o
 obj-$(CONFIG_PCI_EPF_NTB)		+= pci-epf-ntb.o
 obj-$(CONFIG_PCI_EPF_VNTB) 		+= pci-epf-vntb.o
 obj-$(CONFIG_PCI_EPF_MHI)		+= pci-epf-mhi.o
-obj-$(CONFIG_PCI_EPF_IMX9_VGA)		+= pci-epf-imx9-vga.o
+obj-$(CONFIG_PCI_EPF_IMX9_VGA)	+= pci-epf-imx9-vga.o imx9_ikvm/

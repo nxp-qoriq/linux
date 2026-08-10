@@ -59,7 +59,8 @@ config PCI_EPF_IMX9_VGA
 
 	  Provides:
 	    - BAR1: EDID (read from DRM sysfs or 4K fallback blob)
-	    - BAR2: 32MB VRAM (ioremap_wc, DT reserved-memory node "vram")
+	    - BAR2: 64MB VRAM (ioremap_wc, DT reserved-memory node "vram")
+		- BAR3: 32KB PCIe HID Ring buffer
 	    - BAR4: DPU95 register space (ioremap at 0x4b400000)
 	    - Option ROM via firmware loader (OptionRom.rom)
 	    - Resolution change uevent to userspace

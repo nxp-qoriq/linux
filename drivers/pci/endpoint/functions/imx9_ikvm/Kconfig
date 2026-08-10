@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-2.0
+# Copyright 2026 NXP
+#
+# PCI Endpoint KVM input
+#
+
+config PCIE_KVM_INPUT
+    tristate "PCIe EP capture HID input from remote and local input device (iKVM)"
+    depends on PCI_EPF_IMX9_VGA
+    default m
+    help
+      Say Y or M here to expose the i.MX9 PCIe endpoint HID device
+      for OpenBMC iKVM.
+
+      This driver reads the HID data from hid ring buffer and write it to endpoint bar3 
+
+      Requires CONFIG_PCI_EPF_VGA=y or =m.

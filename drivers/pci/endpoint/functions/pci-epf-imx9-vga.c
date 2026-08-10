@@ -8,8 +8,8 @@
  * BAR layout:
  *   BAR0 - 512B   : control registers (compatible with pcitest wire format)
  *   BAR1 - 512B   : EDID (populated from DRM sysfs or fallback 4K blob)
- *   BAR2 - 32MB   : VRAM framebuffer (ioremap_wc, DT reserved-memory "vram")
- *   BAR3 - 16KB   : miscellaneous
+ *   BAR2 - 64MB   : VRAM framebuffer (ioremap_wc, DT reserved-memory "vram")
+ *   BAR3 - 32KB   : PCIe HID Ring buffer
  *   BAR4 - 4MB    : DPU95 register space (ioremap at DPU95_ADDRESS_SPACE)
  *   BAR5 - 1MB    : reserved
  *
@@ -165,11 +165,11 @@ static struct pci_epf_header imx9_vga_header = {
  *   BAR0 = 512B   (control regs)
  *   BAR1 = 512B   (EDID)
  *   BAR2 = 32MB   (VRAM - overridden by alloc_bar to DT size)
- *   BAR3 = 16KB   (misc)
+ *   BAR3 = 32KB   (misc)
  *   BAR4 = 4MB    (DPU95 regs)
  *   BAR5 = 1MB    (reserved)
  */
-static size_t imx9_vga_bar_size[] = { 512, 512, 33554432, 16384, 4194304, 1048576 };
+static size_t imx9_vga_bar_size[] = { 512, 512, 33554432, 32768, 4194304, 1048576 };
 
 /* ------------------------------------------------------------------ */
 /* Default EDID fallback blob (max 4K resolution)                      */
@@ -208,6 +208,11 @@ static unsigned char default_edid[256] = {
 	0x00, 0x1e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfb
 };
+/**
+ * @hid_addr: Virtual address of the shared memory region used for
+ *            USB HID report exchange between the endpoint and host.
+ */
+static void *hid_addr;
 
 /* ------------------------------------------------------------------ */
 /* VRAM helpers                                                         */
@@ -262,6 +267,27 @@ uint64_t pci_epf_get_vram_fb_address(void)
 	return vram_phys;
 }
 EXPORT_SYMBOL_GPL(pci_epf_get_vram_fb_address);
+
+#if IS_ENABLED(CONFIG_PCIE_KVM_INPUT)
+/**
+ * pci_epf_get_hid_address() - Return the USB HID shared memory address
+ *
+ * Returns the virtual address of the shared memory region used for USB HID
+ * report exchange between the PCIe endpoint and the host. Returns %NULL if
+ * the HID memory has not been initialized.
+ *
+ * Exported for use by the PCIe KVM input driver.
+ */
+ 
+void* pci_epf_get_hid_address(void)
+{
+	if (hid_addr)
+		return READ_ONCE(hid_addr);
+	else
+		return NULL;
+}
+EXPORT_SYMBOL_GPL(pci_epf_get_hid_address);
+#endif
 
 /* ------------------------------------------------------------------ */
 /* Driver-specific BAR allocator (ops->alloc_bar / ops->free_bar)      */
@@ -403,6 +429,17 @@ static int epf_imx9_vga_load_option_rom(struct pci_epf *epf)
 
 	dev_info(&epf->dev, "pci-epf-imx9-vga: Loading Option ROM\n");
 
+#if IS_ENABLED(CONFIG_PCIE_KVM_INPUT)
+	ret = request_firmware(&fw, "OptionRom_pcie_kvm.rom", &epf->dev);
+	if (ret) {
+		dev_err(&epf->dev,
+			"pci-epf-imx9-vga: Failed to load pcie Option ROM (%d)\n", ret);
+		return ret;
+	}
+
+	dev_info(&epf->dev, "pci-epf-imx9-vga: pcie Option ROM size: %zu\n", fw->size);
+
+#else
 	ret = request_firmware(&fw, "OptionRom.rom", &epf->dev);
 	if (ret) {
 		dev_err(&epf->dev,
@@ -412,6 +449,7 @@ static int epf_imx9_vga_load_option_rom(struct pci_epf *epf)
 
 	dev_info(&epf->dev, "pci-epf-imx9-vga: Option ROM size: %zu\n", fw->size);
 
+#endif
 	/* PCI spec: ROM BAR window >= 64KB */
 	rom_size = max_t(size_t, roundup_pow_of_two(fw->size), 65536);
 
@@ -701,7 +739,16 @@ static int epf_imx9_vga_epc_init(struct pci_epf *epf)
 		dev_warn(dev, "pci-epf-imx9-vga: Option ROM not loaded (%d)\n", ret);
 
 	/* Populate EDID into BAR1 */
-	epf_imx9_vga_copy_edid_to_bar1(epf_imx9_vga);
+#if IS_ENABLED(CONFIG_PCIE_KVM_INPUT)
+	if (epf_imx9_vga->reg[BAR_3]) {
+		WRITE_ONCE(hid_addr, epf_imx9_vga->reg[BAR_3]);
+		pr_info("HID BAR3 address=%p\n", hid_addr);
+	}
+	else {
+		dev_err(&epf->dev, "BAR3 not allocated\n");
+		return -EINVAL;
+	}
+#endif 
 
 	if (!epc_features->linkup_notifier)
 		queue_work(kpciimx9vga_workqueue, &epf_imx9_vga->cmd_handler.work);

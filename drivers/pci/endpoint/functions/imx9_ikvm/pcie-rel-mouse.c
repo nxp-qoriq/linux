@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
+ * Copyright 2026 NXP
+ *
  * PCIe Endpoint Relative Mouse Driver for i.MX95 iKVM
  *
  * Captures relative mouse input events from local and remote devices and
  * forwards them over the PCIe endpoint through the PCIe HID helper.
  *
- * Copyright 2026 NXP
  */
 
 #define pr_fmt(fmt) "pcie-rel-mouse: " fmt
@@ -19,7 +20,7 @@
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 
-#include <linux/pci-epf-hid.h>
+#include "pci-epf-hid.h"
 
 #define DEVICE_NAME "pcie-rel-mouse"
 
@@ -36,17 +37,17 @@ struct pcie_rel_mouse {
 
 static void pcie_rel_mouse_send_work(struct work_struct *work)
 {
-	struct pcie_rel_mouse *vm;
+	struct pcie_rel_mouse *mouse;
 	struct hid_rel_mouse_report rpt;
 	unsigned long flags;
 	int ret;
 
-	vm = container_of(work, struct pcie_rel_mouse, work);
+	mouse = container_of(work, struct pcie_rel_mouse, work);
 
-	spin_lock_irqsave(&vm->lock, flags);
-	rpt = vm->report;
-	memset(&vm->report, 0, sizeof(vm->report));
-	spin_unlock_irqrestore(&vm->lock, flags);
+	spin_lock_irqsave(&mouse->lock, flags);
+	rpt = mouse->report;
+	memset(&mouse->report, 0, sizeof(mouse->report));
+	spin_unlock_irqrestore(&mouse->lock, flags);
 
 	ret = epf_hid_send_rel_mouse(&rpt);
 	if (ret)
@@ -58,27 +59,27 @@ static void pcie_rel_mouse_event(struct input_handle *handle,
 				 unsigned int code,
 				 int value)
 {
-	struct pcie_rel_mouse *vm;
+	struct pcie_rel_mouse *mouse;
 	unsigned long flags;
 
-	vm = container_of(handle, struct pcie_rel_mouse, handle);
+	mouse = container_of(handle, struct pcie_rel_mouse, handle);
 
-	spin_lock_irqsave(&vm->lock, flags);
+	spin_lock_irqsave(&mouse->lock, flags);
 
 	switch (type) {
 	case EV_REL:
 		switch (code) {
 		case REL_X:
-			vm->report.x = value;
+			mouse->report.x = value;
 			break;
 		case REL_Y:
-			vm->report.y = value;
+			mouse->report.y = value;
 			break;
 		case REL_WHEEL:
-			vm->report.wheel = value;
+			mouse->report.wheel = value;
 			break;
 		default:
-			spin_unlock_irqrestore(&vm->lock, flags);
+			spin_unlock_irqrestore(&mouse->lock, flags);
 			return;
 		}
 		break;
@@ -87,96 +88,96 @@ static void pcie_rel_mouse_event(struct input_handle *handle,
 		switch (code) {
 		case BTN_LEFT:
 			if (value)
-				vm->report.buttons |= BIT(0);
+				mouse->report.buttons |= BIT(0);
 			else
-				vm->report.buttons &= ~BIT(0);
+				mouse->report.buttons &= ~BIT(0);
 			break;
 
 		case BTN_RIGHT:
 			if (value)
-				vm->report.buttons |= BIT(1);
+				mouse->report.buttons |= BIT(1);
 			else
-				vm->report.buttons &= ~BIT(1);
+				mouse->report.buttons &= ~BIT(1);
 			break;
 
 		case BTN_MIDDLE:
 			if (value)
-				vm->report.buttons |= BIT(2);
+				mouse->report.buttons |= BIT(2);
 			else
-				vm->report.buttons &= ~BIT(2);
+				mouse->report.buttons &= ~BIT(2);
 			break;
 
 		default:
-			spin_unlock_irqrestore(&vm->lock, flags);
+			spin_unlock_irqrestore(&mouse->lock, flags);
 			return;
 		}
 		break;
 
 	case EV_SYN:
-		spin_unlock_irqrestore(&vm->lock, flags);
+		spin_unlock_irqrestore(&mouse->lock, flags);
 
-		if (code == SYN_REPORT && !work_pending(&vm->work))
-			schedule_work(&vm->work);
+		if (code == SYN_REPORT && !work_pending(&mouse->work))
+			schedule_work(&mouse->work);
 
 		return;
 
 	default:
-		spin_unlock_irqrestore(&vm->lock, flags);
+		spin_unlock_irqrestore(&mouse->lock, flags);
 		return;
 	}
 
-	spin_unlock_irqrestore(&vm->lock, flags);
+	spin_unlock_irqrestore(&mouse->lock, flags);
 }
 
 static int pcie_rel_mouse_connect(struct input_handler *handler,
 				  struct input_dev *dev,
 				  const struct input_device_id *id)
 {
-	struct pcie_rel_mouse *vm;
+	struct pcie_rel_mouse *mouse;
 	int ret;
 
 	pr_info("connect %s\n", dev_name(&dev->dev));
 
-	vm = kzalloc(sizeof(*vm), GFP_KERNEL);
-	if (!vm)
+	mouse = kzalloc(sizeof(*mouse), GFP_KERNEL);
+	if (!mouse)
 		return -ENOMEM;
 
-	spin_lock_init(&vm->lock);
-	INIT_WORK(&vm->work, pcie_rel_mouse_send_work);
+	spin_lock_init(&mouse->lock);
+	INIT_WORK(&mouse->work, pcie_rel_mouse_send_work);
 
-	vm->handle.dev = dev;
-	vm->handle.handler = handler;
-	vm->handle.name = "pcie_rel_mouse";
+	mouse->handle.dev = dev;
+	mouse->handle.handler = handler;
+	mouse->handle.name = "pcie_rel_mouse";
 
-	ret = input_register_handle(&vm->handle);
+	ret = input_register_handle(&mouse->handle);
 	if (ret)
 		goto err_free;
 
-	ret = input_open_device(&vm->handle);
+	ret = input_open_device(&mouse->handle);
 	if (ret)
 		goto err_unregister;
 
 	return 0;
 
 err_unregister:
-	input_unregister_handle(&vm->handle);
+	input_unregister_handle(&mouse->handle);
 err_free:
-	kfree(vm);
+	kfree(mouse);
 	return ret;
 }
 
 static void pcie_rel_mouse_disconnect(struct input_handle *handle)
 {
-	struct pcie_rel_mouse *vm;
+	struct pcie_rel_mouse *mouse;
 
-	vm = container_of(handle, struct pcie_rel_mouse, handle);
+	mouse = container_of(handle, struct pcie_rel_mouse, handle);
 
-	cancel_work_sync(&vm->work);
+	cancel_work_sync(&mouse->work);
 
 	input_close_device(handle);
 	input_unregister_handle(handle);
 
-	kfree(vm);
+	kfree(mouse);
 
 	pr_info("disconnected\n");
 }
@@ -301,3 +302,4 @@ void rel_mouse_exit(void)
 
 	pr_info("relative mouse removed\n");
 }
+

@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
+ * Copyright 2026 NXP
+ *
  * PCIe Endpoint Virtual Keyboard Driver
  *
  * Provides a character device interface for sending keyboard HID reports
  * over the PCIe endpoint using the EPF HID helper library.
  *
- * Copyright 2026 NXP
  */
 
 #include <linux/fs.h>
@@ -13,7 +14,7 @@
 #include <linux/device.h>
 #include <linux/uaccess.h>
 
-#include <linux/pci-epf-hid.h>
+#include "pci-epf-hid.h"
 
 #define DEVICE_NAME	"pcie-keyboard"
 
@@ -118,3 +119,4 @@ void keyboard_exit(void)
 
 	pr_info("virtual keyboard driver removed\n");
 }
+

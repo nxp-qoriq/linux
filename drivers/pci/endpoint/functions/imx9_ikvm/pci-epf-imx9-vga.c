@@ -1,19 +1,26 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
+ * Copyright 2026 NXP
+ *
  * PCIe Endpoint VGA Class Display Driver for i.MX95 iKVM
  *
  * Implements a PCI_BASE_CLASS_DISPLAY endpoint function driver,
  * separated from the PCI EPF test framework.
  *
- * BAR layout:
- *   BAR0 - 512B   : control registers (compatible with pcitest wire format)
- *   BAR1 - 512B   : EDID (populated from DRM sysfs or fallback 4K blob)
- *   BAR2 - 64MB   : VRAM framebuffer (ioremap_wc, DT reserved-memory "vram")
- *   BAR3 - 32KB   : PCIe HID Ring buffer
- *   BAR4 - 4MB    : DPU95 register space (ioremap at DPU95_ADDRESS_SPACE)
- *   BAR5 - 1MB    : reserved
+ * BAR layout (PCI Type-0 config space):
  *
- * Copyright 2026 NXP
+ *   Offset 0x10  BAR0 - 512B   : control registers (pcitest wire-format compatible)
+ *   Offset 0x14  BAR1 - 512B   : EDID (DRM sysfs or 1080p/4K fallback blob)
+ *   Offset 0x18  BAR2 - 64MB   : VRAM framebuffer (ioremap_wc, DT "vram" node)
+ *   Offset 0x1C  BAR3 - 32KB   : PCIe HID ring buffer (keyboard + mouse reports)
+ *   Offset 0x20  BAR4 - 4MB    : DPU95 register space (ioremap at DPU95_ADDRESS_SPACE)
+ *   Offset 0x24  BAR5 - 1MB    : reserved
+ *
+ *   Offset 0x30  PCI_ROM_ADDRESS (Expansion ROM BAR, NOT BAR6):
+ *                  Size: rounded up to next power-of-2, minimum 64KB per PCI spec.
+ *                  Loaded via request_firmware(), selected by kvm_mode:
+ *                   pcie_video_usb_hid -> OptionRom.rom
+ *                   pcie_kvm          -> OptionRom_pcie_kvm.rom
  */
 
 #include <linux/crc32.h>
@@ -24,13 +31,11 @@
 #include <linux/of_address.h>
 #include <linux/ioport.h>
 #include <linux/module.h>
+#include <linux/moduleparam.h>
 #include <linux/msi.h>
 #include <linux/slab.h>
 #include <linux/pci_ids.h>
 #include <linux/random.h>
-#include <linux/fs.h>
-#include <linux/file.h>
-#include <linux/uaccess.h>
 #include <linux/kernel.h>
 #include <linux/fb.h>
 #include <linux/device.h>
@@ -43,6 +48,10 @@
 #include <linux/pci_regs.h>
 
 #include <linux/dma-mapping.h>
+
+#if IS_ENABLED(CONFIG_PCIE_KVM_INPUT)
+#include "pci-epf-hid.h"
+#endif
 
 /* DPU95 register space physical base address on i.MX95 */
 #define DPU95_ADDRESS_SPACE		0x4b400000UL
@@ -105,6 +114,86 @@ static uint64_t    vram_fb_addr;
 
 static struct workqueue_struct *kpciimx9vga_workqueue;
 
+/*
+ * param_lock: protects param_kvm_mode and param_display_resolution against
+ * concurrent sysfs writes after module load.
+ */
+static DEFINE_MUTEX(param_lock);
+
+/* ------------------------------------------------------------------ */
+/* Module parameters: KVM configuration                                */
+/* ------------------------------------------------------------------ */
+
+/*
+ * kvm_mode: selects the KVM operating mode.
+ *
+ *   "pcie_kvm"            - Full PCIe KVM mode (video + PCIe HID ring)
+ *   "pcie_video_usb_hid"  - PCIe video with USB HID redirection (default)
+ *
+ * Set at module load time:
+ *   modprobe pci-epf-imx9-vga kvm_mode=pcie_kvm
+ * or via kernel command line:
+ *   pci_epf_imx9_vga.kvm_mode=pcie_kvm
+ * or at runtime via sysfs:
+ *   echo pcie_kvm > /sys/module/pci_epf_imx9_vga/parameters/kvm_mode
+ */
+static char param_kvm_mode[32] = "pcie_video_usb_hid";
+
+/*
+ * display_resolution: selects the display output resolution.
+ *
+ *   "1080p" - 1920x1080 FHD (default)
+ *   "4k"    - 3840x2160 UHD
+ *
+ * Set at module load time:
+ *   modprobe pci-epf-imx9-vga display_resolution=4k
+ * or via kernel command line:
+ *   pci_epf_imx9_vga.display_resolution=4k
+ * or at runtime via sysfs:
+ *   echo 4k > /sys/module/pci_epf_imx9_vga/parameters/display_resolution
+ */
+static char param_display_resolution[32] = "1080p";
+
+/**
+ * enum display_mode - supported display output resolutions
+ * @DISPLAY_1080P: Configure the display for 1080p (FHD) resolution.
+ * @DISPLAY_4K: Configure the display for 4K resolution.
+ */
+enum display_mode {
+	DISPLAY_1080P,
+	DISPLAY_4K,
+};
+
+/**
+ * enum kvm_mode - supported KVM operating modes
+ * @KVM_MODE_PCIE_VIDEO_USB_HID: PCIe video with USB HID redirection.
+ * @KVM_MODE_PCIE_KVM: Full PCIe KVM mode.
+ */
+enum imx9_kvm_mode {
+	KVM_MODE_PCIE_VIDEO_USB_HID,
+	KVM_MODE_PCIE_KVM,
+};
+
+/**
+ * struct kvm_config - KVM configuration parameters
+ * @display: Selected display resolution.
+ * @mode: Selected KVM operating mode.
+ */
+struct kvm_config {
+	enum display_mode display;
+	enum imx9_kvm_mode mode;
+};
+
+/**
+ * struct edid_resolution - display resolution described by EDID
+ * @width: Horizontal resolution in pixels.
+ * @height: Vertical resolution in pixels.
+ */
+struct edid_resolution {
+	u16 width;
+	u16 height;
+};
+
 /**
  * struct pci_epf_imx9_vga - private state for the VGA EPF driver instance
  * @reg:          virtual addresses of each BAR's register space
@@ -114,6 +203,8 @@ static struct workqueue_struct *kpciimx9vga_workqueue;
  * @msix_table_offset: offset of MSI-X table within ctrl_reg_bar
  * @cmd_handler:  delayed work for polling the command register
  * @epc_features: EPC feature set for this function
+ * @cfg: Global KVM configuration instance used to store the current
+ *       display resolution and KVM operating mode.
  */
 struct pci_epf_imx9_vga {
 	void				*reg[PCI_STD_NUM_BARS];
@@ -123,6 +214,10 @@ struct pci_epf_imx9_vga {
 	size_t				 msix_table_offset;
 	struct delayed_work		 cmd_handler;
 	const struct pci_epc_features	*epc_features;
+	struct kvm_config cfg;
+#if IS_ENABLED(CONFIG_PCIE_KVM_INPUT)	
+	atomic_t hid_attached;
+#endif	
 };
 
 /**
@@ -164,17 +259,54 @@ static struct pci_epf_header imx9_vga_header = {
  * BAR sizes:
  *   BAR0 = 512B   (control regs)
  *   BAR1 = 512B   (EDID)
- *   BAR2 = 32MB   (VRAM - overridden by alloc_bar to DT size)
- *   BAR3 = 32KB   (misc)
+ *   BAR2 = 64MB   (VRAM - overridden by alloc_bar to DT size)
+ *   BAR3 = 32KB   (PCIe HID ring buffer)
  *   BAR4 = 4MB    (DPU95 regs)
  *   BAR5 = 1MB    (reserved)
  */
-static size_t imx9_vga_bar_size[] = { 512, 512, 33554432, 32768, 4194304, 1048576 };
+static size_t imx9_vga_bar_size[] = { 512, 512, 67108864, 32768, 4194304, 1048576 };
 
 /* ------------------------------------------------------------------ */
-/* Default EDID fallback blob (max 4K resolution)                      */
+/* Default 1080P EDID                                                  */
 /* ------------------------------------------------------------------ */
-static unsigned char default_edid[256] = {
+static const unsigned char default_edid_1080p[256] = {
+	0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00,
+	0x1e, 0x6d, 0x55, 0x5b, 0xd5, 0x56, 0x07, 0x00,
+	0x01, 0x21, 0x01, 0x03, 0x80, 0x30, 0x1b, 0x78,
+	0xea, 0x31, 0x35, 0xa5, 0x55, 0x4e, 0xa1, 0x26,
+	0x0c, 0x50, 0x54, 0xa5, 0x4b, 0x00, 0x71, 0x4f,
+	0x81, 0x80, 0x95, 0x00, 0xb3, 0x00, 0xa9, 0xc0,
+	0x81, 0x00, 0x81, 0xc0, 0x90, 0x40, 0x02, 0x3a,
+	0x80, 0x18, 0x71, 0x38, 0x2d, 0x40, 0x58, 0x2c,
+	0x45, 0x00, 0xe0, 0x0e, 0x11, 0x00, 0x00, 0x1e,
+	0x00, 0x00, 0x00, 0xfd, 0x00, 0x38, 0x4b, 0x1e,
+	0x55, 0x12, 0x00, 0x0a, 0x20, 0x20, 0x20, 0x20,
+	0x20, 0x20, 0x00, 0x00, 0x00, 0xfc, 0x00, 0x4c,
+	0x47, 0x20, 0x46, 0x55, 0x4c, 0x4c, 0x20, 0x48,
+	0x44, 0x0a, 0x20, 0x20, 0x00, 0x00, 0x00, 0xff,
+	0x00, 0x33, 0x30, 0x31, 0x4e, 0x54, 0x5a, 0x4e,
+	0x45, 0x34, 0x39, 0x38, 0x31, 0x0a, 0x01, 0xb3,
+	0x02, 0x03, 0x1b, 0xf1, 0x48, 0x90, 0x04, 0x03,
+	0x01, 0x12, 0x1f, 0x10, 0x13, 0x23, 0x09, 0x07,
+	0x07, 0x83, 0x01, 0x00, 0x00, 0x65, 0x03, 0x0c,
+	0x00, 0x10, 0x00, 0x02, 0x3a, 0x80, 0x18, 0x71,
+	0x38, 0x2d, 0x40, 0x58, 0x2c, 0x45, 0x00, 0xe0,
+	0x0e, 0x11, 0x00, 0x00, 0x1e, 0x2a, 0x44, 0x80,
+	0xa0, 0x70, 0x38, 0x27, 0x40, 0x30, 0x20, 0x35,
+	0x00, 0xe0, 0x0e, 0x11, 0x00, 0x00, 0x1e, 0x01,
+	0x1d, 0x00, 0x72, 0x51, 0xd0, 0x1e, 0x20, 0x6e,
+	0x28, 0x55, 0x00, 0xe0, 0x0e, 0x11, 0x00, 0x00,
+	0x1e, 0x8c, 0x0a, 0xd0, 0x8a, 0x20, 0xe0, 0x2d,
+	0x10, 0x10, 0x3e, 0x96, 0x00, 0xe0, 0x0e, 0x11,
+	0x00, 0x00, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4b
+};
+
+/* ------------------------------------------------------------------ */
+/* Default 4K EDID                                                     */
+/* ------------------------------------------------------------------ */
+static const unsigned char default_edid_4k[256] = {
 	0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00,
 	0x09, 0xd1, 0x49, 0x79, 0x45, 0x54, 0x00, 0x00,
 	0x03, 0x20, 0x01, 0x03, 0x80, 0x3e, 0x22, 0x78,
@@ -208,11 +340,12 @@ static unsigned char default_edid[256] = {
 	0x00, 0x1e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfb
 };
+
 /**
- * @hid_addr: Virtual address of the shared memory region used for
- *            USB HID report exchange between the endpoint and host.
+ * @hid_addr: Virtual __iomem address of the shared memory region used for
+ *            PCIe HID report exchange between the endpoint and host.
  */
-static void *hid_addr;
+static void __iomem *hid_addr;
 
 /* ------------------------------------------------------------------ */
 /* VRAM helpers                                                         */
@@ -267,27 +400,6 @@ uint64_t pci_epf_get_vram_fb_address(void)
 	return vram_phys;
 }
 EXPORT_SYMBOL_GPL(pci_epf_get_vram_fb_address);
-
-#if IS_ENABLED(CONFIG_PCIE_KVM_INPUT)
-/**
- * pci_epf_get_hid_address() - Return the USB HID shared memory address
- *
- * Returns the virtual address of the shared memory region used for USB HID
- * report exchange between the PCIe endpoint and the host. Returns %NULL if
- * the HID memory has not been initialized.
- *
- * Exported for use by the PCIe KVM input driver.
- */
- 
-void* pci_epf_get_hid_address(void)
-{
-	if (hid_addr)
-		return READ_ONCE(hid_addr);
-	else
-		return NULL;
-}
-EXPORT_SYMBOL_GPL(pci_epf_get_hid_address);
-#endif
 
 /* ------------------------------------------------------------------ */
 /* Driver-specific BAR allocator (ops->alloc_bar / ops->free_bar)      */
@@ -390,11 +502,156 @@ static int epf_imx9_vga_read_edid_sysfs(u8 *buf)
 	return 0;
 }
 
-static void epf_imx9_vga_copy_edid_to_bar1(struct pci_epf_imx9_vga *epf_imx9_vga)
+static int epf_imx9_vga_read_kvm_config(struct kvm_config *cfg)
+{
+	char kvm_mode_buf[32];
+	char disp_res_buf[32];
+	char *kvm_mode;
+	char *disp_res;
+
+	/* Defaults */
+	cfg->display = DISPLAY_1080P;
+	cfg->mode    = KVM_MODE_PCIE_VIDEO_USB_HID;
+
+	/*
+	 * Copy params and strip trailing whitespace/newlines written by
+	 * userspace via sysfs (e.g. echo adds a trailing '\n').
+	 */
+	mutex_lock(&param_lock);
+	strscpy(kvm_mode_buf, param_kvm_mode, sizeof(kvm_mode_buf));
+	strscpy(disp_res_buf, param_display_resolution, sizeof(disp_res_buf));
+	mutex_unlock(&param_lock);
+
+	kvm_mode = strim(kvm_mode_buf);
+	disp_res = strim(disp_res_buf);
+
+	/*
+	 * Parse display_resolution module parameter.
+	 */
+	if (strcmp(disp_res, "4k") == 0) {
+		cfg->display = DISPLAY_4K;
+	} else if (strcmp(disp_res, "1080p") == 0) {
+		cfg->display = DISPLAY_1080P;
+	} else {
+		pr_warn("pci-epf-imx9-vga: unknown display_resolution=\"%s\", "
+			"defaulting to 1080p\n", disp_res);
+		cfg->display = DISPLAY_1080P;
+	}
+
+	/*
+	 * Parse kvm_mode module parameter.
+	 */
+	if (strcmp(kvm_mode, "pcie_kvm") == 0) {
+		cfg->mode = KVM_MODE_PCIE_KVM;
+	} else if (strcmp(kvm_mode, "pcie_video_usb_hid") == 0) {
+		cfg->mode = KVM_MODE_PCIE_VIDEO_USB_HID;
+	} else {
+		pr_warn("pci-epf-imx9-vga: unknown kvm_mode=\"%s\", "
+			"defaulting to pcie_video_usb_hid\n", kvm_mode);
+		cfg->mode = KVM_MODE_PCIE_VIDEO_USB_HID;
+	}
+
+	pr_info("===== KVM Configuration =====\n");
+	pr_info("Display Resolution : %s\n",
+		cfg->display == DISPLAY_4K ?
+		"4K (3840x2160)" : "1080p (1920x1080)");
+	pr_info("KVM Mode           : %s\n",
+		cfg->mode == KVM_MODE_PCIE_KVM ?
+		"PCIe KVM" : "PCIe Video + USB HID");
+	pr_info("=============================\n");
+
+	return 0;
+}
+
+static bool epf_imx9_vga_is_adv7535(void)
+{
+	struct device_node *np;
+
+	np = of_find_compatible_node(NULL, NULL, "adi,adv7535");
+	if (!np)
+		return false;
+
+	of_node_put(np);
+	return true;
+}
+
+static bool epf_imx9_vga_is_lt9611uxc(void)
+{
+	struct device_node *np;
+
+	np = of_find_compatible_node(NULL, NULL, "lontium,lt9611uxc");
+	if (!np)
+		return false;
+
+	of_node_put(np);
+	return true;
+}
+
+static void epf_imx9_vga_parse_dtd(const u8 *dtd, struct edid_resolution *max)
+{
+	u16 hactive, vactive;
+
+	if (dtd[0] == 0 && dtd[1] == 0)
+		return;
+
+	hactive = dtd[2] | ((dtd[4] & 0xF0) << 4);
+	vactive = dtd[5] | ((dtd[7] & 0xF0) << 4);
+
+	if ((u32)hactive * vactive > (u32)max->width * max->height) {
+		max->width = hactive;
+		max->height = vactive;
+	}
+}
+
+static struct edid_resolution epf_imx9_vga_get_max_resolution(const u8 *edid, size_t len)
+{
+	struct edid_resolution max = { 0, 0 };
+	int i, ext;
+
+	if (!edid || len < 128)
+		return max;
+
+	for (i = 54; i <= 108; i += 18)
+		epf_imx9_vga_parse_dtd(&edid[i], &max);
+
+	/*
+	 * Cap ext to the number of complete 128-byte extension blocks that
+	 * actually fit in the buffer. edid[126] is device-provided and must
+	 * not be trusted blindly (REV-007).
+	 */
+	ext = min_t(int, edid[126], (int)(len / 128) - 1);
+
+	for (i = 0; i < ext; i++) {
+		const u8 *blk;
+		int dtd_start;
+		int off;
+
+		if (128 * (i + 2) > len)
+			break;
+
+		blk = edid + 128 * (i + 1);
+
+		if (blk[0] != 0x02)
+			continue;
+
+		dtd_start = blk[2];
+
+		if (dtd_start < 4 || dtd_start >= 128)
+			continue;
+
+		for (off = dtd_start; off + 18 <= 128; off += 18)
+			epf_imx9_vga_parse_dtd(&blk[off], &max);
+	}
+
+	return max;
+}
+
+static void epf_imx9_vga_copy_edid_to_bar1(struct pci_epf_imx9_vga *epf_imx9_vga, struct kvm_config *cfg)
 {
 	u8 *bar1;
 	int ret;
 	u8 edid[EDID_SIZE];
+	struct edid_resolution res;
 
 	if (!epf_imx9_vga->reg[BAR_1]) {
 		pr_err("pci-epf-imx9-vga: BAR1 not mapped\n");
@@ -403,14 +660,66 @@ static void epf_imx9_vga_copy_edid_to_bar1(struct pci_epf_imx9_vga *epf_imx9_vga
 
 	bar1 = (u8 *)epf_imx9_vga->reg[BAR_1];
 
+	pr_info("========== Select EDID ==========\n");
+	pr_info("Configured Resolution : %s\n",
+		cfg->display == DISPLAY_4K ? "4K" : "1080p");
+	pr_info("Configured KVM Mode   : %s\n",
+		cfg->mode == KVM_MODE_PCIE_KVM ?
+		"PCIe KVM" : "PCIe Video + USB HID");
+
+	if (epf_imx9_vga_is_adv7535())
+		pr_info("Detected DT          : ADV7535\n");
+	else if (epf_imx9_vga_is_lt9611uxc())
+		pr_info("Detected DT          : LT9611UXC\n");
+	else
+		pr_info("Detected DT          : Unknown\n");
+
 	ret = epf_imx9_vga_read_edid_sysfs(edid);
 	if (ret) {
-		pr_warn("pci-epf-imx9-vga: EDID read failed, using 4K fallback\n");
-		memcpy(edid, default_edid, EDID_SIZE);
-	} else {
-		pr_info("pci-epf-imx9-vga: EDID read from sysfs\n");
+		pr_warn("pci-epf-imx9-vga: Display EDID not found\n");
+		pr_info("pci-epf-imx9-vga: Using fallback %s EDID\n",
+			cfg->display == DISPLAY_4K ? "4K" : "1080p");
+
+		if (cfg->display == DISPLAY_4K)
+			memcpy(edid, default_edid_4k, EDID_SIZE);
+		else
+			memcpy(edid, default_edid_1080p, EDID_SIZE);
+
+		goto done;
 	}
 
+	res = epf_imx9_vga_get_max_resolution(edid, EDID_SIZE);
+
+	pr_info("Monitor Max Resolution : %ux%u\n",
+		res.width, res.height);
+
+	if (cfg->display == DISPLAY_1080P) {
+		pr_info("Requested Resolution : 1080p\n");
+
+		if (epf_imx9_vga_is_adv7535())
+			pr_info("ADV7535 supports 1080p mode\n");
+
+		if (res.width > 1920 || res.height > 1080) {
+			pr_info("Monitor supports higher resolution, advertising 1080p EDID\n");
+			memcpy(edid, default_edid_1080p, EDID_SIZE);
+		} else {
+			pr_info("Using monitor EDID\n");
+		}
+	} else {
+		pr_info("Requested Resolution : 4K\n");
+
+		if (!epf_imx9_vga_is_lt9611uxc()) {
+			pr_warn("LT9611UXC DT not detected, using 1080p EDID\n");
+			memcpy(edid, default_edid_1080p, EDID_SIZE);
+		} else if (res.width >= 3840 && res.height >= 2160) {
+			pr_info("Monitor supports 4K, using monitor EDID\n");
+		} else {
+			pr_warn("Monitor does not support 4K, using 1080p EDID\n");
+			memcpy(edid, default_edid_1080p, EDID_SIZE);
+		}
+	}
+
+done:
 	memcpy(bar1, edid, EDID_SIZE);
 	pr_info("pci-epf-imx9-vga: EDID copied to BAR1\n");
 }
@@ -419,37 +728,46 @@ static void epf_imx9_vga_copy_edid_to_bar1(struct pci_epf_imx9_vga *epf_imx9_vga
 /* Option ROM                                                           */
 /* ------------------------------------------------------------------ */
 
-static int epf_imx9_vga_load_option_rom(struct pci_epf *epf)
+static int epf_imx9_vga_load_option_rom(struct pci_epf *epf, struct kvm_config *cfg)
 {
 	struct pci_epf_imx9_vga *epf_imx9_vga = epf_get_drvdata(epf);
-	const struct firmware *fw;
+	const struct firmware *fw = NULL;
 	void *rom_base;
 	size_t rom_size;
 	int ret;
 
 	dev_info(&epf->dev, "pci-epf-imx9-vga: Loading Option ROM\n");
 
-#if IS_ENABLED(CONFIG_PCIE_KVM_INPUT)
-	ret = request_firmware(&fw, "OptionRom_pcie_kvm.rom", &epf->dev);
-	if (ret) {
+	if (cfg->mode == KVM_MODE_PCIE_VIDEO_USB_HID) {
+		pr_info("Option ROM     : OptionRom.rom\n");
+
+		ret = request_firmware(&fw, "OptionRom.rom", &epf->dev);
+		if (ret) {
+			dev_err(&epf->dev,
+				"pci-epf-imx9-vga: Failed to load Option ROM (%d)\n", ret);
+			goto out;
+		}
+
+		dev_info(&epf->dev, "pci-epf-imx9-vga: Option ROM size: %zu\n", fw->size);
+
+	} else if (cfg->mode == KVM_MODE_PCIE_KVM) {
+		pr_info("Option ROM     : OptionRom_pcie_kvm.rom\n");
+
+		ret = request_firmware(&fw, "OptionRom_pcie_kvm.rom", &epf->dev);
+		if (ret) {
+			dev_err(&epf->dev,
+				"pci-epf-imx9-vga: Failed to load Option ROM (%d)\n", ret);
+			goto out;
+		}
+		dev_info(&epf->dev, "pci-epf-imx9-vga: Option ROM size: %zu\n", fw->size);
+	} else {
 		dev_err(&epf->dev,
-			"pci-epf-imx9-vga: Failed to load pcie Option ROM (%d)\n", ret);
-		return ret;
+			"pci-epf-imx9-vga: unknown KVM mode %d, cannot select Option ROM\n",
+			cfg->mode);
+		ret = -EINVAL;
+		goto out;
 	}
 
-	dev_info(&epf->dev, "pci-epf-imx9-vga: pcie Option ROM size: %zu\n", fw->size);
-
-#else
-	ret = request_firmware(&fw, "OptionRom.rom", &epf->dev);
-	if (ret) {
-		dev_err(&epf->dev,
-			"pci-epf-imx9-vga: Failed to load Option ROM (%d)\n", ret);
-		return ret;
-	}
-
-	dev_info(&epf->dev, "pci-epf-imx9-vga: Option ROM size: %zu\n", fw->size);
-
-#endif
 	/* PCI spec: ROM BAR window >= 64KB */
 	rom_size = max_t(size_t, roundup_pow_of_two(fw->size), 65536);
 
@@ -464,8 +782,8 @@ static int epf_imx9_vga_load_option_rom(struct pci_epf *epf)
 	if (!rom_base) {
 		dev_err(&epf->dev,
 			"pci-epf-imx9-vga: Failed to allocate ROM memory\n");
-		release_firmware(fw);
-		return -ENOMEM;
+		ret = -ENOMEM;	
+		goto out;
 	}
 
 	memcpy(rom_base, fw->data, fw->size);
@@ -482,14 +800,18 @@ static int epf_imx9_vga_load_option_rom(struct pci_epf *epf)
 			"pci-epf-imx9-vga: Failed to configure ROM BAR (%d)\n", ret);
 		dma_free_coherent(epf->epc->dev.parent, rom_size, rom_base,
 				  epf_imx9_vga->rom_bar.phys_addr);
-		release_firmware(fw);
-		return ret;
+		goto out;
 	}
 
 	dev_info(&epf->dev,
 		 "pci-epf-imx9-vga: ROM BAR configured (%zu bytes)\n", rom_size);
-	release_firmware(fw);
-	return 0;
+
+	ret = 0;
+out:
+	if (fw)
+		release_firmware(fw);
+
+	return ret;
 }
 
 /* ------------------------------------------------------------------ */
@@ -696,6 +1018,7 @@ static int epf_imx9_vga_epc_init(struct pci_epf *epf)
 	const struct pci_epc_features *epc_features = epf_imx9_vga->epc_features;
 	struct pci_epc *epc = epf->epc;
 	struct device *dev = &epf->dev;
+	char *envp_uevent[] = { "KVM_EVENT=kvm_ready", NULL};
 	int ret;
 
 	if (epf->vfunc_no <= 1) {
@@ -734,21 +1057,46 @@ static int epf_imx9_vga_epc_init(struct pci_epf *epf)
 		}
 	}
 
-	ret = epf_imx9_vga_load_option_rom(epf);
+	ret = epf_imx9_vga_read_kvm_config(&epf_imx9_vga->cfg);
+	if (ret)
+		dev_warn(dev, "pci-epf-imx9-vga: kvm config file not found (%d)\n", ret);
+
+	ret = epf_imx9_vga_load_option_rom(epf, &epf_imx9_vga->cfg);
 	if (ret)
 		dev_warn(dev, "pci-epf-imx9-vga: Option ROM not loaded (%d)\n", ret);
 
 	/* Populate EDID into BAR1 */
+	epf_imx9_vga_copy_edid_to_bar1(epf_imx9_vga, &epf_imx9_vga->cfg);
+
 #if IS_ENABLED(CONFIG_PCIE_KVM_INPUT)
-	if (epf_imx9_vga->reg[BAR_3]) {
-		WRITE_ONCE(hid_addr, epf_imx9_vga->reg[BAR_3]);
-		pr_info("HID BAR3 address=%p\n", hid_addr);
+	if (epf_imx9_vga->cfg.mode == KVM_MODE_PCIE_KVM) {
+		if (epf_imx9_vga->reg[BAR_3]) {
+			WRITE_ONCE(hid_addr, epf_imx9_vga->reg[BAR_3]);
+			pr_info("HID BAR3 address=%p\n", hid_addr);
+			atomic_set(&epf_imx9_vga->hid_attached, 0);
+			ret = epf_hid_attach(hid_addr);
+			if (ret) {
+				dev_err(&epf->dev,
+					"pci-epf-imx9-vga: epf_hid_attach failed (%d)\n",
+					ret);
+				return ret;
+			}
+			atomic_set(&epf_imx9_vga->hid_attached, 1);
+		} else {
+			dev_err(&epf->dev, "BAR3 not allocated\n");
+			return -EINVAL;
+		}
 	}
-	else {
-		dev_err(&epf->dev, "BAR3 not allocated\n");
-		return -EINVAL;
-	}
-#endif 
+#endif
+
+	/* Notify userspace that the PCIe endpoint is initialized.
+		* Userspace (udev / systemd) is responsible for restarting
+		* obmc-ikvm.service in response to this event.
+		*/
+
+	kobject_uevent_env(&epf->dev.kobj, KOBJ_CHANGE, envp_uevent);
+
+	dev_info(dev, "pci-epf-imx9-vga: sent kvm_ready uevent\n");
 
 	if (!epc_features->linkup_notifier)
 		queue_work(kpciimx9vga_workqueue, &epf_imx9_vga->cmd_handler.work);
@@ -761,6 +1109,14 @@ static void epf_imx9_vga_epc_deinit(struct pci_epf *epf)
 	struct pci_epf_imx9_vga *epf_imx9_vga = epf_get_drvdata(epf);
 
 	cancel_delayed_work_sync(&epf_imx9_vga->cmd_handler);
+#if IS_ENABLED(CONFIG_PCIE_KVM_INPUT)
+	if (epf_imx9_vga->cfg.mode == KVM_MODE_PCIE_KVM) {
+		if (atomic_cmpxchg(&epf_imx9_vga->hid_attached, 1, 0) == 1) {
+			epf_hid_detach();
+			WRITE_ONCE(hid_addr, NULL);
+		}
+	}
+#endif
 	epf_imx9_vga_clear_bar(epf);
 }
 
@@ -904,6 +1260,14 @@ static void epf_imx9_vga_unbind(struct pci_epf *epf)
 	struct pci_epc *epc = epf->epc;
 
 	cancel_delayed_work_sync(&epf_imx9_vga->cmd_handler);
+#if IS_ENABLED(CONFIG_PCIE_KVM_INPUT)
+	if (epf_imx9_vga->cfg.mode == KVM_MODE_PCIE_KVM) {
+		if (atomic_cmpxchg(&epf_imx9_vga->hid_attached, 1, 0) == 1) {
+			epf_hid_detach();
+			WRITE_ONCE(hid_addr, NULL);
+		}
+	}
+#endif
 	if (epc->init_complete) {
 		epf_imx9_vga_clear_bar(epf);
 	}
@@ -993,6 +1357,73 @@ static const struct kernel_param_ops vga_offset_ops = {
 module_param_cb(offset, &vga_offset_ops, NULL, 0644);
 MODULE_PARM_DESC(offset, "VRAM framebuffer physical address");
 
+static int param_set_kvm_mode(const char *val, const struct kernel_param *kp)
+{
+	int ret;
+
+	mutex_lock(&param_lock);
+	ret = param_set_copystring(val, kp);
+	mutex_unlock(&param_lock);
+	return ret;
+}
+
+static int param_get_kvm_mode(char *buf, const struct kernel_param *kp)
+{
+	int ret;
+
+	mutex_lock(&param_lock);
+	ret = param_get_string(buf, kp);
+	mutex_unlock(&param_lock);
+	return ret;
+}
+
+static const struct kernel_param_ops kvm_mode_ops = {
+	.set = param_set_kvm_mode,
+	.get = param_get_kvm_mode,
+};
+
+/* kvm_mode */
+static struct kparam_string kvm_mode_kps = {
+	.maxlen = sizeof(param_kvm_mode),
+	.string = param_kvm_mode,
+};
+module_param_cb(kvm_mode, &kvm_mode_ops, &kvm_mode_kps, 0644);
+MODULE_PARM_DESC(kvm_mode,"KVM operating mode: pcie_kvm or pcie_video_usb_hid (default)");
+	
+static int param_set_display_resolution(const char *val, const struct kernel_param *kp)
+{
+	int ret;
+
+	mutex_lock(&param_lock);
+	ret = param_set_copystring(val, kp);
+	mutex_unlock(&param_lock);
+	return ret;
+}
+
+static int param_get_display_resolution(char *buf, const struct kernel_param *kp)
+{
+	int ret;
+
+	mutex_lock(&param_lock);
+	ret = param_get_string(buf, kp);
+	mutex_unlock(&param_lock);
+	return ret;
+}
+
+static const struct kernel_param_ops display_resolution_ops = {
+	.set = param_set_display_resolution,
+	.get = param_get_display_resolution,
+};
+
+/* display_resolution */
+static struct kparam_string display_resolution_kps = {
+	.maxlen = sizeof(param_display_resolution),
+	.string = param_display_resolution,
+};
+
+module_param_cb(display_resolution, &display_resolution_ops, &display_resolution_kps, 0644);
+MODULE_PARM_DESC(display_resolution,"Display resolution: 1080p (default) or 4k");
+
 /* ------------------------------------------------------------------ */
 /* PCI fixup: VGA class quirk                                           */
 /* ------------------------------------------------------------------ */
@@ -1052,4 +1483,6 @@ module_exit(pci_epf_imx9_vga_exit);
 
 MODULE_DESCRIPTION("PCIe EP VGA Class Display Driver for i.MX95 iKVM");
 MODULE_AUTHOR("Nikhil Gupta <nikhil.gupta_2@nxp.com>");
+MODULE_AUTHOR("Shreyash Damanwala <shreyash.damanwala@nxp.com>");
 MODULE_LICENSE("GPL v2");
+

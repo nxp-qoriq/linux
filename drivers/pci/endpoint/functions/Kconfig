@@ -58,13 +58,20 @@ config PCI_EPF_IMX9_VGA
 	  class display device for iKVM (IP-based KVM over PCIe) use cases.
 
 	  Provides:
-	    - BAR1: EDID (read from DRM sysfs or 4K fallback blob)
-	    - BAR2: 64MB VRAM (ioremap_wc, DT reserved-memory node "vram")
-		- BAR3: 32KB PCIe HID Ring buffer
-	    - BAR4: DPU95 register space (ioremap at 0x4b400000)
-	    - Option ROM via firmware loader (OptionRom.rom)
-	    - Resolution change uevent to userspace
-	    - pci_epf_get_vram_fb_address() for stream2v4l2
+	    - BAR0 (0x10): 512B control registers (pcitest wire-format compatible)
+	    - BAR1 (0x14): 512B EDID (DRM sysfs or 1080p/4K fallback blob)
+	    - BAR2 (0x18): 64MB VRAM framebuffer (ioremap_wc, DT reserved-memory "vram")
+	    - BAR3 (0x1C): 32KB PCIe HID ring buffer (keyboard + mouse reports)
+	    - BAR4 (0x20): 4MB DPU95 register space (ioremap at 0x4b400000)
+	    - BAR5 (0x24): 1MB reserved
+	    - ROM  (0x30): Expansion ROM BAR (PCI_ROM_ADDRESS, not BAR6)
+	                   Loaded via request_firmware(), min 64KB, pow2-aligned:
+	                    pcie_video_usb_hid -> OptionRom.rom
+	                    pcie_kvm          -> OptionRom_pcie_kvm.rom
+	    - Resolution change uevent to userspace (RESOLUTION=WxH)
+	    - KVM ready uevent to userspace (KVM_EVENT=kvm_ready)
+	    - pci_epf_get_vram_fb_address() exported for stream2v4l2
+	    - pci_epf_get_hid_address() exported for pcie-kvm-hid
 
 	  This driver is independent of PCI_EPF_TEST.
 

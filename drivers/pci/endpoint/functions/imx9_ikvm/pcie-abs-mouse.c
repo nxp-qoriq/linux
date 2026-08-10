@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
+ * Copyright 2026 NXP
+ *
  * PCIe Endpoint Absolute Mouse Driver
  *
  * Captures absolute mouse input events from local devices and forwards
  * HID reports over the PCIe endpoint using the EPF HID helper library.
  *
- * Copyright 2026 NXP
  */
 
 #include <linux/fs.h>
@@ -17,7 +18,7 @@
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 
-#include <linux/pci-epf-hid.h>
+#include "pci-epf-hid.h"
 
 #define DEVICE_NAME "pcie-abs-mouse"
 
@@ -67,15 +68,26 @@ static void abs_mouse_event(struct input_handle *handle,
 	case EV_ABS:
 		switch (code) {
 		case ABS_X:
-			mouse->report.x = cpu_to_le16(value);
+			if (value < 0)
+				value = 0;
+			else if (value > 0xffff)
+				value = 0xffff;
+
+			mouse->report.x = cpu_to_le16((u16)value);
 			break;
 
 		case ABS_Y:
-			mouse->report.y = cpu_to_le16(value);
+			if (value < 0)
+				value = 0;
+			else if (value > 0xffff)
+				value = 0xffff;
+
+			mouse->report.y = cpu_to_le16((u16)value);
 			break;
 
 		case ABS_WHEEL:
-			mouse->report.wheel = value;
+		    	value = clamp(value, -128, 127);
+			mouse->report.wheel = (s8)value;
 			break;
 
 		default:
@@ -314,3 +326,4 @@ void abs_mouse_exit(void)
 
 	pr_info("absolute mouse driver removed\n");
 }
+

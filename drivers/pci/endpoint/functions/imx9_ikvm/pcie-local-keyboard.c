@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
+ * Copyright 2026 NXP
+ *
  * PCIe Endpoint Local Keyboard Driver
  *
  * Captures keyboard HID reports from local HID devices and forwards them
  * over the PCIe endpoint using the EPF HID helper.
  *
- * Copyright 2026 NXP
  */
 
 #include <linux/hid.h>
 #include <linux/slab.h>
-#include <linux/pci-epf-hid.h>
+#include "pci-epf-hid.h"
 
 struct local_keyboard {
 	bool keyboard;
@@ -90,19 +91,36 @@ static int local_keyboard_probe(struct hid_device *hdev,
 	kbd->keyboard = local_keyboard_match(hdev);
 
 	if (!kbd->keyboard) {
-		pr_info("ignoring non-keyboard HID device\n");
+		pr_debug("ignoring non-keyboard HID device %s\n",
+			dev_name(&hdev->dev));
+
+		/*
+		 * Do not call hid_hw_stop() or return -ENODEV here.
+		 *
+		 * Composite USB HID devices (e.g. Logitech wireless receivers)
+		 * share a single HID device across keyboard and mouse interfaces.
+		 * Calling hid_hw_stop() would tear down the entire device,
+		 * including the mouse interface managed by another driver.
+		 * Returning -ENODEV would have the same effect on some kernels.
+		 *
+		 * Instead, keep the device attached but mark it as non-keyboard.
+		 * local_keyboard_raw_event() will silently ignore all events
+		 * from this interface.
+		 */
+		kbd->keyboard = false;
+
 		return 0;
 	}
 
-	pr_info("keyboard detected\n");
+	pr_info("keyboard detected: %s\n", dev_name(&hdev->dev));
 
 	return 0;
 }
 
 static const struct hid_device_id local_keyboard_ids[] = {
 	{
-		HID_DEVICE(HID_BUS_ANY,
-			   HID_GROUP_ANY,
+		HID_DEVICE(BUS_USB,
+			   HID_GROUP_GENERIC,
 			   HID_ANY_ID,
 			   HID_ANY_ID)
 	},
@@ -132,3 +150,4 @@ void local_keyboard_exit(void)
 
 	pr_info("local keyboard HID driver unloaded\n");
 }
+

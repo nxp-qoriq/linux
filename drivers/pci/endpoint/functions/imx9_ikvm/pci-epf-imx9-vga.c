@@ -79,6 +79,7 @@
 #define COMMAND_GET_FB_OFFSET		BIT(9)
 #define COMMAND_START_STREAM		BIT(10)
 #define COMMAND_STOP_STREAM		BIT(11)
+#define COMMAND_FRAME_READ		BIT(12)
 
 /* Status bits */
 #define STATUS_READ_SUCCESS		BIT(0)
@@ -96,6 +97,8 @@
 #define STATUS_DOORBELL_DISABLE_SUCCESS	BIT(12)
 #define STATUS_DOORBELL_DISABLE_FAIL	BIT(13)
 #define STATUS_HOTPLUG		BIT(14)
+#define STATUS_FB_READ_SUCCESS		BIT(15)
+#define STATUS_FB_READ_FAIL			BIT(16)
 
 #define FLAG_USE_DMA			BIT(0)
 #define TIMER_RESOLUTION		1
@@ -217,6 +220,14 @@ struct edid_resolution {
  * @ctrl_reg_bar: BAR number used for the control register window (BAR_0)
  * @msix_table_offset: offset of MSI-X table within ctrl_reg_bar
  * @cmd_handler:  delayed work for polling the command register
+ * @dma_chan_rx:       DMA channel used for DEV_TO_MEM transfers.
+ * @transfer_chan:     Channel currently executing a transfer.
+ * @transfer_cookie:   Cookie for the in-flight DMA descriptor.
+ * @transfer_status:   Last polled DMA engine status.
+ * @transfer_complete: Completion signalled by the DMA callback.
+ * @dma_supported:     True if a DMA channel was successfully acquired.
+ * @dma_private:       True if a private (slave) channel is in use.
+ * @dma_cancelled:     Set to 1 when a transfer is being terminated.
  * @epc_features: EPC feature set for this function
  * @cfg: Global KVM configuration instance used to store the current
  *       display resolution and KVM operating mode.
@@ -228,6 +239,14 @@ struct pci_epf_imx9_vga {
 	enum pci_barno			 ctrl_reg_bar;
 	size_t				 msix_table_offset;
 	struct delayed_work		 cmd_handler;
+	struct dma_chan		*dma_chan_rx;
+	struct dma_chan		*transfer_chan;
+	dma_cookie_t		transfer_cookie;
+	enum dma_status		transfer_status;
+	struct completion	transfer_complete;
+	bool			dma_supported;
+	bool			dma_private;
+	atomic_t		dma_cancelled;
 	const struct pci_epc_features	*epc_features;
 	struct kvm_config cfg;
 #if IS_ENABLED(CONFIG_PCIE_KVM_INPUT)
@@ -256,6 +275,7 @@ struct pci_epf_imx9_vga_reg {
 	__le32 height;		/* display: current frame height in pixels */
 	__le32 width;		/* display: current frame width in pixels  */
 	__le64 dpu_fb_offset;	/* display: DPU framebuffer offset in VRAM  */
+	__le64 dma_blit_offset; /* dma: Dirty rectangles offset in VRAM */
 	__le32 caps;
 	__le32 doorbell_bar;
 	__le32 doorbell_offset;
@@ -362,6 +382,222 @@ static const unsigned char default_edid_4k[256] = {
  *            PCIe HID report exchange between the endpoint and host.
  */
 static void __iomem *hid_addr;
+
+/* ------------------------------------------------------------------ */
+/* DMA helpers                                                        */
+/* ------------------------------------------------------------------ */
+
+#define EPF_IMX9_VGA_DMA_TIMEOUT_MS 1000
+
+static void epf_imx9_vga_dma_callback(void *param)
+{
+	struct pci_epf_imx9_vga *epf_imx9_vga = param;
+	struct dma_tx_state state;
+
+	/* check cancellation flag before completing */
+	if (atomic_read(&epf_imx9_vga->dma_cancelled)) {
+		dev_dbg(&epf_imx9_vga->epf->dev,
+			"Ignoring late DMA callback after cancellation\n");
+		return;
+	}
+
+	epf_imx9_vga->transfer_status =
+		dmaengine_tx_status(epf_imx9_vga->transfer_chan,
+				    epf_imx9_vga->transfer_cookie, &state);
+	if (epf_imx9_vga->transfer_status == DMA_COMPLETE ||
+	    epf_imx9_vga->transfer_status == DMA_ERROR)
+		complete(&epf_imx9_vga->transfer_complete);
+}
+
+/**
+ * epf_imx9_vga_data_transfer() - Function that uses dmaengine API to transfer
+ *				  data between PCIe EP and remote PCIe RC
+ * @epf_imx9_vga: the VGA EPF device that performs the data transfer operation
+ * @dma_dst: The destination address of the data transfer.
+ * @dma_src: The source address of the data transfer.
+ * @len: The size of the data transfer
+ * @dma_remote: remote RC physical address
+ * @dir: DMA transfer direction
+ *
+ * Function that uses dmaengine API to transfer data between PCIe EP and remote
+ * PCIe RC. The source and destination address can be a physical address given
+ * by pci_epc_mem_alloc_addr or the one obtained using DMA mapping APIs.
+ *
+ * The function returns '0' on success and negative value on failure.
+ */
+static int epf_imx9_vga_data_transfer(struct pci_epf_imx9_vga *epf_imx9_vga,
+				      dma_addr_t dma_dst, dma_addr_t dma_src,
+				      size_t len, dma_addr_t dma_remote,
+				      enum dma_transfer_direction dir)
+{
+	struct dma_chan *chan = (dir == DMA_MEM_TO_DEV) ?
+				 NULL : epf_imx9_vga->dma_chan_rx;
+	dma_addr_t dma_local = (dir == DMA_MEM_TO_DEV) ? dma_src : dma_dst;
+	enum dma_ctrl_flags flags = DMA_CTRL_ACK | DMA_PREP_INTERRUPT;
+	struct pci_epf *epf = epf_imx9_vga->epf;
+	struct dma_async_tx_descriptor *tx;
+	struct dma_slave_config sconf = {};
+	struct device *dev = &epf->dev;
+	long timeout;
+	int ret = 0;
+
+	if (dir == DMA_MEM_TO_DEV) {
+		dev_err(dev, "DMA transmit channel not support\n");
+		return -EINVAL;
+	}
+
+	if (IS_ERR_OR_NULL(chan)) {
+		dev_err(dev, "Invalid DMA memcpy channel\n");
+		return -EINVAL;
+	}
+
+	if (epf_imx9_vga->dma_private) {
+		sconf.direction = dir;
+		if (dir == DMA_MEM_TO_DEV)
+			sconf.dst_addr = dma_remote;
+		else
+			sconf.src_addr = dma_remote;
+
+		if (dmaengine_slave_config(chan, &sconf)) {
+			dev_err(dev, "DMA slave config fail\n");
+			return -EIO;
+		}
+		tx = dmaengine_prep_slave_single(chan, dma_local, len, dir,
+						 flags);
+	} else {
+		tx = dmaengine_prep_dma_memcpy(chan, dma_dst, dma_src, len,
+					       flags);
+	}
+
+	if (!tx) {
+		dev_err(dev, "Failed to prepare DMA memcpy\n");
+		return -EIO;
+	}
+
+	reinit_completion(&epf_imx9_vga->transfer_complete);
+	atomic_set(&epf_imx9_vga->dma_cancelled, 0);
+
+	epf_imx9_vga->transfer_chan = chan;
+	epf_imx9_vga->transfer_status = DMA_IN_PROGRESS;
+	tx->callback = epf_imx9_vga_dma_callback;
+	tx->callback_param = epf_imx9_vga;
+	epf_imx9_vga->transfer_cookie = dmaengine_submit(tx);
+
+	ret = dma_submit_error(epf_imx9_vga->transfer_cookie);
+	if (ret) {
+		dev_err(dev, "Failed to do DMA tx_submit %d\n", ret);
+		goto terminate;
+	}
+
+	dma_async_issue_pending(chan);
+	timeout = wait_for_completion_timeout(
+			&epf_imx9_vga->transfer_complete,
+			msecs_to_jiffies(EPF_IMX9_VGA_DMA_TIMEOUT_MS));
+	if (!timeout) {
+		dev_err(dev, "DMA transfer timed out\n");
+		ret = -ETIMEDOUT;
+		goto terminate;
+	}
+
+	if (epf_imx9_vga->transfer_status == DMA_ERROR) {
+		dev_err(dev, "DMA transfer failed\n");
+		ret = -EIO;
+	}
+
+	return ret;
+
+terminate:
+	/* when cancelling */
+	atomic_set(&epf_imx9_vga->dma_cancelled, 1);
+	dmaengine_terminate_sync(chan);
+
+	return ret;
+}
+
+struct epf_dma_filter {
+	struct device *dev;
+	u32 dma_mask;
+};
+
+static bool epf_dma_filter_fn(struct dma_chan *chan, void *node)
+{
+	struct epf_dma_filter *filter = node;
+	struct dma_slave_caps caps;
+
+	memset(&caps, 0, sizeof(caps));
+	dma_get_slave_caps(chan, &caps);
+
+	return chan->device->dev == filter->dev
+		&& (filter->dma_mask & caps.directions);
+}
+
+/**
+ * epf_imx9_vga_init_dma_chan() - Function to initialize DMA channel
+ * @epf_imx9_vga: the VGA EPF device that performs data transfer operation
+ *
+ * Function to initialize EPF DMA channel.
+ */
+static int epf_imx9_vga_init_dma_chan(struct pci_epf_imx9_vga *epf_imx9_vga)
+{
+	struct pci_epf *epf = epf_imx9_vga->epf;
+	struct device *dev = &epf->dev;
+	struct epf_dma_filter filter;
+	struct dma_chan *dma_chan;
+	dma_cap_mask_t mask;
+	int ret;
+
+	filter.dev = epf->epc->dev.parent;
+	filter.dma_mask = BIT(DMA_DEV_TO_MEM);
+
+	dma_cap_zero(mask);
+	dma_cap_set(DMA_SLAVE, mask);
+	dma_chan = dma_request_channel(mask, epf_dma_filter_fn, &filter);
+	if (!dma_chan) {
+		dev_info(dev, "Failed to get private DMA rx channel. Falling back to generic one\n");
+		goto fail_back_tx;
+	}
+
+	epf_imx9_vga->dma_chan_rx = dma_chan;
+	epf_imx9_vga->dma_private = true;
+
+	init_completion(&epf_imx9_vga->transfer_complete);
+
+	return 0;
+
+fail_back_tx:
+	dma_cap_zero(mask);
+	dma_cap_set(DMA_MEMCPY, mask);
+
+	dma_chan = dma_request_chan_by_mask(&mask);
+	if (IS_ERR(dma_chan)) {
+		ret = PTR_ERR(dma_chan);
+		if (ret != -EPROBE_DEFER)
+			dev_err(dev, "Failed to get DMA channel\n");
+		return ret;
+	}
+	init_completion(&epf_imx9_vga->transfer_complete);
+
+	epf_imx9_vga->dma_chan_rx = dma_chan;
+
+	return 0;
+}
+
+/**
+ * epf_imx9_vga_clean_dma_chan() - Function to cleanup EPF DMA channel
+ * @epf_imx9_vga: the VGA EPF device that performs data transfer operation
+ *
+ * Helper to cleanup EPF test DMA channel.
+ */
+static void epf_imx9_vga_clean_dma_chan(struct pci_epf_imx9_vga *epf_imx9_vga)
+{
+	if (!epf_imx9_vga->dma_supported)
+		return;
+
+	if (epf_imx9_vga->dma_chan_rx) {
+		dma_release_channel(epf_imx9_vga->dma_chan_rx);
+		epf_imx9_vga->dma_chan_rx = NULL;
+	}
+}
 
 /* ------------------------------------------------------------------ */
 /* VRAM helpers                                                         */
@@ -831,6 +1067,129 @@ out:
 }
 
 /* ------------------------------------------------------------------ */
+/* DMA frame copy                                                     */
+/* ------------------------------------------------------------------ */
+
+static void epf_imx9_vga_print_rate(struct pci_epf_imx9_vga *epf_imx9_vga,
+				    const char *op, u64 size,
+				    struct timespec64 *start,
+				    struct timespec64 *end, bool dma)
+{
+	struct timespec64 ts = timespec64_sub(*end, *start);
+	u64 rate = 0, ns;
+
+	/* calculate the rate */
+	ns = timespec64_to_ns(&ts);
+	if (ns)
+		rate = div64_u64(size * NSEC_PER_SEC, ns * 1000);
+
+	dev_info(&epf_imx9_vga->epf->dev,
+		 "%s => Size: %llu B, DMA: %s, Time: %llu.%09u s, Rate: %llu KB/s\n",
+		 op, size, dma ? "YES" : "NO",
+		 (u64)ts.tv_sec, (u32)ts.tv_nsec, rate);
+}
+
+static void epf_imx9_vga_frame_read(struct pci_epf_imx9_vga *epf_imx9_vga,
+			       struct pci_epf_imx9_vga_reg *reg)
+{
+	int ret = 0;
+	struct pci_epc_map map;
+	struct timespec64 start, end;
+	struct pci_epf *epf = epf_imx9_vga->epf;
+	struct pci_epc *epc = epf->epc;
+	struct device *dev = &epf->dev;
+	struct device *dma_dev = epf_imx9_vga->epf->epc->dev.parent;
+	bool dma_supported = epf_imx9_vga->dma_supported;
+	u64 dma_blit_offset = le64_to_cpu(reg->dma_blit_offset);
+	u64 src_addr = le64_to_cpu(reg->src_addr) + dma_blit_offset;
+	u64 vram_phys_addr = epf->bar[BAR_2].phys_addr;
+	u64 vram_size = epf->bar[BAR_2].size;
+	dma_addr_t dst_phys_addr = vram_phys_addr + vram_fb_offset + dma_blit_offset;
+	dma_addr_t dma_addr;
+
+	size_t orig_size, src_size;
+	ssize_t map_size = 0;
+	u32 flags = le32_to_cpu(reg->flags);
+	u32 status = 0;
+	u64 fb_end = 0;
+
+	orig_size = src_size = le32_to_cpu(reg->size);
+
+	if (!dma_supported || !(flags & FLAG_USE_DMA)) {
+		dev_err(dev, "frame read requires DMA\n");
+		ret = -EINVAL;
+		goto set_status;
+	}
+
+	fb_end = (u64)(vram_fb_offset + dma_blit_offset + src_size);
+	if (!orig_size || fb_end > vram_size) {
+		dev_err(dev, "blit out of BAR2: vram off=0x%llx blit off=0x%llx size=0x%lx bar=0x%llx\n",
+				vram_fb_offset, dma_blit_offset, src_size,
+				vram_size);
+		ret = -EINVAL;
+		goto set_status;
+	}
+
+	ktime_get_ts64(&start);
+	while (src_size) {
+		ret = pci_epc_mem_map(epc, epf->func_no, epf->vfunc_no,
+				      src_addr, src_size, &map);
+		if (ret) {
+			dev_err(dev, "Failed to map address\n");
+			status = STATUS_SRC_ADDR_INVALID;
+			goto set_status;
+		}
+
+		map_size = map.pci_size;
+		if (!map_size) {
+			ret = -EIO;
+			goto unmap;
+		}
+
+		dma_addr = dma_map_resource(dma_dev, dst_phys_addr, map_size,
+				DMA_FROM_DEVICE, 0);
+		if (dma_mapping_error(dma_dev, dma_addr)) {
+			dev_err(dev, "Failed to map resource for DMA\n");
+			ret = -ENOMEM;
+			goto unmap;
+		}
+
+		ret = epf_imx9_vga_data_transfer(epf_imx9_vga,
+				dma_addr, map.phys_addr,
+				map_size, src_addr, DMA_DEV_TO_MEM);
+		if (ret)
+			dev_err(dev, "Data transfer failed\n");
+
+		dma_unmap_resource(dma_dev, dma_addr, map_size, DMA_FROM_DEVICE, 0);
+
+		if (ret)
+			goto unmap;
+
+		src_size -= map_size;
+		src_addr += map_size;
+		dst_phys_addr += map_size;
+
+		pci_epc_mem_unmap(epc, epf->func_no, epf->vfunc_no, &map);
+		map_size = 0;
+	}
+	ktime_get_ts64(&end);
+
+	epf_imx9_vga_print_rate(epf_imx9_vga, "Frame READ", orig_size, &start, &end,
+				flags & FLAG_USE_DMA);
+
+unmap:
+	if (map_size)
+		pci_epc_mem_unmap(epc, epf->func_no, epf->vfunc_no, &map);
+
+set_status:
+	if (!ret)
+		status |= STATUS_FB_READ_SUCCESS;
+	else
+		status |= STATUS_FB_READ_FAIL;
+	reg->status = cpu_to_le32(status);
+}
+
+/* ------------------------------------------------------------------ */
 /* IRQ helper                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -910,7 +1269,10 @@ static void epf_imx9_vga_cmd_handler(struct work_struct *work)
 	case COMMAND_RAISE_MSIX_IRQ:
 		epf_imx9_vga_raise_irq(epf_imx9_vga, reg);
 		break;
-
+	case COMMAND_FRAME_READ:
+		epf_imx9_vga_frame_read(epf_imx9_vga, reg);
+		epf_imx9_vga_raise_irq(epf_imx9_vga, reg);
+		break;
 	case COMMAND_CHANGE_RESOLUTION:
 	{
 		char *envp[3];
@@ -1041,6 +1403,16 @@ static int epf_imx9_vga_epc_init(struct pci_epf *epf)
 	char *envp_uevent[] = { "KVM_EVENT=kvm_ready", NULL};
 	int ret;
 
+	epf_imx9_vga->dma_supported = true;
+
+	ret = epf_imx9_vga_init_dma_chan(epf_imx9_vga);
+	if (ret) {
+		epf_imx9_vga->dma_supported = false;
+		dev_warn(dev, "pci-epf-imx9-vga: fail to initialize dma channels (%d)\n", ret);
+		if (ret == -EPROBE_DEFER)
+			return ret;
+	}
+
 	if (epf->vfunc_no <= 1) {
 		ret = pci_epc_write_header(epc, epf->func_no, epf->vfunc_no,
 					   header);
@@ -1137,6 +1509,7 @@ static void epf_imx9_vga_epc_deinit(struct pci_epf *epf)
 		}
 	}
 #endif
+	epf_imx9_vga_clean_dma_chan(epf_imx9_vga);
 	epf_imx9_vga_clear_bar(epf);
 }
 
@@ -1289,6 +1662,7 @@ static void epf_imx9_vga_unbind(struct pci_epf *epf)
 	}
 #endif
 	if (epc->init_complete) {
+		epf_imx9_vga_clean_dma_chan(epf_imx9_vga);
 		epf_imx9_vga_clear_bar(epf);
 	}
 	epf_imx9_vga_free_space(epf);

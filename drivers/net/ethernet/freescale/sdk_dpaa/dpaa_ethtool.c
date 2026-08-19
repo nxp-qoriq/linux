@@ -274,13 +274,11 @@ static void dpa_get_wol(struct net_device *net_dev, struct ethtool_wolinfo *wol)
 	wol->supported = 0;
 	wol->wolopts = 0;
 
-	if (!priv->wol || !device_can_wakeup(net_dev->dev.parent))
-		return;
+	if (device_can_wakeup(net_dev->dev.parent))
+		wol->supported |= WAKE_MAGIC;
 
-	if (priv->wol & DPAA_WOL_MAGIC) {
-		wol->supported = WAKE_MAGIC;
-		wol->wolopts = WAKE_MAGIC;
-	}
+	if (priv->wol & DPAA_WOL_MAGIC)
+		wol->wolopts |= WAKE_MAGIC;
 }
 
 static int dpa_set_wol(struct net_device *net_dev, struct ethtool_wolinfo *wol)

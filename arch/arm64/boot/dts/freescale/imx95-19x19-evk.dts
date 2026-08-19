@@ -406,6 +406,29 @@
 		spi-max-frequency = <200000000>;
 		spi-tx-bus-width = <8>;
 		spi-rx-bus-width = <8>;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <0x01>;
+			#size-cells = <0x01>;
+
+			partition@0 {
+				label = "u-boot";
+				reg = <0x00000000 0x002E0000>;
+			};
+			partition@2c0000 {
+				label = "kernel";
+				reg = <0x002E0000 0x00E40000>;
+			};
+			partition@1100000 {
+				label = "dtb";
+				reg = <0x01120000 0x00080000>;
+			};
+			partition@1180000 {
+				label = "rootfs";
+				reg = <0x011A0000 0x03800000>;
+			};
+    };
 	};
 };
 

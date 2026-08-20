@@ -2,7 +2,7 @@
 ccflags-$(CONFIG_USBIP_DEBUG) := -DDEBUG
 
 obj-$(CONFIG_USBIP_CORE) += usbip-core.o
-usbip-core-y := usbip_common.o usbip_event.o
+usbip-core-y := stub_usbip_pcie_transport.o usbip_common.o usbip_event.o
 
 obj-$(CONFIG_USBIP_VHCI_HCD) += vhci-hcd.o
 vhci-hcd-y := vhci_sysfs.o vhci_tx.o vhci_rx.o vhci_hcd.o

@@ -12,6 +12,11 @@
 #include <linux/types.h>
 #include <linux/usb.h>
 #include <linux/wait.h>
+#include "stub_usbip_pcie_transport.h"
+
+#ifndef STUB_USB_DEBUG
+#define STUB_USB_DEBUG 0
+#endif
 
 #define STUB_BUSID_OTHER 0
 #define STUB_BUSID_REMOV 1
@@ -65,6 +70,7 @@ struct stub_unlink {
 	unsigned long seqnum;
 	struct list_head list;
 	__u32 status;
+	__u32 devid;
 };
 
 /* same as SYSFS_BUS_ID_SIZE */

@@ -20,6 +20,7 @@
 #include <linux/sched/task.h>
 #include <linux/kcov.h>
 #include <uapi/linux/usbip.h>
+#include "stub_usbip_pcie_transport.h"
 
 #undef pr_fmt
 
@@ -66,31 +67,31 @@ extern struct device_attribute dev_attr_usbip_debug;
 	} while (0)
 
 #define usbip_dbg_sysfs(fmt, args...) \
-	usbip_dbg_with_flag(usbip_debug_sysfs, fmt , ##args)
+	usbip_dbg_with_flag(usbip_debug_sysfs, fmt, ##args)
 #define usbip_dbg_xmit(fmt, args...) \
-	usbip_dbg_with_flag(usbip_debug_xmit, fmt , ##args)
+	usbip_dbg_with_flag(usbip_debug_xmit, fmt, ##args)
 #define usbip_dbg_urb(fmt, args...) \
-	usbip_dbg_with_flag(usbip_debug_urb, fmt , ##args)
+	usbip_dbg_with_flag(usbip_debug_urb, fmt, ##args)
 #define usbip_dbg_eh(fmt, args...) \
-	usbip_dbg_with_flag(usbip_debug_eh, fmt , ##args)
+	usbip_dbg_with_flag(usbip_debug_eh, fmt, ##args)
 
 #define usbip_dbg_vhci_rh(fmt, args...)	\
-	usbip_dbg_with_flag(usbip_debug_vhci_rh, fmt , ##args)
+	usbip_dbg_with_flag(usbip_debug_vhci_rh, fmt, ##args)
 #define usbip_dbg_vhci_hc(fmt, args...)	\
-	usbip_dbg_with_flag(usbip_debug_vhci_hc, fmt , ##args)
+	usbip_dbg_with_flag(usbip_debug_vhci_hc, fmt, ##args)
 #define usbip_dbg_vhci_rx(fmt, args...)	\
-	usbip_dbg_with_flag(usbip_debug_vhci_rx, fmt , ##args)
+	usbip_dbg_with_flag(usbip_debug_vhci_rx, fmt, ##args)
 #define usbip_dbg_vhci_tx(fmt, args...)	\
-	usbip_dbg_with_flag(usbip_debug_vhci_tx, fmt , ##args)
+	usbip_dbg_with_flag(usbip_debug_vhci_tx, fmt, ##args)
 #define usbip_dbg_vhci_sysfs(fmt, args...) \
-	usbip_dbg_with_flag(usbip_debug_vhci_sysfs, fmt , ##args)
+	usbip_dbg_with_flag(usbip_debug_vhci_sysfs, fmt, ##args)
 
 #define usbip_dbg_stub_cmp(fmt, args...) \
-	usbip_dbg_with_flag(usbip_debug_stub_cmp, fmt , ##args)
+	usbip_dbg_with_flag(usbip_debug_stub_cmp, fmt, ##args)
 #define usbip_dbg_stub_rx(fmt, args...) \
-	usbip_dbg_with_flag(usbip_debug_stub_rx, fmt , ##args)
+	usbip_dbg_with_flag(usbip_debug_stub_rx, fmt, ##args)
 #define usbip_dbg_stub_tx(fmt, args...) \
-	usbip_dbg_with_flag(usbip_debug_stub_tx, fmt , ##args)
+	usbip_dbg_with_flag(usbip_debug_stub_tx, fmt, ##args)
 
 /*
  * USB/IP request headers
@@ -256,6 +257,7 @@ enum usbip_side {
 #define	VDEV_EVENT_ERROR_TCP	(USBIP_EH_SHUTDOWN | USBIP_EH_RESET)
 #define	VDEV_EVENT_ERROR_MALLOC	(USBIP_EH_SHUTDOWN | USBIP_EH_UNUSABLE)
 
+
 /* a common structure for stub_device and vhci_device */
 struct usbip_device {
 	enum usbip_side side;
@@ -280,12 +282,16 @@ struct usbip_device {
 		void (*shutdown)(struct usbip_device *);
 		void (*reset)(struct usbip_device *);
 		void (*unusable)(struct usbip_device *);
+		int (*xmit_msg)(struct usbip_device *ud, struct msghdr *msg, size_t txsize);
+		bool (*connected)(struct usbip_device *ud);
 	} eh_ops;
 
+	void *transport_ctx;
 #ifdef CONFIG_KCOV
 	u64 kcov_handle;
 #endif
 };
+
 
 #define kthread_get_run(threadfn, data, namefmt, ...)			   \
 ({									   \

@@ -48,6 +48,14 @@ config PCI_EPF_MHI
 
 	   If in doubt, say "N" to disable Endpoint driver for MHI bus.
 
+config PCI_EPF_USBIP
+	tristate "PCI EP Driver for USB over PCIe"
+	depends on PCI_ENDPOINT
+	depends on USBIP_CORE && USB
+	depends on USBIP_HOST
+	help
+	  Enable PCI Endpoint USB transport support over PCIe.
+
 config PCI_EPF_IMX9_VGA
 	tristate "PCI Endpoint VGA Class Display driver (i.MX9 iKVM)"
 	depends on PCI_ENDPOINT

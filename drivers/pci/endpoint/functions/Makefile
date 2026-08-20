@@ -8,4 +8,4 @@ obj-$(CONFIG_PCI_EPF_NTB)		+= pci-epf-ntb.o
 obj-$(CONFIG_PCI_EPF_VNTB) 		+= pci-epf-vntb.o
 obj-$(CONFIG_PCI_EPF_MHI)		+= pci-epf-mhi.o
 obj-$(CONFIG_PCI_EPF_IMX9_VGA)	+= imx9_ikvm/
-
+obj-$(CONFIG_PCI_EPF_USBIP)		+= pci-epf-usbip.o

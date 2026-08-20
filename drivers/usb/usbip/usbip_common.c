@@ -26,7 +26,7 @@ unsigned long usbip_debug_flag = 0xffffffff;
 unsigned long usbip_debug_flag;
 #endif
 EXPORT_SYMBOL_GPL(usbip_debug_flag);
-module_param(usbip_debug_flag, ulong, S_IRUGO|S_IWUSR);
+module_param(usbip_debug_flag, ulong, 0644);
 MODULE_PARM_DESC(usbip_debug_flag, "debug flags (defined in usbip_common.h)");
 
 /* FIXME */
@@ -768,6 +768,9 @@ int usbip_recv_xbuff(struct usbip_device *ud, struct urb *urb)
 	int copy;
 	int i;
 
+	if (!ud->transport_ctx)
+		return -EINVAL;
+
 	if (ud->side == USBIP_STUB || ud->side == USBIP_VUDC) {
 		/* the direction of urb must be OUT. */
 		if (usb_pipein(urb->pipe))
@@ -800,9 +803,7 @@ int usbip_recv_xbuff(struct usbip_device *ud, struct urb *urb)
 			else
 				recv_size = sg->length;
 
-			recv = usbip_recv(ud->tcp_socket, sg_virt(sg),
-						recv_size);
-
+			recv = usbip_pcie_recv_stream(ud->transport_ctx, sg_virt(sg), recv_size);
 			if (recv != recv_size)
 				goto error;
 
@@ -816,7 +817,7 @@ int usbip_recv_xbuff(struct usbip_device *ud, struct urb *urb)
 		if (ret != size)
 			goto error;
 	} else {
-		ret = usbip_recv(ud->tcp_socket, urb->transfer_buffer, size);
+		ret = usbip_pcie_recv_stream(ud->transport_ctx, urb->transfer_buffer, size);
 		if (ret != size)
 			goto error;
 	}

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2003-2008 Takahiro Hirofuchi
+ * Copyright 2026 NXP
  */
 
 #include <linux/device.h>
@@ -10,6 +11,8 @@
 
 #include "usbip_common.h"
 #include "stub.h"
+#include <linux/pci-epf-usbip.h>
+
 
 /*
  * usbip_status shows the status of usbip-host as long as this driver is bound
@@ -297,14 +300,86 @@ static struct stub_device *stub_device_alloc(struct usb_device *udev)
 
 	usbip_start_eh(&sdev->ud);
 
-	dev_dbg(&udev->dev, "register new device\n");
+	dev_dbg(&udev->dev, "register new device with sdev->devid = 0x%x\n", sdev->devid);
 
 	return sdev;
+}
+
+static void usbip_stub_stop(struct stub_device *sdev)
+{
+	usbip_event_add(&sdev->ud, SDEV_EVENT_DOWN);
 }
 
 static void stub_device_free(struct stub_device *sdev)
 {
 	kfree(sdev);
+}
+
+static int usbip_stub_start(struct stub_device *sdev)
+{
+	struct task_struct *rx;
+	struct task_struct *tx;
+	struct usbip_pcie_ctx *ctx;
+	struct usbip_pcie_channel *ch;
+	int ret;
+
+	if (!sdev)
+		return -EINVAL;
+
+	ctx = usbip_stub_get_ctx();
+	if (!ctx)
+		return -ENOTCONN;
+
+	ch = usbip_pcie_channel_register(ctx, sdev, sdev->devid);
+	if (IS_ERR(ch))
+		return PTR_ERR(ch);
+
+	sdev->ud.transport_ctx = ch;
+
+	rx = kthread_create(stub_rx_loop, &sdev->ud, "stub_rx");
+
+	if (IS_ERR(rx)) {
+		ret =  PTR_ERR(rx);
+		rx = NULL;
+		goto err_unregister_channel;
+	}
+
+	tx = kthread_create(stub_tx_loop, &sdev->ud, "stub_tx");
+
+	if (IS_ERR(tx)) {
+		kthread_stop(rx);
+		ret =  PTR_ERR(tx);
+		tx = NULL;
+		goto err_unregister_channel;
+	}
+
+	get_task_struct(rx);
+	get_task_struct(tx);
+
+	spin_lock_irq(&sdev->ud.lock);
+
+	sdev->ud.tcp_rx = rx;
+	sdev->ud.tcp_tx = tx;
+
+	/*
+	 * No real socket anymore
+	 */
+	sdev->ud.tcp_socket = NULL;
+	sdev->ud.sockfd = -1;
+
+	sdev->ud.status = SDEV_ST_USED;
+
+	spin_unlock_irq(&sdev->ud.lock);
+
+	wake_up_process(rx);
+	wake_up_process(tx);
+
+	return 0;
+
+err_unregister_channel:
+	usbip_pcie_channel_unregister(ch);
+	sdev->ud.transport_ctx = NULL;
+	return ret;
 }
 
 static int stub_probe(struct usb_device *udev)
@@ -314,8 +389,13 @@ static int stub_probe(struct usb_device *udev)
 	struct bus_id_priv *busid_priv;
 	int rc = 0;
 	char save_status;
+	struct usbip_pcie_ctx *ctx;
 
 	dev_dbg(&udev->dev, "Enter probe\n");
+
+	ctx = usbip_stub_get_ctx();
+	if (!ctx)
+		return dev_err_probe(&udev->dev, -EPROBE_DEFER, "PCIe USB/IP transport is not ready\n");
 
 	/* Not sure if this is our device. Allocate here to avoid
 	 * calling alloc while holding busid_table lock.
@@ -391,7 +471,20 @@ static int stub_probe(struct usb_device *udev)
 		goto err_port;
 	}
 
+	rc = usbip_stub_start(sdev);
+	if (rc) {
+		dev_err(&udev->dev, "failed to start PCIe usbip threads\n");
+		goto err_release_port;
+	}
+
+	dev_info(&udev->dev, "Successful PCIe usbip threads with \
+			VID:PID=%04x:%04x\n", le16_to_cpu(udev->descriptor.idVendor),
+			le16_to_cpu(udev->descriptor.idProduct));
+
 	return 0;
+
+err_release_port:
+	usb_hub_release_port(udev->parent, udev->portnum, (struct usb_dev_state *)udev);
 
 err_port:
 	dev_set_drvdata(&udev->dev, NULL);
@@ -457,6 +550,7 @@ static void stub_disconnect(struct usb_device *udev)
 	/* release busid_lock before call to remove device files */
 	put_busid_priv(busid_priv);
 
+	usbip_stub_stop(sdev);
 	/*
 	 * NOTE: rx/tx threads are invoked for each usb_device.
 	 */
@@ -488,8 +582,13 @@ static void stub_disconnect(struct usb_device *udev)
 	/* shutdown the current connection */
 	shutdown_busid(busid_priv);
 
-	usb_put_dev(sdev->udev);
 
+	if (sdev->ud.transport_ctx) {
+		usbip_pcie_channel_unregister(sdev->ud.transport_ctx);
+		sdev->ud.transport_ctx = NULL;
+	}
+
+	usb_put_dev(sdev->udev);
 	/* we already have busid_priv, just lock busid_lock */
 	spin_lock(&busid_priv->busid_lock);
 	/* free sdev */
@@ -500,6 +599,9 @@ static void stub_disconnect(struct usb_device *udev)
 		busid_priv->status = STUB_BUSID_ADDED;
 	/* release busid_lock */
 	spin_unlock(&busid_priv->busid_lock);
+
+	dev_dbg(&udev->dev, "Stub Disconnected Successfully\n");
+
 	return;
 }
 
@@ -535,3 +637,4 @@ struct usb_device_driver stub_driver = {
 	.supports_autosuspend	=	0,
 	.dev_groups	= usbip_groups,
 };
+

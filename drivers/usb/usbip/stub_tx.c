@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2003-2008 Takahiro Hirofuchi
+ * Copyright 2026 NXP
  */
 
 #include <linux/kthread.h>
@@ -24,26 +25,74 @@ void stub_enqueue_ret_unlink(struct stub_device *sdev, __u32 seqnum,
 
 	unlink->seqnum = seqnum;
 	unlink->status = status;
+	unlink->devid = sdev->devid;
 
 	list_add_tail(&unlink->list, &sdev->unlink_tx);
 }
 
-/**
- * stub_complete - completion handler of a usbip urb
- * @urb: pointer to the urb completed
- *
- * When a urb has completed, the USB core driver calls this function mostly in
- * the interrupt context. To return the result of a urb, the completed urb is
- * linked to the pending list of returning.
- *
- */
+#if STUB_USB_DEBUG
+static u8 ep_last_hid_report[16];
+static unsigned int ep_same_report_count;
+
+static void stub_trace_hid_in_report(struct stub_priv *priv, struct urb *urb)
+{
+	int i;
+	bool all_zero = true;
+	bool same;
+	u8 *r;
+
+	if (!priv || !urb)
+		return;
+
+	if (!usb_pipeint(urb->pipe) || !usb_pipein(urb->pipe))
+		return;
+
+	if (!urb->transfer_buffer || urb->actual_length <= 0 ||
+			urb->actual_length > sizeof(ep_last_hid_report))
+		return;
+
+	r = urb->transfer_buffer;
+
+	for (i = 0; i < urb->actual_length; i++) {
+		if (r[i]) {
+			all_zero = false;
+			break;
+		}
+	}
+
+	same = !memcmp(ep_last_hid_report, r, urb->actual_length);
+	ep_same_report_count = same ? ep_same_report_count + 1 : 0;
+
+	if (!same || !all_zero || ep_same_report_count == 10 ||
+			ep_same_report_count == 50 || ep_same_report_count == 100) {
+		dev_dbg(&urb->dev->dev, "EP_HID_REPORT seq=%lu ep=%u actual=%d zero=%u same_count=%u\n",
+				priv->seqnum, usb_pipeendpoint(urb->pipe),
+				urb->actual_length, all_zero, ep_same_report_count);
+		print_hex_dump(KERN_INFO, "EP_HID_IN: ", DUMP_PREFIX_OFFSET,
+				16, 1, r, urb->actual_length, false);
+	}
+
+	memcpy(ep_last_hid_report, r, urb->actual_length);
+}
+#endif
+
 void stub_complete(struct urb *urb)
 {
 	struct stub_priv *priv = (struct stub_priv *) urb->context;
 	struct stub_device *sdev = priv->sdev;
 	unsigned long flags;
 
-	usbip_dbg_stub_tx("complete! status %d\n", urb->status);
+	usbip_dbg_stub_tx("complete! status: status=%d\n", urb->status);
+
+
+#if STUB_USB_DEBUG
+	stub_trace_hid_in_report(priv, urb);
+	dev_dbg(&urb->dev->dev, "complete status: seq=%u ep=%u status=%d actual=%d\n",
+			priv->seqnum,
+			usb_pipeendpoint(urb->pipe),
+			urb->status,
+			urb->actual_length);
+#endif
 
 	switch (urb->status) {
 	case 0:
@@ -89,7 +138,7 @@ void stub_complete(struct urb *urb)
 
 	/* link a urb to the queue of tx. */
 	spin_lock_irqsave(&sdev->priv_lock, flags);
-	if (sdev->ud.tcp_socket == NULL) {
+	if (READ_ONCE(sdev->ud.status) != SDEV_ST_USED) {
 		usbip_dbg_stub_tx("ignore urb for closed connection\n");
 		/* It will be freed in stub_device_cleanup_urbs(). */
 	} else if (priv->unlinking) {
@@ -105,11 +154,11 @@ void stub_complete(struct urb *urb)
 }
 
 static inline void setup_base_pdu(struct usbip_header_basic *base,
-				  __u32 command, __u32 seqnum)
+				  __u32 command, __u32 seqnum, __u32 devid)
 {
 	base->command	= command;
 	base->seqnum	= seqnum;
-	base->devid	= 0;
+	base->devid	= devid;
 	base->ep	= 0;
 	base->direction = 0;
 }
@@ -117,15 +166,16 @@ static inline void setup_base_pdu(struct usbip_header_basic *base,
 static void setup_ret_submit_pdu(struct usbip_header *rpdu, struct urb *urb)
 {
 	struct stub_priv *priv = (struct stub_priv *) urb->context;
+	struct stub_device *sdev = priv->sdev;
 
-	setup_base_pdu(&rpdu->base, USBIP_RET_SUBMIT, priv->seqnum);
+	setup_base_pdu(&rpdu->base, USBIP_RET_SUBMIT, priv->seqnum, sdev->devid);
 	usbip_pack_pdu(rpdu, urb, USBIP_RET_SUBMIT, 1);
 }
 
 static void setup_ret_unlink_pdu(struct usbip_header *rpdu,
 				 struct stub_unlink *unlink)
 {
-	setup_base_pdu(&rpdu->base, USBIP_RET_UNLINK, unlink->seqnum);
+	setup_base_pdu(&rpdu->base, USBIP_RET_UNLINK, unlink->seqnum, unlink->devid);
 	rpdu->u.ret_unlink.status = unlink->status;
 }
 
@@ -146,7 +196,6 @@ static struct stub_priv *dequeue_from_priv_tx(struct stub_device *sdev)
 
 	return NULL;
 }
-
 static int stub_send_ret_submit(struct stub_device *sdev)
 {
 	unsigned long flags;
@@ -313,22 +362,29 @@ static int stub_send_ret_submit(struct stub_device *sdev)
 			iovnum++;
 		}
 
-		ret = kernel_sendmsg(sdev->ud.tcp_socket, &msg,
-						iov,  iovnum, txsize);
-		if (ret != txsize) {
-			dev_err(&sdev->udev->dev,
-				"sendmsg failed!, retval %d for %zd\n",
-				ret, txsize);
+		if (!sdev->ud.transport_ctx) {
+			dev_err(&sdev->udev->dev, "PCIe channel missing for RET_SUBMIT\n");
 			kfree(iov);
 			kfree(iso_buffer);
 			usbip_event_add(&sdev->ud, SDEV_EVENT_ERROR_TCP);
 			return -1;
 		}
 
-		kfree(iov);
-		kfree(iso_buffer);
+		iov_iter_kvec(&msg.msg_iter, ITER_SOURCE, iov, iovnum, txsize);
+		ret = usbip_xmit_pcie(sdev->ud.transport_ctx, &msg, txsize);
+		if (ret != txsize) {
+			dev_err(&sdev->udev->dev,
+					"sendmsg failed!, retval %d for %zd\n",
+					ret, txsize);
+			kfree(iov);
+			kfree(iso_buffer);
+			usbip_event_add(&sdev->ud, SDEV_EVENT_ERROR_TCP);
+			return -1;
+		}
 
-		total_size += txsize;
+		 kfree(iov);
+		 kfree(iso_buffer);
+		 total_size += txsize;
 	}
 
 	spin_lock_irqsave(&sdev->priv_lock, flags);
@@ -384,12 +440,22 @@ static int stub_send_ret_unlink(struct stub_device *sdev)
 		setup_ret_unlink_pdu(&pdu_header, unlink);
 		usbip_header_correct_endian(&pdu_header, 1);
 
+#if STUB_USB_DEBUG
+		dev_dbg(&sdev->udev->dev, "stub_tx:EP USBIP: command=%u seq=%u devid=0x%x ep=%u dir=%u\n",
+				pdu_header.base.command,
+				pdu_header.base.seqnum,
+				pdu_header.base.devid,
+				pdu_header.base.ep,
+				pdu_header.base.direction);
+#endif
+
+
 		iov[0].iov_base = &pdu_header;
 		iov[0].iov_len  = sizeof(pdu_header);
 		txsize += sizeof(pdu_header);
 
-		ret = kernel_sendmsg(sdev->ud.tcp_socket, &msg, iov,
-				     1, txsize);
+		iov_iter_kvec(&msg.msg_iter, ITER_SOURCE, iov, 1, txsize);
+		ret = usbip_xmit_pcie(sdev->ud.transport_ctx, &msg, txsize);
 		if (ret != txsize) {
 			dev_err(&sdev->udev->dev,
 				"sendmsg failed!, retval %d for %zd\n",
@@ -418,6 +484,8 @@ int stub_tx_loop(void *data)
 {
 	struct usbip_device *ud = data;
 	struct stub_device *sdev = container_of(ud, struct stub_device, ud);
+
+	pr_info("EP stub: stub_tx_loop started\n");
 
 	while (!kthread_should_stop()) {
 		if (usbip_event_happened(ud))

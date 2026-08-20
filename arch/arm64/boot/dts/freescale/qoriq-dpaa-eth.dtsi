@@ -32,41 +32,50 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <dt-bindings/soc/fsl,qoriq-rcpm.h>
+
 fsldpaa: fsl,dpaa {
 	compatible = "fsl,ls1043a-dpaa", "simple-bus", "fsl,dpaa";
 	ethernet@0 {
 		compatible = "fsl,dpa-ethernet";
 		fsl,fman-mac = <&enet0>;
 		dma-coherent;
+		fsl,rcpm-wakeup = <&rcpm (RCPM_IPPDEXPCR0_FM1_MAC1 | RCPM_IPPDEXPCR0_FM1)>;
 	};
 	ethernet@1 {
 		compatible = "fsl,dpa-ethernet";
 		fsl,fman-mac = <&enet1>;
 		dma-coherent;
+		fsl,rcpm-wakeup = <&rcpm (RCPM_IPPDEXPCR0_FM1_MAC2 | RCPM_IPPDEXPCR0_FM1)>;
 	};
 	ethernet@2 {
 		compatible = "fsl,dpa-ethernet";
 		fsl,fman-mac = <&enet2>;
 		dma-coherent;
+		fsl,rcpm-wakeup = <&rcpm (RCPM_IPPDEXPCR0_FM1_MAC3 | RCPM_IPPDEXPCR0_FM1)>;
 	};
 	ethernet@3 {
 		compatible = "fsl,dpa-ethernet";
 		fsl,fman-mac = <&enet3>;
 		dma-coherent;
+		fsl,rcpm-wakeup = <&rcpm (RCPM_IPPDEXPCR0_FM1_MAC4 | RCPM_IPPDEXPCR0_FM1)>;
 	};
 	ethernet@4 {
 		compatible = "fsl,dpa-ethernet";
 		fsl,fman-mac = <&enet4>;
 		dma-coherent;
+		fsl,rcpm-wakeup = <&rcpm (RCPM_IPPDEXPCR0_FM1_MAC5 | RCPM_IPPDEXPCR0_FM1)>;
 	};
 	ethernet@5 {
 		compatible = "fsl,dpa-ethernet";
 		fsl,fman-mac = <&enet5>;
 		dma-coherent;
+		fsl,rcpm-wakeup = <&rcpm (RCPM_IPPDEXPCR0_FM1_MAC6 | RCPM_IPPDEXPCR0_FM1)>;
 	};
 	ethernet@8 {
 		compatible = "fsl,dpa-ethernet";
 		fsl,fman-mac = <&enet6>;
 		dma-coherent;
+		fsl,rcpm-wakeup = <&rcpm (RCPM_IPPDEXPCR0_FM1_MAC9 | RCPM_IPPDEXPCR0_FM1)>;
 	};
 };

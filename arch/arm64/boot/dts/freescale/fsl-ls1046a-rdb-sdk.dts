@@ -93,6 +93,7 @@ pcie@3600000 {
 		compatible = "fsl,dpa-ethernet";
 		fsl,fman-mac = <&enet7>;
 		dma-coherent;
+		fsl,rcpm-wakeup = <&rcpm (RCPM_IPPDEXPCR0_FM1_MAC10 | RCPM_IPPDEXPCR0_FM1)>;
 	};
 };
 

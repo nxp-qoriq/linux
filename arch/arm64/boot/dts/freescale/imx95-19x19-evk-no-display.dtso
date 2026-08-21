@@ -1,0 +1,30 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2026 NXP
+ *
+ * imx95-19x19-evk-no-display.dtso
+ *
+ * Device tree overlay for i.MX95 19x19 EVK:
+ *   DPU probe without any display bridge (no-display).
+ *
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include "imx95-clock.h"
+
+&dpu {
+	assigned-clocks = <&scmi_clk IMX95_CLK_DISP1PIX>,
+			  <&scmi_clk IMX95_CLK_VIDEOPLL1_VCO>,
+			  <&scmi_clk IMX95_CLK_VIDEOPLL1>;
+	assigned-clock-parents = <&scmi_clk IMX95_CLK_VIDEOPLL1>;
+	assigned-clock-rates = <0>, <4008000000>, <445333334>;
+	memory-region = <&vram>;
+	status = "okay";
+};
+
+&pixel_interleaver {
+	status = "disabled";
+};
+

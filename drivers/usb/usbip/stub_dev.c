@@ -11,7 +11,9 @@
 
 #include "usbip_common.h"
 #include "stub.h"
+#ifdef CONFIG_USBIP_HOST_PCIE
 #include <linux/pci-epf-usbip.h>
+#endif
 
 
 /*
@@ -156,7 +158,22 @@ ATTRIBUTE_GROUPS(usbip);
 static void stub_shutdown_connection(struct usbip_device *ud)
 {
 	struct stub_device *sdev = container_of(ud, struct stub_device, ud);
+	struct task_struct *tcp_rx = NULL;
+	struct task_struct *tcp_tx = NULL;
 
+
+#ifdef CONFIG_USBIP_HOST_PCIE
+	/*
+	 * Signal the PCIe channel to shut down so that rx/tx threads
+	 * blocked in usbip_pcie_recv_stream() will unblock.
+	 */
+	if (ud->transport_ctx) {
+		struct usbip_pcie_channel *ch = ud->transport_ctx;
+
+		WRITE_ONCE(ch->shutting_down, true);
+		wake_up_all(&ch->rx_wait);
+	}
+#else 
 	/*
 	 * When removing an exported device, kernel panic sometimes occurred
 	 * and then EIP was sk_wait_data of stub_rx thread. Is this because
@@ -167,16 +184,28 @@ static void stub_shutdown_connection(struct usbip_device *ud)
 		dev_dbg(&sdev->udev->dev, "shutdown sockfd %d\n", ud->sockfd);
 		kernel_sock_shutdown(ud->tcp_socket, SHUT_RDWR);
 	}
+#endif
 
-	/* 1. stop threads */
-	if (ud->tcp_rx) {
-		kthread_stop_put(ud->tcp_rx);
-		ud->tcp_rx = NULL;
+	/* 1. stop threads - snapshot under lock to avoid data race */
+	spin_lock_irq(&ud->lock);
+	tcp_rx = ud->tcp_rx;
+	tcp_tx = ud->tcp_tx;
+	ud->tcp_rx = NULL;
+	ud->tcp_tx = NULL;
+	spin_unlock_irq(&ud->lock);
+
+	if (tcp_rx)
+		kthread_stop_put(tcp_rx);
+	if (tcp_tx)
+		kthread_stop_put(tcp_tx);
+
+#ifdef CONFIG_USBIP_HOST_PCIE
+	/* Now threads are stopped, safe to free the channel */
+	if (ud->transport_ctx) {
+		usbip_pcie_channel_unregister(ud->transport_ctx);
+		ud->transport_ctx = NULL;
 	}
-	if (ud->tcp_tx) {
-		kthread_stop_put(ud->tcp_tx);
-		ud->tcp_tx = NULL;
-	}
+#else
 
 	/*
 	 * 2. close the socket
@@ -189,6 +218,8 @@ static void stub_shutdown_connection(struct usbip_device *ud)
 		ud->tcp_socket = NULL;
 		ud->sockfd = -1;
 	}
+#endif
+
 
 	/* 3. free used data */
 	stub_device_cleanup_urbs(sdev);
@@ -315,6 +346,7 @@ static void stub_device_free(struct stub_device *sdev)
 	kfree(sdev);
 }
 
+#ifdef CONFIG_USBIP_HOST_PCIE
 static int usbip_stub_start(struct stub_device *sdev)
 {
 	struct task_struct *rx;
@@ -381,6 +413,7 @@ err_unregister_channel:
 	sdev->ud.transport_ctx = NULL;
 	return ret;
 }
+#endif /* CONFIG_USBIP_HOST_PCIE */
 
 static int stub_probe(struct usb_device *udev)
 {
@@ -389,13 +422,17 @@ static int stub_probe(struct usb_device *udev)
 	struct bus_id_priv *busid_priv;
 	int rc = 0;
 	char save_status;
+#ifdef CONFIG_USBIP_HOST_PCIE
 	struct usbip_pcie_ctx *ctx;
+#endif
 
 	dev_dbg(&udev->dev, "Enter probe\n");
 
+#ifdef CONFIG_USBIP_HOST_PCIE
 	ctx = usbip_stub_get_ctx();
 	if (!ctx)
 		return dev_err_probe(&udev->dev, -EPROBE_DEFER, "PCIe USB/IP transport is not ready\n");
+#endif
 
 	/* Not sure if this is our device. Allocate here to avoid
 	 * calling alloc while holding busid_table lock.
@@ -471,6 +508,7 @@ static int stub_probe(struct usb_device *udev)
 		goto err_port;
 	}
 
+#ifdef CONFIG_USBIP_HOST_PCIE
 	rc = usbip_stub_start(sdev);
 	if (rc) {
 		dev_err(&udev->dev, "failed to start PCIe usbip threads\n");
@@ -480,11 +518,14 @@ static int stub_probe(struct usb_device *udev)
 	dev_info(&udev->dev, "Successful PCIe usbip threads with \
 			VID:PID=%04x:%04x\n", le16_to_cpu(udev->descriptor.idVendor),
 			le16_to_cpu(udev->descriptor.idProduct));
+#endif
 
 	return 0;
 
+#ifdef CONFIG_USBIP_HOST_PCIE
 err_release_port:
 	usb_hub_release_port(udev->parent, udev->portnum, (struct usb_dev_state *)udev);
+#endif
 
 err_port:
 	dev_set_drvdata(&udev->dev, NULL);
@@ -568,6 +609,13 @@ static void stub_disconnect(struct usb_device *udev)
 		return;
 	}
 
+#ifdef CONFIG_USBIP_HOST_PCIE
+	if (sdev->ud.transport_ctx) {
+		usbip_pcie_channel_unregister(sdev->ud.transport_ctx);
+		sdev->ud.transport_ctx = NULL;
+	}
+#endif
+
 	/* If usb reset is called from event handler */
 	if (usbip_in_eh(current))
 		return;
@@ -583,10 +631,12 @@ static void stub_disconnect(struct usb_device *udev)
 	shutdown_busid(busid_priv);
 
 
+#ifdef CONFIG_USBIP_HOST_PCIE
 	if (sdev->ud.transport_ctx) {
 		usbip_pcie_channel_unregister(sdev->ud.transport_ctx);
 		sdev->ud.transport_ctx = NULL;
 	}
+#endif
 
 	usb_put_dev(sdev->udev);
 	/* we already have busid_priv, just lock busid_lock */

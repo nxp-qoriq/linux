@@ -52,7 +52,7 @@ config PCI_EPF_USBIP
 	tristate "PCI EP Driver for USB over PCIe"
 	depends on PCI_ENDPOINT
 	depends on USBIP_CORE && USB
-	depends on USBIP_HOST
+	depends on USBIP_HOST_PCIE
 	help
 	  Enable PCI Endpoint USB transport support over PCIe.
 

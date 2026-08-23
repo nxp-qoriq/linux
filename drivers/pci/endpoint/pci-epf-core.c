@@ -281,7 +281,7 @@ void *pci_epf_alloc_space(struct pci_epf *epf, size_t size, enum pci_barno bar,
 	dma_addr_t phys_addr;
 	struct pci_epc *epc;
 	struct device *dev;
-	void *space;
+	void *space = NULL;
 
 	if (size < 128)
 		size = 128;

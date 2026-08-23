@@ -12,7 +12,9 @@
 #include <linux/types.h>
 #include <linux/usb.h>
 #include <linux/wait.h>
+#ifdef CONFIG_USBIP_HOST_PCIE
 #include "stub_usbip_pcie_transport.h"
+#endif
 
 #ifndef STUB_USB_DEBUG
 #define STUB_USB_DEBUG 0

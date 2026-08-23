@@ -59,6 +59,31 @@ config USBIP_HOST
 	  To compile this driver as a module, choose M here: the
 	  module will be called usbip-host.
 
+choice
+	prompt "USB/IP host transport"
+	depends on USBIP_HOST
+	default USBIP_HOST_PCIE
+	help
+	  Select the transport used by usbip-host to communicate with
+	  the remote side.
+
+config USBIP_HOST_TCP
+	bool "TCP/IP socket transport"
+	depends on NET
+	help
+	  Classic USB/IP over TCP/IP network sockets.
+	  The remote side connects via usbip attach over the network.
+
+config USBIP_HOST_PCIE
+	bool "PCIe endpoint transport"
+	depends on PCI_ENDPOINT
+	help
+	  USB/IP over PCIe endpoint function driver.
+	  The EP-side stub communicates with the RC-side host driver
+	  through a mailbox-backed PCIe BAR without any network stack.
+
+endchoice
+
 config USBIP_VUDC
 	tristate "VUDC driver"
 	depends on USBIP_CORE && USB_GADGET

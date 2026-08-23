@@ -3,10 +3,7 @@
  * PCIe Endpoint Function driver that provides the low-level PCIe transport
  * layer used to carry USB urb packets between a PCIe Endpoint and a Root Complex.
  *
- * Copyright (C) 2017 Texas Instruments
  * Copyright 2026 NXP
- * Author: Kishon Vijay Abraham I <kishon@ti.com>
- * Author: Manish Kumar Sharma <manishkumar.sharma@nxp.com>
  */
 
 #include <linux/crc32.h>
@@ -800,7 +797,7 @@ static int pci_epf_usb_read_into_local(struct pci_epf_usb *epf_test, struct pci_
 
 	remote_addr = ((u64)READ_ONCE(reg->submit_src_addr_hi) << 32) | READ_ONCE(reg->submit_src_addr_lo);
 	len = READ_ONCE(reg->submit_len);
-	flags = READ_ONCE(reg->submit_flags);
+	flags = READ_ONCE(reg->submit_flags) | FLAG_USE_DMA;
 
 	if (!remote_addr || !len)
 		return -EINVAL;
@@ -1320,7 +1317,7 @@ static void pci_epf_usb_epc_deinit(struct pci_epf *epf)
 {
 	struct pci_epf_usb *epf_test = epf_get_drvdata(epf);
 
-	cancel_delayed_work(&epf_test->cmd_handler);
+	cancel_delayed_work_sync(&epf_test->cmd_handler);
 	flush_work(&epf_test->txq.work);
 	pci_epf_usb_stream_close(epf_test);
 	pci_epf_usb_txq_purge(&epf_test->txq);
@@ -1458,7 +1455,7 @@ static void pci_epf_usb_unbind(struct pci_epf *epf)
 	struct pci_epf_usb *epf_test = epf_get_drvdata(epf);
 	struct pci_epc *epc = epf->epc;
 
-	cancel_delayed_work(&epf_test->cmd_handler);
+	cancel_delayed_work_sync(&epf_test->cmd_handler);
 	flush_work(&epf_test->txq.work);
 	pci_epf_usb_stream_close(epf_test);
 	pci_epf_usb_txq_purge(&epf_test->txq);
@@ -1555,14 +1552,13 @@ module_init(pci_epf_usb_init);
 
 static void __exit pci_epf_usb_exit(void)
 {
+	pci_epf_unregister_driver(&test_driver);
+
 	if (kpciusb_workqueue)
 		destroy_workqueue(kpciusb_workqueue);
-
-	pci_epf_unregister_driver(&test_driver);
 }
 module_exit(pci_epf_usb_exit);
 
 MODULE_DESCRIPTION("PCI EPF USB URB TRANSPORT DRIVER");
-MODULE_AUTHOR("Kishon Vijay Abraham I <kishon@ti.com> ");
-MODULE_AUTHOR("Manish Kumar Sharma <manishkumar.sharma@nxp.com>");
+MODULE_AUTHOR("NXP");
 MODULE_LICENSE("GPL v2");

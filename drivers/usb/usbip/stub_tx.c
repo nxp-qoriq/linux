@@ -362,6 +362,7 @@ static int stub_send_ret_submit(struct stub_device *sdev)
 			iovnum++;
 		}
 
+#ifdef CONFIG_USBIP_HOST_PCIE
 		if (!sdev->ud.transport_ctx) {
 			dev_err(&sdev->udev->dev, "PCIe channel missing for RET_SUBMIT\n");
 			kfree(iov);
@@ -372,6 +373,11 @@ static int stub_send_ret_submit(struct stub_device *sdev)
 
 		iov_iter_kvec(&msg.msg_iter, ITER_SOURCE, iov, iovnum, txsize);
 		ret = usbip_xmit_pcie(sdev->ud.transport_ctx, &msg, txsize);
+#else
+		iov_iter_kvec(&msg.msg_iter, ITER_SOURCE, iov, iovnum, txsize);
+		ret = kernel_sendmsg(sdev->ud.tcp_socket, &msg, iov, iovnum,
+				     txsize);
+#endif
 		if (ret != txsize) {
 			dev_err(&sdev->udev->dev,
 					"sendmsg failed!, retval %d for %zd\n",
@@ -454,8 +460,17 @@ static int stub_send_ret_unlink(struct stub_device *sdev)
 		iov[0].iov_len  = sizeof(pdu_header);
 		txsize += sizeof(pdu_header);
 
+#ifdef CONFIG_USBIP_HOST_PCIE
+		if (!sdev->ud.transport_ctx) {
+			dev_err(&sdev->udev->dev, "PCIe channel missing for RET_UNLINK\n");
+			usbip_event_add(&sdev->ud, SDEV_EVENT_ERROR_TCP);
+			return -1;
+		}
 		iov_iter_kvec(&msg.msg_iter, ITER_SOURCE, iov, 1, txsize);
 		ret = usbip_xmit_pcie(sdev->ud.transport_ctx, &msg, txsize);
+#else
+		ret = kernel_sendmsg(sdev->ud.tcp_socket, &msg, iov, 1, txsize);
+#endif
 		if (ret != txsize) {
 			dev_err(&sdev->udev->dev,
 				"sendmsg failed!, retval %d for %zd\n",

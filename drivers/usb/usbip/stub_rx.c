@@ -607,7 +607,6 @@ static void stub_recv_cmd_submit(struct stub_device *sdev,
 	if (usbip_recv_iso(ud, priv->urbs[0]) < 0)
 		return;
 
-
 	/* urb is now ready to submit */
 	for (i = 0; i < priv->num_urbs; i++) {
 		if (!is_tweaked) {
@@ -658,29 +657,40 @@ static void stub_rx_pdu(struct usbip_device *ud)
 	struct usbip_header pdu;
 	struct stub_device *sdev = container_of(ud, struct stub_device, ud);
 	struct device *dev = &sdev->udev->dev;
-	struct usbip_pcie_channel *ch = sdev->ud.transport_ctx;
-
 	usbip_dbg_stub_rx("Enter\n");
 
 	memset(&pdu, 0, sizeof(pdu));
 
+#ifdef CONFIG_USBIP_HOST_PCIE
+	{
+		struct usbip_pcie_channel *ch = sdev->ud.transport_ctx;
 
-	if (!ch) {
-		dev_err(dev, "PCIe transport context not ready\n");
-		usbip_event_add(ud, SDEV_EVENT_ERROR_TCP);
-		return;
-	}
-
-	ret = usbip_pcie_recv_stream(ch, &pdu, sizeof(pdu));
-	if (ret != sizeof(pdu)) {
-		if (ret == -ESHUTDOWN || ret == -ENOTCONN) {
-			dev_err(dev, "PCIe channel closed, ret=%d\n", ret);
+		if (!ch) {
+			dev_err(dev, "PCIe transport context not ready\n");
+			usbip_event_add(ud, SDEV_EVENT_ERROR_TCP);
 			return;
 		}
-		dev_err(dev, "recv invalid request\n");
+
+		ret = usbip_pcie_recv_stream(ch, &pdu, sizeof(pdu));
+		if (ret != sizeof(pdu)) {
+			if (ret == -ESHUTDOWN || ret == -ENOTCONN) {
+				dev_err(dev, "PCIe channel closed, ret=%d\n", ret);
+				return;
+			}
+			dev_err(dev, "recv invalid request\n");
+			usbip_event_add(ud, SDEV_EVENT_ERROR_TCP);
+			return;
+		}
+	}
+#else
+	/* TCP path: receive a pdu header */
+	ret = usbip_recv(ud->tcp_socket, &pdu, sizeof(pdu));
+	if (ret != sizeof(pdu)) {
+		dev_err(dev, "recv a header, %d\n", ret);
 		usbip_event_add(ud, SDEV_EVENT_ERROR_TCP);
 		return;
 	}
+#endif
 
 
 	usbip_header_correct_endian(&pdu, 0);

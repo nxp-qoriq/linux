@@ -1,5 +1,10 @@
-
 /* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * PCI Endpoint USB (EPF) header file
+ *
+ * Copyright 2026 NXP
+ */
+
 #ifndef __PCI_EPF_USB_USBIP_H__
 #define __PCI_EPF_USB_USBIP_H__
 

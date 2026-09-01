@@ -95,6 +95,7 @@
 #define STATUS_DOORBELL_ENABLE_FAIL	BIT(11)
 #define STATUS_DOORBELL_DISABLE_SUCCESS	BIT(12)
 #define STATUS_DOORBELL_DISABLE_FAIL	BIT(13)
+#define STATUS_HOTPLUG		BIT(14)
 
 #define FLAG_USE_DMA			BIT(0)
 #define TIMER_RESOLUTION		1
@@ -114,9 +115,23 @@ static uint64_t    vram_fb_addr;
 
 static struct workqueue_struct *kpciimx9vga_workqueue;
 
+static bool hotplug_detected;
+
 /*
- * param_lock: protects param_kvm_mode and param_display_resolution against
- * concurrent sysfs writes after module load.
+ * hotplug_cmd_handler_ptr: static pointer to the cmd_handler delayed_work
+ * already embedded in pci_epf_imx9_vga. Set once in probe(). The param_set
+ * callback uses container_of to recover the full driver struct:
+ *
+ *   container_of(hotplug_cmd_handler_ptr,
+ *                struct pci_epf_imx9_vga, cmd_handler)
+ *
+ * No new members or anchor structs needed.
+ */
+static struct delayed_work *hotplug_cmd_handler_ptr;
+
+/*
+ * param_lock: protects param_kvm_mode, param_display_resolution, and
+ * hotplug_detected against concurrent sysfs writes after module load.
  */
 static DEFINE_MUTEX(param_lock);
 
@@ -215,9 +230,9 @@ struct pci_epf_imx9_vga {
 	struct delayed_work		 cmd_handler;
 	const struct pci_epc_features	*epc_features;
 	struct kvm_config cfg;
-#if IS_ENABLED(CONFIG_PCIE_KVM_INPUT)	
+#if IS_ENABLED(CONFIG_PCIE_KVM_INPUT)
 	atomic_t hid_attached;
-#endif	
+#endif
 };
 
 /**
@@ -245,6 +260,7 @@ struct pci_epf_imx9_vga_reg {
 	__le32 doorbell_bar;
 	__le32 doorbell_offset;
 	__le32 doorbell_data;
+	__le32 hotplug_detect;
 } __packed;
 
 /* PCI configuration header: VGA class display device */
@@ -829,7 +845,11 @@ static void epf_imx9_vga_raise_irq(struct pci_epf_imx9_vga *epf_imx9_vga,
 	u32 irq_type = le32_to_cpu(reg->irq_type);
 	int count;
 
-	status |= STATUS_IRQ_RAISED;
+	if (reg->hotplug_detect)
+		status |= STATUS_HOTPLUG;
+	else
+		status |= STATUS_IRQ_RAISED;
+
 	WRITE_ONCE(reg->status, cpu_to_le32(status));
 
 	switch (irq_type) {
@@ -1307,6 +1327,16 @@ static int pci_epf_imx9_vga_probe(struct pci_epf *epf,
 	epf->event_ops = &pci_epf_imx9_vga_event_ops;
 
 	epf_set_drvdata(epf, epf_imx9_vga);
+
+	/*
+	 * Publish the existing cmd_handler delayed_work pointer so that
+	 * param_set_hotplug_detected() can recover the full driver struct via:
+	 *   container_of(hotplug_cmd_handler_ptr,
+	 *                struct pci_epf_imx9_vga, cmd_handler)
+	 * No new members or anchor structs needed.
+	 */
+	WRITE_ONCE(hotplug_cmd_handler_ptr, &epf_imx9_vga->cmd_handler);
+
 	return 0;
 }
 
@@ -1423,6 +1453,127 @@ static struct kparam_string display_resolution_kps = {
 
 module_param_cb(display_resolution, &display_resolution_ops, &display_resolution_kps, 0644);
 MODULE_PARM_DESC(display_resolution,"Display resolution: 1080p (default) or 4k");
+
+/* ------------------------------------------------------------------ */
+/* Module parameter: HDMI hotplug                                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * param_set_hotplug_detected() - userspace-triggered HDMI hotplug
+ *
+ * The userspace application writes one of two strings:
+ *   "[HOTPLUG DETECTED]=connected"    - HDMI cable plugged in
+ *   "[HOTPLUG DETECTED]=disconnected" - HDMI cable unplugged
+ *
+ * Uses container_of on the existing cmd_handler delayed_work (set in probe)
+ * to recover the full pci_epf_imx9_vga driver struct — no new members or
+ * anchor structs needed:
+ *
+ *   container_of(hotplug_cmd_handler_ptr,
+ *                struct pci_epf_imx9_vga, cmd_handler)
+ *
+ * On "connected":
+ *   1. Sets hotplug_detected = true
+ *   2. Refreshes EDID in BAR1
+ *   3. Sets reg->hotplug_detect = 1 in BAR0
+ *   4. Raises IRQ to notify the RC
+ *
+ * On "disconnected":
+ *   1. Sets hotplug_detected = false
+ *   2. Sets reg->hotplug_detect = 0 in BAR0
+ *   3. Raises IRQ to notify the RC
+ *
+ * RC clears reg->hotplug_detect once it reinitialises the driver.
+ */
+static int param_set_hotplug_detected(const char *val,
+				      const struct kernel_param *kp)
+{
+	struct delayed_work *dw;
+	struct pci_epf_imx9_vga *epf_imx9_vga;
+	struct pci_epf_imx9_vga_reg *reg;
+	enum pci_barno ctrl_bar;
+	bool connected;
+	char buf[64];
+
+	/* Strip trailing whitespace/newline from sysfs write */
+	strscpy(buf, val, sizeof(buf));
+	strim(buf);
+
+	if (strcmp(buf, "[HOTPLUG DETECTED]=connected") == 0) {
+		connected = true;
+	} else if (strcmp(buf, "[HOTPLUG DETECTED]=disconnected") == 0) {
+		connected = false;
+	} else {
+		pr_err("pci-epf-imx9-vga: hotplug_detected: invalid value \"%s\"\n"
+		       "  expected: \"[HOTPLUG DETECTED]=connected\" or "
+		       "\"[HOTPLUG DETECTED]=disconnected\"\n", buf);
+		return -EINVAL;
+	}
+
+	mutex_lock(&param_lock);
+	hotplug_detected = connected;
+	mutex_unlock(&param_lock);
+
+	dw = READ_ONCE(hotplug_cmd_handler_ptr);
+	if (!dw) {
+		pr_warn("pci-epf-imx9-vga: hotplug_detected set but driver not probed yet\n");
+		return 0;
+	}
+
+	/* Recover full driver struct from the existing cmd_handler member */
+	epf_imx9_vga = container_of(dw, struct pci_epf_imx9_vga, cmd_handler);
+
+	ctrl_bar = epf_imx9_vga->ctrl_reg_bar;
+	reg = epf_imx9_vga->reg[ctrl_bar];
+	if (!reg) {
+		pr_err("pci-epf-imx9-vga: hotplug param: ctrl reg not mapped\n");
+		return 0;
+	}
+
+	if (connected) {
+		pr_info("pci-epf-imx9-vga: HDMI hotplug: connected\n");
+		/* Refresh EDID in BAR1 on connect */
+		epf_imx9_vga_copy_edid_to_bar1(epf_imx9_vga, &epf_imx9_vga->cfg);
+		/* Signal connected to RC via BAR0 hotplug_detect field */
+		WRITE_ONCE(reg->hotplug_detect, cpu_to_le32(1));
+	} else {
+		pr_info("pci-epf-imx9-vga: HDMI hotplug: disconnected\n");
+		/* Signal disconnected to RC via BAR0 hotplug_detect field */
+		WRITE_ONCE(reg->hotplug_detect, cpu_to_le32(0));
+	}
+
+	pr_info("pci-epf-imx9-vga: hotplug_detect=%u, raising IRQ\n",
+		connected ? 1 : 0);
+
+	/* Raise IRQ to notify the RC immediately */
+	epf_imx9_vga_raise_irq(epf_imx9_vga, reg);
+
+	return 0;
+}
+
+static int param_get_hotplug_detected(char *buf,
+				      const struct kernel_param *kp)
+{
+	bool val;
+
+	mutex_lock(&param_lock);
+	val = hotplug_detected;
+	mutex_unlock(&param_lock);
+
+	return sprintf(buf, "[HOTPLUG DETECTED]=%s\n",
+		       val ? "connected" : "disconnected");
+}
+
+static const struct kernel_param_ops hotplug_detected_ops = {
+	.set = param_set_hotplug_detected,
+	.get = param_get_hotplug_detected,
+};
+
+module_param_cb(hotplug_detected, &hotplug_detected_ops, NULL, 0644);
+MODULE_PARM_DESC(hotplug_detected,
+	"Write \"[HOTPLUG DETECTED]=connected\" or \"[HOTPLUG DETECTED]=disconnected\" "
+	"to signal HDMI hotplug from userspace; updates BAR0 hotplug_detect field "
+	"and raises an IRQ to the RC");
 
 /* ------------------------------------------------------------------ */
 /* PCI fixup: VGA class quirk                                           */

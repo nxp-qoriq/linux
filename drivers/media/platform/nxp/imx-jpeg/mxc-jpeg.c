@@ -37,7 +37,7 @@
  *
  * This is inspired by the drivers/media/platform/samsung/s5p-jpeg driver
  *
- * Copyright 2018-2019 NXP
+ * Copyright 2018-2019,2026 NXP
  */
 
 #include <linux/kernel.h>
@@ -62,6 +62,7 @@
 
 #include "mxc-jpeg-hw.h"
 #include "mxc-jpeg.h"
+#include "mxc-jpeg-enc-api.h"
 
 static const struct mxc_jpeg_fmt mxc_formats[] = {
 	{
@@ -991,6 +992,23 @@ static irqreturn_t mxc_jpeg_dec_irq(int irq, void *priv)
 	slot = COM_STATUS_CUR_SLOT(com_status);
 	dev_dbg(dev, "Irq %d on slot %d.\n", irq, slot);
 
+	/*
+	 * Check if this IRQ belongs to an in-kernel encoder API session
+	 * BEFORE touching the M2M framework. The API uses the HW directly
+	 * without a V4L2 M2M job, so ctx (v4l2_m2m_get_curr_priv) would
+	 * be NULL and trigger WARN_ON below.
+	 *
+	 * Read and W1C the slot status here so the IRQ line is de-asserted,
+	 * then notify the waiting API session and return IRQ_HANDLED.
+	 */
+	if (mxc_jpeg_enc_api_is_active(jpeg, slot)) {
+		dec_ret = readl(reg + MXC_SLOT_OFFSET(slot, SLOT_STATUS));
+		writel(dec_ret, reg + MXC_SLOT_OFFSET(slot, SLOT_STATUS)); /* w1c */
+		mxc_jpeg_enc_api_irq_notify(jpeg, slot, dec_ret);
+		spin_unlock(&jpeg->hw_lock);
+		return IRQ_HANDLED;
+	}
+
 	ctx = v4l2_m2m_get_curr_priv(jpeg->m2m_dev);
 	if (WARN_ON(!ctx))
 		goto job_unlock;
@@ -1182,9 +1200,9 @@ static int mxc_jpeg_fixup_sos(struct mxc_jpeg_sos *sos,
 	return sos_length; /* not swaped */
 }
 
-static unsigned int mxc_jpeg_setup_cfg_stream(void *cfg_stream_vaddr,
-					      u32 fourcc,
-					      u16 w, u16 h)
+unsigned int mxc_jpeg_setup_cfg_stream(void *cfg_stream_vaddr,
+				       u32 fourcc,
+				       u16 w, u16 h)
 {
 	/*
 	 * There is a hardware issue that first 128 bytes of configuration data
@@ -1251,6 +1269,7 @@ static unsigned int mxc_jpeg_setup_cfg_stream(void *cfg_stream_vaddr,
 
 	return offset;
 }
+EXPORT_SYMBOL_GPL(mxc_jpeg_setup_cfg_stream);
 
 static void mxc_jpeg_config_dec_desc(struct vb2_buffer *out_buf,
 				     struct mxc_jpeg_ctx *ctx,
@@ -1513,6 +1532,15 @@ static void mxc_jpeg_device_run_timeout(struct work_struct *work)
 
 	spin_lock_irqsave(&ctx->mxc_jpeg->hw_lock, flags);
 	if (ctx->mxc_jpeg->slot_data.used) {
+		/*
+		 * Do NOT reset HW if the in-kernel encoder API owns the slot.
+		 * Our API has its own timeout handling in mxc_jpeg_enc_session_encode().
+		 */
+		if (atomic_read(&ctx->mxc_jpeg->api_hw_active)) {
+			dev_dbg(jpeg->dev, "enc_api owns slot, skip V4L2 timeout reset\n");
+			spin_unlock_irqrestore(&ctx->mxc_jpeg->hw_lock, flags);
+			return;
+		}
 		dev_warn(jpeg->dev, "%s timeout, cancel it\n",
 			 ctx->mxc_jpeg->mode == MXC_JPEG_DECODE ? "decode" : "encode");
 		mxc_jpeg_job_finish(ctx, VB2_BUF_STATE_ERROR, true);
@@ -2868,6 +2896,9 @@ static int mxc_jpeg_probe(struct platform_device *pdev)
 
 	mutex_init(&jpeg->lock);
 	spin_lock_init(&jpeg->hw_lock);
+	atomic_set(&jpeg->api_hw_active, 0);
+	INIT_LIST_HEAD(&jpeg->g_session_list);
+	spin_lock_init(&jpeg->g_session_list_lock);
 
 	ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(32));
 	if (ret) {
@@ -2996,6 +3027,55 @@ err_irq:
 err_clk:
 	return ret;
 }
+
+
+/**
+ * mxc_jpeg_get_enc_dev() - look up the i.MX8 JPEG encoder mxc_jpeg_dev
+ *
+ * Other kernel modules that do not have their own reference to the encoder
+ * platform_device can call this function to obtain the mxc_jpeg_dev pointer,
+ * which carries base_reg, dev, hw_lock, slot_data, etc.
+ *
+ * The function walks the OF device tree looking for a node whose compatible
+ * string matches one of the known encoder compatibles, then returns the
+ * driver private data set by mxc_jpeg_probe().
+ *
+ * Returns the mxc_jpeg_dev pointer on success, ERR_PTR(-ENODEV) if the
+ * encoder node is not found or the driver has not probed yet.
+ */
+struct mxc_jpeg_dev *mxc_jpeg_get_enc_dev(void)
+{
+	static const char * const enc_compats[] = {
+		"nxp,imx8qxp-jpgenc",
+		"nxp,imx8qm-jpgenc",
+		"fsl,imx9-jpgenc",
+		NULL
+	};
+	const char * const *compat;
+	struct device_node *np;
+	struct platform_device *pdev;
+	struct mxc_jpeg_dev *jpeg;
+
+	for (compat = enc_compats; *compat; compat++) {
+		np = of_find_compatible_node(NULL, NULL, *compat);
+		if (!np)
+			continue;
+
+		pdev = of_find_device_by_node(np);
+		of_node_put(np);
+		if (!pdev)
+			continue;
+
+		jpeg = platform_get_drvdata(pdev);
+		put_device(&pdev->dev);
+		if (jpeg && jpeg->mode == MXC_JPEG_ENCODE) {
+			return jpeg;
+		}
+	}
+
+	return ERR_PTR(-ENODEV);
+}
+EXPORT_SYMBOL_GPL(mxc_jpeg_get_enc_dev);
 
 static int mxc_jpeg_runtime_resume(struct device *dev)
 {

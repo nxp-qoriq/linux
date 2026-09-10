@@ -2,7 +2,7 @@
 /*
  * i.MX8QXP/i.MX8QM JPEG encoder/decoder v4l2 driver
  *
- * Copyright 2018-2019 NXP
+ * Copyright 2018-2019,2026 NXP
  */
 
 #include <media/v4l2-ctrls.h>
@@ -141,6 +141,9 @@ struct mxc_jpeg_dev {
 	int				num_domains;
 	struct device			**pd_dev;
 	struct device_link		**pd_link;
+	struct list_head	g_session_list;
+	spinlock_t			g_session_list_lock;
+	atomic_t			api_hw_active;
 };
 
 /**
@@ -198,5 +201,9 @@ struct mxc_jpeg_sos {
 	struct mxc_jpeg_sos_comp comp[MXC_JPEG_MAX_COMPONENTS];
 	u8 ignorable_bytes[3];
 } __packed;
+
+/* Exported from mxc-jpeg.c for use by mxc-jpeg-enc-api.c */
+unsigned int mxc_jpeg_setup_cfg_stream(void *cfg_stream_vaddr,
+				       u32 fourcc, u16 w, u16 h);
 
 #endif

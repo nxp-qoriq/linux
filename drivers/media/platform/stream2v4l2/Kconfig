@@ -2,7 +2,7 @@
 # Copyright 2026 NXP
 config VIDEO_STREAM2V4L2
     tristate "PCIe EP framebuffer to V4L2 capture bridge (iKVM)"
-    depends on MEDIA_SUPPORT && VIDEO_DEV
+    depends on MEDIA_SUPPORT && VIDEO_DEV && VIDEO_IMX8_JPEG
     depends on PCI_EPF_IMX9_VGA
     select VIDEOBUF2_CORE
     select VIDEOBUF2_DMA_CONTIG

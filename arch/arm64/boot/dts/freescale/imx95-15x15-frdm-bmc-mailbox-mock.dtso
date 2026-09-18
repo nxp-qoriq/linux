@@ -1,0 +1,242 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * iMX95 15x15 FRDM BMC - QSPI Mailbox Mock DTS Overlay
+ *
+ * Apply on top of imx95-15x15-frdm-bmc.dtb to add the QSPI mailbox
+ * device on FlexSPI1 CS1, alongside NOR flash on CS0.
+ *
+ * Build:
+ *   make ARCH=arm64 arch/arm64/boot/dts/freescale/imx95-15x15-frdm-bmc-mailbox-mock.dtbo
+ *
+ * Boot (u-boot):
+ *   load mmc 0:1 ${fdt_addr} imx95-15x15-frdm-bmc.dtb
+ *   load mmc 0:1 ${dtbo_addr} imx95-15x15-frdm-bmc-mailbox-mock.dtbo
+ *   fdt addr ${fdt_addr}
+ *   fdt resize 8192
+ *   fdt apply ${dtbo_addr}
+ *   booti ${kernel_addr} - ${fdt_addr}
+ *
+ * EVK bring-up FlexSPI1 layout (XSPI pads, NOR flash on CS0, mailbox on CS1):
+ *   CS0 (XSPI1_SS0_B) -> NOR flash (MT25QU512ABB)
+ *   CS1 (XSPI1_SS1_B) -> FPGA mailbox
+ *
+ * XSPI pad mapping:
+ *   XSPI1_SCLK   -> FLEXSPI1_A_SCLK
+ *   XSPI1_SS0_B  -> FLEXSPI1_A_SS0_B  (CS0 - NOR flash)
+ *   XSPI1_SS1_B  -> FLEXSPI1_A_SS1_B  (CS1 - FPGA mailbox)
+ *   XSPI1_DATA0  -> FLEXSPI1_A_DATA_BIT0
+ *   XSPI1_DATA1  -> FLEXSPI1_A_DATA_BIT1
+ *   XSPI1_DATA2  -> FLEXSPI1_A_DATA_BIT2
+ *   XSPI1_DATA3  -> FLEXSPI1_A_DATA_BIT3
+ *
+ * NOTE: With CONFIG_IMX9_QSPI_MB_MOCK=y the mock transport is used -
+ * no real FPGA or FlexSPI wiring is required for initial bring-up.
+ * Set CONFIG_IMX9_QSPI_MB_MOCK=n for real FPGA bring-up.
+ *
+ * Virtual I2C buses (mock sensor topology):
+ *   fpga_i2c0 (bus 0) -> tmp75@48, @49, @4a, @4b, @4c  (5x TMP75 temperature)
+ *   fpga_i2c1 (bus 1) -> ina226@40   (INA226 power monitor)
+ *   fpga_i2c2 (bus 2) -> max31790@2c (MAX31790 fan controller)
+ *
+ * Virtual I3C buses (mock sensor topology):
+ *   fpga_i3c0 (bus 3) -> p3t1755@08  (NXP I3C temperature sensor)
+ *   fpga_i3c1 (bus 4) -> pct2075@09  (NXP I3C temperature sensor)
+ *   fpga_i3c2 (bus 5) -> p3t2030@0a  (NXP I3C current/voltage monitor)
+ *
+ * Copyright 2026 NXP
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include "imx95-pinfunc.h"
+
+&{/aliases} {
+	/*
+	 * i3c aliases give each virtual I3C master a unique bus ID.
+	 * Without these, i3c_bus_init() uses dynamic IDR allocation
+	 * but dev_set_name() is called before the ID is assigned,
+	 * causing all masters to get the same sysfs name "i3c-0".
+	 * Use IDs 3/4/5 - well above any real SoC I3C controllers.
+	 *
+	 * i2c aliases for the embedded I2C adapters inside each I3C
+	 * master (required by i3c_master_i2c_adapter_init).
+	 * Use IDs 11/12/13 - above our fpga-i2c adapters (8/9/10).
+	 */
+	i3c3 = &fpga_i3c0;
+	i3c4 = &fpga_i3c1;
+	i3c5 = &fpga_i3c2;
+	i2c11 = &fpga_i3c0;
+	i2c12 = &fpga_i3c1;
+	i2c13 = &fpga_i3c2;
+
+	/*
+	 * fpga-i2c adapter aliases - pin each virtual I2C adapter to a
+	 * fixed i2c-XX number regardless of probe order.
+	 * iMX95 SoC has lpi2c1..8 = i2c0..7; i3c embedded = i2c11..13.
+	 * Use i2c20 onwards - well clear of all SoC and I3C adapters.
+	 *
+	 * Only the buses the shared sensor topology actually defines are
+	 * aliased here - an alias naming a label that no longer exists is a
+	 * hard dtc error ("Reference to non-existent node or label").
+	 * See imx9-qspi-mailbox-sensors.dtsi for the bus list.
+	 */
+	i2c20 = &fpga_i2c20;
+	i2c21 = &fpga_i2c21;
+	i2c22 = &fpga_i2c22;
+	i2c23 = &fpga_i2c23;
+	i2c24 = &fpga_i2c24;
+	i2c25 = &fpga_i2c25;
+	i2c26 = &fpga_i2c26;
+	i2c30 = &fpga_i2c30;
+	i2c31 = &fpga_i2c31;
+	i2c35 = &fpga_i2c35;
+	i2c36 = &fpga_i2c36;
+	i2c37 = &fpga_i2c37;
+	i2c39 = &fpga_i2c39;
+};
+
+&scmi_iomuxc {
+	/*
+	 * FlexSPI1 port A pinmux.
+	 *
+	 * Required here because the 15x15 FRDM base DTS does not use flexspi1
+	 * and therefore muxes none of these pads. Same pad set and same drive
+	 * settings as pinctrl_flexspi1 in imx95-19x19-latu-dcsm.dts, so the
+	 * electrical behaviour matches the board the mailbox was brought up on.
+	 *
+	 * Both chip-selects are muxed: SS0 so a NOR flash can be added later
+	 * without touching the pinmux, SS1 because that is where the mailbox
+	 * lives (see mailbox@1 below).
+	 */
+	pinctrl_qspi_mb_flexspi1: qspi-mb-flexspi1-grp {
+		fsl,pins = <
+			IMX95_PAD_XSPI1_SS0_B__FLEXSPI1_A_SS0_B		0x3fe
+			IMX95_PAD_XSPI1_SS1_B__FLEXSPI1_A_SS1_B		0x3fe
+			IMX95_PAD_XSPI1_SCLK__FLEXSPI1_A_SCLK		0x3fe
+			IMX95_PAD_XSPI1_DATA0__FLEXSPI1_A_DATA_BIT0	0x3fe
+			IMX95_PAD_XSPI1_DATA1__FLEXSPI1_A_DATA_BIT1	0x3fe
+			IMX95_PAD_XSPI1_DATA2__FLEXSPI1_A_DATA_BIT2	0x3fe
+			IMX95_PAD_XSPI1_DATA3__FLEXSPI1_A_DATA_BIT3	0x3fe
+		>;
+	};
+
+	/*
+	 * FPGA alert line - intentionally NOT instantiated. See the header
+	 * comment: SD3_DATA0 belongs to usdhc3 on this board. When a free pad
+	 * is picked from the schematic, add its mux entry here and uncomment
+	 * the irq-gpios / pinctrl properties in mailbox@1.
+	 *
+	 * pinctrl_qspi_mb_irq: qspi-mb-irq-grp {
+	 *	fsl,pins = <
+	 *		IMX95_PAD_<FREE_PAD>__GPIO<N>_IO_BIT<M>	0x31e
+	 *	>;
+	 * };
+	 */
+};
+
+&flexspi1 {
+	/*
+	 * Enable the controller and mux its pads. The base DTS leaves
+	 * flexspi1 disabled, so both are this overlay's responsibility -
+	 * unlike the latu-dcsm overlay, where the base DTS has already done
+	 * this for the on-board NOR.
+	 */
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_qspi_mb_flexspi1>;
+
+	nxp,fspi-individual-mode;
+
+	/*
+	 * FlexSPI is a SPI controller: children address via chip-select, so
+	 * one address cell (the CS index) and no size cells. These have to be
+	 * declared here in the overlay because the base DTS values are not
+	 * visible to the overlay compiler - without them dtc falls back to the
+	 * default 2/1 and then mis-flags mailbox@1's single-cell reg:
+	 *
+	 *   Warning (reg_format): .../mailbox@1:reg: property has invalid
+	 *   length (4 bytes) (#address-cells == 2, #size-cells == 1)
+	 *
+	 * That in turn fails the prerequisite for the pci_device_reg,
+	 * pci_device_bus_num, i2c_bus_reg and spi_bus_reg checks, so they get
+	 * skipped for the whole blob.
+	 */
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	/* QSPI mailbox on CS1 (XSPI1_SS1_B -> FLEXSPI1_A_SS1_B) */
+	qspi_mailbox0: mailbox@1 {
+		compatible = "nxp,imx9-qspi-mailbox";
+		reg = <1>;
+
+		/*
+		 * SPI mode 0 (CPOL=0, CPHA=0) - CLK idle LOW.
+		 * FlexSPI does not support mode 3 (unsupported mode bits).
+		 * 1 MHz for FPGA bring-up; update to <50000000> for production.
+		 * Note: shared FlexSPI clock - a NOR flash added on CS0 later
+		 * would be limited to this value while the mailbox is active.
+		 */
+		spi-max-frequency = <1000000>;
+
+		/*
+		 * 4-wire QSPI data phase - required so spi_mem_default_supports_op()
+		 * sets SPI_TX_QUAD / SPI_RX_QUAD mode flags on the device.
+		 * Without these, the bus-width check in spi_mem_default_supports_op()
+		 * rejects our 4-wire data op with -EOPNOTSUPP.
+		 */
+		spi-tx-bus-width = <4>;
+		spi-rx-bus-width = <4>;
+
+		/*
+		 * FPGA alert line - omitted on this board, see the header
+		 * comment. The driver falls back to poll-only mode when
+		 * irq-gpios is absent, which is non-fatal and sufficient for
+		 * simulator and bring-up use.
+		 *
+		 * irq-gpios = <&gpioN M GPIO_ACTIVE_LOW>;
+		 * pinctrl-names = "default";
+		 * pinctrl-0 = <&pinctrl_qspi_mb_irq>;
+		 */
+
+		nxp,schema-version = <5>;
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		/* -- FPGA-internal hwmon channels ------------------------ */
+		/*
+		 * Shared mock sensor topology: 26 mailbox channels
+		 * (22 virtual I2C + 3 virtual I3C + 1 FPGA-internal hwmon).
+		 *
+		 * Sized so CONFIG SET_MULTIPLE spans 3 fragments and SENSOR
+		 * DATA GET_ALL spans 2, keeping both the driver's RX
+		 * reassembly and the simulator's TX fragmentation exercised.
+		 * See imx9-qspi-mailbox-sensors.dtsi for the full rationale.
+		 */
+#include "imx9-qspi-mailbox-sensors.dtsi"
+
+		/* -- Virtual GPIO lines ---------------------------------- */
+
+		/* GPIO line 0: power enable output (mock: FPGA register 0x00) */
+		fpga_gpio0: gpio@0 {
+			compatible = "nxp,fpga-gpio";
+			reg = <0>;
+			nxp,sensor-id = <0x0500>;
+			nxp,reg1-address = <0x00>;
+			nxp,direction = "output";
+			gpio-line-names = "PWR_EN_12V";
+		};
+
+		/* GPIO line 1: fault input (mock: FPGA register 0x00) */
+		fpga_gpio1: gpio@1 {
+			compatible = "nxp,fpga-gpio";
+			reg = <1>;
+			nxp,sensor-id = <0x0501>;
+			nxp,reg1-address = <0x00>;
+			nxp,direction = "input";
+			gpio-line-names = "FAULT_N";
+		};
+	};
+};

@@ -1,0 +1,336 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * iMX9 QSPI Mailbox - shared mock sensor topology
+ *
+ * Included from inside the mailbox@N node of a board's
+ * *-mailbox-mock.dtso overlay:
+ *
+ *     qspi_mailbox0: mailbox@1 {
+ *             compatible = "nxp,imx9-qspi-mailbox";
+ *             ...board-specific properties...
+ *
+ *             #include "imx9-qspi-mailbox-sensors.dtsi"
+ *     };
+ *
+ * WHY THIS FILE EXISTS
+ *   imx91, imx93, imx943 and imx95-15x15-frdm-bmc all carried their own
+ *   copy of this topology, byte-identical apart from the header comment.
+ *   Four copies meant every protocol fix had to be applied four times and
+ *   they drifted apart silently. The topology is a property of the mock
+ *   FPGA model, not of the SoC, so it belongs in one place; only the
+ *   pinmux and FlexSPI wiring are genuinely board-specific and those stay
+ *   in the per-board overlay.
+ *
+ *   The imx95 19x19 LATU DCSM overlay deliberately does NOT include this
+ *   file: it is the reference platform and keeps its larger 57-channel
+ *   tree so that deep mux trees and 6-fragment CONFIG pushes stay covered.
+ *
+ * CHANNEL BUDGET (26 mailbox channels)
+ *   22 virtual I2C sensors + 3 virtual I3C sensors + 1 FPGA-internal
+ *   hwmon channel. The count is chosen deliberately, not inherited:
+ *
+ *     CONFIG SET_MULTIPLE  10 entries/fragment  -> 3 fragments
+ *     SENSOR DATA GET_ALL  24 entries/packet    -> 2 fragments
+ *
+ *   One GET_ALL packet holds (496 - 2 - 8) / 20 = 24 entries, so 26
+ *   channels is the smallest count that pushes the response into a second
+ *   fragment. That keeps the driver's RX reassembly path and the
+ *   simulator's TX fragmentation under test on every board, while staying
+ *   well inside the real FPGA's 40-sensor table (APP_MAX_SENSORS) so the
+ *   same topology can be used for real bring-up.
+ *
+ *   Every bus class is represented - I2C (flat and 1/2-level muxed), I3C,
+ *   and FPGA-internal - so no transport path is left unexercised.
+ *
+ * Copyright 2026 NXP
+ */
+
+		fpga_hwmon: fpga-hwmon {
+			compatible = "nxp,fpga-hwmon";
+			nxp,channel-map = <
+				0x0400  6  1  1		/* FPGA die temp -> temp4_input (milli-degC) */
+			>;
+		};
+
+		fpga_i2c20: i2c@20 {
+			compatible = "nxp,fpga-i2c";
+			reg = <20>;
+			nxp,i2c-bus-nr = <20>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			tmp75_0: temperature-sensor@48 {
+				compatible = "ti,tmp75";
+				reg = <0x48>;
+				nxp,reg1-address = <0x00>;
+				nxp,reg1-data-size = <2>;
+			};
+
+			tmp75_1: temperature-sensor@49 {
+				compatible = "ti,tmp75";
+				reg = <0x49>;
+				nxp,reg1-address = <0x00>;
+				nxp,reg1-data-size = <2>;
+			};
+			tmp75_2: temperature-sensor@4a {
+				compatible = "ti,tmp75";
+				reg = <0x4a>;
+				nxp,reg1-address = <0x00>;
+				nxp,reg1-data-size = <2>;
+			};
+
+			tmp75_3: temperature-sensor@4b {
+				compatible = "ti,tmp75";
+				reg = <0x4b>;
+				nxp,reg1-address = <0x00>;
+				nxp,reg1-data-size = <2>;
+			};
+		};
+
+		fpga_i2c21: i2c@21 {
+			compatible = "nxp,fpga-i2c";
+			reg = <21>;
+			nxp,i2c-bus-nr = <21>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			ina226_0: power-monitor@40 {
+				compatible = "ti,ina226";
+				reg = <0x40>;
+				shunt-resistor = <10000>;	/* 10 mOhm */
+				nxp,reg1-address = <0x02>;	/* bus voltage   */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x01>;	/* shunt voltage */
+				nxp,reg2-data-size = <2>;
+			};
+		};
+
+		fpga_i2c22: i2c@22 {
+			compatible = "nxp,fpga-i2c";
+			reg = <22>;
+			nxp,i2c-bus-nr = <22>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			max31790_0: fan-controller@2c {
+				compatible = "maxim,max31790";
+				reg = <0x2c>;
+				nxp,reg1-address = <0x18>;	/* TACH_COUNT(0): fan1 tach */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x08>;	/* FAN_DYNAMICS(0): SR bits */
+				nxp,reg2-data-size = <1>;
+			};
+		};
+
+		fpga_i2c23: i2c@23 {
+			compatible = "nxp,fpga-i2c";
+			reg = <23>;
+			nxp,i2c-bus-nr = <23>;
+			mux = <0x71>, <0x70>;        /* PCA9848@0x71 -> TCA9545A@0x70 */
+			mux-channels = <0>, <0>;     /* ch0 -> ch0 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			fanctrl0: fan-controller@2f {
+				compatible = "maxim,max31790";
+				reg = <0x2f>;
+			};
+		};
+
+		fpga_i2c24: i2c@24 {
+			compatible = "nxp,fpga-i2c";
+			reg = <24>;
+			nxp,i2c-bus-nr = <24>;
+			mux = <0x71>, <0x70>;        /* PCA9848@0x71 -> TCA9545A@0x70 */
+			mux-channels = <0>, <1>;     /* ch0 -> ch1 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			fanctrl1: fan-controller@2f {
+				compatible = "maxim,max31790";
+				reg = <0x2f>;
+			};
+		};
+
+		fpga_i2c25: i2c@25 {
+			compatible = "nxp,fpga-i2c";
+			reg = <25>;
+			nxp,i2c-bus-nr = <25>;
+			mux = <0x71>, <0x72>;        /* PCA9848@0x71 -> TCA9545A@0x72 */
+			mux-channels = <0>, <2>;     /* ch0 -> ch2 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			fan1_fru: eeprom@52 {
+				compatible = "atmel,24c256";
+				reg = <0x52>;
+			};
+		};
+
+		fpga_i2c26: i2c@26 {
+			compatible = "nxp,fpga-i2c";
+			reg = <26>;
+			nxp,i2c-bus-nr = <26>;
+			mux = <0x71>, <0x72>;        /* PCA9848@0x71 -> TCA9545A@0x72 */
+			mux-channels = <0>, <0>;     /* ch0 -> ch0 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			fanctrl2: fan-controller@2f {
+				compatible = "maxim,max31790";
+				reg = <0x2f>;
+			};
+		};
+
+		fpga_i2c30: i2c@30 {
+			compatible = "nxp,fpga-i2c";
+			reg = <30>;
+			nxp,i2c-bus-nr = <30>;
+			mux = <0x71>;                /* PCA9848@0x71 */
+			mux-channels = <2>;          /* ch2 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			adc0: adc@50 { compatible = "ti,adc121c021"; reg = <0x50>; };
+			adc1: adc@51 { compatible = "ti,adc121c021"; reg = <0x51>; };
+		};
+
+		fpga_i2c31: i2c@31 {
+			compatible = "nxp,fpga-i2c";
+			reg = <31>;
+			nxp,i2c-bus-nr = <31>;
+			mux = <0x71>;                /* PCA9848@0x71 */
+			mux-channels = <4>;          /* ch4 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			lt7182s_41: regulator@41 { compatible = "lltc,lt7182s"; reg = <0x41>; }; /* P1V5_RET2_VDDIO / P1V5_RET3_VDDIO */
+			lt7182s_45: regulator@45 { compatible = "lltc,lt7182s"; reg = <0x45>; }; /* P1V5_RET0_VDDIO / P1V5_RET1_VDDIO */
+			lt7182s_49: regulator@49 { compatible = "lltc,lt7182s"; reg = <0x49>; }; /* P1V8_RET_VDDIO */
+		};
+
+		fpga_i2c35: i2c@35 {
+			compatible = "nxp,fpga-i2c";
+			reg = <35>;
+			nxp,i2c-bus-nr = <35>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			sac_fru: eeprom@53 {
+				compatible = "atmel,24c256";
+				reg = <0x53>;
+			};
+
+			i2c_io_exp_4a: gpio@4a {
+				compatible = "nxp,pca9555";
+				reg = <0x4a>;
+				gpio-controller;
+				#gpio-cells = <2>;
+			};
+		};
+
+		fpga_i2c36: i2c@36 {
+			compatible = "nxp,fpga-i2c";
+			reg = <36>;
+			nxp,i2c-bus-nr = <36>;
+			mux = <0x72>;                /* TCA9545A@0x72 */
+			mux-channels = <0>;          /* ch0 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			i2c_io_exp_46a: gpio@46 {
+				compatible = "nxp,pca9555";
+				reg = <0x46>;
+				gpio-controller;
+				#gpio-cells = <2>;
+			};
+		};
+
+		fpga_i2c37: i2c@37 {
+			compatible = "nxp,fpga-i2c";
+			reg = <37>;
+			nxp,i2c-bus-nr = <37>;
+			mux = <0x72>;                /* TCA9545A@0x72 */
+			mux-channels = <1>;          /* ch1 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			bmr350_66: regulator@66 { compatible = "flex,bmr350"; reg = <0x66>; };
+			bmr350_67: regulator@67 { compatible = "flex,bmr350"; reg = <0x67>; };
+		};
+
+		fpga_i2c39: i2c@39 {
+			compatible = "nxp,fpga-i2c";
+			reg = <39>;
+			nxp,i2c-bus-nr = <39>;
+			mux = <0x72>;                /* TCA9545A@0x72 */
+			mux-channels = <3>;          /* ch3 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			ltc4287_40: power-monitor@40 {
+				compatible = "lltc,ltc4287";
+				reg = <0x40>;
+			};
+
+			ltc4287_42: power-monitor@42 {
+				compatible = "lltc,ltc4287";
+				reg = <0x42>;
+			};
+		};
+
+		fpga_i3c0: i3c@3 {
+			compatible = "virtual,fpga-i3c";
+			reg = <3>;
+			#address-cells = <3>;
+			#size-cells = <0>;
+
+			/*
+			 * reg = <static_addr  pid_high  pid_low>
+			 * pid = ((u64)pid_high << 32) | pid_low
+			 * PID bits[47:33] = MIPI Manufacturer ID (NXP = 0x0124)
+			 * PID bit[32]     = RND flag - MUST BE 0 (non-random mode)
+			 * pid_high = (manuf_id << 1) | 0  - bit0=0 means non-random
+			 * NXP MIPI ID 0x0124 -> pid_high = 0x0248
+			 */
+			p3t1755_0: temperature-sensor@8,248000000000 {
+				compatible = "nxp,p3t1755";
+				reg = <0x08 0x0248 0x0>;
+				assigned-address = <0x08>;
+				nxp,reg1-address = <0x00>;
+				nxp,reg1-data-size = <2>;
+			};
+		};
+
+		fpga_i3c1: i3c@4 {
+			compatible = "virtual,fpga-i3c";
+			reg = <4>;
+			#address-cells = <3>;
+			#size-cells = <0>;
+
+			pct2075_0: temperature-sensor@9,248000000000 {
+				compatible = "nxp,pct2075";
+				reg = <0x09 0x0248 0x0>;
+				assigned-address = <0x09>;
+				nxp,reg1-address = <0x00>;
+				nxp,reg1-data-size = <2>;
+			};
+		};
+
+		fpga_i3c2: i3c@5 {
+			compatible = "virtual,fpga-i3c";
+			reg = <5>;
+			#address-cells = <3>;
+			#size-cells = <0>;
+
+			p3t2030_0: power-monitor@a,248000000000 {
+				compatible = "nxp,p3t2030";
+				reg = <0x0a 0x0248 0x0>;
+				assigned-address = <0x0a>;
+				shunt-resistor = <10000>;	/* 10 mOhm */
+				nxp,reg1-address = <0x02>;	/* bus voltage   */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x01>;	/* shunt voltage */
+				nxp,reg2-data-size = <2>;
+			};
+		};

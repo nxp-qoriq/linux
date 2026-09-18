@@ -1,0 +1,275 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * iMX91 11x11 FRDM - QSPI Mailbox Mock DTS Overlay
+ *
+ * Apply on top of imx91-11x11-frdm.dtb to add the QSPI mailbox
+ * device on FlexSPI1 CS1, alongside NOR flash on CS0.
+ *
+ * Build:
+ *   make ARCH=arm64 arch/arm64/boot/dts/freescale/imx91-11x11-frdm-mailbox-mock.dtbo
+ *
+ * Boot (u-boot):
+ *   load mmc 0:1 ${fdt_addr} imx91-11x11-frdm.dtb
+ *   load mmc 0:1 ${dtbo_addr} imx91-11x11-frdm-mailbox-mock.dtbo
+ *   fdt addr ${fdt_addr}
+ *   fdt resize 8192
+ *   fdt apply ${dtbo_addr}
+ *   booti ${kernel_addr} - ${fdt_addr}
+ *
+ * FRDM bring-up FlexSPI1 layout (NOR flash on CS0, mailbox on CS1):
+ *   CS0 (FLEXSPI1_A_SS0_B) -> NOR flash
+ *   CS1 (FLEXSPI1_A_SS1_B) -> FPGA mailbox
+ *
+ * NOTE: FlexSPI1 is disabled in the i.MX91 SoC dtsi, so this overlay
+ * enables it. With CONFIG_IMX9_QSPI_MB_MOCK=y the mock transport is
+ * used - no real FPGA or FlexSPI wiring is required for initial
+ * bring-up. Set CONFIG_IMX9_QSPI_MB_MOCK=n for real FPGA bring-up.
+ *
+ * Mock sensor topology (24 sensors total):
+ *   FPGA-internal      -> die temperature (nxp,fpga-hwmon)              x1
+ *   fpga_i2c20 (bus 20) -> tmp75@48, @49            (TMP75 temperature)  x2
+ *   fpga_i2c21 (bus 21) -> ina226@40                (INA226 power)       x1
+ *   fpga_i2c22 (bus 22) -> max31790@2c              (MAX31790 fan ctrl)  x1
+ *   fpga_i2c23 (bus 23) -> max31790@2f (mux 0x71/0x70 ch0/0)            x1
+ *   fpga_i2c24 (bus 24) -> max31790@2f (mux 0x71/0x70 ch0/1)            x1
+ *   fpga_i2c25 (bus 25) -> 24LC256@52  (mux 0x71/0x72 ch0/2, FRU)       x1
+ *   fpga_i2c26 (bus 26) -> max31790@2f (mux 0x71/0x72 ch0/0)            x1
+ *   fpga_i2c30 (bus 30) -> adc121c@50, @51 (mux 0x71 ch2, ADC)          x2
+ *   fpga_i2c31 (bus 31) -> lt7182s@41, @45, @49 (mux 0x71 ch4, reg)     x3
+ *   fpga_i2c35 (bus 35) -> 24LC256@53 (FRU), pca9555@4a (GPIO exp)      x2
+ *   fpga_i2c36 (bus 36) -> pca9555@46 (mux 0x72 ch0, GPIO exp)          x1
+ *   fpga_i2c37 (bus 37) -> bmr350@66, @67 (mux 0x72 ch1, regulator)     x2
+ *   fpga_i2c39 (bus 39) -> ltc4287@40, @42 (mux 0x72 ch3, power)        x2
+ *   fpga_i3c0  (bus 3)  -> p3t1755@08              (I3C temperature)    x1
+ *   fpga_i3c1  (bus 4)  -> pct2075@09              (I3C temperature)    x1
+ *   fpga_i3c2  (bus 5)  -> p3t2030@0a              (I3C current/voltage) x1
+ *
+ * Plus 2 virtual GPIO lines (not counted as sensors): PWR_EN_12V, FAULT_N.
+ *
+ * Copyright 2026 NXP
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include "imx91-pinfunc.h"
+
+&{/aliases} {
+	/*
+	 * i3c aliases give each virtual I3C master a unique bus ID.
+	 * Without these, i3c_bus_init() uses dynamic IDR allocation
+	 * but dev_set_name() is called before the ID is assigned,
+	 * causing all masters to get the same sysfs name "i3c-0".
+	 * Use IDs 3/4/5 - well above any real SoC I3C controllers.
+	 *
+	 * i2c aliases for the embedded I2C adapters inside each I3C
+	 * master (required by i3c_master_i2c_adapter_init).
+	 * Use IDs 11/12/13 - above our fpga-i2c adapters (8/9/10).
+	 */
+	i3c3 = &fpga_i3c0;
+	i3c4 = &fpga_i3c1;
+	i3c5 = &fpga_i3c2;
+	i2c11 = &fpga_i3c0;
+	i2c12 = &fpga_i3c1;
+	i2c13 = &fpga_i3c2;
+
+	/*
+	 * fpga-i2c adapter aliases - pin each virtual I2C adapter to a
+	 * fixed i2c-XX number regardless of probe order.
+	 * Use i2c20 onwards - well clear of all SoC and I3C adapters.
+	 */
+	i2c20 = &fpga_i2c20;
+	i2c21 = &fpga_i2c21;
+	i2c22 = &fpga_i2c22;
+	i2c23 = &fpga_i2c23;
+	i2c24 = &fpga_i2c24;
+	i2c25 = &fpga_i2c25;
+	i2c26 = &fpga_i2c26;
+	i2c30 = &fpga_i2c30;
+	i2c31 = &fpga_i2c31;
+	i2c35 = &fpga_i2c35;
+	i2c36 = &fpga_i2c36;
+	i2c37 = &fpga_i2c37;
+	i2c39 = &fpga_i2c39;
+};
+
+&flexspi1 {
+	status = "okay";
+	nxp,fspi-individual-mode;
+
+	/*
+	 * FlexSPI is a SPI controller: children address via chip-select,
+	 * so one address cell (the CS index) and no size cells. Declared
+	 * here in the overlay because the base DTS values are not visible
+	 * to the overlay compiler - without these, dtc falls back to the
+	 * default 2/1 and mis-flags mailbox@1's single-cell reg.
+	 */
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	/* QSPI mailbox on CS0 (FLEXSPI1_A_SS0_B) */
+
+	qspi_mailbox0: mailbox@1 {
+		compatible = "nxp,imx9-qspi-mailbox";
+		reg = <1>;
+
+		/*
+		 * SPI mode 0 (CPOL=0, CPHA=0) - CLK idle LOW.
+		 * FlexSPI does not support mode 3 (unsupported mode bits).
+		 * 1 MHz for FPGA bring-up; update to <50000000> for production.
+		 * Note: shared FlexSPI clock - NOR flash frequency will be
+		 * limited to this value while mailbox is active.
+		 */
+		spi-max-frequency = <1000000>;
+
+		/*
+		 * 4-wire QSPI data phase - required so spi_mem_default_supports_op()
+		 * sets SPI_TX_QUAD / SPI_RX_QUAD mode flags on the device.
+		 * Without these, the bus-width check in spi_mem_default_supports_op()
+		 * rejects our 4-wire data op with -EOPNOTSUPP.
+		 */
+		spi-tx-bus-width = <4>;
+		spi-rx-bus-width = <4>;
+
+		/*
+		 * IRQ GPIO placeholder - FPGA pin N11 = SPL_HPM_SCM_IRQ0_N.
+		 * Update with correct iMX91 GPIO once schematic received.
+		 * Driver falls back to poll-only mode if absent (non-fatal).
+		 */
+		/* irq-gpios = <&gpio_placeholder N GPIO_ACTIVE_LOW>; */
+
+		/* DTS schema version - must match CONFIGURATION SET_MULTIPLE */
+		nxp,schema-version = <5>;
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		/* -- FPGA-internal hwmon channels ------------------------ */
+		/*
+		 * Shared mock sensor topology: 26 mailbox channels
+		 * (22 virtual I2C + 3 virtual I3C + 1 FPGA-internal hwmon).
+		 *
+		 * Sized so CONFIG SET_MULTIPLE spans 3 fragments and SENSOR
+		 * DATA GET_ALL spans 2, keeping both the driver's RX
+		 * reassembly and the simulator's TX fragmentation exercised.
+		 * See imx9-qspi-mailbox-sensors.dtsi for the full rationale.
+		 */
+#include "imx9-qspi-mailbox-sensors.dtsi"
+
+		/* -- Virtual GPIO lines ---------------------------------- */
+
+		/* GPIO line 0: power enable output (mock: FPGA register 0x00) */
+		fpga_gpio0: gpio@0 {
+			compatible = "nxp,fpga-gpio";
+			reg = <0>;
+			nxp,sensor-id = <0x0500>;
+			nxp,reg1-address = <0x00>;
+			nxp,direction = "output";
+			gpio-line-names = "PWR_EN_12V";
+		};
+
+		/* GPIO line 1: fault input (mock: FPGA register 0x00) */
+		fpga_gpio1: gpio@1 {
+			compatible = "nxp,fpga-gpio";
+			reg = <1>;
+			nxp,sensor-id = <0x0501>;
+			nxp,reg1-address = <0x00>;
+			nxp,direction = "input";
+			gpio-line-names = "FAULT_N";
+		};
+
+		/*
+		 * -- Virtual eSPI controller snapshot ---------------------
+		 *
+		 * In this topology the MachXO5 FPGA is the eSPI controller
+		 * (master) driving the host/EC target; the BMC does not own
+		 * the eSPI link. Instead the FPGA aggregates the controller
+		 * state into a bank of one-byte registers behind a single
+		 * sensor id, and the BMC reads that snapshot over the
+		 * mailbox. The driver creates a debugfs test surface under
+		 * /sys/kernel/debug/imx9-qspi-espi/<name>/ with one file per
+		 * register. Addresses below MUST match the fpga_sim eSPI
+		 * controller model (sensor id 0x0600) or the test surface
+		 * will not read back the simulated values.
+		 *
+		 * Base channel registers:
+		 *   nxp,vw-address     - Virtual Wire register (bit 0 of byte)
+		 *   nxp,oob-address    - Out-Of-Band scratch byte
+		 *   nxp,status-address - Peripheral status byte (read-only)
+		 *
+		 * Aggregated controller snapshot (all read-only unless noted):
+		 *   nxp,link-status-address - link-init progress bits
+		 *                             (reset/cap/cfg/channel-ready)
+		 *   nxp,link-cfg-address    - clock/IO-mode/CRC config (rw)
+		 *   nxp,vw-power-address    - host power state
+		 *   nxp,vw-sleep-address    - encoded SLP_S3/S4/S5 levels
+		 *   nxp,vw-reset-address    - host reset / reset-warning
+		 *   nxp,vw-pwrgood-address  - power-good level
+		 *   nxp,kcs-status-address  - KCS OBF/IBF status bits
+		 *   nxp,kcs-cmd-address     - KCS/IPMI command selector (rw)
+		 *   nxp,kcs-rsp-address     - KCS/IPMI completion code
+		 *   nxp,post-code-address   - Port-80 POST byte
+		 *   nxp,oob-status-address  - OOB ALERT#/timeout/CRC flags
+		 *   nxp,fault-address       - fault-injection selector (rw)
+		 *   nxp,err-count-address   - accumulated controller errors
+		 */
+		fpga_espi0: espi@2 {
+			compatible = "nxp,fpga-espi";
+			reg = <2>;
+			nxp,sensor-id = <0x0600>;
+			nxp,vw-address = <0x40>;
+			nxp,oob-address = <0x41>;
+			nxp,status-address = <0x42>;
+			nxp,link-status-address = <0x43>;
+			nxp,link-cfg-address = <0x44>;
+			nxp,vw-power-address = <0x45>;
+			nxp,vw-sleep-address = <0x46>;
+			nxp,vw-reset-address = <0x47>;
+			nxp,vw-pwrgood-address = <0x48>;
+			nxp,kcs-status-address = <0x49>;
+			nxp,kcs-cmd-address = <0x4A>;
+			nxp,kcs-rsp-address = <0x4B>;
+			nxp,post-code-address = <0x4C>;
+			nxp,oob-status-address = <0x4D>;
+			nxp,fault-address = <0x4E>;
+			nxp,err-count-address = <0x4F>;
+			nxp,channel-name = "espi_slp_s3";
+		};
+
+		/*
+		 * -- Virtual PLDM boot-progress / POST / SEL bank --------
+		 *
+		 * The MachXO5 terminates the host's PLDM-over-MCTP boot
+		 * progress and platform-event stream and presents a
+		 * snapshot as one mailbox sensor: the current boot-progress
+		 * code, the legacy Port-80 POST byte, a boot-error
+		 * indicator, and a small ring exposing the SEL entry count
+		 * plus the latest record id, event word and timestamp.
+		 * Register addresses and the sensor id MUST match the
+		 * fpga_sim PLDM model and the pldm.c sub-driver.
+		 *
+		 * nxp,boot-progress-address - PLDM boot progress code
+		 * nxp,post-code-address     - Port-80 POST byte
+		 * nxp,boot-error-address    - boot error (0 = none)
+		 * nxp,sel-count-address     - number of SEL entries
+		 * nxp,sel-latest-id-address - latest SEL record id
+		 * nxp,sel-latest-ev-address - latest SEL event data word
+		 * nxp,sel-latest-ts-address - latest SEL timestamp (epoch)
+		 */
+		fpga_pldm0: pldm@7 {
+			compatible = "nxp,fpga-pldm";
+			reg = <7>;
+			nxp,sensor-id = <0x0800>;
+			nxp,boot-progress-address = <0x60>;
+			nxp,post-code-address = <0x61>;
+			nxp,boot-error-address = <0x62>;
+			nxp,sel-count-address = <0x63>;
+			nxp,sel-latest-id-address = <0x64>;
+			nxp,sel-latest-ev-address = <0x65>;
+			nxp,sel-latest-ts-address = <0x66>;
+			nxp,channel-name = "pldm_host0";
+		};
+	};
+};
+

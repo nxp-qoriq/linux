@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Copyright 2025 NXP
+ * Copyright 2025-2026 NXP
  */
 
-#include "imx93-11x11-evk.dts"
+#include "imx93-11x11-evk-flexspi-m2.dts"
 
 &lpi2c5 {
 #address-cells = <1>;
@@ -54,4 +54,34 @@ pinctrl_uart8: uart8grp {
 			       MX93_PAD_GPIO_IO13__LPUART8_RX			0x31e
 			       >;
 	       };
+};
+
+&flexspi1 {
+        flash0: flash@0 {
+                partitions {
+                        compatible = "fixed-partitions";
+                        #address-cells = <1>;
+                        #size-cells = <1>;
+
+                        partition@0 {
+                                label = "boot";
+                                reg = <0x00000000 0x002C0000>;
+                        };
+
+                        partition@2C0000 {
+                                label = "kernel";
+                                reg = <0x002C0000 0x01000000>;
+                        };
+
+                        partition@12C0000 {
+                                label = "dtb";
+                                reg = <0x012C0000 0x00080000>;
+                        };
+
+                        partition@1340000 {
+                                label = "rootfs";
+                                reg = <0x01340000 0x027C0000>;
+                        };
+                };
+        };
 };

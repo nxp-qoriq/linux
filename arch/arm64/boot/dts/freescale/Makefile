@@ -1087,8 +1087,8 @@ dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-ep-adv7535.dtb
 imx95-19x19-evk-ep-mipi-4K-lt9611uxc-dtbs := imx95-19x19-evk.dtb imx95-19x19-evk-lt9611uxc.dtbo imx95-19x19-evk-pcie1-ep.dtbo
 dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-ep-mipi-4K-lt9611uxc.dtb
 
-imx95-19x19-latu-dcsm-mailbox-mock-dtbs := imx95-19x19-latu-dcsm.dtb imx95-19x19-latu-dcsm-mailbox-mock.dtbo
-dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-latu-dcsm-mailbox-mock.dtb
+imx95-dcsm-mailbox-dtbs := imx95-19x19-latu-dcsm.dtb imx95-dcsm-mailbox.dtbo
+dtb-$(CONFIG_ARCH_MXC) += imx95-dcsm-mailbox.dtb
 
 imx95-19x19-evk-jdi-wuxga-lvds-panel-dtbs := imx95-19x19-evk.dtb imx95-19x19-evk-jdi-wuxga-lvds-panel.dtbo
 dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-jdi-wuxga-lvds-panel.dtb

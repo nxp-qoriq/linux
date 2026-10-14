@@ -1,0 +1,920 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * iMX95 LATU DCSM - QSPI Mailbox Mock DTS Overlay
+ *
+ * Apply on top of imx95-19x19-latu-dcsm.dtb to add the QSPI mailbox
+ * device on FlexSPI1 CS1, alongside NOR flash on CS0.
+ *
+ * Build:
+ *   make ARCH=arm64 arch/arm64/boot/dts/freescale/imx95-19x19-latu-dcsm-mailbox-mock.dtbo
+ *
+ * Boot (u-boot):
+ *   load mmc 0:1 ${fdt_addr} imx95-19x19-latu-dcsm.dtb
+ *   load mmc 0:1 ${dtbo_addr} imx95-19x19-latu-dcsm-mailbox-mock.dtbo
+ *   fdt addr ${fdt_addr}
+ *   fdt resize 8192
+ *   fdt apply ${dtbo_addr}
+ *   booti ${kernel_addr} - ${fdt_addr}
+ *
+ * EVK bring-up FlexSPI1 layout (XSPI pads, NOR flash on CS0, mailbox on CS1):
+ *   CS0 (XSPI1_SS0_B) -> NOR flash (MT25QU512ABB)
+ *   CS1 (XSPI1_SS1_B) -> FPGA mailbox
+ *
+ * XSPI pad mapping:
+ *   XSPI1_SCLK   -> FLEXSPI1_A_SCLK
+ *   XSPI1_SS0_B  -> FLEXSPI1_A_SS0_B  (CS0 - NOR flash)
+ *   XSPI1_SS1_B  -> FLEXSPI1_A_SS1_B  (CS1 - FPGA mailbox)
+ *   XSPI1_DATA0  -> FLEXSPI1_A_DATA_BIT0
+ *   XSPI1_DATA1  -> FLEXSPI1_A_DATA_BIT1
+ *   XSPI1_DATA2  -> FLEXSPI1_A_DATA_BIT2
+ *   XSPI1_DATA3  -> FLEXSPI1_A_DATA_BIT3
+ *
+ * NOTE: With CONFIG_IMX9_QSPI_MB_MOCK=y the mock transport is used -
+ * no real FPGA or FlexSPI wiring is required for initial bring-up.
+ * Set CONFIG_IMX9_QSPI_MB_MOCK=n for real FPGA bring-up.
+ *
+ * Virtual I2C buses (mock sensor topology):
+ *   fpga_i2c0 (bus 0) -> tmp75@48, @49, @4a, @4b, @4c  (5x TMP75 temperature)
+ *   fpga_i2c1 (bus 1) -> ina226@40   (INA226 power monitor)
+ *   fpga_i2c2 (bus 2) -> max31790@2c (MAX31790 fan controller)
+ *
+ * Virtual I3C buses (mock sensor topology):
+ *   fpga_i3c0 (bus 3) -> p3t1755@08  (NXP I3C temperature sensor)
+ *   fpga_i3c1 (bus 4) -> pct2075@09  (NXP I3C temperature sensor)
+ *   fpga_i3c2 (bus 5) -> p3t2030@0a  (NXP I3C current/voltage monitor)
+ *
+ * Copyright 2026 NXP
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include "imx95-pinfunc.h"
+
+&{/aliases} {
+	/*
+	 * i3c aliases give each virtual I3C master a unique bus ID.
+	 * Without these, i3c_bus_init() uses dynamic IDR allocation
+	 * but dev_set_name() is called before the ID is assigned,
+	 * causing all masters to get the same sysfs name "i3c-0".
+	 * Use IDs 3/4/5 - well above any real SoC I3C controllers.
+	 *
+	 * i2c aliases for the embedded I2C adapters inside each I3C
+	 * master (required by i3c_master_i2c_adapter_init).
+	 * Use IDs 11/12/13 - above our fpga-i2c adapters (8/9/10).
+	 */
+	i3c3 = &fpga_i3c0;
+	i3c4 = &fpga_i3c1;
+	i3c5 = &fpga_i3c2;
+	i2c11 = &fpga_i3c0;
+	i2c12 = &fpga_i3c1;
+	i2c13 = &fpga_i3c2;
+
+	/*
+	 * fpga-i2c adapter aliases - pin each virtual I2C adapter to a
+	 * fixed i2c-XX number regardless of probe order.
+	 * iMX95 SoC has lpi2c1..8 = i2c0..7; i3c embedded = i2c11..13.
+	 * Use i2c20 onwards - well clear of all SoC and I3C adapters.
+	 *
+	 * i2c20..22: I2C_3 flat channels (tmp75x5, ina226, max31790)
+	 * i2c23..34: I2C_4 channels (PCA9848@0x71 mux tree)
+	 * i2c35..39: I2C_5 channels (TCA9545A@0x72 mux tree)
+	 */
+	i2c20 = &fpga_i2c20;
+	i2c21 = &fpga_i2c21;
+	i2c22 = &fpga_i2c22;
+	i2c23 = &fpga_i2c23;
+	i2c24 = &fpga_i2c24;
+	i2c25 = &fpga_i2c25;
+	i2c26 = &fpga_i2c26;
+	i2c27 = &fpga_i2c27;
+	i2c28 = &fpga_i2c28;
+	i2c29 = &fpga_i2c29;
+	i2c30 = &fpga_i2c30;
+	i2c31 = &fpga_i2c31;
+	i2c32 = &fpga_i2c32;
+	i2c33 = &fpga_i2c33;
+	i2c34 = &fpga_i2c34;
+	i2c35 = &fpga_i2c35;
+	i2c36 = &fpga_i2c36;
+	i2c37 = &fpga_i2c37;
+	i2c38 = &fpga_i2c38;
+	i2c39 = &fpga_i2c39;
+};
+
+&scmi_iomuxc {
+	pinctrl_qspi_mb_irq: qspi-mb-irq-grp {
+		fsl,pins = <
+			/*
+			 * IMX95_PAD_SD3_DATA0__GPIO3_IO_BIT22
+			 * FPGA alert line: GPIO input, pull-up, no drive.
+			 * 0x31e = PDRV(0=high) | PULL(11=100k pull-up) | IBE(1=input enabled)
+			 */
+			IMX95_PAD_SD3_DATA0__GPIO3_IO_BIT22	0x31e
+		>;
+	};
+};
+
+&flexspi1 {
+	nxp,fspi-individual-mode;
+
+	/*
+	 * FlexSPI is a SPI controller: children address via chip-select, so
+	 * one address cell (the CS index) and no size cells. These have to be
+	 * declared here in the overlay because the base DTS values are not
+	 * visible to the overlay compiler - without them dtc falls back to the
+	 * default 2/1 and then mis-flags mailbox@1's single-cell reg:
+	 *
+	 *   Warning (reg_format): .../mailbox@1:reg: property has invalid
+	 *   length (4 bytes) (#address-cells == 2, #size-cells == 1)
+	 *
+	 * That in turn fails the prerequisite for the pci_device_reg,
+	 * pci_device_bus_num, i2c_bus_reg and spi_bus_reg checks, so they get
+	 * skipped for the whole blob. The imx91 and imx93 mailbox overlays
+	 * already carry these two lines; this one was missing them.
+	 */
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	/* QSPI mailbox on CS0 (SD3_CMD -> FLEXSPI1_A_SS0_B) */
+	qspi_mailbox0: mailbox@1 {
+		compatible = "nxp,imx9-qspi-mailbox";
+		reg = <1>;
+
+		/*
+		 * SPI mode 0 (CPOL=0, CPHA=0) - CLK idle LOW.
+		 * FlexSPI does not support mode 3 (unsupported mode bits).
+		 * 1 MHz for FPGA bring-up; update to <50000000> for production.
+		 * Note: shared FlexSPI clock - NOR flash frequency will be
+		 * limited to this value while mailbox is active.
+		 */
+		spi-max-frequency = <1000000>;
+
+		/*
+		 * 4-wire QSPI data phase - required so spi_mem_default_supports_op()
+		 * sets SPI_TX_QUAD / SPI_RX_QUAD mode flags on the device.
+		 * Without these, the bus-width check in spi_mem_default_supports_op()
+		 * rejects our 4-wire data op with -EOPNOTSUPP.
+		 */
+		spi-tx-bus-width = <4>;
+		spi-rx-bus-width = <4>;
+
+		/*
+		 * IRQ GPIO: IMX95_PAD_SD3_DATA0__GPIO3_IO_BIT22
+		 * DTS label: gpio3 bit 22 (43820000.gpio = gpiochip1)
+		 * Pad muxed to GPIO3_IO_BIT22 via scmi_iomuxc pinctrl above.
+		 * FPGA alert line (active-low, falling edge).
+		 * Driver falls back to poll-only mode if absent (non-fatal).
+		 */
+		irq-gpios = <&gpio3 22 GPIO_ACTIVE_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_qspi_mb_irq>;
+
+		/* DTS schema version - must match CONFIGURATION SET_MULTIPLE */
+		nxp,schema-version = <5>;
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		/* -- FPGA-internal hwmon channels ------------------------ */
+		//fpga_hwmon: fpga-hwmon {
+		//	compatible = "nxp,fpga-hwmon";
+		//	nxp,channel-map = <
+		//		0x0400  6  1  1		/* FPGA die temp -> temp4_input (milli-degC) */
+		//	>;
+		//};
+
+		/* -- Virtual I2C bus 0 - Thermal domain ------------------ */
+		fpga_i2c20: i2c@20 {
+			compatible = "nxp,fpga-i2c";
+			reg = <20>;
+			nxp,i2c-bus-nr = <20>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			tmp75_0: temperature-sensor@48 {
+				compatible = "ti,tmp75";
+				reg = <0x48>;
+				nxp,reg1-address = <0x00>;	/* temp1_input */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x02>;	/* temp1_max (T_OS) */
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;	/* temp1_max_hyst (T_HYST) */
+				nxp,reg3-data-size = <2>;
+			};
+
+			tmp75_1: temperature-sensor@49 {
+				compatible = "ti,tmp75";
+				reg = <0x49>;
+				nxp,reg1-address = <0x00>;	/* temp1_input */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x02>;	/* temp1_max (T_OS) */
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;	/* temp1_max_hyst (T_HYST) */
+				nxp,reg3-data-size = <2>;
+			};
+
+			tmp75_2: temperature-sensor@4a {
+				compatible = "ti,tmp75";
+				reg = <0x4a>;
+				nxp,reg1-address = <0x00>;	/* temp1_input */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x02>;	/* temp1_max (T_OS) */
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;	/* temp1_max_hyst (T_HYST) */
+				nxp,reg3-data-size = <2>;
+			};
+
+			tmp75_3: temperature-sensor@4b {
+				compatible = "ti,tmp75";
+				reg = <0x4b>;
+				nxp,reg1-address = <0x00>;	/* temp1_input */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x02>;	/* temp1_max (T_OS) */
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;	/* temp1_max_hyst (T_HYST) */
+				nxp,reg3-data-size = <2>;
+			};
+
+			tmp75_4: temperature-sensor@4c {
+				compatible = "ti,tmp75";
+				reg = <0x4c>;
+				nxp,reg1-address = <0x00>;	/* temp1_input */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x02>;	/* temp1_max (T_OS) */
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;	/* temp1_max_hyst (T_HYST) */
+				nxp,reg3-data-size = <2>;
+			};
+
+			tmp75_5: temperature-sensor@4d {
+				compatible = "ti,tmp75";
+				reg = <0x4d>;
+				nxp,reg1-address = <0x00>;	/* temp1_input */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x02>;	/* temp1_max (T_OS) */
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;	/* temp1_max_hyst (T_HYST) */
+				nxp,reg3-data-size = <2>;
+			};
+
+			tmp75_6: temperature-sensor@4e {
+				compatible = "ti,tmp75";
+				reg = <0x4e>;
+				nxp,reg1-address = <0x00>;	/* temp1_input */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x02>;	/* temp1_max (T_OS) */
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;	/* temp1_max_hyst (T_HYST) */
+				nxp,reg3-data-size = <2>;
+			};
+
+			tmp75_7: temperature-sensor@4f {
+				compatible = "ti,tmp75";
+				reg = <0x4f>;
+				nxp,reg1-address = <0x00>;	/* temp1_input */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x02>;	/* temp1_max (T_OS) */
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;	/* temp1_max_hyst (T_HYST) */
+				nxp,reg3-data-size = <2>;
+			};
+		};
+
+		/* -- Virtual I2C bus 1 - Power domain -------------------- */
+		fpga_i2c21: i2c@21 {
+			compatible = "nxp,fpga-i2c";
+			reg = <21>;
+			nxp,i2c-bus-nr = <21>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			ina226_0: power-monitor@40 {
+				compatible = "ti,ina226";
+				reg = <0x40>;
+				shunt-resistor = <10000>;	/* 10 mOhm */
+				nxp,reg1-address = <0x02>;	/* bus voltage   */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x01>;	/* shunt voltage */
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;	/* power register */
+				nxp,reg3-data-size = <2>;
+			};
+		};
+
+		/* -- Virtual I2C bus 2 - Fan/Control domain -------------- */
+		fpga_i2c22: i2c@22 {
+			compatible = "nxp,fpga-i2c";
+			reg = <22>;
+			nxp,i2c-bus-nr = <22>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			max31790_0: fan-controller@2c {
+				compatible = "maxim,max31790";
+				reg = <0x2c>;
+				nxp,reg1-address = <0x18>;	/* TACH_COUNT(0): fan1 tach */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x08>;	/* FAN_DYNAMICS(0): SR bits */
+				nxp,reg2-data-size = <1>;
+				/* TODO: reg3 address pending max31790 datasheet confirmation (TACH_COUNT fan2) */
+				nxp,reg3-address = <0x20>;	/* TACH_COUNT(1): fan2 tach */
+				nxp,reg3-data-size = <2>;
+			};
+		};
+
+		/*
+		 * -- Virtual I2C bus 4 - Muxed sensors (PCA9848@0x71 + TCA9545A@0x70 + TCA9545A@0x72) --
+		 *
+		 * Mux tree flattened: each node = one leaf channel, sensors as children.
+		 * reg          - unique channel ID (= bus_id)
+		 * mux[]        - I2C addresses of mux chips, outer -> inner
+		 * mux-channels[] - channel index to select at each mux level
+		 *
+		 * PCA9848@0x71 ch0 -> TCA9545A@0x70:
+		 *   ch0: MAX31790@0x2f
+		 *   ch1: MAX31790@0x2f
+		 * PCA9848@0x71 ch0 -> TCA9545A@0x72:
+		 *   ch0: MAX31790@0x2f, MAX31790@0x20
+		 *   ch1: MAX31790@0x2f, MAX31790@0x20
+		 *   ch2: 24LC256@0x52 FRU Board 1
+		 *   ch3: 24LC256@0x52 FRU Board 2
+		 * PCA9848@0x71 ch1: TMP75AID x6
+		 * PCA9848@0x71 ch2: ADC121C x4
+		 * PCA9848@0x71 ch4: LT7182S x5
+		 * PCA9848@0x71 ch5: LT7182S x2
+		 * PCA9848@0x71 ch6: LT7182S x2
+		 * PCA9848@0x71 ch7: LT7182S x2
+		 */
+
+		/* I2C_4: PCA9848@0x71[ch0] -> TCA9545A@0x70[ch0]: MAX31790@0x2f */
+		fpga_i2c23: i2c@23 {
+			compatible = "nxp,fpga-i2c";
+			reg = <23>;
+			nxp,i2c-bus-nr = <23>;
+			mux = <0x71>, <0x70>;        /* PCA9848@0x71 -> TCA9545A@0x70 */
+			mux-channels = <0>, <0>;     /* ch0 -> ch0 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			fanctrl0: fan-controller@2f {
+				compatible = "maxim,max31790";
+				reg = <0x2f>;
+				nxp,reg1-address = <0x18>;	/* TACH_COUNT(0): fan1 tach */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x08>;	/* FAN_DYNAMICS(0): SR bits */
+				nxp,reg2-data-size = <1>;
+				/* TODO: reg3 address pending max31790 datasheet confirmation (TACH_COUNT fan2) */
+				nxp,reg3-address = <0x20>;	/* TACH_COUNT(1): fan2 tach */
+				nxp,reg3-data-size = <2>;
+			};
+		};
+
+		/* I2C_4: PCA9848@0x71[ch0] -> TCA9545A@0x70[ch1]: MAX31790@0x2f */
+		fpga_i2c24: i2c@24 {
+			compatible = "nxp,fpga-i2c";
+			reg = <24>;
+			nxp,i2c-bus-nr = <24>;
+			mux = <0x71>, <0x70>;        /* PCA9848@0x71 -> TCA9545A@0x70 */
+			mux-channels = <0>, <1>;     /* ch0 -> ch1 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			fanctrl1: fan-controller@2f {
+				compatible = "maxim,max31790";
+				reg = <0x2f>;
+				nxp,reg1-address = <0x18>;	/* TACH_COUNT(0): fan1 tach */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x08>;	/* FAN_DYNAMICS(0): SR bits */
+				nxp,reg2-data-size = <1>;
+				/* TODO: reg3 address pending max31790 datasheet confirmation (TACH_COUNT fan2) */
+				nxp,reg3-address = <0x20>;	/* TACH_COUNT(1): fan2 tach */
+				nxp,reg3-data-size = <2>;
+			};
+		};
+
+		/* I2C_4: PCA9848@0x71[ch0] -> TCA9545A@0x72[ch2]: 24LC256@0x52 (FAN Board 1 FRU) */
+		fpga_i2c25: i2c@25 {
+			compatible = "nxp,fpga-i2c";
+			reg = <25>;
+			nxp,i2c-bus-nr = <25>;
+			mux = <0x71>, <0x72>;        /* PCA9848@0x71 -> TCA9545A@0x72 */
+			mux-channels = <0>, <2>;     /* ch0 -> ch2 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			fan1_fru: eeprom@52 {
+				compatible = "atmel,24c256";
+				reg = <0x52>;
+				nxp,reg1-address = <0x3333>;	/* TODO: placeholder - real reg TBD */
+				nxp,reg1-data-size = <2>;
+			};
+		};
+
+		/* I2C_4: PCA9848@0x71[ch0] -> TCA9545A@0x72[ch0]: MAX31790@0x2f, MAX31790@0x20 */
+		fpga_i2c26: i2c@26 {
+			compatible = "nxp,fpga-i2c";
+			reg = <26>;
+			nxp,i2c-bus-nr = <26>;
+			mux = <0x71>, <0x72>;        /* PCA9848@0x71 -> TCA9545A@0x72 */
+			mux-channels = <0>, <0>;     /* ch0 -> ch0 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			fanctrl2: fan-controller@2f {
+				compatible = "maxim,max31790";
+				reg = <0x2f>;
+				nxp,reg1-address = <0x18>;	/* TACH_COUNT(0): fan1 tach */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x08>;	/* FAN_DYNAMICS(0): SR bits */
+				nxp,reg2-data-size = <1>;
+				/* TODO: reg3 address pending max31790 datasheet confirmation (TACH_COUNT fan2) */
+				nxp,reg3-address = <0x20>;	/* TACH_COUNT(1): fan2 tach */
+				nxp,reg3-data-size = <2>;
+			};
+
+			fanctrl3: fan-controller@20 {
+				compatible = "maxim,max31790";
+				reg = <0x20>;
+				nxp,reg1-address = <0x18>;	/* TACH_COUNT(0): fan1 tach */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x08>;	/* FAN_DYNAMICS(0): SR bits */
+				nxp,reg2-data-size = <1>;
+				/* TODO: reg3 address pending max31790 datasheet confirmation (TACH_COUNT fan2) */
+				nxp,reg3-address = <0x20>;	/* TACH_COUNT(1): fan2 tach */
+				nxp,reg3-data-size = <2>;
+			};
+		};
+
+		/* I2C_4: PCA9848@0x71[ch0] -> TCA9545A@0x72[ch1]: MAX31790@0x2f, MAX31790@0x20 */
+		fpga_i2c27: i2c@27 {
+			compatible = "nxp,fpga-i2c";
+			reg = <27>;
+			nxp,i2c-bus-nr = <27>;
+			mux = <0x71>, <0x72>;        /* PCA9848@0x71 -> TCA9545A@0x72 */
+			mux-channels = <0>, <1>;     /* ch0 -> ch1 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			fanctrl4: fan-controller@2f {
+				compatible = "maxim,max31790";
+				reg = <0x2f>;
+				nxp,reg1-address = <0x18>;	/* TACH_COUNT(0): fan1 tach */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x08>;	/* FAN_DYNAMICS(0): SR bits */
+				nxp,reg2-data-size = <1>;
+				/* TODO: reg3 address pending max31790 datasheet confirmation (TACH_COUNT fan2) */
+				nxp,reg3-address = <0x20>;	/* TACH_COUNT(1): fan2 tach */
+				nxp,reg3-data-size = <2>;
+			};
+
+			fanctrl5: fan-controller@20 {
+				compatible = "maxim,max31790";
+				reg = <0x20>;
+				nxp,reg1-address = <0x18>;	/* TACH_COUNT(0): fan1 tach */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x08>;	/* FAN_DYNAMICS(0): SR bits */
+				nxp,reg2-data-size = <1>;
+				/* TODO: reg3 address pending max31790 datasheet confirmation (TACH_COUNT fan2) */
+				nxp,reg3-address = <0x20>;	/* TACH_COUNT(1): fan2 tach */
+				nxp,reg3-data-size = <2>;
+			};
+		};
+
+		/* I2C_4: PCA9848@0x71[ch0] -> TCA9545A@0x72[ch3]: 24LC256@0x52 (FAN Board 2 FRU) */
+		fpga_i2c28: i2c@28 {
+			compatible = "nxp,fpga-i2c";
+			reg = <28>;
+			nxp,i2c-bus-nr = <28>;
+			mux = <0x71>, <0x72>;        /* PCA9848@0x71 -> TCA9545A@0x72 */
+			mux-channels = <0>, <3>;     /* ch0 -> ch3 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			fan2_fru: eeprom@52 {
+				compatible = "atmel,24c256";
+				reg = <0x52>;
+				nxp,reg1-address = <0x3333>;	/* TODO: placeholder - real reg TBD */
+				nxp,reg1-data-size = <2>;
+			};
+		};
+
+		/* I2C_4: PCA9848@0x71[ch1]: TMP75AID x6 */
+		fpga_i2c29: i2c@29 {
+			compatible = "nxp,fpga-i2c";
+			reg = <29>;
+			nxp,i2c-bus-nr = <29>;
+			mux = <0x71>;                /* PCA9848@0x71 */
+			mux-channels = <1>;          /* ch1 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			temp0: temperature-sensor@48 {
+				compatible = "ti,tmp75";
+				reg = <0x48>;
+				nxp,reg1-address = <0x00>;
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x02>;
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;
+				nxp,reg3-data-size = <2>;
+			};
+			temp1: temperature-sensor@49 {
+				compatible = "ti,tmp75";
+				reg = <0x49>;
+				nxp,reg1-address = <0x00>;
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x02>;
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;
+				nxp,reg3-data-size = <2>;
+			};
+			temp2: temperature-sensor@4a {
+				compatible = "ti,tmp75";
+				reg = <0x4a>;
+				nxp,reg1-address = <0x00>;
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x02>;
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;
+				nxp,reg3-data-size = <2>;
+			};
+			temp3: temperature-sensor@4b {
+				compatible = "ti,tmp75";
+				reg = <0x4b>;
+				nxp,reg1-address = <0x00>;
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x02>;
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;
+				nxp,reg3-data-size = <2>;
+			};
+			temp4: temperature-sensor@4c {
+				compatible = "ti,tmp75";
+				reg = <0x4c>;
+				nxp,reg1-address = <0x00>;
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x02>;
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;
+				nxp,reg3-data-size = <2>;
+			};
+			temp5: temperature-sensor@4d {
+				compatible = "ti,tmp75";
+				reg = <0x4d>;
+				nxp,reg1-address = <0x00>;
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x02>;
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;
+				nxp,reg3-data-size = <2>;
+			};
+		};
+
+		/* I2C_4: PCA9848@0x71[ch2]: ADC121C x4 */
+		fpga_i2c30: i2c@30 {
+			compatible = "nxp,fpga-i2c";
+			reg = <30>;
+			nxp,i2c-bus-nr = <30>;
+			mux = <0x71>;                /* PCA9848@0x71 */
+			mux-channels = <2>;          /* ch2 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			adc0: adc@50 { compatible = "ti,adc121c021"; reg = <0x50>; };
+			adc1: adc@51 { compatible = "ti,adc121c021"; reg = <0x51>; };
+			adc2: adc@52 { compatible = "ti,adc121c021"; reg = <0x52>; };
+			adc3: adc@56 { compatible = "ti,adc121c021"; reg = <0x56>; };
+		};
+
+		/* I2C_4: PCA9848@0x71[ch4]: LT7182S x5 (P1V5_RET2/3, P1V5_RET0/1, P1V8_RET, P0V8_RET0) */
+		fpga_i2c31: i2c@31 {
+			compatible = "nxp,fpga-i2c";
+			reg = <31>;
+			nxp,i2c-bus-nr = <31>;
+			mux = <0x71>;                /* PCA9848@0x71 */
+			mux-channels = <4>;          /* ch4 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			lt7182s_41: regulator@41 { compatible = "lltc,lt7182s"; reg = <0x41>; }; /* P1V5_RET2_VDDIO / P1V5_RET3_VDDIO */
+			lt7182s_45: regulator@45 { compatible = "lltc,lt7182s"; reg = <0x45>; }; /* P1V5_RET0_VDDIO / P1V5_RET1_VDDIO */
+			lt7182s_49: regulator@49 { compatible = "lltc,lt7182s"; reg = <0x49>; }; /* P1V8_RET_VDDIO */
+			lt7182s_42a: regulator@42 { compatible = "lltc,lt7182s"; reg = <0x42>; }; /* P0V8_RET0_DVDD */
+			lt7182s_44a: regulator@44 { compatible = "lltc,lt7182s"; reg = <0x44>; }; /* P0V8_RET0_AVDD */
+		};
+
+		/* I2C_4: PCA9848@0x71[ch5]: LT7182S x2 (P0V8_RET1) */
+		fpga_i2c32: i2c@32 {
+			compatible = "nxp,fpga-i2c";
+			reg = <32>;
+			nxp,i2c-bus-nr = <32>;
+			mux = <0x71>;                /* PCA9848@0x71 */
+			mux-channels = <5>;          /* ch5 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			lt7182s_42b: regulator@42 { compatible = "lltc,lt7182s"; reg = <0x42>; }; /* P0V8_RET1_DVDD */
+			lt7182s_44b: regulator@44 { compatible = "lltc,lt7182s"; reg = <0x44>; }; /* P0V8_RET1_AVDD */
+		};
+
+		/* I2C_4: PCA9848@0x71[ch6]: LT7182S x2 (P0V8_RET2) */
+		fpga_i2c33: i2c@33 {
+			compatible = "nxp,fpga-i2c";
+			reg = <33>;
+			nxp,i2c-bus-nr = <33>;
+			mux = <0x71>;                /* PCA9848@0x71 */
+			mux-channels = <6>;          /* ch6 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			lt7182s_42c: regulator@42 { compatible = "lltc,lt7182s"; reg = <0x42>; }; /* P0V8_RET2_DVDD */
+			lt7182s_44c: regulator@44 { compatible = "lltc,lt7182s"; reg = <0x44>; }; /* P0V8_RET2_AVDD */
+		};
+
+		/* I2C_4: PCA9848@0x71[ch7]: LT7182S x2 (P0V8_RET3) */
+		fpga_i2c34: i2c@34 {
+			compatible = "nxp,fpga-i2c";
+			reg = <34>;
+			nxp,i2c-bus-nr = <34>;
+			mux = <0x71>;                /* PCA9848@0x71 */
+			mux-channels = <7>;          /* ch7 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			lt7182s_42d: regulator@42 { compatible = "lltc,lt7182s"; reg = <0x42>; }; /* P0V8_RET3_DVDD */
+			lt7182s_44d: regulator@44 { compatible = "lltc,lt7182s"; reg = <0x44>; }; /* P0V8_RET3_AVDD */
+		};
+
+		/*
+		 * -- Virtual I2C bus 5 - Muxed sensors (TCA9545A@0x72) --
+		 *
+		 * direct: 24LC256@0x53 SAC FRU, PCA9555PW@0x4a
+		 * TCA9545A@0x72 ch0: PCA9555PW@0x46, TMP75AID@0x4a,0x4b, 24LC256@0x50 VPDB FRU
+		 * TCA9545A@0x72 ch1: LTC4287@0x11, BMR350@0x66..0x69
+		 * TCA9545A@0x72 ch2: PCA9555PW@0x46, TMP75AID@0x4a,0x4b, 24LC256@0x51 HPDB FRU
+		 * TCA9545A@0x72 ch3: LTC4287@0x40, LTC4287@0x42
+		 */
+
+		/* I2C_5: direct: 24LC256@0x53 (SAC FRU), PCA9555PW@0x4a */
+		fpga_i2c35: i2c@35 {
+			compatible = "nxp,fpga-i2c";
+			reg = <35>;
+			nxp,i2c-bus-nr = <35>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			sac_fru: eeprom@53 {
+				compatible = "atmel,24c256";
+				reg = <0x53>;
+				nxp,reg1-address = <0x3333>;	/* TODO: placeholder - real reg TBD */
+				nxp,reg1-data-size = <2>;
+			};
+
+			i2c_io_exp_4a: gpio@4a {
+				compatible = "nxp,pca9555";
+				reg = <0x4a>;
+				gpio-controller;
+				#gpio-cells = <2>;
+				nxp,reg1-address = <0x3333>;	/* TODO: placeholder - real reg TBD */
+				nxp,reg1-data-size = <2>;
+			};
+		};
+
+		/* I2C_5: TCA9545A@0x72[ch0]: PCA9555PW@0x46, TMP75AID@0x4a,0x4b, 24LC256@0x50 (VPDB FRU) */
+		fpga_i2c36: i2c@36 {
+			compatible = "nxp,fpga-i2c";
+			reg = <36>;
+			nxp,i2c-bus-nr = <36>;
+			mux = <0x72>;                /* TCA9545A@0x72 */
+			mux-channels = <0>;          /* ch0 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			i2c_io_exp_46a: gpio@46 {
+				compatible = "nxp,pca9555";
+				reg = <0x46>;
+				gpio-controller;
+				#gpio-cells = <2>;
+				nxp,reg1-address = <0x3333>;	/* TODO: placeholder - real reg TBD */
+				nxp,reg1-data-size = <2>;
+			};
+
+			temp_vpdb0: temperature-sensor@4a {
+				compatible = "ti,tmp75";
+				reg = <0x4a>;
+				nxp,reg1-address = <0x00>;
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x02>;
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;
+				nxp,reg3-data-size = <2>;
+			};
+			temp_vpdb1: temperature-sensor@4b {
+				compatible = "ti,tmp75";
+				reg = <0x4b>;
+				nxp,reg1-address = <0x00>;
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x02>;
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;
+				nxp,reg3-data-size = <2>;
+			};
+
+			vpdb_fru: eeprom@50 {
+				compatible = "atmel,24c256";
+				reg = <0x50>;
+				nxp,reg1-address = <0x3333>;	/* TODO: placeholder - real reg TBD */
+				nxp,reg1-data-size = <2>;
+			};
+		};
+
+		/* I2C_5: TCA9545A@0x72[ch1]: LTC4287@0x11, BMR350@0x66..0x69 */
+		fpga_i2c37: i2c@37 {
+			compatible = "nxp,fpga-i2c";
+			reg = <37>;
+			nxp,i2c-bus-nr = <37>;
+			mux = <0x72>;                /* TCA9545A@0x72 */
+			mux-channels = <1>;          /* ch1 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			ltc4287_11: power-monitor@11 {
+				compatible = "lltc,ltc4287";
+				reg = <0x11>;
+				nxp,reg1-address = <0x3333>;	/* TODO: placeholder - real reg TBD */
+				nxp,reg1-data-size = <2>;
+			};
+
+			bmr350_66: regulator@66 { compatible = "flex,bmr350"; reg = <0x66>; };
+			bmr350_67: regulator@67 { compatible = "flex,bmr350"; reg = <0x67>; };
+			bmr350_68: regulator@68 { compatible = "flex,bmr350"; reg = <0x68>; };
+			bmr350_69: regulator@69 { compatible = "flex,bmr350"; reg = <0x69>; };
+		};
+
+		/* I2C_5: TCA9545A@0x72[ch2]: PCA9555PW@0x46, TMP75AID@0x4a,0x4b, 24LC256@0x51 (HPDB FRU) */
+		fpga_i2c38: i2c@38 {
+			compatible = "nxp,fpga-i2c";
+			reg = <38>;
+			nxp,i2c-bus-nr = <38>;
+			mux = <0x72>;                /* TCA9545A@0x72 */
+			mux-channels = <2>;          /* ch2 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			i2c_io_exp_46b: gpio@46 {
+				compatible = "nxp,pca9555";
+				reg = <0x46>;
+				gpio-controller;
+				#gpio-cells = <2>;
+				nxp,reg1-address = <0x3333>;	/* TODO: placeholder - real reg TBD */
+				nxp,reg1-data-size = <2>;
+			};
+
+			temp_hpdb0: temperature-sensor@4a {
+				compatible = "ti,tmp75";
+				reg = <0x4a>;
+				nxp,reg1-address = <0x00>;
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x02>;
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;
+				nxp,reg3-data-size = <2>;
+			};
+			temp_hpdb1: temperature-sensor@4b {
+				compatible = "ti,tmp75";
+				reg = <0x4b>;
+				nxp,reg1-address = <0x00>;
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x02>;
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;
+				nxp,reg3-data-size = <2>;
+			};
+
+			hpdb_fru: eeprom@51 {
+				compatible = "atmel,24c256";
+				reg = <0x51>;
+				nxp,reg1-address = <0x3333>;	/* TODO: placeholder - real reg TBD */
+				nxp,reg1-data-size = <2>;
+			};
+		};
+
+		/* I2C_5: TCA9545A@0x72[ch3]: LTC4287@0x40, LTC4287@0x42 */
+		fpga_i2c39: i2c@39 {
+			compatible = "nxp,fpga-i2c";
+			reg = <39>;
+			nxp,i2c-bus-nr = <39>;
+			mux = <0x72>;                /* TCA9545A@0x72 */
+			mux-channels = <3>;          /* ch3 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			ltc4287_40: power-monitor@40 {
+				compatible = "lltc,ltc4287";
+				reg = <0x40>;
+				nxp,reg1-address = <0x3333>;	/* TODO: placeholder - real reg TBD */
+				nxp,reg1-data-size = <2>;
+			};
+
+			ltc4287_42: power-monitor@42 {
+				compatible = "lltc,ltc4287";
+				reg = <0x42>;
+				nxp,reg1-address = <0x3333>;	/* TODO: placeholder - real reg TBD */
+				nxp,reg1-data-size = <2>;
+			};
+		};
+
+		/* -- Virtual I3C bus 0 - I3C Thermal domain (bus_id=3) --- */
+		fpga_i3c0: i3c@3 {
+			compatible = "virtual,fpga-i3c";
+			reg = <3>;
+			#address-cells = <3>;
+			#size-cells = <0>;
+
+			/*
+			 * reg = <static_addr  pid_high  pid_low>
+			 * pid = ((u64)pid_high << 32) | pid_low
+			 * PID bits[47:33] = MIPI Manufacturer ID (NXP = 0x0124)
+			 * PID bit[32]     = RND flag - MUST BE 0 (non-random mode)
+			 * pid_high = (manuf_id << 1) | 0  - bit0=0 means non-random
+			 * NXP MIPI ID 0x0124 -> pid_high = 0x0248
+			 */
+			p3t1755_0: temperature-sensor@8,248000000000 {
+				compatible = "nxp,p3t1755";
+				reg = <0x08 0x0248 0x0>;
+				assigned-address = <0x08>;
+				nxp,reg1-address = <0x00>;	/* temp1_input */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x02>;	/* temp1_max (T_OS) */
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;	/* temp1_max_hyst (T_HYST) */
+				nxp,reg3-data-size = <2>;
+			};
+		};
+
+		/* -- Virtual I3C bus 1 - I3C Thermal domain 2 (bus_id=4) - */
+		fpga_i3c1: i3c@4 {
+			compatible = "virtual,fpga-i3c";
+			reg = <4>;
+			#address-cells = <3>;
+			#size-cells = <0>;
+
+			pct2075_0: temperature-sensor@9,248000000000 {
+				compatible = "nxp,pct2075";
+				reg = <0x09 0x0248 0x0>;
+				assigned-address = <0x09>;
+				nxp,reg1-address = <0x00>;	/* temp1_input */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x02>;	/* temp1_max (T_OS) */
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;	/* temp1_max_hyst (T_HYST) */
+				nxp,reg3-data-size = <2>;
+			};
+		};
+
+		/* -- Virtual I3C bus 2 - I3C Power domain (bus_id=5) ----- */
+		fpga_i3c2: i3c@5 {
+			compatible = "virtual,fpga-i3c";
+			reg = <5>;
+			#address-cells = <3>;
+			#size-cells = <0>;
+
+			p3t2030_0: power-monitor@a,248000000000 {
+				compatible = "nxp,p3t2030";
+				reg = <0x0a 0x0248 0x0>;
+				assigned-address = <0x0a>;
+				shunt-resistor = <10000>;	/* 10 mOhm */
+				nxp,reg1-address = <0x02>;	/* bus voltage   */
+				nxp,reg1-data-size = <2>;
+				nxp,reg2-address = <0x01>;	/* shunt voltage */
+				nxp,reg2-data-size = <2>;
+				nxp,reg3-address = <0x03>;	/* power register */
+				nxp,reg3-data-size = <2>;
+			};
+		};
+
+		/* -- Virtual GPIO lines ---------------------------------- */
+
+		/* GPIO line 0: power enable output (mock: FPGA register 0x00) */
+		fpga_gpio0: gpio@0 {
+			compatible = "nxp,fpga-gpio";
+			reg = <0>;
+			nxp,sensor-id = <0x0500>;
+			nxp,reg1-address = <0x00>;
+			nxp,direction = "output";
+			gpio-line-names = "PWR_EN_12V";
+		};
+
+		/* GPIO line 1: fault input (mock: FPGA register 0x00) */
+		fpga_gpio1: gpio@1 {
+			compatible = "nxp,fpga-gpio";
+			reg = <1>;
+			nxp,sensor-id = <0x0501>;
+			nxp,reg1-address = <0x00>;
+			nxp,direction = "input";
+			gpio-line-names = "FAULT_N";
+		};
+	};
+};

@@ -273,3 +273,37 @@
 	};
 };
 
+/*
+ * -- eSPI host power control -----------------------------------------------
+ *
+ * Bidirectional one-byte register. Writing it is a request; reading it returns
+ * the observed host power state:
+ *
+ *   write  1 = on            read  0 = S5 (off)
+ *          2 = graceful off        1 = S0 (running)
+ *          3 = force off           2 = shutting down
+ *          4 = graceful reset      3 = resetting
+ *          5 = force reset
+ *
+ * This is what gives the BMC a real graceful path. The alternative - dropping a
+ * GPIO enable line - can neither ask the host to shut itself down nor observe
+ * whether it did, which is why "Graceful Restart" previously behaved as a force
+ * restart. With this register the FPGA drives the ACPI sideband (SLP_S5 /
+ * reset-warning), host firmware runs its own shutdown, and nxp_host_power.sh
+ * polls the state to decide whether the request was honoured or needs
+ * escalating to a force.
+ *
+ * It lives in the simulator overlay because only fpga_sim implements the
+ * matching state machine today. When the FPGA gains the register, move this
+ * property into the base overlay - the driver side (espi.c) needs no change,
+ * since it treats the property as optional and simply does not create the
+ * debugfs file when absent.
+ *
+ * 0x50 is the next address after the eSPI snapshot bank the base overlay
+ * already describes (0x40..0x4F) and must match ESPI_HOST_CTRL_ADDR in
+ * app/fpga_sim.c.
+ */
+&fpga_espi0 {
+	nxp,host-ctrl-address = <0x50>;
+};
+

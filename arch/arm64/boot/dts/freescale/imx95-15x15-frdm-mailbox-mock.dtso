@@ -6,11 +6,11 @@
  * device on FlexSPI1 CS1, alongside NOR flash on CS0.
  *
  * Build:
- *   make ARCH=arm64 arch/arm64/boot/dts/freescale/imx95-15x15-frdm-bmc-mailbox-mock.dtbo
+ *   make ARCH=arm64 arch/arm64/boot/dts/freescale/imx95-15x15-frdm-mailbox.dtbo
  *
  * Boot (u-boot):
  *   load mmc 0:1 ${fdt_addr} imx95-15x15-frdm-bmc.dtb
- *   load mmc 0:1 ${dtbo_addr} imx95-15x15-frdm-bmc-mailbox-mock.dtbo
+ *   load mmc 0:1 ${dtbo_addr} imx95-15x15-frdm-mailbox.dtbo
  *   fdt addr ${fdt_addr}
  *   fdt resize 8192
  *   fdt apply ${dtbo_addr}

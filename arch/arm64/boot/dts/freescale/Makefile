@@ -763,18 +763,12 @@ dtb-$(CONFIG_ARCH_MXC) += imx91-11x11-frdm-tianma-wvga-panel.dtb
 
 imx91-11x11-frdm-mailbox-mock-dtbs := imx91-11x11-frdm.dtb imx91-11x11-frdm-mailbox-mock.dtbo
 dtb-$(CONFIG_ARCH_MXC) += imx91-11x11-frdm-mailbox-mock.dtb
-imx91-11x11-frdm-mailbox-mock-sim-dtbs := imx91-11x11-frdm.dtb imx91-11x11-frdm-mailbox-mock-sim.dtbo
-dtb-$(CONFIG_ARCH_MXC) += imx91-11x11-frdm-mailbox-mock-sim.dtb
 
 imx93-11x11-frdm-mailbox-mock-dtbs := imx93-11x11-frdm.dtb imx93-11x11-frdm-mailbox-mock.dtbo
 dtb-$(CONFIG_ARCH_MXC) += imx93-11x11-frdm-mailbox-mock.dtb
-imx93-11x11-frdm-mailbox-mock-sim-dtbs := imx93-11x11-frdm.dtb imx93-11x11-frdm-mailbox-mock-sim.dtbo
-dtb-$(CONFIG_ARCH_MXC) += imx93-11x11-frdm-mailbox-mock-sim.dtb
 
 imx943-dc-scm-mailbox-mock-dtbs := imx943-dc-scm.dtb imx943-dc-scm-mailbox-mock.dtbo
 dtb-$(CONFIG_ARCH_MXC) += imx943-dc-scm-mailbox-mock.dtb
-imx943-dc-scm-mailbox-mock-sim-dtbs := imx943-dc-scm.dtb imx943-dc-scm-mailbox-mock-sim.dtbo
-dtb-$(CONFIG_ARCH_MXC) += imx943-dc-scm-mailbox-mock-sim.dtb
 
 dtb-$(CONFIG_ARCH_MXC) += imx93-14x14-evk.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx93-kontron-bl-osm-s.dtb
@@ -1223,8 +1217,8 @@ dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-verdin-root.dtb imx95-19x19-verdin-inmate.
 
 dtb-$(CONFIG_ARCH_MXC) += imx95-15x15-frdm.dtb imx95-15x15-frdm-bmc.dtb  imx95-15x15-frdm-boe-wxga-lvds-panel.dtb
 
-imx95-15x15-frdm-bmc-mailbox-mock-dtbs := imx95-15x15-frdm-bmc.dtb imx95-15x15-frdm-bmc-mailbox-mock.dtbo
-dtb-$(CONFIG_ARCH_MXC) += imx95-15x15-frdm-bmc-mailbox-mock.dtb
+imx95-15x15-frdm-mailbox-mock-dtbs := imx95-15x15-frdm-bmc.dtb imx95-15x15-frdm-mailbox-mock.dtbo
+dtb-$(CONFIG_ARCH_MXC) += imx95-15x15-frdm-mailbox-mock.dtb
 
 imx95-15x15-frdm-waveshare-7inch-c-panel-dtbs := imx95-15x15-frdm.dtb imx95-15x15-frdm-waveshare-7inch-c-panel.dtbo
 
